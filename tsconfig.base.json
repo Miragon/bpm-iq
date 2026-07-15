@@ -1,0 +1,29 @@
+{
+  // Shared compiler baseline. There is deliberately NO build step — Node >= 23.6
+  // runs the .ts sources directly via type stripping. tsc runs with noEmit as a
+  // pure type gate (pnpm -r typecheck, enforced in CI).
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    // sources import each other as ./x.ts — required for type stripping
+    "allowImportingTsExtensions": true,
+    // type stripping cannot erase enums/namespaces/parameter properties;
+    // reject them at typecheck time instead of at runtime
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    // second-wave strictness (measured zero/near-zero cost across the workspace):
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    // index access + array element reads are `T | undefined` — forces a guard or
+    // default at every lookup that could miss (staged in per-package first)
+    "noUncheckedIndexedAccess": true
+  }
+}

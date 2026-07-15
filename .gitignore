@@ -1,0 +1,25 @@
+*.log
+.DS_Store
+Thumbs.db
+node_modules/
+
+# secrets — never commit (bpmiq platform credentials)
+**/.env
+*.pem
+**/*.pem
+
+# host-owned runtime state (Yjs lineages, sessions, registry, workspace clones)
+.live/
+# control-plane runtime state (tenant directory / control.db)
+.control/
+# local tooling scratch
+.playwright-mcp/
+
+# build outputs (regenerated)
+apps/web/dist/
+apps/control-plane/ui/dist/
+apps/vscode/out/
+apps/vscode/.vscode-test/
+process-documentation/.vitepress/cache/
+process-documentation/.vitepress/dist/
+.oss-export

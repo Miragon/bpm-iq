@@ -1,0 +1,20 @@
+{
+  "name": "@bpmiq/notations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The notation registry: one descriptor per modeling notation (extensions, media kind, editor language). Adding a notation to the platform starts here.",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./extract": "./extract.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0"
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "version": 2,
+  "title": "Acme Commerce — team topology",
+  "nodes": [
+    {
+      "id": "team-order-management",
+      "type": "stream-aligned",
+      "label": "Order Management",
+      "position": {
+        "x": 320,
+        "y": 110
+      },
+      "size": {
+        "width": 240,
+        "height": 96
+      },
+      "description": "Owns the end-to-end Order to Cash process: order intake, validation, and fulfillment coordination."
+    },
+    {
+      "id": "team-customer-experience",
+      "type": "stream-aligned",
+      "label": "Customer Experience",
+      "position": {
+        "x": 700,
+        "y": 110
+      },
+      "size": {
+        "width": 240,
+        "height": 96
+      },
+      "description": "Owns customer onboarding and support journeys."
+    },
+    {
+      "id": "team-payments-platform",
+      "type": "platform",
+      "label": "Payments & Billing Platform",
+      "position": {
+        "x": 320,
+        "y": 420
+      },
+      "size": {
+        "width": 380,
+        "height": 130
+      },
+      "description": "Provides invoicing and payment processing as a self-service capability for all stream-aligned teams."
+    },
+    {
+      "id": "team-process-excellence",
+      "type": "enabling",
+      "label": "Process Excellence",
+      "position": {
+        "x": 60,
+        "y": 130
+      },
+      "size": {
+        "width": 120,
+        "height": 200
+      },
+      "description": "BPM center of excellence: coaches teams on process modeling, conventions, and continuous improvement."
+    }
+  ],
+  "interactions": [
+    {
+      "id": "int-payments-om",
+      "mode": "x-as-a-service",
+      "position": {
+        "x": 396,
+        "y": 260
+      },
+      "size": {
+        "width": 88,
+        "height": 78
+      },
+      "label": "invoicing & payments API"
+    },
+    {
+      "id": "int-payments-cx",
+      "mode": "x-as-a-service",
+      "position": {
+        "x": 640,
+        "y": 260
+      },
+      "size": {
+        "width": 88,
+        "height": 78
+      },
+      "label": "billing data"
+    },
+    {
+      "id": "int-pe-om",
+      "mode": "facilitating",
+      "position": {
+        "x": 212,
+        "y": 140
+      },
+      "size": {
+        "width": 84,
+        "height": 84
+      },
+      "label": "modeling conventions"
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow-order-to-cash",
+      "position": {
+        "x": 60,
+        "y": 620
+      },
+      "size": {
+        "width": 880,
+        "height": 60
+      },
+      "label": "Flow of change — commerce value stream"
+    }
+  ]
+}

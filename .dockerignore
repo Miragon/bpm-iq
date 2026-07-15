@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.vitepress/cache
+.vitepress/dist
+.git
+.github
+.DS_Store
+*.log
+.live
+.env
+**/.env
+*.pem
+**/*.pem
+apps/web/dist
+process-documentation/.vitepress/dist
+apps/vscode/out

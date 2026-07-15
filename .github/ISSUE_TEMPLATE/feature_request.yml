@@ -1,0 +1,38 @@
+name: Feature request
+description: A concrete improvement to the platform.
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Live Host (server, sync, release-as-PR)
+        - Web client
+        - VS Code extension
+        - MCP server
+        - Validator
+        - Content repo / portal / skills
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today, and who hits it? Lead with the workflow, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to see. If it touches the backend, note which port or adapter it lands in (ADR 0003).
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use today, or designs you rejected.

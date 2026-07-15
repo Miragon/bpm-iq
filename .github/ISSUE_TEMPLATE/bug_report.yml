@@ -1,0 +1,57 @@
+name: Bug report
+description: A reproducible defect in the platform.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: deploy-mode
+    attributes:
+      label: Deploy mode
+      description: How are you running bpmiq?
+      options:
+        - Docker Compose (docs/on-prem)
+        - From source (pnpm live-host)
+        - Miragon SaaS
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / image tag
+      description: GHCR tag (`vX.Y.Z` / `sha-<short>`), git SHA when running from source, or "SaaS" plus your cell hostname.
+      placeholder: ghcr.io/miragon/bpmiq-live-host:v0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Smallest sequence that triggers the bug. If it involves a model file, attach or inline the file.
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. Observe …
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs. actual
+      description: What should have happened, what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Live Host log output around the failure, plus browser console errors if the client is involved. Redact tokens and secrets.
+      render: shell
+  - type: checkboxes
+    id: environment
+    attributes:
+      label: Environment checklist
+      description: Rules out the two most common self-hosting misconfigurations.
+      options:
+        - label: I run behind a reverse proxy (nginx / Traefik / Caddy / …)
+        - label: The WebSocket upgrade works — the editor connects instead of hanging at "connecting…"
+        - label: "`pnpm validate` passes on my content repo"
+        - label: Reproducible on the latest release / `main`

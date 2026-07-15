@@ -1,0 +1,50 @@
+# Glossary slice for the exported "order-to-cash" skill — the domain vocabulary
+# relevant to this process, copied from the glossary in the source repository
+# at export time (2026-07-06, process v1.0.0).
+# Use it to understand the user's words: synonyms map what people say to the
+# terms used in the model, metadata, and docs of this package.
+#
+# Team ids in `owner:` fields, resolved from the source team topology:
+#   team-order-management  = Order Management (stream-aligned team)
+#   team-payments-platform = Payments & Billing Platform (platform team)
+terms:
+  - term: customer order
+    definition: A confirmed request by a customer to purchase goods, including items, quantities, prices, and delivery address.
+    synonyms: [order, sales order, Auftrag]
+    systems: [ERP]
+
+  - term: credit check
+    definition: Preventive control that verifies a customer's open exposure plus the new order value stays within their credit limit before fulfillment; small orders under 500 EUR are tolerated up to 10% over the limit (credit policy CP-7 §3).
+    synonyms: [credit approval, credit limit check, Bonitätsprüfung]
+    owner: team-order-management
+    systems: [ERP]
+
+  - term: credit limit
+    definition: The maximum open exposure a customer may have, set during customer onboarding.
+    synonyms: [credit line]
+    systems: [ERP]
+
+  - term: fulfillment
+    definition: Picking, packing, and shipping the ordered goods to the customer.
+    synonyms: [order fulfillment, goods issue, Versand]
+    owner: team-order-management
+
+  - term: invoice
+    definition: The billing document sent to the customer after fulfillment, stating amount and payment terms.
+    synonyms: [bill, Rechnung]
+    owner: team-payments-platform
+    systems: [ERP]
+
+  - term: payment reminder
+    definition: Message sent to a customer whose invoice is past its payment terms; repeated until payment is recorded.
+    synonyms: [dunning notice, dunning, Mahnung]
+    owner: team-payments-platform
+
+  - term: payment terms
+    definition: The agreed period after invoicing within which the customer must pay (e.g. net 30).
+    synonyms: [terms of payment, Zahlungsziel]
+
+  - term: days sales outstanding
+    definition: Average number of days between invoicing and payment receipt — the headline collection KPI.
+    synonyms: [DSO]
+    systems: [Finance dashboard]

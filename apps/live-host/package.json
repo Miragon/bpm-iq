@@ -1,0 +1,32 @@
+{
+  "name": "@bpmiq/live-host",
+  "private": true,
+  "type": "module",
+  "description": "Live collaboration host: Hocuspocus sync + REST API + web app on one port. Multi-repo, per-(user,repo) authz, release-as-PR.",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts && bash test/release-e2e.sh",
+    "test:sync": "node src/guest-test.ts",
+    "create-app": "node src/tools/create-app.ts"
+  },
+  "dependencies": {
+    "@bpmiq/cell-protocol": "workspace:*",
+    "@bpmiq/contracts": "workspace:*",
+    "@bpmiq/http-kit": "workspace:*",
+    "@bpmiq/github-app": "workspace:*",
+    "@bpmiq/notations": "workspace:*",
+    "@bpmiq/validator": "workspace:*",
+    "@hocuspocus/server": "^4.3.0",
+    "yaml": "^2.6.0",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@bpmiq/live-client": "workspace:*",
+    "@types/ws": "^8.18.1",
+    "ws": "^8.21.0"
+  }
+}

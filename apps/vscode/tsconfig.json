@@ -1,0 +1,12 @@
+{
+  // esbuild does the emit; tsc (via the shared base) is the type gate.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    // this app is BUNDLED by esbuild (not Node type-stripping), so parameter
+    // properties / enums are fine here — the base's erasableSyntaxOnly does not apply
+    "erasableSyntaxOnly": false
+  },
+  "include": ["src"]
+}

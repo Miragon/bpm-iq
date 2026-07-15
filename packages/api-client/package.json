@@ -1,0 +1,16 @@
+{
+  "name": "@bpmiq/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared same-origin fetch wrapper for the bpmiq SPAs (ApiError + api<T> + TanStack Query defaults) — zero runtime dependencies, raw .ts consumed directly by Vite.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

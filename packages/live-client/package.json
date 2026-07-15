@@ -1,0 +1,28 @@
+{
+  "name": "@bpmiq/live-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared live-session client: the ONE Hocuspocus wiring (socket + provider + sync lifecycle) for the web editor, the VS Code extension and headless guests — plus minimal-diff Y.Text writing and the Y.Text ↔ bpmn-js sync bridge.",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "exports": {
+    ".": "./src/session.ts",
+    "./text": "./src/text-diff.ts",
+    "./bpmn-sync": "./src/bpmn-sync.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.ts"
+  },
+  "dependencies": {
+    "@bpmiq/contracts": "workspace:*",
+    "@hocuspocus/provider": "^4.3.0",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.9.3"
+  }
+}

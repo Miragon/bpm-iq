@@ -1,0 +1,20 @@
+# CODEOWNERS — decision rights per path in the bpmiq monorepo.
+# Merge approval = release: a required review from the owning team IS the release decision.
+#
+# Individual owners for now; swap in org team slugs (e.g. @Miragon/platform)
+# as the teams exist.
+#
+# GitHub ignores lines starting with #. Later entries win over earlier ones.
+
+# ── Platform code ────────────────────────────────────────────────────
+/apps/                        @dominikhorn93
+/packages/                    @dominikhorn93
+/docs/                        @dominikhorn93
+/.github/                     @dominikhorn93
+/deploy/                      @dominikhorn93
+/Dockerfile                   @dominikhorn93
+
+# ── Example content repo (mirrored to the starter template) ─────────
+# The starter's own CODEOWNERS lives in process-documentation/.github/CODEOWNERS
+# and is mirrored with the rest of the content by sync-starter.yml.
+/process-documentation/       @dominikhorn93

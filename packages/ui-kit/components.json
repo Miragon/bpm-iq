@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/theme.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@bpmiq/ui-kit/components",
+    "utils": "@bpmiq/ui-kit/lib/utils",
+    "ui": "@bpmiq/ui-kit/components",
+    "lib": "@bpmiq/ui-kit/lib",
+    "hooks": "@bpmiq/ui-kit/hooks"
+  }
+}

@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "@bpmiq/ui-kit/theme.css";
+
+/* the kit's raw sources live under node_modules (not auto-scanned) — tell
+   Tailwind to pick up the utility classes its components use */
+@source "../node_modules/@bpmiq/ui-kit/src";
+
+/* the collaborative editor fills its route; bpmn-js + Monaco need explicit height */
+.bpmn-canvas,
+.monaco-host {
+  height: 100%;
+  width: 100%;
+}

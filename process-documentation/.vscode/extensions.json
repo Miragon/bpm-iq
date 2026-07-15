@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "miragon-gmbh.vs-code-bpmn-modeler",
+    "miragon-gmbh.wardley-mapping-modeler",
+    "miragon-gmbh.value-chain-modeler",
+    "miragon-gmbh.team-topologies-modeler",
+    "anthropic.claude-code"
+  ]
+}

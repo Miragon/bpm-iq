@@ -1,0 +1,12 @@
+{
+  // Browser fetch client (no build — Vite consumes the raw .ts). Mirrors the
+  // SPAs' compiler surface; tsc is a pure type gate.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "include": ["src"]
+}

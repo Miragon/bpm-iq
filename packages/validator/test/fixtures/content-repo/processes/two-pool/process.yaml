@@ -1,0 +1,25 @@
+id: two-pool
+name: Two Pool Offer Exchange
+classification: support
+level: 2
+supports: [order-to-cash]
+status: draft
+version: 0.1.0
+owner:
+  team: team-order-management
+purpose: Fixture - a collaboration with two pools, a message flow and an embedded sub-process.
+trigger: Inquiry received
+outcome: Offer reviewed
+models:
+  bpmn: two-pool.bpmn
+last_reviewed: 2026-07-01
+history:
+  - version: 0.1.0
+    date: 2026-07-01
+    changed_by: fixture
+    change: initial
+
+controls:
+  - name: Review control
+    element: Task_review
+    type: preventive

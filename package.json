@@ -1,0 +1,44 @@
+{
+  "name": "bpmiq",
+  "private": true,
+  "type": "module",
+  "description": "bpmiq — collaborative BPM platform: live modeling, PR-based release, and processes that talk",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "packageManager": "pnpm@11.1.3",
+  "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "live-host": "pnpm --filter @bpmiq/live-host start",
+    "web:dev": "pnpm --filter @bpmiq/web dev",
+    "portal:dev": "pnpm --filter process-documentation dev",
+    "portal:build": "pnpm --filter process-documentation build",
+    "validate": "pnpm --filter process-documentation validate",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "arch": "depcruise apps packages",
+    "arch:baseline": "depcruise-baseline apps packages",
+    "arch:graph": "depcruise apps packages --output-type dot",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.1",
+    "dependency-cruiser": "^18.1.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
+    "globals": "^17.7.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.9.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.63.0"
+  }
+}

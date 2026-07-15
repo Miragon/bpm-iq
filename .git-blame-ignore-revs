@@ -1,0 +1,2 @@
+# Mechanical reformats — ignore in git blame (git config blame.ignoreRevsFile .git-blame-ignore-revs)
+dae2520c4acb4aac69e61d4616c4ffb5dcf1b884  Adopt Prettier (repo-wide format)

@@ -1,0 +1,36 @@
+# Prettier scope guardrails.
+# The content repo + model files are the platform's DATA CONTRACT (CLAUDE.md hard
+# rules 4/6): reformatting process.yaml / schemas / model files churns diffs
+# against dist/skills exports and breaks the schema `cmp` check in validate.yml.
+
+pnpm-lock.yaml
+node_modules
+
+# local tooling + the AI skill docs that travel with the starter (mirrored) —
+# don't churn them
+**/.claude/
+
+# model files (compound suffixes matter — never touch these)
+**/*.bpmn
+**/*.dmn
+**/*.owm
+**/*.tt
+**/*.vc.json
+
+# content repo data (owned by the modeling conventions, not the formatter)
+process-documentation/processes/
+process-documentation/landscape/
+process-documentation/schemas/
+process-documentation/templates/
+process-documentation/dist/
+
+# the canonical schemas — MUST stay byte-identical to the content-repo copy above
+# (validate.yml `cmp`s them); formatting only one side breaks that check
+packages/validator/schemas/
+
+# build outputs / caches
+apps/web/dist/
+apps/vscode/out/
+apps/vscode/.vscode-test/
+process-documentation/.vitepress/cache/
+process-documentation/.vitepress/dist/

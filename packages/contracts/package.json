@@ -1,0 +1,18 @@
+{
+  "name": "@bpmiq/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend ↔ frontend wire types + the live-document contract, pinned in ONE place: backends type their response assembly against these (satisfies / return-type annotations), frontends re-export them — shape drift becomes a tsc error. Zero dependencies.",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "exports": {
+    "./live-host": "./src/live-host.ts",
+    "./common": "./src/common.ts",
+    "./live": "./src/live.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

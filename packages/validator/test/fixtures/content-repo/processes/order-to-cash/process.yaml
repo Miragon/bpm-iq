@@ -1,0 +1,158 @@
+# yaml-language-server: $schema=../../schemas/process.schema.json
+# Process metadata — schema reference: docs/process-metadata.md
+# Every reference below must resolve against landscape/ models. `scripts/validate.ts` checks this.
+
+# Identity ─────────────────────────────────────────────────────────
+id: order-to-cash
+name: Order to Cash
+classification: core
+level: 2
+version: 1.0.0
+status: as-is
+last_reviewed: 2026-07-06
+review_cycle_months: 6
+
+# Purpose ──────────────────────────────────────────────────────────
+purpose: >
+  Turn a confirmed customer order into collected revenue: validate the order,
+  check credit, fulfill, invoice, and record payment. This is Acme Commerce's
+  primary revenue process.
+trigger: Customer places an order
+outcome: Payment received and order fulfilled
+
+# Ownership (→ landscape/team-topology.tt) ─────────────────────────
+owner:
+  team: team-order-management
+  role: Process Owner
+participants:
+  - team: team-payments-platform
+    interaction: x-as-a-service
+
+# Strategic context ────────────────────────────────────────────────
+value_chain: # → landscape/value-chain.vc.json (element ids)
+  steps:
+    - step-sales
+    - step-fulfillment
+    - step-billing
+wardley: # → landscape/wardley-map.owm (component display names)
+  components:
+    - Order Management
+    - Credit Check
+    - Order Fulfillment
+    - Invoicing
+    - Payment Processing
+
+# Operations ───────────────────────────────────────────────────────
+kpis:
+  - name: Order cycle time (order received → payment recorded)
+    target: "< 5 business days"
+    direction: lower-is-better
+    source: ERP report OTC-01
+    measured_from: StartEvent_order_received
+    measured_to: EndEvent_order_fulfilled
+    actuals:
+      - date: 2026-06-30
+        value: "6.2 business days"
+  - name: First-pass yield (orders fulfilled without manual rework)
+    target: "> 95%"
+    direction: higher-is-better
+    source: ERP report OTC-02
+  - name: Days sales outstanding (DSO)
+    target: "< 30 days"
+    direction: lower-is-better
+    source: Finance dashboard
+operations:
+  volume:
+    cases_per_period: 1400
+    period: month
+    as_of: 2026-06-30
+    source: ERP report OTC-01
+  cost:
+    per_case: "≈ 18 EUR"
+    as_of: 2026-06-30
+systems:
+  - name: ERP
+    role: System of record for orders, inventory, and invoices
+  - name: Payment gateway
+    role: Processes incoming payments (outsourced commodity)
+inputs:
+  - Confirmed customer order
+outputs:
+  - Fulfilled shipment
+  - Paid invoice
+
+# Structure ────────────────────────────────────────────────────────
+models:
+  bpmn: order-to-cash.bpmn
+subprocesses:
+  - id: invoice-handling
+    name: Invoice Handling
+    file: subprocesses/invoice-handling.bpmn
+decisions:
+  - id: credit-check
+    name: Credit approved?
+    file: decisions/credit-check.dmn
+    used_by: Gateway_credit_approved
+docs:
+  - docs/overview.md
+
+# Relationships ────────────────────────────────────────────────────
+related_processes:
+  - id: customer-onboarding
+    relationship: upstream
+    note: New customers must be onboarded (master data, credit terms) before their first order.
+exceptions:
+  - name: Credit check fails
+    handling: Order is rejected; customer is notified with the reason and alternatives (prepayment).
+    frequency: "~4% of orders (as of 2026-06)"
+  - name: Payment not received within terms
+    handling: A timer on "Await payment" (Invoice Handling) triggers a payment reminder when terms expire; the loop repeats until payment is recorded.
+    frequency: "~11% of invoices (as of 2026-06)"
+
+# Risk & compliance ────────────────────────────────────────────────
+risks:
+  - name: Revenue loss from uncollectible orders
+    impact: high
+    mitigated_by: Credit check before fulfillment
+controls:
+  - name: Credit check before fulfillment
+    type: preventive
+    element: Task_check_credit
+    requirement: Internal credit policy CP-7
+
+# Automation ───────────────────────────────────────────────────────
+automation:
+  status: candidate
+  note: >
+    Dunning is the first candidate: "Send payment reminder" is manual work on a
+    commodity capability (Payment Processing). See docs/automation.md for the path.
+
+# Process mining connection ────────────────────────────────────────
+mining:
+  case_id:
+    name: Order number
+    system: ERP
+  events:
+    - activity: Task_check_credit
+      system: ERP
+      event: CreditCheckCompleted
+    - activity: Task_fulfill_order
+      system: ERP
+      event: GoodsIssuePosted
+    - activity: Task_create_invoice
+      system: ERP
+      event: InvoiceCreated
+  no_digital_trace:
+    - Task_validate_order
+    - Task_send_reminder
+
+# Governance (→ docs/governance.md) ────────────────────────────────
+approval:
+  approved_by: Process Owner, team-order-management
+  date: 2026-07-06
+  version: 1.0.0
+history:
+  - version: 1.0.0
+    date: 2026-07-06
+    change: Initial as-is model of the order-to-cash process
+    changed_by: team-order-management

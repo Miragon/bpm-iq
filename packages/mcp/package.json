@@ -1,0 +1,21 @@
+{
+  "name": "@bpmiq/mcp",
+  "version": "0.1.0",
+  "description": "Read-only MCP server exposing a BPM content repo\u2019s process dependency graph (process.yaml + landscape models) to any MCP client.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "start": "node server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@bpmiq/notations": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "yaml": "^2.0.0",
+    "zod": "^3.25.0"
+  }
+}

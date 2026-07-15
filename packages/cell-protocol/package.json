@@ -1,0 +1,17 @@
+{
+  "name": "@bpmiq/cell-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The control-plane ↔ cell security wire contract (ADR 0002): derived per-cell secrets + the handoff-token codec, pinned in one place so the two sides can't drift. Zero deps (node:crypto only).",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
+  }
+}

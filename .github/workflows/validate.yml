@@ -1,0 +1,45 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint (eslint — errors fail; warnings are the ratchet)
+        run: pnpm lint
+      - name: Architecture rules (dependency-cruiser — layer/topology boundaries)
+        run: pnpm arch
+      - name: Format check (prettier)
+        run: pnpm format:check
+      - name: Typecheck all packages (type stripping runs untyped otherwise)
+        run: pnpm typecheck
+      - name: Validate link integrity, schema conformance, BPMN structure, export freshness
+        run: pnpm validate
+      - name: Tests (validator, web sync merge, live-host release flow)
+        run: pnpm test
+      - name: Build (web app + portal — a Vite/VitePress break must not first surface in the Fly image)
+        run: pnpm build
+      - name: Content-repo schema copy must match the canonical platform schema
+        # process.yaml's $schema points at the content repo's own schemas/ copy
+        # (editor tooling, starter self-containment); the VALIDATING copy is
+        # always packages/validator/schemas — this keeps the two from drifting.
+        run: cmp packages/validator/schemas/process.schema.json process-documentation/schemas/process.schema.json
+      - name: No stale pre-monorepo paths in docs or code
+        # The b190944 restructure (collab/ → apps/, integrations/ → packages/) left
+        # docs pointing at dead paths once — this keeps that class of drift out for good.
+        run: |
+          if git grep -nE "collab/|integrations/mcp" -- ':!*.lock' ':!node_modules' ':!.github/workflows/validate.yml'; then
+            echo "::error::stale pre-monorepo path references found (collab/ or integrations/mcp)"
+            exit 1
+          fi

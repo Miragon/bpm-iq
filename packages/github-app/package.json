@@ -1,0 +1,18 @@
+{
+  "name": "@bpmiq/github-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GitHub App server-side primitives shared by the control plane (holds the app key, ADR 0002) and a standalone live-host: the RS256 app JWT, private-key loading, and the REST/OAuth plumbing (app requests, token minting, pagination, user OAuth), pinned in one place so the two sides can't drift. Zero third-party deps (node:crypto + node:fs).",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./oauth": "./src/oauth.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
+  }
+}

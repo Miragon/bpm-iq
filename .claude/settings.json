@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.local)",
+      "Read(.env.*.local)",
+      "Edit(.env)",
+      "Edit(.env.local)",
+      "Edit(.env.*.local)",
+      "Write(.env)",
+      "Write(.env.local)",
+      "Write(.env.*.local)",
+      "Bash(cat .env)",
+      "Bash(cat .env :*)",
+      "Bash(cat .env.local:*)",
+      "Bash(cat .env.*.local:*)",
+      "Bash(cat *.env)"
+    ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "claude-mem@thedotmack": true
+  }
+}

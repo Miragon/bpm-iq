@@ -1,0 +1,11 @@
+{
+  // Consumed by both worlds: Node type-stripping backends (NodeNext, inherited
+  // from the base — hence explicit ./x.ts intra-package imports) and bundlers
+  // (web/Vite, vscode/esbuild, which resolve the exports map themselves).
+  // DOM lib mirrors apps/web: bpmn-sync.ts uses DOMParser at call time.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src", "test"]
+}

@@ -1,0 +1,57 @@
+{
+  "name": "@bpmiq/vscode",
+  "displayName": "BPM Live Workspace",
+  "description": "M0 spike skeleton: open live model documents (bpm-live://) synced through the Live Host \u2014 the Miragon BPMN Modeler opens them like any other file.",
+  "version": "0.0.1",
+  "private": true,
+  "publisher": "miragon-gmbh",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onFileSystem:bpm-live"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "bpmLive.open",
+        "title": "BPM Live: Open Live Model"
+      }
+    ],
+    "configuration": {
+      "title": "BPM Live",
+      "properties": {
+        "bpmLive.serverUrl": {
+          "type": "string",
+          "default": "ws://localhost:8301",
+          "description": "WebSocket URL of the Live Host (Hocuspocus)."
+        },
+        "bpmLive.token": {
+          "type": "string",
+          "default": "demo",
+          "description": "Auth token (spike: shared token; later: WorkOS/GitHub JWT)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js",
+    "typecheck": "tsc -p .",
+    "test:e2e": "pnpm compile && esbuild src/test/e2e.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/test-e2e.js && node src/test/runTest.mts"
+  },
+  "dependencies": {
+    "@bpmiq/contracts": "workspace:*",
+    "@bpmiq/live-client": "workspace:*",
+    "@hocuspocus/provider": "^4.3.0",
+    "ws": "^8.21.0",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "@types/ws": "^8.5.0",
+    "@vscode/test-electron": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}

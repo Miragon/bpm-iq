@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "apps/*/ui"
+  - "packages/*"
+  - "process-documentation"
+# postinstall build scripts pnpm may run (blocked by default for security)
+allowBuilds:
+  esbuild: true
+  inferno: false

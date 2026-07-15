@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_order-to-cash" targetNamespace="http://acme-commerce.example/bpmn" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.24.0">
+  <bpmn:collaboration id="Collaboration_order-to-cash">
+    <bpmn:participant id="Participant_acme" name="Acme Commerce" processRef="order-to-cash" />
+  </bpmn:collaboration>
+  <bpmn:process id="order-to-cash" name="Order to Cash" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_order-to-cash">
+      <bpmn:lane id="Lane_order_management" name="Order Management">
+        <bpmn:flowNodeRef>StartEvent_order_received</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_validate_order</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_check_credit</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_credit_approved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_fulfill_order</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_reject_order</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_order_rejected</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_billing" name="Payments &amp; Billing Platform">
+        <bpmn:flowNodeRef>CallActivity_invoice_handling</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_order_fulfilled</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="StartEvent_order_received" name="Order received">
+      <bpmn:outgoing>Flow_validate</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Task_validate_order" name="Validate order">
+      <bpmn:incoming>Flow_validate</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_credit</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_check_credit" name="Check credit limit">
+      <bpmn:incoming>Flow_to_credit</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_gateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_credit_approved" name="Credit approved?">
+      <bpmn:incoming>Flow_to_gateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_yes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_no</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_fulfill_order" name="Fulfill order">
+      <bpmn:incoming>Flow_yes</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_invoice</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:callActivity id="CallActivity_invoice_handling" name="Invoice Handling" calledElement="invoice-handling">
+      <bpmn:incoming>Flow_to_invoice</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_fulfilled</bpmn:outgoing>
+    </bpmn:callActivity>
+    <bpmn:endEvent id="EndEvent_order_fulfilled" name="Order fulfilled">
+      <bpmn:incoming>Flow_to_fulfilled</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sendTask id="Task_reject_order" name="Notify customer of rejection">
+      <bpmn:incoming>Flow_no</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_rejected</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="EndEvent_order_rejected" name="Order rejected">
+      <bpmn:incoming>Flow_to_rejected</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_validate" sourceRef="StartEvent_order_received" targetRef="Task_validate_order" />
+    <bpmn:sequenceFlow id="Flow_to_credit" sourceRef="Task_validate_order" targetRef="Task_check_credit" />
+    <bpmn:sequenceFlow id="Flow_to_gateway" sourceRef="Task_check_credit" targetRef="Gateway_credit_approved" />
+    <bpmn:sequenceFlow id="Flow_yes" name="yes" sourceRef="Gateway_credit_approved" targetRef="Task_fulfill_order" />
+    <bpmn:sequenceFlow id="Flow_no" name="no" sourceRef="Gateway_credit_approved" targetRef="Task_reject_order" />
+    <bpmn:sequenceFlow id="Flow_to_invoice" sourceRef="Task_fulfill_order" targetRef="CallActivity_invoice_handling" />
+    <bpmn:sequenceFlow id="Flow_to_fulfilled" sourceRef="CallActivity_invoice_handling" targetRef="EndEvent_order_fulfilled" />
+    <bpmn:sequenceFlow id="Flow_to_rejected" sourceRef="Task_reject_order" targetRef="EndEvent_order_rejected" />
+    <bpmn:textAnnotation id="TextAnnotation_note">
+      <bpmn:text>Reviewer note: valid artifact, must not error</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_note" associationDirection="None" sourceRef="Task_validate_order" targetRef="TextAnnotation_note" />
+    <bpmn:dataObject id="DataObject_inv" />
+    <bpmn:dataObjectReference id="DataObjectReference_inv" dataObjectRef="DataObject_inv" name="Invoice" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_order-to-cash">
+    <bpmndi:BPMNPlane id="BPMNPlane_order-to-cash" bpmnElement="Collaboration_order-to-cash">
+      <bpmndi:BPMNShape id="Participant_acme_di" bpmnElement="Participant_acme" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1040" height="480" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_order_management_di" bpmnElement="Lane_order_management" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1010" height="280" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_billing_di" bpmnElement="Lane_billing" isHorizontal="true">
+        <dc:Bounds x="190" y="360" width="1010" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_order_received_di" bpmnElement="StartEvent_order_received">
+        <dc:Bounds x="240" y="152" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="222" y="195" width="73" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_validate_order_di" bpmnElement="Task_validate_order">
+        <dc:Bounds x="320" y="130" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_check_credit_di" bpmnElement="Task_check_credit">
+        <dc:Bounds x="470" y="130" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_credit_approved_di" bpmnElement="Gateway_credit_approved" isMarkerVisible="true">
+        <dc:Bounds x="620" y="145" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="603" y="115" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_fulfill_order_di" bpmnElement="Task_fulfill_order">
+        <dc:Bounds x="720" y="130" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_reject_order_di" bpmnElement="Task_reject_order">
+        <dc:Bounds x="595" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_order_rejected_di" bpmnElement="EndEvent_order_rejected">
+        <dc:Bounds x="760" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="742" y="315" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CallActivity_invoice_handling_di" bpmnElement="CallActivity_invoice_handling">
+        <dc:Bounds x="920" y="400" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_order_fulfilled_di" bpmnElement="EndEvent_order_fulfilled">
+        <dc:Bounds x="1080" y="422" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1063" y="465" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_validate_di" bpmnElement="Flow_validate">
+        <di:waypoint x="276" y="170" />
+        <di:waypoint x="320" y="170" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_to_credit_di" bpmnElement="Flow_to_credit">
+        <di:waypoint x="420" y="170" />
+        <di:waypoint x="470" y="170" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_to_gateway_di" bpmnElement="Flow_to_gateway">
+        <di:waypoint x="570" y="170" />
+        <di:waypoint x="620" y="170" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_yes_di" bpmnElement="Flow_yes">
+        <di:waypoint x="670" y="170" />
+        <di:waypoint x="720" y="170" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="686" y="152" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_no_di" bpmnElement="Flow_no">
+        <di:waypoint x="645" y="195" />
+        <di:waypoint x="645" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="652" y="210" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_to_invoice_di" bpmnElement="Flow_to_invoice">
+        <di:waypoint x="820" y="170" />
+        <di:waypoint x="870" y="170" />
+        <di:waypoint x="870" y="440" />
+        <di:waypoint x="920" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_to_fulfilled_di" bpmnElement="Flow_to_fulfilled">
+        <di:waypoint x="1020" y="440" />
+        <di:waypoint x="1080" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_to_rejected_di" bpmnElement="Flow_to_rejected">
+        <di:waypoint x="695" y="290" />
+        <di:waypoint x="760" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_note_di" bpmnElement="Association_note"><di:waypoint x="900" y="60" /><di:waypoint x="860" y="90" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="DataObjectReference_inv_di" bpmnElement="DataObjectReference_inv"><dc:Bounds x="960" y="120" width="36" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_note_di" bpmnElement="TextAnnotation_note"><dc:Bounds x="900" y="40" width="140" height="40" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

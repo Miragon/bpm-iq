@@ -1,0 +1,45 @@
+name: Connector proposal
+description: Propose a new git-provider connector (GitLab, Bitbucket, Gitea, …) against the existing ports.
+labels: ["connector"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A connector is a new `adapters/<vendor>/` folder against the existing ports — never a change
+        to a use-case (ADR 0003). Read [docs/extending/connectors.md](../../docs/extending/connectors.md) first.
+  - type: checkboxes
+    id: ports
+    attributes:
+      label: Which port(s)?
+      options:
+        - label: "`GitProvider` (`apps/live-host/src/ports/git-provider.ts`) — auth, per-(user,repo) permission checks, branch/push/PR"
+        - label: "`RepoConnectionSource` (`apps/live-host/src/ports/connection-source.ts`) — repo discovery and connection enumeration"
+    validations:
+      required: true
+  - type: input
+    id: vendor
+    attributes:
+      label: Target vendor
+      description: Product and edition — hosted, self-managed, minimum version.
+      placeholder: GitLab self-managed >= 17.x
+    validations:
+      required: true
+  - type: textarea
+    id: auth-model
+    attributes:
+      label: Auth model
+      description: How users sign in and how the connector derives per-(user,repo) write permission. OAuth app, PAT, group/project tokens? Who mints what, what is stored where?
+    validations:
+      required: true
+  - type: textarea
+    id: pr-mapping
+    attributes:
+      label: MR/PR mapping
+      description: How "release as PR" maps to the vendor — branch from default, push as the user, open the MR/PR in their name. What maps 1:1, what doesn't (draft state, approvals, CODEOWNERS equivalent)?
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: API quirks, rate limits, webhook signature scheme, whether you plan to implement it yourself.

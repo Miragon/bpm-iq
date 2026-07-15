@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "bpm-architecture": {
+      "command": "node",
+      "args": ["packages/mcp/server.ts"]
+    }
+  }
+}

@@ -1,0 +1,86 @@
+name: Sync process-documentation starter
+
+# Mirrors process-documentation/ into Miragon/process-documentation-starter so the
+# "Use this template" repo never drifts from the monorepo source of truth.
+# Requires the release-please GitHub App installed on the starter repo with
+# Contents write (and Workflows write if the template later ships workflows).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "process-documentation/**"
+      - ".github/workflows/sync-starter.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-starter
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Push process-documentation to the starter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          owner: Miragon
+          repositories: process-documentation-starter
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: Miragon/process-documentation-starter
+          token: ${{ steps.app-token.outputs.token }}
+          path: starter
+
+      - name: Mirror content into the starter
+        run: rsync -a --delete --exclude ".git" process-documentation/ starter/
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Verify the mirrored starter is complete and builds standalone
+        working-directory: starter
+        run: |
+          # template essentials must survive the mirror
+          for f in LICENSE README.md .github/CODEOWNERS .vscode/extensions.json scripts/validate.ts; do
+            test -f "$f" || { echo "::error::starter is missing $f"; exit 1; }
+          done
+          # the starter is standalone (plain npm, no workspace: deps)
+          npm install --no-audit --no-fund
+          npm run build
+          # validate must either pass or fail GRACEFULLY (exit 2 = validator not bundled
+          # yet — acceptable until @bpmiq/validator is published), never crash
+          status=0
+          node scripts/validate.ts || status=$?
+          if [ "$status" -eq 0 ]; then
+            echo "starter validated"
+          elif [ "$status" -eq 2 ]; then
+            echo "validator not bundled — graceful degradation confirmed"
+          else
+            echo "::error::starter validate failed (exit $status)"; exit 1
+          fi
+          # build artifacts are gitignored; make sure nothing slipped through
+          git status --porcelain | grep -E "node_modules|\.vitepress/(dist|cache)" && exit 1 || true
+
+      - name: Commit and push
+        working-directory: starter
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Starter already up to date."
+            exit 0
+          fi
+          git commit -m "chore: sync from bpm-architect@${GITHUB_SHA::7}"
+          git push

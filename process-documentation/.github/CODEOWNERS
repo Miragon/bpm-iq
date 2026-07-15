@@ -1,0 +1,29 @@
+# CODEOWNERS — decision rights per path (see docs/governance.md).
+# Merge approval = release: a required review from the owning team IS the release decision.
+#
+# TODO: Replace every placeholder below with your real GitHub org and team slugs
+#       (e.g. @acme/order-management). Placeholders will silently match nothing.
+# TODO: Keep these entries in sync with `owner.team` in each processes/<id>/process.yaml
+#       and with the team ids in landscape/team-topology.tt — CODEOWNERS is not validated
+#       automatically, so drift here is on you.
+#
+# GitHub ignores lines starting with #. Later entries win over earlier ones,
+# so process-specific rules must come AFTER the repo-wide method rules.
+
+# ── Method & shared models — CoE / method owner ─────────────────────
+# In the example organization: team-process-excellence (landscape/team-topology.tt).
+# Landscape changes also need the affected process owners — a team or value chain
+# step id rename breaks every process.yaml referencing it. Run `pnpm validate`
+# before merging; request the extra reviews manually (CODEOWNERS can't express "+").
+/landscape/       @your-org/process-excellence
+/docs/            @your-org/process-excellence
+/scripts/         @your-org/process-excellence
+/.claude/         @your-org/process-excellence
+/.github/         @your-org/process-excellence
+/templates/       @your-org/process-excellence
+
+# ── Processes — one entry per processes/<id>/, owned by its owner.team ──
+# order-to-cash: owner.team = team-order-management
+/processes/order-to-cash/   @your-org/order-management
+
+# TODO: Add one line per new process directory when the new-process skill scaffolds it.

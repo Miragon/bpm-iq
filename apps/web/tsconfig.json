@@ -1,0 +1,16 @@
+{
+  // Browser bundle (Vite, React). Inherits the shared strict base; overrides only
+  // what the browser/bundler world needs. vite build does its own transform — tsc
+  // is a pure type gate.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] },
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src", "test"]
+}

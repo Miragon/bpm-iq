@@ -1,0 +1,75 @@
+# bpmiq Live Host — production-shaped Docker Compose example (on-prem, ADR 0004).
+#
+#   cp .env.example .env    # fill in LIVE_PUBLIC_URL + your GitHub credentials
+#   docker compose up -d
+#
+# The image serves HTTP API + web app + WebSocket sync on ONE port (8080
+# in-container). ghcr.io/miragon/bpmiq-live-host is the same artifact Miragon's
+# hosted cells run.
+
+services:
+  live-host:
+    image: ghcr.io/miragon/bpmiq-live-host:${BPMIQ_VERSION:-latest}
+    env_file: .env
+    ports:
+      # host 8301 → container 8080 (the image pins PORT=8080; HTTP + ws share it)
+      - "8301:8080"
+    volumes:
+      # host-owned state: Yjs lineages + sessions (live.db), repo registry,
+      # workspace clones — the image sets LIVE_DATA_DIR=/data
+      - ./data:/data
+    restart: unless-stopped
+    # Graceful shutdown MUST outlast the in-process hard exit (LIVE_SHUTDOWN_MS,
+    # default 25s): on SIGTERM the server flushes the debounced write-throughs
+    # (up to ~10s of pending edits per open doc) to SQLite and the workspace
+    # tree — a shorter grace period SIGKILLs mid-flush and loses edits.
+    stop_grace_period: 30s
+    healthcheck:
+      # the image ships NO curl/wget — probe /healthz with node's global fetch
+      # (200 ok / 503 degraded: SQLite unwritable or disk critically low)
+      test:
+        [
+          "CMD",
+          "node",
+          "--eval",
+          "fetch('http://localhost:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      start_period: 10s
+
+  # ── Optional: read-only process portal + MCP server ──────────────────────
+  # Serves a CONTENT repo checkout (the process-documentation contract) to
+  # browsers and MCP clients. Image published later (ADR 0004 fast-follow) —
+  # shown here for shape.
+  #
+  # mcp:
+  #   image: ghcr.io/miragon/bpmiq-portal:${BPMIQ_VERSION:-latest}
+  #   environment:
+  #     BPM_CONTENT_ROOT: /content # content-repo checkout mounted below
+  #     # MCP_TOKEN: change-me     # optional — MCP clients must then send "Authorization: Bearer <token>"
+  #   volumes:
+  #     - ./content:/content:ro # a checkout of YOUR content repo
+  #   ports:
+  #     - "8302:8080"
+  #   restart: unless-stopped
+
+  # ── Optional: TLS termination (WebSocket-safe) ────────────────────────────
+  # Caddy terminates TLS and proxies to the live-host; reverse_proxy upgrades
+  # WebSockets automatically — no extra config. The whole Caddyfile is 2 lines:
+  #
+  #   bpm.example.com
+  #   reverse_proxy live-host:8080
+  #
+  # LIVE_PUBLIC_URL must then be the https URL (https://bpm.example.com) —
+  # OAuth callbacks, webhooks and Secure cookies derive from it. Drop the
+  # live-host `ports:` mapping when only Caddy should be reachable.
+  #
+  # caddy:
+  #   image: caddy:2
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - ./caddy-data:/data
+  #   restart: unless-stopped

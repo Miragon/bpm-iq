@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_twopool" targetNamespace="http://bpmiq.example/two-pool">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_company" name="Company" processRef="Process_company" />
+    <bpmn:participant id="Participant_customer" name="Customer" processRef="Process_customer" />
+    <bpmn:messageFlow id="MessageFlow_offer" sourceRef="Task_send_offer" targetRef="StartEvent_customer" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_company" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_company" name="Inquiry received">
+      <bpmn:outgoing>Flow_c1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Task_send_offer" name="Send offer">
+      <bpmn:incoming>Flow_c1</bpmn:incoming>
+      <bpmn:outgoing>Flow_c2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="EndEvent_company" name="Offer sent">
+      <bpmn:incoming>Flow_c2</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_c1" sourceRef="StartEvent_company" targetRef="Task_send_offer" />
+    <bpmn:sequenceFlow id="Flow_c2" sourceRef="Task_send_offer" targetRef="SubProcess_review" />
+    <bpmn:sequenceFlow id="Flow_c3" sourceRef="SubProcess_review" targetRef="EndEvent_company" />
+    <bpmn:subProcess id="SubProcess_review" name="Review internally">
+      <bpmn:incoming>Flow_c2</bpmn:incoming>
+      <bpmn:outgoing>Flow_c3</bpmn:outgoing>
+      <bpmn:startEvent id="StartEvent_review"><bpmn:outgoing>Flow_r1</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:task id="Task_review" name="Review offer"><bpmn:incoming>Flow_r1</bpmn:incoming><bpmn:outgoing>Flow_r2</bpmn:outgoing></bpmn:task>
+      <bpmn:endEvent id="EndEvent_review"><bpmn:incoming>Flow_r2</bpmn:incoming></bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_r1" sourceRef="StartEvent_review" targetRef="Task_review" />
+      <bpmn:sequenceFlow id="Flow_r2" sourceRef="Task_review" targetRef="EndEvent_review" />
+    </bpmn:subProcess>
+  </bpmn:process>
+  <bpmn:process id="Process_customer" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_customer" name="Offer received">
+      <bpmn:outgoing>Flow_k1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:endEvent id="EndEvent_customer" name="Offer reviewed">
+      <bpmn:incoming>Flow_k1</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_k1" sourceRef="StartEvent_customer" targetRef="EndEvent_customer" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="Participant_company_di" bpmnElement="Participant_company" isHorizontal="true"><dc:Bounds x="120" y="60" width="600" height="250" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Participant_customer_di" bpmnElement="Participant_customer" isHorizontal="true"><dc:Bounds x="120" y="360" width="600" height="160" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_company_di" bpmnElement="StartEvent_company"><dc:Bounds x="172" y="142" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_send_offer_di" bpmnElement="Task_send_offer"><dc:Bounds x="260" y="120" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_company_di" bpmnElement="EndEvent_company"><dc:Bounds x="412" y="142" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SubProcess_review_di" bpmnElement="SubProcess_review" isExpanded="true"><dc:Bounds x="480" y="100" width="220" height="180" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_review_di" bpmnElement="StartEvent_review"><dc:Bounds x="500" y="160" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_review_di" bpmnElement="Task_review"><dc:Bounds x="560" y="140" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_review_di" bpmnElement="EndEvent_review"><dc:Bounds x="670" y="160" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_r1_di" bpmnElement="Flow_r1"><di:waypoint x="536" y="178" /><di:waypoint x="560" y="178" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_r2_di" bpmnElement="Flow_r2"><di:waypoint x="660" y="178" /><di:waypoint x="670" y="178" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_c1_di" bpmnElement="Flow_c1"><di:waypoint x="208" y="160" /><di:waypoint x="260" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_c2_di" bpmnElement="Flow_c2"><di:waypoint x="360" y="160" /><di:waypoint x="480" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_c3_di" bpmnElement="Flow_c3"><di:waypoint x="700" y="160" /><di:waypoint x="412" y="160" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="StartEvent_customer_di" bpmnElement="StartEvent_customer"><dc:Bounds x="172" y="422" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_customer_di" bpmnElement="EndEvent_customer"><dc:Bounds x="272" y="422" width="36" height="36" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_k1_di" bpmnElement="Flow_k1"><di:waypoint x="208" y="440" /><di:waypoint x="272" y="440" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="MessageFlow_offer_di" bpmnElement="MessageFlow_offer"><di:waypoint x="310" y="200" /><di:waypoint x="190" y="422" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
