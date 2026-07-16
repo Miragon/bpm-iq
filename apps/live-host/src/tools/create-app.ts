@@ -43,7 +43,7 @@ const manifest = JSON.stringify({
   request_oauth_on_install: true,
   description: "Live BPM collaboration — releases become pull requests in the name of the releasing user.",
   public: false,
-  default_permissions: { contents: "write", pull_requests: "write", metadata: "read" },
+  default_permissions: { contents: "write", pull_requests: "write", issues: "write", metadata: "read" },
   ...(webhookUrl ? { hook_attributes: { url: webhookUrl, active: false } } : {}),
 });
 
