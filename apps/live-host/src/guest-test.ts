@@ -22,7 +22,7 @@ const URL = process.env.LIVE_URL ?? "ws://localhost:8301";
 const TOKEN = process.env.LIVE_TOKEN ?? "demo";
 // room = <owner>/<repo>/<repo-relative-path>; the monorepo's root bpmiq.yml
 // points its processes folder at process-documentation/processes
-const DOC_NAME = "Miragon/bpm-iq/process-documentation/processes/order-to-cash/order-to-cash.bpmn";
+const DOC_NAME = "Miragon/bpm-iq/process-documentation/processes/order-to-cash.bpmn";
 const REL_PATH = DOC_NAME.split("/").slice(2).join("/");
 const HOST_CONTENT =
   process.env.LIVE_HOST_CONTENT_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");

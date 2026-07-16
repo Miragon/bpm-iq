@@ -118,7 +118,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("bpmLive.open", async () => {
       const path = await vscode.window.showInputBox({
         prompt: "Model path on the Live Host: <owner>/<repo>/<repo-relative-path>",
-        value: "Miragon/bpm-iq/process-documentation/processes/order-to-cash/order-to-cash.bpmn",
+        value: "Miragon/bpm-iq/process-documentation/processes/order-to-cash.bpmn",
       });
       if (!path) return;
       await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(`${SCHEME}:/${path}`));

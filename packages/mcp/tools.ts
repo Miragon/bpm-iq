@@ -3,26 +3,36 @@
  *   server.ts  → stdio (local: Claude Code picks it up via .mcp.json)
  *   http.ts    → Streamable HTTP (remote: fly.io, any MCP client via URL)
  *
- * Read-only by construction: only readFileSync/readdirSync, no write path.
- * All tools carry readOnlyHint so clients may auto-approve them. The one
- * opt-in exception to "repo-local" is list_todos (registered ONLY when
- * BPM_TODOS_REPO + BPM_TODOS_TOKEN are set): a read-only GET against the
- * content repo's issue tracker — the zero-auth default stays untouched.
+ * Read-only by construction: only readFileSync + the content-repo discovery,
+ * no write path. All tools carry readOnlyHint so clients may auto-approve them.
+ * The one opt-in exception to "repo-local" is list_todos (registered ONLY when
+ * BPM_TODOS_REPO + BPM_TODOS_TOKEN are set): a read-only GET against the content
+ * repo's issue tracker — the zero-auth default stays untouched.
  *
- * Content root: pass --root <dir> (server.ts) or BPM_CONTENT_ROOT — any BPM
- * content repo works, the bundled process-documentation is only the default.
+ * The content contract is minimal (@bpmiq/notations/content): a repo is a BPM
+ * content repo iff it has a root bpmiq.yml naming its BPMN processes folder; a
+ * process IS a .bpmn file there. There is NO hand-written process.yaml — the
+ * process view (name, roles, steps, flow, sub-process calls) is DERIVED from the
+ * BPMN on the fly (@bpmiq/notations/derive). A new notation with an extractor is
+ * automatically analyzable here.
  *
- * Model analyses run on the generic ModelGraph from @bpmiq/notations/extract —
- * a new notation with an extractor is automatically analyzable here.
+ * Content root: pass --root <dir> (server.ts) or BPM_CONTENT_ROOT — any content
+ * repo works, the bundled process-documentation is only the default.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseAnchor } from "@bpmiq/contracts/todo-anchor";
+import {
+  type ContentConfig,
+  type DiscoveredProcess,
+  discoverProcesses,
+  loadContentConfig,
+} from "@bpmiq/notations/content";
+import { deriveProcess } from "@bpmiq/notations/derive";
 import { extractModelGraph, type ModelGraph } from "@bpmiq/notations/extract";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import YAML from "yaml";
 import { z } from "zod";
 
 /** This file lives at packages/mcp/; the example content repo is process-documentation/. */
@@ -37,36 +47,6 @@ const readText = (path: string): string | null => {
     return null;
   }
 };
-const parseYaml = (text: string): any => {
-  try {
-    return YAML.parse(text);
-  } catch {
-    return null;
-  }
-};
-const parseJson = (text: string): any => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-};
-
-function listFiles(dir: string, prefix = ""): string[] {
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const files: string[] = [];
-  for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    const rel = prefix ? `${prefix}/${e.name}` : e.name;
-    if (e.isDirectory()) files.push(...listFiles(join(dir, e.name), rel));
-    else files.push(rel);
-  }
-  return files;
-}
 
 // ── Tool result helpers ───────────────────────────────────────────────────────
 const ok = (value: unknown) => ({
@@ -172,51 +152,29 @@ export function todosConfigFromEnv(env: Record<string, string | undefined>): Tod
 
 /** Build a fully configured, read-only MCP server over the repo at `root`. */
 export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig): McpServer {
-  const PROCESSES = join(root, "processes");
-  const LANDSCAPE = join(root, "landscape");
-  const TEAM_TOPOLOGY = join(LANDSCAPE, "team-topology.tt");
-  const GLOSSARY = join(LANDSCAPE, "glossary.yaml");
-
-  const processIds = () => {
-    let entries;
-    try {
-      entries = readdirSync(PROCESSES, { withFileTypes: true });
-    } catch {
-      return [];
-    }
-    return entries
-      .filter((e) => e.isDirectory() && existsSync(join(PROCESSES, e.name, "process.yaml")))
-      .map((e) => e.name)
-      .sort();
+  // re-read the contract per call so the server reflects a live-edited checkout
+  const config = (): ContentConfig | undefined => loadContentConfig(root);
+  const processes = async (): Promise<DiscoveredProcess[]> => {
+    const cfg = config();
+    return cfg ? discoverProcesses(root, cfg) : [];
   };
-  const loadProcess = (id: string) => {
-    const text = readText(join(PROCESSES, id, "process.yaml"));
-    return text === null ? null : parseYaml(text);
-  };
-  /** resolve a model file within one process dir — traversal-safe */
-  const modelPath = (id: string, rel: string): string | null => {
-    const dir = resolve(PROCESSES, id);
-    const abs = resolve(dir, rel);
-    return abs.startsWith(dir + "/") ? abs : null;
-  };
-  /** every model file a process declares (models, subprocesses, decisions) */
-  const declaredModels = (meta: any): string[] =>
-    [
-      ...Object.values((meta?.models ?? {}) as Record<string, string>),
-      ...(meta?.subprocesses ?? []).map((sp: { file?: string }) => sp?.file),
-      ...(meta?.decisions ?? []).map((d: { file?: string }) => d?.file),
-    ].filter(Boolean) as string[];
-  const graphFor = (id: string, rel: string): ModelGraph | ToolResult => {
-    const abs = modelPath(id, rel);
-    if (!abs) return fail(`Illegal model path '${rel}' — must stay inside processes/${id}/.`);
-    const raw = readText(abs);
-    if (raw === null) return fail(`No such model file: processes/${id}/${rel}.`);
-    const graph = extractModelGraph(rel, raw);
-    if (!graph)
-      return fail(`No extractor for '${rel}' — known notations: bpmn, dmn, wardley, team-topology, value-chain.`);
+  const findProcess = async (id: string): Promise<DiscoveredProcess | null> =>
+    (await processes()).find((p) => p.id === id) ?? null;
+  /** parse a discovered process's .bpmn into a ModelGraph, or a failure result */
+  const graphOf = (proc: DiscoveredProcess): ModelGraph | ToolResult => {
+    const raw = readText(join(root, proc.path));
+    if (raw === null) return fail(`No such model file: ${proc.path}.`);
+    const graph = extractModelGraph(proc.path, raw);
+    if (!graph) return fail(`No extractor for '${proc.path}'.`);
     return graph;
   };
   const isGraph = (g: ModelGraph | ToolResult): g is ModelGraph => !("content" in g);
+  const notAContentRepo = () =>
+    fail(
+      `No bpmiq.yml at the content root — not a BPM content repo. Expected a root bpmiq.yml naming a processes folder.`,
+    );
+  const unknownProcess = async (id: string) =>
+    fail(`Unknown process '${id}'. Available: ${(await processes()).map((p) => p.id).join(", ") || "(none)"}.`);
 
   const server = new McpServer({ name: "bpm-architecture", version: "0.2.0" });
 
@@ -224,30 +182,22 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     "list_processes",
     {
       description:
-        "List all modeled business processes (processes/*/process.yaml): id, name, classification " +
-        "(core | support | management), status (draft | to-be | as-is | deprecated), version, " +
-        "owning team, and last_reviewed date. Use to get a portfolio overview or to find a " +
-        "process id before calling get_process, get_model or who_owns.",
+        "List all modeled business processes — every .bpmn file under the repo's bpmiq.yml " +
+        "processes folder. Each row: id (file name without extension), derived name, the file " +
+        "path, and a count of steps/events/gateways/roles. Use to get a portfolio overview or " +
+        "to find a process id before calling get_process, get_model, who_owns or enumerate_paths.",
       annotations: READ_ONLY,
     },
-    safe(() => {
-      const ids = processIds();
-      if (ids.length === 0) {
-        return fail(`No processes found — expected processes/<id>/process.yaml under ${PROCESSES}.`);
-      }
+    safe(async () => {
+      if (!config()) return notAContentRepo();
+      const procs = await processes();
+      if (procs.length === 0) return ok("No processes found — no .bpmn files under the configured processes folder.");
       return ok(
-        ids.map((id) => {
-          const meta = loadProcess(id);
-          if (!meta) return { id, error: "process.yaml missing or invalid YAML" };
-          return {
-            id,
-            name: meta.name ?? null,
-            classification: meta.classification ?? null,
-            status: meta.status ?? null,
-            version: meta.version ?? null,
-            owner: meta.owner?.team ?? null,
-            last_reviewed: meta.last_reviewed ?? null,
-          };
+        procs.map((p) => {
+          const graph = graphOf(p);
+          if (!isGraph(graph)) return { id: p.id, path: p.path, error: "could not parse BPMN" };
+          const d = deriveProcess(graph);
+          return { id: p.id, name: d.name ?? p.id, path: p.path, ...d.stats };
         }),
       );
     }),
@@ -257,30 +207,22 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     "get_process",
     {
       description:
-        "Get one process in full: the complete process.yaml metadata (purpose, trigger, outcome, " +
-        "ownership, value_chain/supports links, wardley.components, kpis, operations, systems, " +
-        "risks, controls, automation, mining, decisions, approval, history), the list of model " +
-        "and doc files in its directory, and the docs/overview.md text if present. Use for " +
-        "walkthroughs and any deep question about a single process.",
-      inputSchema: { id: z.string().describe("Process id = directory name under processes/, e.g. order-to-cash") },
+        "Get one process in full: the process view DERIVED from its BPMN — name, roles (BPMN " +
+        "lanes = owning teams), steps (activities with their role), events, gateways, the " +
+        "sequence/message flow, and the sub-processes it calls (callActivity → calledElement). " +
+        "Use for walkthroughs and any deep question about a single process.",
+      inputSchema: {
+        id: z.string().describe("Process id = the .bpmn file name without extension, e.g. order-to-cash"),
+      },
       annotations: READ_ONLY,
     },
-    safe(({ id }) => {
-      const dir = join(PROCESSES, id);
-      const raw = readText(join(dir, "process.yaml"));
-      if (raw === null) {
-        return fail(`Unknown process '${id}'. Available: ${processIds().join(", ") || "(none)"}.`);
-      }
-      const metadata = parseYaml(raw);
-      if (metadata === null) return fail(`processes/${id}/process.yaml exists but is not valid YAML.`);
-      const overview = readText(join(dir, "docs", "overview.md"));
-      return ok({
-        id,
-        path: `processes/${id}/process.yaml`,
-        metadata,
-        files: listFiles(dir).filter((f) => f !== "process.yaml"),
-        overview: overview ?? "(no docs/overview.md in this process)",
-      });
+    safe(async ({ id }) => {
+      if (!config()) return notAContentRepo();
+      const proc = await findProcess(id);
+      if (!proc) return unknownProcess(id);
+      const graph = graphOf(proc);
+      if (!isGraph(graph)) return graph;
+      return ok({ id: proc.id, path: proc.path, ...deriveProcess(graph) });
     }),
   );
 
@@ -288,31 +230,18 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     "get_model",
     {
       description:
-        "Parse ONE model file of a process into a generic graph: nodes (id, type, name), edges " +
-        "(sequence/message flows, information requirements, dependencies) and notation-specific " +
-        "meta (lanes, pools, DMN hit policies + rule counts). Works for every registered notation " +
-        "(BPMN, DMN, Wardley .owm, team topology .tt, value chain .vc.json). Default: the " +
-        "process's primary BPMN model. Use to see the actual flow, decision structure, or to " +
-        "ground any 'how does X work' answer in the real model instead of metadata.",
-      inputSchema: {
-        id: z.string().describe("Process id, e.g. order-to-cash"),
-        file: z
-          .string()
-          .optional()
-          .describe("Model file relative to the process dir (default: models.bpmn), e.g. decisions/credit-check.dmn"),
-      },
+        "Parse a process's BPMN model into a generic graph: nodes (id, type, name), edges " +
+        "(sequence/message flows) and meta (lanes, pools). Use to see the raw flow structure, " +
+        "or to ground any 'how does X work' answer in the actual model.",
+      inputSchema: { id: z.string().describe("Process id, e.g. order-to-cash") },
       annotations: READ_ONLY,
     },
-    safe(({ id, file }) => {
-      const meta = loadProcess(id);
-      if (!meta) return fail(`Unknown process '${id}'. Available: ${processIds().join(", ") || "(none)"}.`);
-      const rel: string | undefined = file ?? meta.models?.bpmn;
-      if (!rel)
-        return fail(
-          `Process '${id}' declares no primary BPMN model; pass file= one of: ${declaredModels(meta).join(", ")}.`,
-        );
-      const graph = graphFor(id, rel);
-      return isGraph(graph) ? ok({ id, file: rel, ...graph }) : graph;
+    safe(async ({ id }) => {
+      if (!config()) return notAContentRepo();
+      const proc = await findProcess(id);
+      if (!proc) return unknownProcess(id);
+      const graph = graphOf(proc);
+      return isGraph(graph) ? ok({ id: proc.id, file: proc.path, ...graph }) : graph;
     }),
   );
 
@@ -330,14 +259,14 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
       },
       annotations: READ_ONLY,
     },
-    safe(({ id, max }) => {
-      const meta = loadProcess(id);
-      if (!meta) return fail(`Unknown process '${id}'. Available: ${processIds().join(", ") || "(none)"}.`);
-      if (!meta.models?.bpmn) return fail(`Process '${id}' declares no primary BPMN model.`);
-      const graph = graphFor(id, meta.models.bpmn);
+    safe(async ({ id, max }) => {
+      if (!config()) return notAContentRepo();
+      const proc = await findProcess(id);
+      if (!proc) return unknownProcess(id);
+      const graph = graphOf(proc);
       if (!isGraph(graph)) return graph;
       const { paths, truncated } = enumeratePaths(graph, max ?? 20);
-      return ok({ id, pathCount: paths.length, truncated, paths });
+      return ok({ id: proc.id, pathCount: paths.length, truncated, paths });
     }),
   );
 
@@ -351,70 +280,14 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
       inputSchema: { id: z.string().describe("Process id, e.g. order-to-cash") },
       annotations: READ_ONLY,
     },
-    safe(({ id }) => {
-      const meta = loadProcess(id);
-      if (!meta) return fail(`Unknown process '${id}'. Available: ${processIds().join(", ") || "(none)"}.`);
-      if (!meta.models?.bpmn) return fail(`Process '${id}' declares no primary BPMN model.`);
-      const graph = graphFor(id, meta.models.bpmn);
+    safe(async ({ id }) => {
+      if (!config()) return notAContentRepo();
+      const proc = await findProcess(id);
+      if (!proc) return unknownProcess(id);
+      const graph = graphOf(proc);
       if (!isGraph(graph)) return graph;
       const cycles = findCycles(graph);
-      return ok(cycles.length === 0 ? `No cycles in ${id}'s sequence flow.` : { id, cycles });
-    }),
-  );
-
-  server.registerTool(
-    "query_kpis",
-    {
-      description:
-        "Query KPIs across the whole portfolio: every process's kpis[] with name, target, unit, " +
-        "measured_from/measured_to elements and recorded actuals (dated measurements). Optional " +
-        "case-insensitive filter on KPI name or process id. Use for 'how do we measure X', " +
-        "'which KPIs miss their target', or KPI inventories.",
-      inputSchema: {
-        query: z.string().optional().describe("Case-insensitive substring on KPI name or process id (default: all)"),
-      },
-      annotations: READ_ONLY,
-    },
-    safe(({ query }) => {
-      const q = (query ?? "").toLowerCase();
-      const rows = [];
-      for (const id of processIds()) {
-        const meta = loadProcess(id);
-        for (const kpi of meta?.kpis ?? []) {
-          if (q && !`${id} ${kpi?.name ?? ""}`.toLowerCase().includes(q)) continue;
-          rows.push({ process: id, ...kpi });
-        }
-      }
-      if (rows.length === 0)
-        return ok(`No KPIs${query ? ` matching '${query}'` : ""} found (checked ${processIds().length} process(es)).`);
-      return ok(rows);
-    }),
-  );
-
-  server.registerTool(
-    "get_landscape",
-    {
-      description:
-        "Parse one strategic landscape model into a graph: 'wardley' (components with " +
-        "visibility/evolution stage + dependencies), 'team-topology' (teams + interaction " +
-        "modes), or 'value-chain' (steps + connections). Use for strategy questions: what to " +
-        "automate/outsource (wardley evolution), Conway mismatches (topology vs process " +
-        "handoffs), coverage gaps (value chain).",
-      inputSchema: {
-        view: z.enum(["wardley", "team-topology", "value-chain"]).describe("Which landscape model to load"),
-      },
-      annotations: READ_ONLY,
-    },
-    safe(({ view }) => {
-      const file = {
-        wardley: "wardley-map.owm",
-        "team-topology": "team-topology.tt",
-        "value-chain": "value-chain.vc.json",
-      }[view as string];
-      const raw = readText(join(LANDSCAPE, file!));
-      if (raw === null) return fail(`landscape/${file} not found in this repository.`);
-      const graph = extractModelGraph(file!, raw);
-      return graph ? ok(graph) : fail(`Could not parse landscape/${file}.`);
+      return ok(cycles.length === 0 ? `No cycles in ${proc.id}'s sequence flow.` : { id: proc.id, cycles });
     }),
   );
 
@@ -422,36 +295,28 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     "who_owns",
     {
       description:
-        "Resolve ownership of a process: owner.team (with role) and participants[] (with interaction " +
-        "mode) from process.yaml, resolved against landscape/team-topology.tt into real teams " +
-        "(label, type, description). Use for 'who owns X', 'who do I call about X', or handoff " +
-        "and escalation questions.",
-      inputSchema: { id: z.string().describe("Process id = directory name under processes/, e.g. order-to-cash") },
+        "Resolve ownership of a process from its BPMN lanes — the roles/teams that own its steps " +
+        "(each lane, with the steps it contains) plus the pools (participants). Use for 'who owns " +
+        "X', 'who does what in X', or handoff questions. Note: on the slim contract ownership is " +
+        "whatever the model's lanes say; a process with no lanes has no modeled owner.",
+      inputSchema: { id: z.string().describe("Process id, e.g. order-to-cash") },
       annotations: READ_ONLY,
     },
-    safe(({ id }) => {
-      const meta = loadProcess(id);
-      if (!meta) {
-        return fail(`Unknown process '${id}'. Available: ${processIds().join(", ") || "(none)"}.`);
+    safe(async ({ id }) => {
+      if (!config()) return notAContentRepo();
+      const proc = await findProcess(id);
+      if (!proc) return unknownProcess(id);
+      const graph = graphOf(proc);
+      if (!isGraph(graph)) return graph;
+      const d = deriveProcess(graph);
+      if (d.roles.length === 0 && d.pools.length === 0) {
+        return ok(`Process '${proc.id}' has no lanes or pools — no owning team is modeled in the BPMN.`);
       }
-      const topo = parseJson(readText(TEAM_TOPOLOGY) ?? "");
-      const resolveTeam = (teamId?: string) => {
-        if (!teamId) return { team: null, note: "no team set in process.yaml" };
-        if (!topo?.nodes) {
-          return { team: teamId, note: "landscape/team-topology.tt missing or invalid — id not resolved" };
-        }
-        const node = topo.nodes.find((n: { id: string }) => n.id === teamId);
-        return node
-          ? { team: teamId, label: node.label, type: node.type, description: node.description ?? null }
-          : { team: teamId, note: "not found in landscape/team-topology.tt (broken link — run process-review)" };
-      };
+      const byId = new Map(graph.nodes.map((n) => [n.id, n.name ?? n.id]));
       return ok({
-        id,
-        owner: { ...resolveTeam(meta.owner?.team), role: meta.owner?.role ?? null },
-        participants: (meta.participants ?? []).map((p: { team?: string; interaction?: string }) => ({
-          ...resolveTeam(p?.team),
-          interaction: p?.interaction ?? null,
-        })),
+        id: proc.id,
+        pools: d.pools,
+        roles: d.roles.map((r) => ({ role: r.name, steps: r.stepIds.map((s) => byId.get(s) ?? s) })),
       });
     }),
   );
@@ -460,81 +325,41 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     "which_processes_use",
     {
       description:
-        "Impact analysis across the portfolio: find processes whose systems[].name, " +
-        "wardley.components[], owner.team / participants[].team, value chain links " +
-        "(value_chain.steps[], supports[]), related_processes[], subprocesses[], decisions[] " +
-        "or kpis[] match a query — case-insensitive substring. Use for 'what depends on the " +
-        "ERP', 'which processes touch team-payments-platform', 'what uses the credit-check " +
-        "decision', 'what realizes step-billing'.",
+        "Impact analysis across the portfolio: find processes whose id, derived name, role/lane " +
+        "names, step names, or sub-process calls (calledElement) match a query — case-insensitive " +
+        "substring. Use for 'what calls invoice-handling', 'which processes have a Billing lane', " +
+        "'what touches the credit check'.",
       inputSchema: {
-        query: z
-          .string()
-          .describe("Case-insensitive substring, e.g. 'ERP', 'team-payments-platform', 'step-billing', 'credit-check'"),
+        query: z.string().describe("Case-insensitive substring, e.g. 'invoice-handling', 'Billing', 'credit'"),
       },
       annotations: READ_ONLY,
     },
-    safe(({ query }) => {
+    safe(async ({ query }) => {
+      if (!config()) return notAContentRepo();
       const q = query.toLowerCase();
+      const procs = await processes();
       const hits = [];
-      for (const id of processIds()) {
-        const meta = loadProcess(id);
-        if (!meta) continue;
+      for (const proc of procs) {
+        const graph = graphOf(proc);
+        if (!isGraph(graph)) continue;
+        const d = deriveProcess(graph);
         const matches: { field: string; value: string }[] = [];
         const check = (field: string, value: unknown) => {
           if (typeof value === "string" && value.toLowerCase().includes(q)) matches.push({ field, value });
         };
-        for (const s of meta.systems ?? []) check("systems[].name", s?.name);
-        for (const c of meta.wardley?.components ?? []) check("wardley.components[]", c);
-        check("owner.team", meta.owner?.team);
-        for (const p of meta.participants ?? []) check("participants[].team", p?.team);
-        for (const s of meta.value_chain?.steps ?? []) check("value_chain.steps[]", s);
-        for (const s of meta.supports ?? []) check("supports[]", s);
-        for (const r of meta.related_processes ?? []) check("related_processes[].id", r?.id);
-        for (const sp of meta.subprocesses ?? []) check("subprocesses[].id", sp?.id);
-        for (const d of meta.decisions ?? []) check("decisions[].id", d?.id);
-        for (const k of meta.kpis ?? []) check("kpis[].name", k?.name);
-        if (matches.length > 0) {
-          hits.push({ id, name: meta.name ?? null, classification: meta.classification ?? null, matches });
-        }
+        check("id", proc.id);
+        check("name", d.name);
+        for (const r of d.roles) check("role", r.name);
+        for (const s of d.steps) check("step", s.name);
+        for (const c of d.calls) check("calls", c.calledElement);
+        if (matches.length > 0) hits.push({ id: proc.id, name: d.name ?? proc.id, matches });
       }
       if (hits.length === 0) {
         return ok(
-          `No process references '${query}' in systems, wardley components, teams, value chain ` +
-            `links, related processes, subprocesses, decisions or KPIs (checked ${processIds().length} process(es)).`,
+          `No process references '${query}' in its id, name, roles, steps or sub-process calls (checked ${procs.length} process(es)).`,
         );
       }
       return ok(hits);
-    }),
-  );
-
-  server.registerTool(
-    "search_glossary",
-    {
-      description:
-        "Look up a term in landscape/glossary.yaml — the organization's ubiquitous language. " +
-        "Matches term, synonyms, and definition (case-insensitive substring) and returns term, " +
-        "definition, and synonyms. Use when a word in a question may be org-specific jargon or a " +
-        "synonym in another language (e.g. 'dunning', 'Mahnung', 'DSO').",
-      inputSchema: { term: z.string().describe("Word or phrase to look up, e.g. 'dunning' or 'DSO'") },
-      annotations: READ_ONLY,
-    },
-    safe(({ term }) => {
-      const text = readText(GLOSSARY);
-      if (text === null) return fail("landscape/glossary.yaml not found — this repository has no glossary yet.");
-      const entries = parseYaml(text)?.terms;
-      if (!Array.isArray(entries)) return fail("landscape/glossary.yaml is invalid or has no terms[] list.");
-      const q = term.toLowerCase();
-      const matches = entries
-        .filter((e) =>
-          [e?.term, e?.definition, ...(e?.synonyms ?? [])].some(
-            (v) => typeof v === "string" && v.toLowerCase().includes(q),
-          ),
-        )
-        .map((e) => ({ term: e.term, definition: e.definition, synonyms: e.synonyms ?? [] }));
-      if (matches.length === 0) {
-        return ok(`No glossary entry matches '${term}' (${entries.length} terms defined in landscape/glossary.yaml).`);
-      }
-      return ok(matches);
     }),
   );
 

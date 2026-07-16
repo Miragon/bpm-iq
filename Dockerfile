@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-# Portal (VitePress) + MCP server (Streamable HTTP) in one image.
-# Runtime = packages/mcp/http.ts serving process-documentation/.vitepress/dist
-# and POST /mcp. Build context = the monorepo root (pnpm workspace).
+# MCP server (Streamable HTTP) image. Runtime = packages/mcp/http.ts serving
+# POST /mcp over the bundled example content (process-documentation). Build
+# context = the monorepo root (pnpm workspace).
 #
-# Build (from the repo root):  docker build -t bpmiq-portal .
+# Build (from the repo root):  docker build -t bpmiq-mcp .
 # Serves any content repo: set BPM_CONTENT_ROOT / mount your checkout (docs/on-prem).
 
 FROM node:24-slim AS build
@@ -19,19 +19,17 @@ COPY packages/github-app/package.json ./packages/github-app/
 COPY packages/http-kit/package.json ./packages/http-kit/
 COPY packages/validator/package.json ./packages/validator/
 COPY packages/mcp/package.json ./packages/mcp/
-COPY process-documentation/package.json ./process-documentation/
 # --frozen-lockfile: the image must install the EXACT versions CI validated, not
 # resolve caret ranges fresh (reproducible + closes in-range dependency substitution)
 RUN pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm portal:build
 
 FROM node:24-slim
 RUN corepack enable
 ENV NODE_ENV=production PORT=8080
 WORKDIR /app
-# Runtime needs: the MCP server + its deps, the built portal, and the content
-# the MCP tools read (process-documentation/processes, /landscape).
+# Runtime needs: the MCP server + its deps and the content the tools read
+# (process-documentation: bpmiq.yml + processes/*.bpmn — the default example).
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/pnpm-workspace.yaml /app/.npmrc /app/package.json ./
 COPY --from=build /app/packages/notations ./packages/notations

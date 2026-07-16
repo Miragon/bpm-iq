@@ -1,44 +1,30 @@
 #!/usr/bin/env node
 /**
- * Deterministic validation of the BPM repository.
+ * Deterministic validation of a BPM content repository (the slim contract).
  *
- * Checks the mechanical invariants that make the repo trustworthy as a system of
- * record: schema conformance, cross-model link integrity, BPMN structure and DI
- * coverage, governance consistency, and export freshness. Judgment-based checks
- * (naming quality, cross-view consistency) live in the `process-review` skill,
- * which runs this script first.
+ * A content repo is a root `bpmiq.yml` naming the folder its BPMN processes
+ * live in (@bpmiq/notations/content); a process IS a `.bpmn` file there. This
+ * checks the mechanical invariants that make each model trustworthy and
+ * editable: well-formed XML, sound BPMN flow structure, and a COMPLETE BPMNDI
+ * section (every flow node has a shape — Hard Rule 2, or the visual editor
+ * breaks). It also cross-checks callActivity → calledElement against the other
+ * processes in the repo. Nothing else about the layout is assumed.
  *
- * Usage:  node scripts/validate.ts                     # validate this repo
- *         node scripts/validate.ts <process>           # one process id
- *         node scripts/validate.ts --root <dir> [<id>] # validate ANOTHER checkout
- *         npm run validate
+ * Usage:  node src/validate.ts                     # validate this repo
+ *         node src/validate.ts <process>           # one process id (file stem)
+ *         node src/validate.ts --root <dir> [<id>] # validate ANOTHER checkout
  *
- * --root makes this the PLATFORM validator (docs/multi-repo-architecture.md):
- * the target checkout is pure data — its layout is the contract, the canonical
- * schema always comes from THIS repo (schemas/), and no code from the target
- * is ever executed.
+ * --root makes this the PLATFORM validator: the target checkout is pure data —
+ * no code from the target is ever executed.
  *
  * Exit code 0 = no errors (warnings allowed), 1 = errors found.
  * Requires Node >= 23.6 (built-in TypeScript type stripping).
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
 
-import { NOTATIONS } from "@bpmiq/notations";
-import { Ajv2020 } from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
+import { discoverProcesses, loadContentConfig } from "@bpmiq/notations/content";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
-import { parse as parseYaml } from "yaml";
-
-/**
- * platform root: where the validator + canonical schemas live.
- * This file runs from src/validate.ts (workspace, type stripping) AND from the
- * published dist/validate.js (tsdown bundle) — both sit exactly one level below
- * the package root, so `..` lands on the directory that contains schemas/ in
- * both cases (schemas/ ships in the npm package via `files`). Keep it that way.
- */
-const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const argv = process.argv.slice(2);
 const rootFlag = argv.indexOf("--root");
@@ -47,16 +33,11 @@ if (rootFlag >= 0 && !rootArg) {
   console.error("--root requires a directory argument");
   process.exit(2);
 }
-/** content root: the checkout being validated (defaults to the platform repo itself) */
-const ROOT = rootArg ? resolve(rootArg) : PLATFORM_ROOT;
+/** content root: the checkout being validated (defaults to the cwd) */
+const ROOT = rootArg ? resolve(rootArg) : resolve(".");
 if (rootFlag >= 0) argv.splice(rootFlag, 2);
-if (!existsSync(join(ROOT, "processes"))) {
-  // a broken layout is a finding, not a stacktrace — the platform calls this
-  // against arbitrary checkouts
-  console.error(`[ERROR] ${ROOT}: no processes/ directory — not a BPM content repo (or wrong --root)`);
-  console.error("\n1 error(s), 0 warning(s) — FAIL (0 process(es) checked)");
-  process.exit(1);
-}
+/** optional single-process filter (a .bpmn file stem) */
+const only = argv[0];
 
 type Severity = "ERROR" | "WARN";
 interface Finding {
@@ -77,101 +58,12 @@ const warn = (file: string, message: string): void => {
 const read = (p: string): string => readFileSync(p, "utf8");
 const asArray = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
 
-// ── Landscape ────────────────────────────────────────────────────────────────
-
-interface Landscape {
-  teamIds: Set<string>;
-  teamLabels: Set<string>;
-  stepIds: Set<string>;
-  components: Set<string>;
-}
-
-function loadLandscape(): Landscape {
-  const teamIds = new Set<string>();
-  const teamLabels = new Set<string>();
-  const stepIds = new Set<string>();
-  const components = new Set<string>();
-
-  const ttPath = join(ROOT, "landscape/team-topology.tt");
-  if (!existsSync(ttPath)) {
-    err(ttPath, "missing — team links in process.yaml cannot be resolved");
-  } else {
-    try {
-      const tt = JSON.parse(read(ttPath));
-      for (const n of tt.nodes ?? []) {
-        teamIds.add(n.id);
-        teamLabels.add(n.label);
-      }
-    } catch (e) {
-      err(ttPath, `cannot parse: ${e}`);
-    }
-  }
-
-  const vcPath = join(ROOT, "landscape/value-chain.vc.json");
-  if (!existsSync(vcPath)) {
-    err(vcPath, "missing — value chain links in process.yaml cannot be resolved");
-  } else {
-    try {
-      const vc = JSON.parse(read(vcPath));
-      const allIds = new Set((vc.elements ?? []).map((el: { id: string }) => el.id));
-      for (const el of vc.elements ?? []) if (el.elementType === "step") stepIds.add(el.id);
-      for (const c of vc.connections ?? []) {
-        for (const ref of [c.source, c.target]) {
-          if (!allIds.has(ref)) err(vcPath, `connection ${c.id} references missing element '${ref}'`);
-        }
-      }
-    } catch (e) {
-      err(vcPath, `cannot parse: ${e}`);
-    }
-  }
-
-  const owmPath = join(ROOT, "landscape/wardley-map.owm");
-  if (!existsSync(owmPath)) {
-    err(owmPath, "missing — wardley component links in process.yaml cannot be resolved");
-  } else {
-    try {
-      for (const m of read(owmPath).matchAll(/^component\s+([^[]+?)\s*\[/gm)) if (m[1]) components.add(m[1]);
-    } catch (e) {
-      err(owmPath, `cannot read: ${e}`);
-    }
-  }
-
-  const glPath = join(ROOT, "landscape/glossary.yaml");
-  if (existsSync(glPath)) {
-    try {
-      const gl = parseYaml(read(glPath)) ?? {};
-      const seen = new Map<string, string>();
-      for (const entry of gl.terms ?? []) {
-        if (!entry?.term || !entry?.definition) {
-          err(glPath, `glossary entry missing term/definition: ${JSON.stringify(entry)}`);
-          continue;
-        }
-        for (const word of [entry.term, ...(entry.synonyms ?? [])]) {
-          const w = String(word).toLowerCase();
-          const owner = seen.get(w);
-          if (owner && owner !== entry.term)
-            warn(glPath, `'${word}' appears under both '${owner}' and '${entry.term}'`);
-          seen.set(w, entry.term);
-        }
-      }
-    } catch (e) {
-      err(glPath, `cannot parse: ${e}`);
-    }
-  } else {
-    warn(glPath, "missing — the glossary is the shared language of models and skills");
-  }
-
-  return { teamIds, teamLabels, stepIds, components };
-}
-
-// ── BPMN ─────────────────────────────────────────────────────────────────────
-
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true });
 
 // Explicit BPMN flow-node whitelist (with namespace prefixes stripped). Everything
 // else — textAnnotation, association, dataObject(Reference), group, … — is a legal
-// artifact but NOT a flow node; treating it as one produced false "unreachable"/
-// "dead end"/"no lane" errors that blocked releases of perfectly valid models.
+// artifact but NOT a flow node; treating it as one produces false "unreachable"/
+// "dead end" errors on perfectly valid models.
 const FLOW_NODE_TAGS = new Set([
   "task",
   "userTask",
@@ -206,11 +98,6 @@ const DI_ARTIFACT_TAGS = new Set([
   "dataStoreReference",
   "group",
 ]);
-
-interface BpmnModel {
-  nodes: Map<string, string>;
-  called: string[];
-}
 
 interface FlowContainer {
   /** container id for messages ("process Process_1", "subProcess Sub_1") */
@@ -296,13 +183,13 @@ function checkXmlNamespaces(path: string, raw: string): void {
   }
 }
 
-function checkBpmn(path: string, teamLabels: Set<string>): BpmnModel {
-  const empty: BpmnModel = { nodes: new Map(), called: [] };
+/** Validate one .bpmn file's structure + DI; returns the calledElement ids it references. */
+function checkBpmn(path: string): string[] {
   const raw = read(path);
   const wf = XMLValidator.validate(raw);
   if (wf !== true) {
     err(path, `not well-formed XML: ${wf.err.msg}`);
-    return empty;
+    return [];
   }
   checkXmlNamespaces(path, raw);
 
@@ -311,7 +198,7 @@ function checkBpmn(path: string, teamLabels: Set<string>): BpmnModel {
   const processes = asArray(defs?.process as Record<string, unknown>[]);
   if (processes.length === 0) {
     err(path, "no <bpmn:process> element");
-    return empty;
+    return [];
   }
 
   const collected = {
@@ -398,15 +285,13 @@ function checkBpmn(path: string, teamLabels: Set<string>): BpmnModel {
     if (!di.has(id)) err(path, `${id} has no BPMNDI shape/edge (breaks the visual editor)`);
   }
 
-  // lanes: names must be team labels, every top-level node assigned; lanes render, so they need DI
+  // lanes: if present, every top-level node must be assigned, and lanes render → need DI
   for (let i = 0; i < processes.length; i++) {
     const proc = processes[i] as Record<string, any>;
     const lanes = asArray(proc.laneSet?.lane);
     if (lanes.length === 0) continue;
     const laned = new Set<string>();
     for (const lane of lanes) {
-      if (!teamLabels.has(lane["@_name"]))
-        warn(path, `lane '${lane["@_name"]}' is not a team label in landscape/team-topology.tt`);
       if (lane["@_id"] && !di.has(lane["@_id"]))
         err(path, `lane ${lane["@_id"]} has no BPMNDI shape (breaks the visual editor)`);
       for (const ref of asArray(lane.flowNodeRef as string[])) laned.add(String(ref));
@@ -423,270 +308,41 @@ function checkBpmn(path: string, teamLabels: Set<string>): BpmnModel {
   ).length;
   if (activities > 9) warn(path, `${activities} activities — consider extracting a sub-process (7±2 rule)`);
 
-  return { nodes, called: collected.called };
+  return collected.called;
 }
 
-// ── Process ──────────────────────────────────────────────────────────────────
+// ── run ───────────────────────────────────────────────────────────────────────
 
-const ajv = new Ajv2020({ allErrors: true, allowUnionTypes: true });
-// CJS/ESM interop: at runtime the default import IS the plugin function; the
-// package's types don't model that under NodeNext
-(addFormats as unknown as (a: Ajv2020) => void)(ajv);
-// canonical schema is PLATFORM-owned — never trust the target checkout's copy
-const schemaPath = join(PLATFORM_ROOT, "schemas/process.schema.json");
-const schema = JSON.parse(read(schemaPath));
-// the `models` block is GENERATED from the notation registry: every registered
-// notation is declarable (models.<id>: <file>), bpmn stays the required primary
-// model. Adding a notation must not require a schema edit.
-schema.properties.models = {
-  type: "object",
-  required: ["bpmn"],
-  additionalProperties: false,
-  properties: Object.fromEntries(
-    NOTATIONS.filter((n) => n.processModel).map((n) => [
-      n.id,
-      { type: "string", pattern: `(${n.extensions.map((e) => e.replaceAll(".", "\\.")).join("|")})$` },
-    ]),
-  ),
-};
-const validateSchema = ajv.compile(schema);
+const cfg = loadContentConfig(ROOT);
+if (!cfg) {
+  console.error(`[ERROR] ${ROOT}: no bpmiq.yml at the root — not a BPM content repo (or wrong --root)`);
+  console.error("\n1 error(s), 0 warning(s) — FAIL (0 process(es) checked)");
+  process.exit(1);
+}
 
-function validateProcess(pdir: string, land: Landscape, allProcessIds: Set<string>): void {
-  const pyaml = join(pdir, "process.yaml");
-  const dirName = pdir.split("/").pop() as string;
-  if (!existsSync(pyaml)) {
-    err(pdir, "missing process.yaml");
-    return;
-  }
+const all = await discoverProcesses(ROOT, cfg);
+const processes = only ? all.filter((p) => p.id === only) : all;
+if (only && processes.length === 0) {
+  console.error(`[ERROR] unknown process '${only}'. Available: ${all.map((p) => p.id).join(", ") || "(none)"}`);
+  process.exit(1);
+}
 
-  let meta: Record<string, any>;
-  try {
-    meta = parseYaml(read(pyaml));
-  } catch (e) {
-    err(pyaml, `cannot parse: ${e}`);
-    return;
-  }
-
-  // unreplaced template placeholders (ignore comments)
-  for (const line of read(pyaml).split("\n")) {
-    const code = line.includes("#") ? line.slice(0, line.indexOf("#")) : line;
-    if (/<[A-Za-z][^>]*>/.test(code)) {
-      err(pyaml, "unreplaced <placeholder> values remain");
-      break;
-    }
-  }
-
-  if (!validateSchema(meta)) {
-    for (const e of validateSchema.errors ?? []) {
-      err(pyaml, `schema: ${e.instancePath || "(root)"}: ${e.message}`);
-    }
-  }
-  if (meta === null || typeof meta !== "object") return;
-
-  if (meta.id !== dirName) err(pyaml, `id '${meta.id}' != directory name '${dirName}'`);
-
-  // classification rules
-  if (meta.classification === "core" && !meta.value_chain?.steps?.length)
-    err(pyaml, "classification: core requires value_chain.steps");
-  if (meta.classification === "support" && !meta.supports?.length)
-    err(pyaml, "classification: support requires supports[]");
-
-  // landscape links
-  const teams = [meta.owner?.team, ...(meta.participants ?? []).map((p: { team: string }) => p.team)];
-  for (const t of teams)
-    if (t && !land.teamIds.has(t)) err(pyaml, `team '${t}' not found in landscape/team-topology.tt`);
-  for (const s of meta.value_chain?.steps ?? [])
-    if (!land.stepIds.has(s)) err(pyaml, `value chain step '${s}' not found in landscape/value-chain.vc.json`);
-  for (const s of meta.supports ?? []) {
-    if (!land.stepIds.has(s) && !allProcessIds.has(s))
-      err(pyaml, `supports '${s}' is neither a value chain step nor a process id`);
-  }
-  for (const c of meta.wardley?.components ?? []) {
-    if (!land.components.has(c))
-      err(pyaml, `wardley component '${c}' not found in landscape/wardley-map.owm (exact match required)`);
-  }
-
-  // file paths — every declared model of every notation must exist
-  const paths: string[] = [
-    ...Object.values((meta.models ?? {}) as Record<string, string>),
-    ...(meta.subprocesses ?? []).map((sp: { file: string }) => sp.file),
-    ...(meta.decisions ?? []).map((d: { file: string }) => d.file),
-    ...(meta.docs ?? []),
-    ...(meta.automation?.model ? [meta.automation.model] : []),
-  ].filter(Boolean);
-  for (const p of paths) if (!existsSync(join(pdir, p))) err(pyaml, `referenced file '${p}' does not exist`);
-
-  // related processes (soft)
-  for (const rp of meta.related_processes ?? []) {
-    if (!allProcessIds.has(rp.id)) warn(pyaml, `related process '${rp.id}' is not modeled (allowed, but note it)`);
-  }
-
-  // governance
-  if (meta.status === "as-is") {
-    if (!meta.approval) err(pyaml, "status: as-is requires an approval block (docs/governance.md)");
-    else if (meta.approval.version !== meta.version)
-      err(pyaml, `approval.version '${meta.approval.version}' != version '${meta.version}' — re-approve after changes`);
-  }
-  const hist: { version: string }[] = meta.history ?? [];
-  if (hist.length > 0 && !hist.some((h) => h.version === meta.version))
-    warn(pyaml, `version ${meta.version} has no history entry`);
-  else if (hist.length === 0) warn(pyaml, "no history block — change tracking starts with one entry per version");
-
-  // staleness
-  const cycleMonths: number = meta.review_cycle_months ?? 12;
-  const lastReviewed = Date.parse(String(meta.last_reviewed));
-  if (Number.isNaN(lastReviewed)) {
-    err(pyaml, `last_reviewed '${meta.last_reviewed}' is not a valid date`);
-  } else if (Date.now() - lastReviewed > cycleMonths * 31 * 24 * 60 * 60 * 1000) {
-    warn(pyaml, `last_reviewed ${meta.last_reviewed} exceeds the review cycle of ${cycleMonths} months`);
-  }
-
-  // BPMN models + element-id references
-  const allNodes = new Map<string, string>();
-  const called: string[] = [];
-  const subIds = new Set<string>((meta.subprocesses ?? []).map((sp: { id: string }) => sp.id));
-  const modelFiles = [meta.models?.bpmn, ...(meta.subprocesses ?? []).map((sp: { file: string }) => sp.file)].filter(
-    Boolean,
-  );
-  for (const mf of modelFiles) {
-    const mp = join(pdir, mf);
-    if (!existsSync(mp)) continue;
-    const model = checkBpmn(mp, land.teamLabels);
-    for (const [id, tag] of model.nodes) allNodes.set(id, tag);
-    called.push(...model.called);
-  }
-  for (const ce of called) {
-    if (!subIds.has(ce) && !allProcessIds.has(ce))
-      err(pyaml, `callActivity calledElement '${ce}' resolves to no subprocess or process id`);
-  }
-
-  const checkElement = (ref: string | undefined, context: string): void => {
-    if (ref && !allNodes.has(ref))
-      err(pyaml, `${context} references BPMN element '${ref}' which exists in no model of this process`);
-  };
-  for (const k of meta.kpis ?? []) {
-    checkElement(k.measured_from, `kpi '${k.name}' measured_from`);
-    checkElement(k.measured_to, `kpi '${k.name}' measured_to`);
-  }
-  for (const c of meta.controls ?? []) checkElement(c.element, `control '${c.name}'`);
-  for (const d of meta.decisions ?? []) {
-    checkElement(d.used_by, `decision '${d.id}' used_by`);
-    const dp = join(pdir, d.file ?? "");
-    if (existsSync(dp)) {
-      const dmnRaw = read(dp);
-      const wf = XMLValidator.validate(dmnRaw);
-      if (wf !== true) err(dp, `not well-formed XML: ${wf.err.msg}`);
-      else {
-        checkXmlNamespaces(dp, dmnRaw);
-        // the declared decision id must actually exist in the DMN file
-        const dmnDefs = xml.parse(dmnRaw).definitions;
-        const decisionIds = asArray(dmnDefs?.decision as Record<string, string>[])
-          .map((el) => el["@_id"])
-          .filter(Boolean);
-        if (decisionIds.length === 0) {
-          err(dp, "no <dmn:decision> element");
-        } else if (d.id && !decisionIds.includes(d.id)) {
-          err(pyaml, `decision '${d.id}' not found in ${d.file} (contains: ${decisionIds.join(", ")})`);
-        }
-      }
-    }
-  }
-  for (const ev of meta.mining?.events ?? []) checkElement(ev.activity, "mining event mapping");
-  for (const a of meta.mining?.no_digital_trace ?? []) checkElement(a, "mining no_digital_trace");
-
-  // per-task work instructions must point at real elements
-  const tasksDir = join(pdir, "docs/tasks");
-  if (existsSync(tasksDir)) {
-    for (const f of readdirSync(tasksDir).filter((f) => f.endsWith(".md"))) {
-      checkElement(f.replace(/\.md$/, ""), `work instruction '${f}'`);
-    }
-  }
-
-  // export freshness
-  const dist = join(ROOT, "dist/skills", dirName);
-  if (existsSync(dist)) {
-    const ctx = join(dist, "resources/context.yaml");
-    if (!existsSync(ctx)) {
-      err(dist, "export exists but has no resources/context.yaml");
-      return;
-    }
-    try {
-      const exported = (parseYaml(read(ctx)) ?? {}).exported ?? {};
-      if (!exported.source_version) {
-        err(ctx, "export has no exported.source_version — freshness cannot be checked; re-run export-process-skill");
-      } else if (String(exported.source_version) !== String(meta.version)) {
-        err(
-          ctx,
-          `stale export: source_version ${exported.source_version} != process version ${meta.version} — re-run export-process-skill`,
-        );
-      }
-    } catch (e) {
-      err(ctx, `cannot parse: ${e}`);
+const processIds = new Set(all.map((p) => p.id));
+for (const proc of processes) {
+  const called = checkBpmn(resolve(ROOT, proc.path));
+  // link integrity: a callActivity should reference a process that exists in the repo
+  for (const ref of called) {
+    if (!processIds.has(ref)) {
+      warn(proc.path, `callActivity calls '${ref}', which is not a process in this repo (external or dangling?)`);
     }
   }
 }
 
-// ── Index & orphaned exports ────────────────────────────────────────────────
-
-function validateIndex(processIds: string[]): void {
-  const index = join(ROOT, "processes/INDEX.md");
-  if (!existsSync(index)) {
-    warn(index, "missing — generate it so humans and agents get a portfolio overview");
-    return;
-  }
-  const text = read(index);
-  for (const id of processIds) {
-    if (!new RegExp(`\\b${id}\\b`).test(text)) warn(index, `process '${id}' has no row — INDEX.md is out of sync`);
-  }
-  for (const m of text.matchAll(/^\|\s*\[?([a-z0-9]+(?:-[a-z0-9]+)+)\]?/gm)) {
-    const dir = m[1] ?? "";
-    if (!existsSync(join(ROOT, "processes", dir))) warn(index, `row '${dir}' has no matching process directory`);
-  }
+for (const f of findings.sort((a, b) => a.file.localeCompare(b.file))) {
+  console.log(`[${f.severity}] ${f.file}: ${f.message}`);
 }
-
-function validateOrphanExports(allProcessIds: Set<string>): void {
-  const dist = join(ROOT, "dist/skills");
-  if (!existsSync(dist)) return;
-  for (const d of readdirSync(dist, { withFileTypes: true })) {
-    if (d.isDirectory() && !allProcessIds.has(d.name)) {
-      err(join(dist, d.name), `exported skill '${d.name}' has no source process — deprecated? remove or restore`);
-    }
-  }
-}
-
-// ── Main ─────────────────────────────────────────────────────────────────────
-
-const only = argv[0];
-const land = loadLandscape();
-const processDirs = readdirSync(join(ROOT, "processes"), { withFileTypes: true })
-  .filter((d) => d.isDirectory() && existsSync(join(ROOT, "processes", d.name, "process.yaml")))
-  .map((d) => join(ROOT, "processes", d.name))
-  .sort();
-const allProcessIds = new Set(processDirs.map((p) => p.split("/").pop() as string));
-
-let checked = 0;
-for (const pdir of processDirs) {
-  if (only && !pdir.endsWith(`/${only}`)) continue;
-  validateProcess(pdir, land, allProcessIds);
-  checked++;
-}
-if (only && checked === 0) {
-  // an unknown id must fail loudly — "OK (1 process(es) checked)" for a typo
-  // silently green-lit releases of nothing
-  err(
-    join(ROOT, "processes", only),
-    `unknown process id '${only}' (known: ${[...allProcessIds].join(", ") || "none"})`,
-  );
-}
-if (!only) {
-  validateIndex([...allProcessIds]);
-  validateOrphanExports(allProcessIds);
-}
-
-const errors = findings.filter((f) => f.severity === "ERROR");
-const warnings = findings.filter((f) => f.severity === "WARN");
-for (const f of findings) console.log(`[${f.severity}] ${f.file}: ${f.message}`);
-console.log(
-  `\n${errors.length} error(s), ${warnings.length} warning(s) — ${errors.length ? "FAIL" : "OK"} (${checked} process(es) checked)`,
-);
-process.exit(errors.length ? 1 : 0);
+const errorCount = findings.filter((f) => f.severity === "ERROR").length;
+const warnCount = findings.length - errorCount;
+const verdict = errorCount === 0 ? "OK" : "FAIL";
+console.log(`\n${errorCount} error(s), ${warnCount} warning(s) — ${verdict} (${processes.length} process(es) checked)`);
+process.exit(errorCount === 0 ? 0 : 1);

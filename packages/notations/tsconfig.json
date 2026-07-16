@@ -1,4 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["*.ts"]
+  "compilerOptions": {
+    // content.ts is the node-only subpath (fs) — index/extract/derive stay
+    // browser-safe; node types here only affect the typecheck, not the bundle
+    "types": ["node"]
+  },
+  "include": ["*.ts", "test"]
 }

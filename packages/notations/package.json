@@ -9,12 +9,19 @@
   },
   "exports": {
     ".": "./index.ts",
-    "./extract": "./extract.ts"
+    "./extract": "./extract.ts",
+    "./derive": "./derive.ts",
+    "./content": "./content.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
   },
   "dependencies": {
-    "fast-xml-parser": "5.9.3"
+    "fast-xml-parser": "5.9.3",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1"
   }
 }

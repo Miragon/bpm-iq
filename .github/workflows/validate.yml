@@ -32,17 +32,12 @@ jobs:
         run: pnpm format:check
       - name: Typecheck all packages (type stripping runs untyped otherwise)
         run: pnpm typecheck
-      - name: Validate link integrity, schema conformance, BPMN structure, export freshness
+      - name: Validate the example content repo (bpmiq.yml discovery + BPMN structure/DI)
         run: pnpm validate
-      - name: Tests (validator, web sync merge, live-host release flow)
+      - name: Tests (notations, validator, web sync merge, live-host release flow)
         run: pnpm test
-      - name: Build (web app + portal — a Vite/VitePress break must not first surface in the Fly image)
+      - name: Build (web app — a Vite break must not first surface in the Fly image)
         run: pnpm build
-      - name: Content-repo schema copy must match the canonical platform schema
-        # process.yaml's $schema points at the content repo's own schemas/ copy
-        # (editor tooling, starter self-containment); the VALIDATING copy is
-        # always packages/validator/schemas — this keeps the two from drifting.
-        run: cmp packages/validator/schemas/process.schema.json process-documentation/schemas/process.schema.json
       - name: No stale pre-monorepo paths in docs or code
         # The b190944 restructure (collab/ → apps/, integrations/ → packages/) left
         # docs pointing at dead paths once — this keeps that class of drift out for good.

@@ -2,7 +2,7 @@
   "name": "@bpmiq/validator",
   "version": "0.2.0",
   "type": "module",
-  "description": "Platform-owned validator for BPM content repos — schema, link integrity, BPMN/DMN structure, governance, export freshness. Runs against any checkout via --root; never executes content-repo code.",
+  "description": "Platform-owned validator for BPM content repos — bpmiq.yml discovery + BPMN structure and BPMNDI coverage. Runs against any checkout via --root; never executes content-repo code.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -12,10 +12,7 @@
   "keywords": [
     "bpm",
     "bpmn",
-    "dmn",
     "validator",
-    "process-documentation",
-    "governance",
     "cli"
   ],
   "engines": {
@@ -28,8 +25,7 @@
     ".": "./src/validate.ts"
   },
   "files": [
-    "dist",
-    "schemas"
+    "dist"
   ],
   "publishConfig": {
     "access": "public",
@@ -47,8 +43,6 @@
     "test": "node --test test/validate.test.ts"
   },
   "dependencies": {
-    "ajv": "8.20.0",
-    "ajv-formats": "3.0.1",
     "fast-xml-parser": "5.9.3",
     "yaml": "2.9.0"
   },

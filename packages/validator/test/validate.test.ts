@@ -1,8 +1,10 @@
 /**
- * CLI-level tests for the platform validator, run against the checked-in
- * fixture content repo (test/fixtures/content-repo). The fixture deliberately
- * contains the two model shapes that once produced false positives:
- *   - order-to-cash carries a textAnnotation + association + data object
+ * CLI-level tests for the platform validator (the slim contract: bpmiq.yml +
+ * .bpmn files, BPMN structure + BPMNDI coverage). Run against the checked-in
+ * fixture content repo (test/fixtures/content-repo), which carries the two
+ * model shapes that once produced false positives:
+ *   - order-to-cash carries a textAnnotation + association + data object, and
+ *     a callActivity that calls the invoice-handling sub-process
  *   - two-pool is a collaboration (two pools, message flow, embedded sub-process)
  */
 import assert from "node:assert/strict";
@@ -29,11 +31,12 @@ function mutableFixture(): string {
   return dir;
 }
 
-test("fixture repo validates green (artifacts + collaboration are legal)", () => {
+test("fixture repo validates green (a process per .bpmn, artifacts + collaboration are legal)", () => {
   const { status, out } = run(["--root", FIXTURE]);
   assert.equal(status, 0, out);
   assert.match(out, /0 error\(s\)/);
-  assert.match(out, /2 process\(es\) checked/);
+  // three .bpmn files: order-to-cash, its invoice-handling sub-process, two-pool
+  assert.match(out, /3 process\(es\) checked/);
 });
 
 test("two-pool collaboration is parsed per pool, not flagged bogus", () => {
@@ -43,18 +46,24 @@ test("two-pool collaboration is parsed per pool, not flagged bogus", () => {
   assert.doesNotMatch(out, /unreachable/);
 });
 
+test("a callActivity that resolves to a real process raises no link warning", () => {
+  // order-to-cash calls calledElement="invoice-handling", which IS a process here
+  const { status, out } = run(["--root", FIXTURE, "order-to-cash"]);
+  assert.equal(status, 0, out);
+  assert.doesNotMatch(out, /which is not a process in this repo/);
+});
+
 test("unknown process id fails instead of reporting OK", () => {
   const { status, out } = run(["--root", FIXTURE, "no-such-process"]);
   assert.equal(status, 1);
-  assert.match(out, /unknown process id 'no-such-process'/);
-  assert.match(out, /0 process\(es\) checked/);
+  assert.match(out, /unknown process 'no-such-process'/);
 });
 
-test("--root without a processes/ directory fails gracefully", () => {
+test("--root without a bpmiq.yml fails gracefully (no stacktrace)", () => {
   const { status, out } = run(["--root", tmpdir()]);
   assert.equal(status, 1);
-  assert.match(out, /no processes\/ directory/);
-  assert.doesNotMatch(out, /at .*validate\.ts/); // no stacktrace
+  assert.match(out, /no bpmiq\.yml/);
+  assert.doesNotMatch(out, /at .*validate\.ts/);
 });
 
 test("--root without a value fails with a clear message", () => {
@@ -82,7 +91,7 @@ test("missing BPMNDI for an artifact is an error (breaks the editor)", () => {
   }
 });
 
-test("model change semantics: sequenceFlow to a missing node is an error", () => {
+test("a sequenceFlow to a missing node is an error", () => {
   const dir = mutableFixture();
   try {
     const bpmn = join(dir, "processes", "two-pool", "two-pool.bpmn");
@@ -95,14 +104,17 @@ test("model change semantics: sequenceFlow to a missing node is an error", () =>
   }
 });
 
-test("declared DMN decision id must exist in the DMN file", () => {
+test("a callActivity to a process that does not exist is a link warning (not an error)", () => {
   const dir = mutableFixture();
   try {
-    const pyaml = join(dir, "processes", "order-to-cash", "process.yaml");
-    writeFileSync(pyaml, readFileSync(pyaml, "utf8").replace("- id: credit-check", "- id: credit-check-typo"));
+    const bpmn = join(dir, "processes", "order-to-cash", "order-to-cash.bpmn");
+    writeFileSync(
+      bpmn,
+      readFileSync(bpmn, "utf8").replace('calledElement="invoice-handling"', 'calledElement="ghost-proc"'),
+    );
     const { status, out } = run(["--root", dir, "order-to-cash"]);
-    assert.equal(status, 1);
-    assert.match(out, /decision 'credit-check-typo' not found in decisions\/credit-check\.dmn/);
+    assert.equal(status, 0, out); // a dangling call is a warning, still green
+    assert.match(out, /calls 'ghost-proc', which is not a process in this repo/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

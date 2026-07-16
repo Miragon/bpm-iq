@@ -1,32 +1,42 @@
-# process-documentation-starter
+# process-documentation — example BPM content repo
 
-A starter for **BPM process documentation** that the [bpmiq](https://github.com/Miragon/bpm-iq)
-platform serves: model your processes and their strategic context, then let them talk.
+The example **BPM content repository** the bpmiq platform serves — the content
+counterpart to the platform code in this monorepo, and the working example the
+MCP server and validator run against.
 
-> This repository is **auto-synced** from `process-documentation/` in the bpmiq monorepo.
-> Use it as a GitHub template ("Use this template") to create your own content repository,
-> then connect it in bpmiq — the platform clones it, renders the portal, and answers
-> questions about it over MCP.
+## The contract
 
-## Layout
+A content repo is a root **`bpmiq.yml`** naming the folder its BPMN processes
+live in:
 
-| Path                 | What it is                                                                                                             |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `processes/<id>/`    | One process: `process.yaml` (metadata + links), `<id>.bpmn`, `subprocesses/`, `decisions/` (DMN), `feedback/`, `docs/` |
-| `processes/INDEX.md` | Portfolio overview                                                                                                     |
-| `landscape/`         | `value-chain.vc.json`, `wardley-map.owm`, `team-topology.tt`, `glossary.yaml`                                          |
-| `templates/process/` | Scaffold for new processes — copy, don't reinvent                                                                      |
-| `docs/`              | method, modeling-conventions, process-metadata, governance, migration, automation                                      |
-| `.vitepress/`        | Portal: `pnpm dev` renders all models via bpmn-js/dmn-js/Miragon renderers                                             |
-| `.claude/skills/`    | AI-first toolset — ask your processes questions (see `CLAUDE.md`)                                                      |
-| `dist/skills/`       | Exported portable process skills                                                                                       |
-
-## Use it
-
-```bash
-pnpm install
-pnpm dev        # the portal at http://localhost:5173
+```yaml
+processes: processes
 ```
 
-Validation, live co-modeling, and PR-based release come from the **bpmiq** platform once
-this repo is connected there.
+- Every `.bpmn` file under that folder (subfolders included) is a **process**.
+- A process's **id** is its file name without the extension
+  (`processes/order-to-cash.bpmn` → `order-to-cash`).
+- There is no hand-written metadata: the process view (name, roles from lanes,
+  steps, flow, sub-process calls) is **derived from the BPMN on the fly**
+  (`@bpmiq/notations/derive`).
+
+```
+bpmiq.yml
+processes/
+  order-to-cash.bpmn
+  subprocesses/
+    invoice-handling.bpmn   ← called by order-to-cash (callActivity calledElement)
+```
+
+## Working with it
+
+- **Model live**: open the repo in the bpmiq web app; every `.bpmn` is a process
+  you can co-edit. Release → PR publishes a process's live state.
+- **Ask the processes**: the MCP server (`packages/mcp`) answers questions over
+  this content (`list_processes`, `get_process`, `who_owns`, `enumerate_paths`, …).
+- **Validate**: `node packages/validator/src/validate.ts --root .` (from the repo
+  root) checks BPMN structure + BPMNDI coverage.
+- **Skills**: `.claude/skills/` carries the AI toolset that operates on this repo.
+
+The minimal seed of this contract lives in the monorepo's `starter/` and is
+mirrored to [`Miragon/process-documentation-starter`](https://github.com/Miragon/process-documentation-starter).

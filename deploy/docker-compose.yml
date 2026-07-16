@@ -37,13 +37,13 @@ services:
       interval: 30s
       start_period: 10s
 
-  # ── Optional: read-only process portal + MCP server ──────────────────────
-  # Serves a CONTENT repo checkout (the process-documentation contract) to
-  # browsers and MCP clients. Image published later (ADR 0004 fast-follow) —
-  # shown here for shape.
+  # ── Optional: read-only MCP server ───────────────────────────────────────
+  # Serves a CONTENT repo checkout (a bpmiq.yml + .bpmn files) to MCP clients
+  # over POST /mcp. Image published later (ADR 0004 fast-follow) — shown here
+  # for shape.
   #
   # mcp:
-  #   image: ghcr.io/miragon/bpmiq-portal:${BPMIQ_VERSION:-latest}
+  #   image: ghcr.io/miragon/bpmiq-mcp:${BPMIQ_VERSION:-latest}
   #   environment:
   #     BPM_CONTENT_ROOT: /content # content-repo checkout mounted below
   #     # MCP_TOKEN: change-me     # optional — MCP clients must then send "Authorization: Bearer <token>"
