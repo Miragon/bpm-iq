@@ -11,7 +11,7 @@ redeploys portal + MCP.
 Verified end to end (all self-tested, see git history for the harnesses):
 
 - canvas co-modeling, two real browser tabs, both directions, ~370 ms: **9/9 PASS**
-- release flow against the real repo: [PR #1](https://github.com/Miragon/bpm-architect/pull/1) created, CI validate green
+- release flow against the real repo: PR created, CI validate green (pre-split, private history)
 - VS Code (Miragon modeler on `bpm-live://`): **6/6 PASS**
 - Yjs lineage survives server restarts (SQLite persistence in `.live/live.db`): **PASS** —
   this fix came from a live-observed bug where a restart + reconnecting client duplicated

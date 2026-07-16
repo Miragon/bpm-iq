@@ -82,5 +82,5 @@ jobs:
             echo "Starter already up to date."
             exit 0
           fi
-          git commit -m "chore: sync from bpm-architect@${GITHUB_SHA::7}"
+          git commit -m "chore: sync from bpm-iq@${GITHUB_SHA::7}"
           git push

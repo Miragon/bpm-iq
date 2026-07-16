@@ -1,6 +1,6 @@
 # process-documentation-starter
 
-A starter for **BPM process documentation** that the [bpmiq](https://github.com/Miragon/bpm-architect)
+A starter for **BPM process documentation** that the [bpmiq](https://github.com/Miragon/bpm-iq)
 platform serves: model your processes and their strategic context, then let them talk.
 
 > This repository is **auto-synced** from `process-documentation/` in the bpmiq monorepo.
