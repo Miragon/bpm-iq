@@ -6,6 +6,15 @@ on:
     branches: [main]
 
 jobs:
+
+  pin-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: Miragon/pin-npm-dependencies@58fe24377aef66748a1444ff69ab05e3f938a798 # v1.2.1
+
   validate:
     runs-on: ubuntu-latest
     steps:
