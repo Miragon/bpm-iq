@@ -5,7 +5,10 @@
   // DOM lib mirrors apps/web: bpmn-sync.ts uses DOMParser at call time.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // explicit like the sibling node packages: tests import node:test/node:assert,
+    // and TS 6 no longer auto-includes @types from enclosing node_modules
+    "types": ["node"]
   },
   "include": ["src", "test"]
 }
