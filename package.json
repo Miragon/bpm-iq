@@ -31,7 +31,7 @@
     "@eslint/js": "10.0.1",
     "@types/node": "26.1.1",
     "dependency-cruiser": "18.1.0",
-    "eslint": "9.39.5",
+    "eslint": "10.6.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-simple-import-sort": "13.0.0",
