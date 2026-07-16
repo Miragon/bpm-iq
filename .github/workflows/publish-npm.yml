@@ -4,7 +4,7 @@
 # build here is the ONLY build, at the publish boundary. publishConfig in each
 # package.json swaps bin/exports to the dist/ output at pack time.
 #
-# Requires the NPM_PUBLISH_SECRET repo secret (npm automation token). id-token
+# Requires the NPM_TOKEN repo secret (npm automation token). id-token
 # gives the run npm provenance.
 name: Publish npm package
 
@@ -48,4 +48,4 @@ jobs:
       - name: Publish with provenance
         run: pnpm --filter @bpmiq/${{ inputs.package }} publish --access public --no-git-checks --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_SECRET }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
