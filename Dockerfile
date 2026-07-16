@@ -6,7 +6,7 @@
 # Build (from the repo root):  docker build -t bpmiq-portal .
 # Serves any content repo: set BPM_CONTENT_ROOT / mount your checkout (docs/on-prem).
 
-FROM node:24-slim AS build
+FROM node:25-slim AS build
 RUN corepack enable
 WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
@@ -26,7 +26,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm portal:build
 
-FROM node:24-slim
+FROM node:25-slim
 RUN corepack enable
 ENV NODE_ENV=production PORT=8080
 WORKDIR /app
