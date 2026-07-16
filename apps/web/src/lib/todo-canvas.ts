@@ -97,7 +97,7 @@ export function attachTodoCanvas(
       badge.type = "button";
       badge.className = "bpm-todo-badge";
       badge.textContent = String(count);
-      badge.title = count === 1 ? "1 offenes Todo" : `${count} offene Todos`;
+      badge.title = count === 1 ? "1 open todo" : `${count} open todos`;
       badge.addEventListener("click", (e) => {
         e.stopPropagation();
         hooks.onBadgeClick(elementId);

@@ -28,7 +28,7 @@ export function Overview() {
         void qc.invalidateQueries({ queryKey: ["me"] }); // session gone → flip to login
         return;
       }
-      toast.error(e instanceof Error ? e.message : "Aktualisieren fehlgeschlagen");
+      toast.error(e instanceof Error ? e.message : "Refresh failed");
     } finally {
       setRefreshing(false);
     }
@@ -55,25 +55,25 @@ export function Overview() {
         <div className="flex items-center gap-2">
           {installUrl && (
             <Button size="sm" onClick={() => openInstallPicker(installUrl, refresh)}>
-              <Plus /> Repository hinzufügen
+              <Plus /> Add repository
             </Button>
           )}
-          <Button variant="outline" size="sm" disabled={refreshing} onClick={refresh} title="Neu von GitHub laden">
-            <RefreshCw className={refreshing ? "animate-spin" : ""} /> Aktualisieren
+          <Button variant="outline" size="sm" disabled={refreshing} onClick={refresh} title="Reload from GitHub">
+            <RefreshCw className={refreshing ? "animate-spin" : ""} /> Refresh
           </Button>
         </div>
       </div>
       <p className="text-muted-foreground mb-6 text-sm">
-        Verbundene Prozess-Repositories — Zugriff folgt deinen GitHub-Rechten.
+        Connected process repositories — access follows your GitHub permissions.
       </p>
 
       {repos.isLoading ? (
-        <p className="text-muted-foreground text-sm">Lade …</p>
+        <p className="text-muted-foreground text-sm">Loading…</p>
       ) : list.length === 0 ? (
         <p className="text-muted-foreground max-w-prose text-sm">
-          Noch keine Repositories für deinen Account. Über <strong>Repository hinzufügen</strong> installierst du die
-          App auf einem oder mehreren Prozess-Repositories
-          {installUrl ? "" : " (Install-URL nicht konfiguriert)"} — danach <strong>Aktualisieren</strong>.
+          No repositories for your account yet. Use <strong>Add repository</strong> to install the app on one or more
+          process repositories
+          {installUrl ? "" : " (install URL not configured)"} — then <strong>Refresh</strong>.
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -87,17 +87,17 @@ export function Overview() {
                   </CardTitle>
                   <p className="text-muted-foreground text-sm">
                     {r.defaultBranch}
-                    {r.processCount !== null ? ` · ${r.processCount} Prozess(e)` : " · noch nicht geladen"}
+                    {r.processCount !== null ? ` · ${r.processCount} process(es)` : " · not loaded yet"}
                   </p>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-1.5">
                   {r.suspended ? (
-                    <Badge variant="warning">Installation pausiert</Badge>
+                    <Badge variant="warning">Installation suspended</Badge>
                   ) : (
-                    <Badge variant="success">verbunden</Badge>
+                    <Badge variant="success">connected</Badge>
                   )}
-                  {r.dirtyCount ? <Badge variant="warning">{r.dirtyCount} mit Live-Änderungen</Badge> : null}
-                  {r.liveSessions > 0 ? <Badge variant="default">{r.liveSessions} aktiv</Badge> : null}
+                  {r.dirtyCount ? <Badge variant="warning">{r.dirtyCount} with live changes</Badge> : null}
+                  {r.liveSessions > 0 ? <Badge variant="default">{r.liveSessions} active</Badge> : null}
                 </CardContent>
               </Card>
             </Link>

@@ -23,14 +23,14 @@ export function ProcessList() {
       </Button>
       <h1 className="text-2xl font-semibold tracking-tight">{repo}</h1>
       <p className="text-muted-foreground mb-6 text-sm">
-        Live modellieren — jede Freigabe wird ein reviewbarer Pull Request.
+        Model live — every release becomes a reviewable pull request.
       </p>
 
       {processes.isLoading ? (
-        <p className="text-muted-foreground text-sm">Lade … (erster Aufruf klont das Repository)</p>
+        <p className="text-muted-foreground text-sm">Loading… (the first load clones the repository)</p>
       ) : list.length === 0 ? (
         <p className="text-muted-foreground max-w-prose text-sm">
-          Keine Prozesse gefunden — entspricht dieses Repository dem Starter-Layout (
+          No processes found — does this repository match the starter layout (
           <code className="bg-muted rounded px-1">processes/&lt;id&gt;/process.yaml</code>)?
         </p>
       ) : (
@@ -58,8 +58,8 @@ export function ProcessList() {
               <CardContent className="flex flex-col gap-2">
                 <div className="flex flex-wrap gap-1.5">
                   <Badge variant="success">released: {p.status ?? "—"}</Badge>
-                  {p.dirty && <Badge variant="warning">live-Änderungen</Badge>}
-                  {p.liveSessions > 0 && <Badge>{p.liveSessions} aktiv</Badge>}
+                  {p.dirty && <Badge variant="warning">live changes</Badge>}
+                  {p.liveSessions > 0 && <Badge>{p.liveSessions} active</Badge>}
                 </div>
                 {p.models.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
