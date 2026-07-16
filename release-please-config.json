@@ -6,10 +6,23 @@
     ".": {
       "package-name": "bpmiq",
       "extra-files": [
-        { "type": "json", "path": "packages/validator/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "packages/mcp/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "apps/live-host/package.json", "jsonpath": "$.version" }
-      ]
+        {
+          "type": "json",
+          "path": "packages/validator/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/mcp/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "apps/live-host/package.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "include-component-in-tag": false
     }
   }
 }
