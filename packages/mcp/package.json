@@ -50,7 +50,7 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "fast-xml-parser": "4.5.7",
     "yaml": "2.9.0",
-    "zod": "3.25.76"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@bpmiq/contracts": "workspace:*",
