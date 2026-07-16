@@ -19,11 +19,14 @@ import { extname, join, normalize } from "node:path";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-import { createMcpServer, DEFAULT_ROOT } from "./tools.ts";
+import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const DIST = join(DEFAULT_ROOT, ".vitepress", "dist");
 const TOKEN = process.env.MCP_TOKEN;
+// list_todos is strictly opt-in (BPM_TODOS_REPO + BPM_TODOS_TOKEN) — without
+// both env vars the tool does not exist and the server stays zero-auth
+const TODOS = todosConfigFromEnv(process.env);
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -115,7 +118,7 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
     );
     return;
   }
-  const server = createMcpServer();
+  const server = createMcpServer(DEFAULT_ROOT, TODOS);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on("close", () => {
     void transport.close();

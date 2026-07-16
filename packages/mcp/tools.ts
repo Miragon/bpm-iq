@@ -4,7 +4,10 @@
  *   http.ts    → Streamable HTTP (remote: fly.io, any MCP client via URL)
  *
  * Read-only by construction: only readFileSync/readdirSync, no write path.
- * All tools carry readOnlyHint so clients may auto-approve them.
+ * All tools carry readOnlyHint so clients may auto-approve them. The one
+ * opt-in exception to "repo-local" is list_todos (registered ONLY when
+ * BPM_TODOS_REPO + BPM_TODOS_TOKEN are set): a read-only GET against the
+ * content repo's issue tracker — the zero-auth default stays untouched.
  *
  * Content root: pass --root <dir> (server.ts) or BPM_CONTENT_ROOT — any BPM
  * content repo works, the bundled process-documentation is only the default.
@@ -16,6 +19,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseAnchor } from "@bpmiq/contracts/todo-anchor";
 import { extractModelGraph, type ModelGraph } from "@bpmiq/notations/extract";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import YAML from "yaml";
@@ -146,8 +150,28 @@ function findCycles(graph: ModelGraph): string[][] {
   return cycles;
 }
 
+/** Opt-in tracker access for list_todos — absent = the tool does not register. */
+export interface TodosConfig {
+  /** owner/name of the tracker repo (GitHub) */
+  repo: string;
+  /** token with issues:read on that repo */
+  token: string;
+  /** REST base override (default https://api.github.com) */
+  apiUrl?: string;
+}
+
+/** The list_todos gate, used by BOTH entry points (server.ts, http.ts — the
+ * composition roots read env, this module doesn't): undefined unless BOTH
+ * BPM_TODOS_REPO and BPM_TODOS_TOKEN are set — the server stays zero-auth by
+ * default, the tool simply does not exist without the opt-in. */
+export function todosConfigFromEnv(env: Record<string, string | undefined>): TodosConfig | undefined {
+  return env.BPM_TODOS_REPO && env.BPM_TODOS_TOKEN
+    ? { repo: env.BPM_TODOS_REPO, token: env.BPM_TODOS_TOKEN, apiUrl: env.GITHUB_API_URL }
+    : undefined;
+}
+
 /** Build a fully configured, read-only MCP server over the repo at `root`. */
-export function createMcpServer(root: string = DEFAULT_ROOT): McpServer {
+export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig): McpServer {
   const PROCESSES = join(root, "processes");
   const LANDSCAPE = join(root, "landscape");
   const TEAM_TOPOLOGY = join(LANDSCAPE, "team-topology.tt");
@@ -513,6 +537,70 @@ export function createMcpServer(root: string = DEFAULT_ROOT): McpServer {
       return ok(matches);
     }),
   );
+
+  // ── Todos (STRICTLY opt-in — the zero-auth default stays untouched) ───────
+  // Model-anchored todos live as issues in the content repo's OWN tracker (see
+  // apps/live-host). Listing them needs a credential, which this read-only
+  // zero-auth server must never require — the tool only EXISTS when the entry
+  // point passed a TodosConfig (todosConfigFromEnv: BPM_TODOS_REPO + BPM_TODOS_TOKEN).
+  if (todos) {
+    const { repo: todosRepo, token: todosToken } = todos;
+    const api = (todos.apiUrl ?? "https://api.github.com").replace(/\/$/, "");
+    server.registerTool(
+      "list_todos",
+      {
+        description:
+          "List the OPEN model-anchored todos of this content repo — work items filed from the " +
+          "live model into the repo's issue tracker (label 'todo'). Each row carries the tracker " +
+          "id and URL, title, assignees, createdAt and the parsed anchor (process, model file, " +
+          "anchored BPMN elements). Optional filter on one process. Use for 'what is open on " +
+          "process X' or to cross-check a model answer against known open discrepancies.",
+        inputSchema: {
+          process: z.string().optional().describe("Only todos anchored to this process id, e.g. order-to-cash"),
+        },
+        // still read-only, but the ONE tool that leaves the checkout (tracker API)
+        annotations: { readOnlyHint: true, openWorldHint: true },
+      },
+      safe(async ({ process: processId }) => {
+        const labels = processId ? `todo,process:${processId}` : "todo";
+        const res = await fetch(
+          `${api}/repos/${todosRepo}/issues?state=open&labels=${encodeURIComponent(labels)}&per_page=100`,
+          {
+            headers: {
+              accept: "application/vnd.github+json",
+              authorization: `Bearer ${todosToken}`,
+              "user-agent": "bpmiq-mcp",
+            },
+          },
+        );
+        if (!res.ok) return fail(`Tracker query on ${todosRepo} failed: ${res.status} ${await res.text()}`);
+        const rows = (await res.json()) as Array<{
+          number: number;
+          html_url: string;
+          title: string;
+          body: string | null;
+          assignees?: Array<{ login: string }>;
+          created_at: string;
+          /** present on PULL REQUESTS — GitHub returns them in the issues list */
+          pull_request?: unknown;
+        }>;
+        const todos = rows
+          .filter((row) => row.pull_request === undefined)
+          .map((row) => ({
+            id: String(row.number),
+            url: row.html_url,
+            title: row.title,
+            anchor: parseAnchor(row.body ?? ""),
+            assignees: (row.assignees ?? []).map((a) => a.login),
+            createdAt: row.created_at,
+          }));
+        if (todos.length === 0) {
+          return ok(`No open todos${processId ? ` for process '${processId}'` : ""} in ${todosRepo}.`);
+        }
+        return ok(todos);
+      }),
+    );
+  }
 
   return server;
 }

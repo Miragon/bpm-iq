@@ -15,7 +15,7 @@ import { resolve } from "node:path";
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { createMcpServer, DEFAULT_ROOT } from "./tools.ts";
+import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
 
 const rootFlag = process.argv.indexOf("--root");
 const rootArg = rootFlag >= 0 ? process.argv[rootFlag + 1] : undefined;
@@ -39,6 +39,11 @@ if (!existsSync(root)) {
   process.exit(2);
 }
 
-const server = createMcpServer(root);
+// list_todos is strictly opt-in (BPM_TODOS_REPO + BPM_TODOS_TOKEN) — without
+// both env vars the tool does not exist and the server stays zero-auth
+const todos = todosConfigFromEnv(process.env);
+const server = createMcpServer(root, todos);
 await server.connect(new StdioServerTransport());
-console.error(`bpm-mcp-server ready — read-only tools, repo root: ${root}`);
+console.error(
+  `bpm-mcp-server ready — read-only tools${todos ? ` (+ list_todos on ${todos.repo})` : ""}, repo root: ${root}`,
+);
