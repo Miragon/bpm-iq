@@ -56,25 +56,41 @@ export function useTodos(repo: string, process?: string, enabled = true) {
   });
 }
 
-/** create a model-anchored todo; invalidates every todos query of the repo (all + per-process) */
+/** create a model-anchored todo.
+ *
+ *  GitHub's issue LIST lags the create by a few seconds (eventual consistency),
+ *  so an immediate refetch would come back WITHOUT the new todo and overwrite
+ *  the cache with the stale list. The create RESPONSE is authoritative: write
+ *  it into every matching todos query directly; the 60s poll / focus refetch
+ *  reconciles with the tracker later. */
 export function useCreateTodo(repo: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateTodoBody) => createTodo(repo, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["todos", repo] }),
+    onSuccess: (created) => {
+      for (const [key, data] of qc.getQueriesData<TodoWire[]>({ queryKey: ["todos", repo] })) {
+        const processFilter = key[2] as string | null | undefined;
+        // per-process queries only receive todos anchored to that process
+        if (processFilter != null && processFilter !== created.anchor?.process) continue;
+        if (data?.some((t) => t.id === created.id)) continue;
+        qc.setQueryData<TodoWire[]>(key, [created, ...(data ?? [])]);
+      }
+    },
   });
 }
 
 /** close a todo in the tracker; drops the row from every todos query of the
- *  repo right away (badges/counts follow via setTodos), then re-syncs by
- *  invalidating the ["todos", repo] prefix on settle */
+ *  repo right away (badges/counts follow via setTodos). No invalidation on
+ *  success — the tracker's list lags the close (same eventual consistency as
+ *  create) and would resurrect the row; the poll reconciles. On ERROR the
+ *  invalidation restores the optimistically removed row. */
 export function useCloseTodo(repo: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => closeTodo(repo, id),
     onSuccess: (_result, id) =>
       qc.setQueriesData<TodoWire[]>({ queryKey: ["todos", repo] }, (old) => old?.filter((t) => t.id !== id)),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["todos", repo] }),
+    onError: () => qc.invalidateQueries({ queryKey: ["todos", repo] }),
   });
 }
 
