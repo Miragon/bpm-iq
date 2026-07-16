@@ -1,11 +1,3 @@
-# Publish @bpmiq/validator or @bpmiq/mcp to npm — manual, one package per run.
-#
-# The workspace itself is build-free (raw .ts via Node type stripping); the tsdown
-# build here is the ONLY build, at the publish boundary. publishConfig in each
-# package.json swaps bin/exports to the dist/ output at pack time.
-#
-# Requires the NPM_TOKEN repo secret (npm automation token). id-token
-# gives the run npm provenance.
 name: Publish npm package
 
 on:
@@ -18,14 +10,24 @@ on:
         options:
           - validator
           - mcp
+  workflow_call:
+    inputs:
+      package:
+        description: "Package to publish (validator | mcp)"
+        required: true
+        type: string
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -42,10 +44,13 @@ jobs:
         run: node packages/validator/dist/validate.js --root process-documentation
       - name: Sanity-run the built MCP server (must boot, then exit 0 on stdin EOF)
         if: inputs.package == 'mcp'
-        # closed stdin ends the stdio transport right after startup — a hang or a
-        # boot crash both fail the step (timeout guards the hang case)
         run: timeout 30 node packages/mcp/dist/server.js --root process-documentation < /dev/null
-      - name: Publish with provenance
-        run: pnpm --filter @bpmiq/${{ inputs.package }} publish --access public --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish with provenance (skip if version already on the registry)
+        run: |
+          name="$(node -p "require('./packages/${{ inputs.package }}/package.json').name")"
+          version="$(node -p "require('./packages/${{ inputs.package }}/package.json').version")"
+          if npm view "$name@$version" version > /dev/null 2>&1; then
+            echo "$name@$version already published — skipping"
+          else
+            pnpm --filter "$name" publish --access public --no-git-checks --provenance
+          fi
