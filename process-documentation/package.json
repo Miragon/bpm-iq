@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Example BPM content (processes, landscape, glossary) rendered as a browsable VitePress portal \u2014 the content contract the bpmiq platform serves.",
+  "description": "Example BPM content (processes, landscape, glossary) rendered as a browsable VitePress portal — the content contract the bpmiq platform serves.",
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
@@ -11,6 +11,7 @@
     "validate": "node scripts/validate.ts"
   },
   "devDependencies": {
+    "@bpmiq/validator": "^0.1.0",
     "@miragon/team-topologies-renderer": "^0.3.1",
     "@miragon/team-topologies-schema-model": "^0.3.1",
     "@miragon/wardley-renderer": "^0.3.0",

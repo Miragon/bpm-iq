@@ -7,3 +7,5 @@ packages:
 allowBuilds:
   esbuild: true
   inferno: false
+minimumReleaseAgeExclude:
+  - "@bpmiq/validator@0.1.0"

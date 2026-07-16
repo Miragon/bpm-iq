@@ -58,17 +58,9 @@ jobs:
           # the starter is standalone (plain npm, no workspace: deps)
           npm install --no-audit --no-fund
           npm run build
-          # validate must either pass or fail GRACEFULLY (exit 2 = validator not bundled
-          # yet — acceptable until @bpmiq/validator is published), never crash
-          status=0
-          node scripts/validate.ts || status=$?
-          if [ "$status" -eq 0 ]; then
-            echo "starter validated"
-          elif [ "$status" -eq 2 ]; then
-            echo "validator not bundled — graceful degradation confirmed"
-          else
-            echo "::error::starter validate failed (exit $status)"; exit 1
-          fi
+          # @bpmiq/validator is a published devDependency — validation must PASS
+          node scripts/validate.ts
+          echo "starter validated (via the published @bpmiq/validator)"
           # build artifacts are gitignored; make sure nothing slipped through
           git status --porcelain | grep -E "node_modules|\.vitepress/(dist|cache)" && exit 1 || true
 
