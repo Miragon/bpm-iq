@@ -1,0 +1,75 @@
+# Dependabot — balanced mode: minor+patch grouped per ecosystem, each major
+# lands as its own PR for individual review. Reviewers come from CODEOWNERS.
+version: 2
+updates:
+  # npm — one block covers the whole pnpm workspace (resolved from the root).
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+    # majors arrive as individual PRs — leave headroom above the default of 5
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    # let new releases mature before a PR opens; security fixes are never delayed
+    cooldown:
+      default-days: 5
+      semver-major-days: 14
+      semver-minor-days: 5
+      semver-patch-days: 3
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+      npm-security:
+        applies-to: security-updates
+        patterns: ['*']
+
+  # github-actions — SHA-pinned and CI-gated; majors are mostly mechanical, so
+  # group everything. Monthly: workflows change slowly.
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'monthly'
+    labels:
+      - 'dependencies'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    cooldown:
+      default-days: 5
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns: ['*']
+      github-actions-security:
+        applies-to: security-updates
+        patterns: ['*']
+
+  # docker — base images for the two service Dockerfiles. A node major is a
+  # runtime change, so it lands separately (minor+patch grouped).
+  - package-ecosystem: 'docker'
+    directories:
+      - '/'
+      - '/apps/live-host'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    cooldown:
+      default-days: 5
+    groups:
+      docker-minor-patch:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+      docker-security:
+        applies-to: security-updates
+        patterns: ['*']
