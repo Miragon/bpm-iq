@@ -1,6 +1,6 @@
 {
   "name": "@bpmiq/validator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Platform-owned validator for BPM content repos — schema, link integrity, BPMN/DMN structure, governance, export freshness. Runs against any checkout via --root; never executes content-repo code.",
   "license": "MIT",
