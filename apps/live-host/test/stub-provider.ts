@@ -36,6 +36,8 @@ interface StubIssue {
 }
 const repoLabels = new Map<string, Set<string>>();
 const repoIssues = new Map<string, StubIssue[]>();
+// comments per issue, keyed "<repo>#<number>" (GitHub keeps them off the issue row)
+const issueComments = new Map<string, Array<{ body: string }>>();
 let issuesForbidden = false;
 const addIssue = (repo: string, i: { title: string; body?: string; labels?: string[]; pull_request?: boolean }) => {
   const list = repoIssues.get(repo) ?? [];
@@ -182,11 +184,35 @@ createServer(async (req, res) => {
   }
 
   // Issues + labels (todo feature) — like GitHub: 422 on duplicate label, the
-  // issues list filters by labels (ALL must match) + state and includes PR rows
+  // issues list filters by labels (ALL must match) + state and includes PR rows.
+  // One issue (PATCH: state transitions) + its comments (POST/GET) round out the
+  // close flow; issuesForbidden simulates the missing-permission 403 on all of it.
   const labelsRoute = url.pathname.match(/^\/repos\/([^/]+\/[^/]+)\/labels$/);
   const issuesRoute = url.pathname.match(/^\/repos\/([^/]+\/[^/]+)\/issues$/);
-  if ((labelsRoute || issuesRoute) && issuesForbidden) {
+  const issueRoute = url.pathname.match(/^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)$/);
+  const commentsRoute = url.pathname.match(/^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/comments$/);
+  if ((labelsRoute || issuesRoute || issueRoute || commentsRoute) && issuesForbidden) {
     return json(res, 403, { message: "Resource not accessible by integration" });
+  }
+  const issueOf = (repo: string, num: string): StubIssue | undefined =>
+    (repoIssues.get(repo) ?? []).find((i) => i.number === Number(num));
+  if (commentsRoute && req.method === "POST") {
+    if (!issueOf(commentsRoute[1]!, commentsRoute[2]!)) return json(res, 404, { message: "Not Found" });
+    const key = `${commentsRoute[1]}#${commentsRoute[2]}`;
+    const list = issueComments.get(key) ?? [];
+    issueComments.set(key, list);
+    list.push({ body: (JSON.parse(body) as { body: string }).body });
+    return json(res, 201, { id: list.length, body: list[list.length - 1]!.body });
+  }
+  if (commentsRoute && req.method === "GET") {
+    return json(res, 200, issueComments.get(`${commentsRoute[1]}#${commentsRoute[2]}`) ?? []);
+  }
+  if (issueRoute && req.method === "PATCH") {
+    const issue = issueOf(issueRoute[1]!, issueRoute[2]!);
+    if (!issue) return json(res, 404, { message: "Not Found" });
+    const { state } = JSON.parse(body) as { state?: string };
+    if (state === "open" || state === "closed") issue.state = state;
+    return json(res, 200, issue);
   }
   if (labelsRoute && req.method === "POST") {
     const repo = labelsRoute[1]!;

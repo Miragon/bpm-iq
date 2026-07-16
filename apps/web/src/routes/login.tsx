@@ -11,26 +11,24 @@ export function Login() {
       <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">bpmiq Live</CardTitle>
-          <CardDescription>
-            Gemeinsam modellieren, per Pull Request freigeben — und danach mit den Prozessen reden.
-          </CardDescription>
+          <CardDescription>Model together, release via pull request — then talk to your processes.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {providers.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              Diese Instanz ist noch nicht mit GitHub verbunden (Anbieter-Schritt, einmalig):{" "}
-              <code className="bg-muted rounded px-1">npm run create-app</code> — danach erscheint hier der Login.
+              This instance is not connected to GitHub yet (one-time provider step):{" "}
+              <code className="bg-muted rounded px-1">npm run create-app</code> — the login appears here afterwards.
             </p>
           ) : (
             providers.map((p) => (
               <Button key={p.id} asChild className="w-full">
-                <a href={`/auth/${p.id}`}>Mit {p.label} anmelden</a>
+                <a href={`/auth/${p.id}`}>Sign in with {p.label}</a>
               </Button>
             ))
           )}
           <p className="text-muted-foreground text-xs">
-            Die Anmeldung läuft über GitHubs eigene Seiten. Welche Repositories du siehst, entscheiden App-Installation
-            + dein Schreibrecht — Releases entstehen unter deinem Namen, Merge-Rechte bleiben beim Repository.
+            Sign-in happens on GitHub's own pages. Which repositories you see is decided by the app installation + your
+            write access — releases are created under your name, merge rights stay with the repository.
           </p>
         </CardContent>
       </Card>

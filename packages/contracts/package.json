@@ -10,7 +10,8 @@
   "exports": {
     "./live-host": "./src/live-host.ts",
     "./common": "./src/common.ts",
-    "./live": "./src/live.ts"
+    "./live": "./src/live.ts",
+    "./todo-anchor": "./src/todo-anchor.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

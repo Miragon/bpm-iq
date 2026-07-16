@@ -53,6 +53,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@bpmiq/contracts": "workspace:*",
     "@bpmiq/notations": "workspace:*",
     "tsdown": "0.22.8"
   }

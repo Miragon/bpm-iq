@@ -49,6 +49,7 @@ export function LiveEditor({
   processId,
   docPath,
   processVersion,
+  revealElementId,
   me,
 }: {
   repo: string;
@@ -56,6 +57,8 @@ export function LiveEditor({
   docPath: string;
   /** process.yaml version, when the route resolved it — stamped into todo anchors */
   processVersion?: string;
+  /** deep-link target (?element=<id>) — revealed ONCE after the first diagram import */
+  revealElementId?: string;
   me: Me;
 }) {
   const notation = byExtension(docPath);
@@ -88,6 +91,18 @@ export function LiveEditor({
     todoCanvasRef.current?.setTodos(todosRef.current);
   }, [todoList]);
 
+  // deep-link reveal: hand the ?element target to the canvas controller. Before
+  // the controller exists (session still syncing) it is parked in the ref and
+  // armed once in attach(); the controller's revealOnce consumes it after the
+  // FIRST import.done, so remote re-imports / session re-attaches never re-zoom.
+  const pendingRevealRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!revealElementId) return;
+    const canvas = todoCanvasRef.current;
+    if (canvas) canvas.revealOnce(revealElementId);
+    else pendingRevealRef.current = revealElementId;
+  }, [revealElementId]);
+
   useEffect(() => {
     let cancelled = false;
     const session = openLiveSession({
@@ -97,7 +112,7 @@ export function LiveEditor({
       token: me.wsToken,
       onAuthenticationFailed: (reason) => {
         if (cancelled) return;
-        setError(`Zugriff verweigert: ${reason}`);
+        setError(`Access denied: ${reason}`);
         setStatus("error");
       },
     });
@@ -134,6 +149,11 @@ export function LiveEditor({
           });
           todoCanvasRef.current = todoCanvas;
           todoCanvas.setTodos(todosRef.current);
+          if (pendingRevealRef.current) {
+            // deep link opened before the session synced — arm the one-shot now
+            todoCanvas.revealOnce(pendingRevealRef.current);
+            pendingRevealRef.current = null;
+          }
         }
       }
       if (xmlRef.current) {
@@ -174,9 +194,9 @@ export function LiveEditor({
   const release = useMutation({
     mutationFn: () => releaseProcess(repo, processId),
     onSuccess: ({ pr }) =>
-      toast.success("Release erstellt", {
+      toast.success("Release created", {
         description: pr,
-        action: { label: "PR öffnen", onClick: () => window.open(pr, "_blank") },
+        action: { label: "Open PR", onClick: () => window.open(pr, "_blank") },
         duration: 15_000,
       }),
     onError: (e) => toast.error((e as Error).message),
@@ -187,7 +207,7 @@ export function LiveEditor({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
-        <Button asChild variant="ghost" size="icon" title="Zurück">
+        <Button asChild variant="ghost" size="icon" title="Back">
           <Link to="/r/$owner/$repo" params={{ owner, repo: name }}>
             <ArrowLeft />
           </Link>
@@ -199,7 +219,7 @@ export function LiveEditor({
         {status === "live" && <Badge variant="success">live</Badge>}
         {(status === "connecting" || status === "slow") && (
           <Badge variant="secondary">
-            <Loader2 className="animate-spin" /> {status === "slow" ? "verbinde… (dauert)" : "verbinde…"}
+            <Loader2 className="animate-spin" /> {status === "slow" ? "connecting… (taking longer)" : "connecting…"}
           </Badge>
         )}
         {status === "error" && <Badge variant="destructive">offline</Badge>}
@@ -227,7 +247,7 @@ export function LiveEditor({
             <Button
               variant="outline"
               size="sm"
-              title="Offene Todos dieses Prozesses"
+              title="Open todos for this process"
               onClick={() => {
                 setTodoFilter(null);
                 setTodosOpen((v) => !v);
@@ -241,8 +261,8 @@ export function LiveEditor({
               size="sm"
               title={
                 selectedElements.length > 0
-                  ? "Todo an der Auswahl verankern"
-                  : "Todo auf Prozess-Ebene anlegen (kein Element ausgewählt)"
+                  ? "Anchor a todo to the selection"
+                  : "Create a process-level todo (no element selected)"
               }
               onClick={() => setTodoCreateOpen(true)}
             >
@@ -253,7 +273,7 @@ export function LiveEditor({
         )}
         {processId && (
           <Button size="sm" disabled={release.isPending} onClick={() => release.mutate()}>
-            {release.isPending ? "Validiere & PR…" : "Release → PR"}
+            {release.isPending ? "Validating & PR…" : "Release → PR"}
           </Button>
         )}
       </div>
@@ -269,6 +289,7 @@ export function LiveEditor({
         />
         {hasTodos && todosOpen && (
           <TodoPanel
+            repo={repo}
             todos={todoList}
             isLoading={todosQuery.isLoading}
             error={todosQuery.error}
@@ -276,7 +297,7 @@ export function LiveEditor({
             onClearFilter={() => setTodoFilter(null)}
             onRevealElement={(elementId) => {
               if (!todoCanvasRef.current?.reveal(elementId))
-                toast(`Element '${elementId}' existiert nicht (mehr) im Diagramm.`);
+                toast(`Element '${elementId}' no longer exists in the diagram.`);
             }}
             onClose={() => {
               setTodosOpen(false);

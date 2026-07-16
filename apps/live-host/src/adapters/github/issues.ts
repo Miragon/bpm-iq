@@ -2,7 +2,7 @@
  * GitHub implementation of the IssueTracker port — todos are repo ISSUES in
  * the customer's own repository, never rows in a platform database. Each todo
  * carries the `todo` label plus `process:<id>` for the anchored process; the
- * platform anchor block (domain/todo-anchor.ts owns the codec) lives invisibly
+ * platform anchor block (the codec lives in @bpmiq/contracts/todo-anchor (mcp needs it too)) lives invisibly
  * at the top of the issue body, followed by the author's text and a textual
  * attribution line (issues are bot-authored via the installation token, the
  * human stays attributed — same model as releases, ADR 0001).
@@ -13,10 +13,10 @@
  * (remote mint). Nothing GitHub-specific leaks through the port — GitLab/Jira
  * implement the same contract against their own issue APIs.
  */
+import { encodeAnchor, parseAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 import { paginate } from "@bpmiq/github-app";
 import { AppError } from "@bpmiq/http-kit";
 
-import { encodeAnchor, parseAnchor } from "../../domain/todo-anchor.ts";
 import type { IssueTracker, Todo, TodoInput } from "../../ports/issue-tracker.ts";
 import { githubApi } from "./app-auth.ts";
 
@@ -31,14 +31,49 @@ export const attributionLine = (author: string): string => `_Created from the bp
 
 const ATTRIBUTION_RE = /_Created from the bpmiq live model by @([A-Za-z0-9-]+)_/;
 
+/** attribution comment posted before closing (the close itself is bot-authored) */
+export const closeAttributionLine = (closedBy: string): string => `_Closed from the bpmiq live model by @${closedBy}_`;
+
 /** parse the platform author back out of an issue body (null: created by hand) */
 export function parseAuthor(body: string): string | null {
   return ATTRIBUTION_RE.exec(body)?.[1] ?? null;
 }
 
-/** anchor block + author text + attribution, blank-line separated */
-export function todoBody(input: TodoInput): string {
-  return [encodeAnchor(input.anchor), input.body.trim(), attributionLine(input.author)]
+/** where a todo's deep links point: the web app served at the live host's public URL */
+export interface DeepLinkTarget {
+  /** the live host's public origin (PUBLIC_URL in server.ts), no trailing slash needed */
+  publicUrl: string;
+  repoFullName: string;
+}
+
+/** one 📍 line per anchored element, linking into the web app's process-editor
+ * route (`/r/$owner/$repo/p/$processId`, TanStack router — apps/web/src/router.tsx).
+ * The repo segment is split at the FIRST slash: GitHub is always owner/name;
+ * GitLab subgroups (multi-segment repos) need the router to capture the repo as
+ * a splat first — mirror of the comment in apps/web/src/router.tsx. */
+function deepLinkLines(anchor: TodoAnchor, target: DeepLinkTarget): string {
+  const slash = target.repoFullName.indexOf("/");
+  const owner = slash === -1 ? target.repoFullName : target.repoFullName.slice(0, slash);
+  const repo = slash === -1 ? "" : target.repoFullName.slice(slash + 1);
+  const base = target.publicUrl.replace(/\/$/, "");
+  return anchor.elements
+    .map((el) => {
+      const url =
+        `${base}/r/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
+        `/p/${encodeURIComponent(anchor.process)}?element=${encodeURIComponent(el.id)}`;
+      return `📍 [${el.name ?? el.id}](${url})`;
+    })
+    .join("\n");
+}
+
+/** anchor block + author text + element deep links + attribution, blank-line separated */
+export function todoBody(input: TodoInput, deepLink?: DeepLinkTarget): string {
+  return [
+    encodeAnchor(input.anchor),
+    input.body.trim(),
+    deepLink ? deepLinkLines(input.anchor, deepLink) : "",
+    attributionLine(input.author),
+  ]
     .filter((part) => part.length > 0)
     .join("\n\n");
 }
@@ -48,6 +83,9 @@ export interface GitHubIssuesDeps {
   apiUrl: string;
   /** installation token for ONE repo — server.ts composes registry → TokenService */
   tokenFor(repoFullName: string): Promise<string>;
+  /** the live host's public URL — when set, issue bodies carry 📍 deep links
+   * into the web app's process editor for every anchored element */
+  publicUrl?: string;
 }
 
 /** the slice of GitHub's issue wire shape this adapter maps */
@@ -143,7 +181,7 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
         method: "POST",
         body: JSON.stringify({
           title: input.title,
-          body: todoBody(input),
+          body: todoBody(input, deps.publicUrl ? { publicUrl: deps.publicUrl, repoFullName } : undefined),
           labels: [TODO_LABEL, processLabel(input.anchor.process)],
         }),
       });
@@ -168,6 +206,23 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
       }
       // GitHub's issues list INCLUDES pull requests (they carry a pull_request key)
       return issues.filter((issue) => issue.pull_request === undefined).map(toTodo);
+    },
+
+    async closeTodo(repoFullName, id, closedBy) {
+      const token = await deps.tokenFor(repoFullName);
+      // attribution first — a closed issue without the trail would look bot-arbitrary
+      const comment = await rest(token, `/repos/${repoFullName}/issues/${id}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body: closeAttributionLine(closedBy) }),
+      });
+      if (!comment.ok) await raise(comment, repoFullName, `todo #${id} close attribution`);
+      await comment.text();
+      const res = await rest(token, `/repos/${repoFullName}/issues/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ state: "closed" }),
+      });
+      if (!res.ok) await raise(res, repoFullName, `todo #${id} close`);
+      await res.text();
     },
   };
 }

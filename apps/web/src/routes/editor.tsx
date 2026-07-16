@@ -23,7 +23,7 @@ function NotFound({ repo, msg }: { repo: string; msg: string }) {
       <p className="text-muted-foreground text-sm">{msg}</p>
       <Button asChild variant="outline" size="sm" className="mt-4">
         <Link to="/r/$owner/$repo" params={{ owner, repo: name }}>
-          Zurück zu {repo}
+          Back to {repo}
         </Link>
       </Button>
     </div>
@@ -32,6 +32,8 @@ function NotFound({ repo, msg }: { repo: string; msg: string }) {
 
 export function ProcessEditorScreen() {
   const { owner, repo: name, processId } = processRoute.useParams();
+  // deep-link target (?element=<id>) — revealed once after the first diagram import
+  const { element } = processRoute.useSearch();
   const repo = `${owner}/${name}`;
   const me = useMe();
   const processes = useProcesses(repo);
@@ -41,7 +43,7 @@ export function ProcessEditorScreen() {
   // data is also undefined when the query errored (don't mislabel a 500/network error)
   if (processes.isError) return <NotFound repo={repo} msg={(processes.error as Error).message} />;
   const proc = processes.data?.find((p) => p.id === processId);
-  if (!proc?.bpmn) return <NotFound repo={repo} msg={`Prozess '${processId}' hat kein BPMN-Modell.`} />;
+  if (!proc?.bpmn) return <NotFound repo={repo} msg={`Process '${processId}' has no BPMN model.`} />;
   return (
     <LiveEditor
       key={`${repo}/${proc.bpmn}`}
@@ -49,6 +51,7 @@ export function ProcessEditorScreen() {
       processId={processId}
       docPath={proc.bpmn}
       processVersion={proc.version ?? undefined}
+      revealElementId={element}
       me={me.data}
     />
   );

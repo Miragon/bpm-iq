@@ -10,6 +10,9 @@
  *  - canvas selection → TodoElementWire[] (`selection.changed`) so React can
  *    anchor new todos to the current selection
  *  - reveal: select + scroll an anchored element into view (panel chip click)
+ *  - revealOnce: one-shot deep-link reveal (?element=…) — waits for the FIRST
+ *    `import.done` if the diagram isn't in yet, then clears itself so remote
+ *    re-imports never re-zoom
  */
 import type { TodoElementWire, TodoWire } from "@/lib/api";
 
@@ -50,6 +53,10 @@ export interface TodoCanvas {
   setTodos(todos: TodoWire[]): void;
   /** select + scroll an element into view; false when the id is not in the diagram */
   reveal(elementId: string): boolean;
+  /** arm a one-shot reveal: fires right away if the diagram already imported,
+   *  otherwise after the FIRST `import.done`; an unknown id is silently ignored
+   *  and the shot is consumed either way (later re-imports never re-zoom) */
+  revealOnce(elementId: string): void;
   destroy(): void;
 }
 
@@ -64,6 +71,18 @@ export function attachTodoCanvas(
   },
 ): TodoCanvas {
   let todos: TodoWire[] = [];
+  // one-shot deep-link reveal state: set by revealOnce before the first import,
+  // consumed (and cleared) by the first `import.done`
+  let imported = false;
+  let pendingReveal: string | null = null;
+
+  const reveal = (elementId: string): boolean => {
+    const el = modeler.get("elementRegistry").get(elementId);
+    if (!el) return false;
+    modeler.get("selection").select([el]);
+    modeler.get("canvas").scrollToElement(el, 80);
+    return true;
+  };
 
   const render = (): void => {
     const overlays = modeler.get("overlays");
@@ -78,7 +97,7 @@ export function attachTodoCanvas(
       badge.type = "button";
       badge.className = "bpm-todo-badge";
       badge.textContent = String(count);
-      badge.title = count === 1 ? "1 offenes Todo" : `${count} offene Todos`;
+      badge.title = count === 1 ? "1 open todo" : `${count} open todos`;
       badge.addEventListener("click", (e) => {
         e.stopPropagation();
         hooks.onBadgeClick(elementId);
@@ -87,7 +106,15 @@ export function attachTodoCanvas(
     }
   };
 
-  const onImportDone = (): void => render();
+  const onImportDone = (): void => {
+    imported = true;
+    render();
+    if (pendingReveal !== null) {
+      const id = pendingReveal;
+      pendingReveal = null; // consume BEFORE revealing — a miss must not re-arm
+      reveal(id); // silently a no-op when the id is not in the diagram
+    }
+  };
 
   const onSelectionChanged = (event: SelectionChangedEvent): void => {
     const seen = new Set<string>();
@@ -110,12 +137,10 @@ export function attachTodoCanvas(
       todos = next;
       render();
     },
-    reveal(elementId) {
-      const el = modeler.get("elementRegistry").get(elementId);
-      if (!el) return false;
-      modeler.get("selection").select([el]);
-      modeler.get("canvas").scrollToElement(el, 80);
-      return true;
+    reveal,
+    revealOnce(elementId) {
+      if (imported) reveal(elementId);
+      else pendingReveal = elementId;
     },
     destroy() {
       modeler.off("import.done", onImportDone);

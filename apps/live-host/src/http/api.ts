@@ -14,6 +14,7 @@
  *   GET  /api/repos/:owner/:repo/processes       → process list      (repo write required)
  *   GET  /api/repos/:owner/:repo/todos           → open model-anchored todos (repo write required)
  *   POST /api/repos/:owner/:repo/todos           → create a todo in the repo's tracker (repo write required)
+ *   POST /api/repos/:owner/:repo/todos/:id/close → close a todo in the tracker (repo write required)
  *   POST /api/repos/:owner/:repo/release/:id     → release AS THE USER (repo write required)
  *   POST /webhook/github                         → installation lifecycle (HMAC-verified)
  *   GET  /setup/installed                        → post-install sync + redirect
@@ -368,10 +369,14 @@ export function startApi(port: number, opts: ApiOptions): Server {
         return send(res, 200, await listRepos(opts, session));
       }
 
-      // repo-scoped: processes + todos + release. The repo segment is GREEDY
-      // (multi-segment) — GitLab projects live in subgroups, so "owner/name" must
-      // not be baked into the route shape. The registry decides what a repo is.
-      const repoRoute = url.pathname.match(/^\/api\/repos\/(.+)\/(processes|todos|release(?:\/([a-z0-9-]+))?)$/);
+      // repo-scoped: processes + todos (+ close) + release. The repo segment is
+      // GREEDY (multi-segment) — GitLab projects live in subgroups, so "owner/name"
+      // must not be baked into the route shape. The registry decides what a repo is.
+      // Group 3 = todo id (tracker-native, opaque: GitHub numbers, Jira "PROJ-123"),
+      // group 4 = release process id.
+      const repoRoute = url.pathname.match(
+        /^\/api\/repos\/(.+)\/(processes|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([a-z0-9-]+))?)$/,
+      );
       if (repoRoute) {
         const session = sessionOf(req);
         if (!session) return send(res, 401, { error: "not logged in" });
@@ -381,11 +386,21 @@ export function startApi(port: number, opts: ApiOptions): Server {
           const workspace = await opts.workspaces.ensure(repo);
           return send(res, 200, await listProcesses(opts, repo, workspace));
         }
-        if (repoRoute[2] === "todos") {
+        if (repoRoute[2]?.startsWith("todos")) {
           // the tracker seam needs a platform credential (installation token) —
           // a credential-less local spike has no way to act on the repo's issues
           if (!opts.issues) {
             return send(res, 501, { error: "todo tracking is not configured (requires platform credentials)" });
+          }
+          // todos/:id/close — the close itself is bot-authored, the SESSION user is
+          // attributed (same model as create); unknown ids surface as upstream errors
+          // through the shared error path
+          const todoId = repoRoute[3];
+          if (todoId) {
+            if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+            await opts.issues.closeTodo(repo.fullName, todoId, session.user.login);
+            console.log(`todo closed in ${repo.fullName} by @${session.user.login}: #${todoId}`);
+            return send(res, 200, { ok: true });
           }
           if (req.method === "GET") {
             const todos = await opts.issues.listTodos(repo.fullName, url.searchParams.get("process") ?? undefined);
@@ -426,8 +441,8 @@ export function startApi(port: number, opts: ApiOptions): Server {
         }
         if (repoRoute[2]?.startsWith("release/") && req.method === "POST") {
           const provider = opts.providers.get(session.user.provider) ?? opts.github;
-          const result = await release(opts, session, provider, repo, repoRoute[3] ?? "");
-          console.log(`released ${repo.fullName}#${repoRoute[3]} by @${result.by} → ${result.pr}`);
+          const result = await release(opts, session, provider, repo, repoRoute[4] ?? "");
+          console.log(`released ${repo.fullName}#${repoRoute[4]} by @${result.by} → ${result.pr}`);
           return send(res, 200, result satisfies ReleaseResult);
         }
         return send(res, 405, { error: "method not allowed" });

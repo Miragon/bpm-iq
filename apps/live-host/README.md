@@ -44,11 +44,14 @@ cross-repo bleed) and per-(user,repo) authorization.
 
 ## Todos — model-anchored work items in the repo's own tracker
 
-`GET/POST /api/repos/:fullName/todos` stores todos as **GitHub Issues in the content repo**
-(label `todo` + `process:<id>`, the anchor block from `src/domain/todo-anchor.ts` embedded in
-the issue body) — never in a platform database. Issues are created with the app installation
-token (bot-authored, the human is attributed in the body — same model as releases); without
-platform credentials the routes answer 501. Requires the GitHub App permission
+`GET/POST /api/repos/:fullName/todos` (+ `POST …/todos/:id/close`) stores todos as **GitHub
+Issues in the content repo** (label `todo` + `process:<id>`, the anchor block from
+`@bpmiq/contracts/todo-anchor` embedded in the issue body) — never in a platform database.
+Issue bodies deep-link every anchored element straight into the web app's process editor
+(`📍 <PUBLIC_URL>/r/<owner>/<repo>/p/<process>?element=<id>`). Issues are created with the app
+installation token (bot-authored, the human is attributed in the body — same model as
+releases; a close posts the attribution comment first); without platform credentials the
+routes answer 501. Requires the GitHub App permission
 **Issues: Read and write** (in the `create-app` manifest since the todo feature): apps
 registered earlier must add the permission in the app settings, and **existing installations
 must approve the added permission** (GitHub prompts the org owner) before todos work — until

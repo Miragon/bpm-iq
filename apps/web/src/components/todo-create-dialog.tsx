@@ -70,10 +70,10 @@ export function TodoCreateDialog({
         onClick={(e) => e.stopPropagation()}
         onSubmit={submit}
       >
-        <h2 className="text-sm font-semibold">Todo anlegen</h2>
+        <h2 className="text-sm font-semibold">Create todo</h2>
         {elements.length > 0 ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            <span className="text-muted-foreground text-xs">Verankert an:</span>
+            <span className="text-muted-foreground text-xs">Anchored to:</span>
             {elements.map((el) => (
               <Badge key={el.id} variant="outline" className="max-w-48" title={el.id}>
                 <span className="truncate">{el.name ?? el.id}</span>
@@ -82,23 +82,23 @@ export function TodoCreateDialog({
           </div>
         ) : (
           <p className="text-muted-foreground mt-1.5 text-xs">
-            Kein Element ausgewählt — das Todo gilt für den Prozess "{processId}".
+            No element selected — the todo applies to the process "{processId}".
           </p>
         )}
         <label className="mt-3 block text-xs font-medium" htmlFor="todo-title">
-          Titel
+          Title
         </label>
         <input
           id="todo-title"
           className={fieldClass}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Was ist zu tun?"
+          placeholder="What needs to be done?"
           autoFocus
           required
         />
         <label className="mt-3 block text-xs font-medium" htmlFor="todo-body">
-          Beschreibung <span className="text-muted-foreground font-normal">(optional)</span>
+          Description <span className="text-muted-foreground font-normal">(optional)</span>
         </label>
         <textarea
           id="todo-body"
@@ -110,10 +110,10 @@ export function TodoCreateDialog({
         {create.error && <p className="text-destructive mt-3 text-sm">{create.error.message}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Abbrechen
+            Cancel
           </Button>
           <Button type="submit" size="sm" disabled={create.isPending || title.trim().length === 0}>
-            {create.isPending ? "Anlegen …" : "Todo anlegen"}
+            {create.isPending ? "Creating…" : "Create todo"}
           </Button>
         </div>
       </form>
