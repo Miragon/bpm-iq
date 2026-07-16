@@ -4,8 +4,10 @@
 # build here is the ONLY build, at the publish boundary. publishConfig in each
 # package.json swaps bin/exports to the dist/ output at pack time.
 #
-# Requires the NPM_TOKEN repo secret (npm automation token). id-token
-# gives the run npm provenance.
+# Auth: npm Trusted Publishing (OIDC) — no token. npmjs.com must list this
+# exact workflow (publish-npm.yml @ Miragon/bpm-iq, GitHub Actions) as the
+# trusted publisher of BOTH packages; id-token:write is what makes the
+# exchange possible. Provenance comes with it automatically.
 name: Publish npm package
 
 on:
@@ -45,7 +47,5 @@ jobs:
         # closed stdin ends the stdio transport right after startup — a hang or a
         # boot crash both fail the step (timeout guards the hang case)
         run: timeout 30 node packages/mcp/dist/server.js --root process-documentation < /dev/null
-      - name: Publish with provenance
+      - name: Publish (OIDC trusted publishing, provenance implied)
         run: pnpm --filter @bpmiq/${{ inputs.package }} publish --access public --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
