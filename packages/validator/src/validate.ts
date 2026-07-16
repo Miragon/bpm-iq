@@ -31,7 +31,13 @@ import addFormats from "ajv-formats";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { parse as parseYaml } from "yaml";
 
-/** platform root: where the validator + canonical schemas live */
+/**
+ * platform root: where the validator + canonical schemas live.
+ * This file runs from src/validate.ts (workspace, type stripping) AND from the
+ * published dist/validate.js (tsdown bundle) — both sit exactly one level below
+ * the package root, so `..` lands on the directory that contains schemas/ in
+ * both cases (schemas/ ships in the npm package via `files`). Keep it that way.
+ */
 const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const argv = process.argv.slice(2);

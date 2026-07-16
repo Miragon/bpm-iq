@@ -1,0 +1,51 @@
+# Publish @bpmiq/validator or @bpmiq/mcp to npm — manual, one package per run.
+#
+# The workspace itself is build-free (raw .ts via Node type stripping); the tsdown
+# build here is the ONLY build, at the publish boundary. publishConfig in each
+# package.json swaps bin/exports to the dist/ output at pack time.
+#
+# Requires the NPM_PUBLISH_SECRET repo secret (npm automation token). id-token
+# gives the run npm provenance.
+name: Publish npm package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to publish"
+        required: true
+        type: choice
+        options:
+          - validator
+          - mcp
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - name: Build (tsdown → dist/)
+        run: pnpm --filter @bpmiq/${{ inputs.package }} build
+      - name: Sanity-run the built validator against the example content repo
+        if: inputs.package == 'validator'
+        run: node packages/validator/dist/validate.js --root process-documentation
+      - name: Sanity-run the built MCP server (must boot, then exit 0 on stdin EOF)
+        if: inputs.package == 'mcp'
+        # closed stdin ends the stdio transport right after startup — a hang or a
+        # boot crash both fail the step (timeout guards the hang case)
+        run: timeout 30 node packages/mcp/dist/server.js --root process-documentation < /dev/null
+      - name: Publish with provenance
+        run: pnpm --filter @bpmiq/${{ inputs.package }} publish --access public --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_SECRET }}

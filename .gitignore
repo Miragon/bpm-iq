@@ -16,6 +16,9 @@ node_modules/
 .playwright-mcp/
 
 # build outputs (regenerated)
+# packages/*/dist exists ONLY at the npm publish boundary (tsdown) — dev runs raw .ts
+packages/validator/dist/
+packages/mcp/dist/
 apps/web/dist/
 apps/control-plane/ui/dist/
 apps/vscode/out/
