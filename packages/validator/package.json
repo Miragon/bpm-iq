@@ -1,11 +1,25 @@
 {
   "name": "@bpmiq/validator",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Platform-owned validator for BPM content repos — schema, link integrity, BPMN/DMN structure, governance, export freshness. Runs against any checkout via --root; never executes content-repo code.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Miragon/bpm-iq.git",
+    "directory": "packages/validator"
+  },
+  "keywords": [
+    "bpm",
+    "bpmn",
+    "dmn",
+    "validator",
+    "process-documentation",
+    "governance",
+    "cli"
+  ],
   "engines": {
-    "node": ">=23.6"
+    "node": ">=22"
   },
   "bin": {
     "bpmiq-validate": "src/validate.ts"
@@ -13,16 +27,33 @@
   "exports": {
     ".": "./src/validate.ts"
   },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": "./dist/validate.js"
+    },
+    "bin": {
+      "bpmiq-validate": "dist/validate.js"
+    }
+  },
   "scripts": {
     "validate": "node src/validate.ts",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/validate.test.ts"
   },
   "dependencies": {
-    "@bpmiq/notations": "workspace:*",
     "ajv": "^8.17.0",
     "ajv-formats": "^3.0.0",
     "fast-xml-parser": "^4.5.0",
     "yaml": "^2.6.0"
+  },
+  "devDependencies": {
+    "@bpmiq/notations": "workspace:*",
+    "tsdown": "^0.22.8"
   }
 }
