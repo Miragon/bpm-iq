@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -102,6 +102,73 @@ test("a sequenceFlow to a missing node is an error", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+/** write a self-contained content repo (bpmiq.yml + one process) and validate it */
+function loneProcess(id: string, bpmn: string): { status: number; out: string } {
+  const dir = mkdtempSync(join(tmpdir(), "validator-lone-"));
+  try {
+    writeFileSync(join(dir, "bpmiq.yml"), "processes: processes\n");
+    mkdirSync(join(dir, "processes"), { recursive: true });
+    writeFileSync(join(dir, "processes", `${id}.bpmn`), bpmn);
+    return run(["--root", dir, id]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("an event sub-process is NOT flagged unreachable / dead end (it triggers itself)", () => {
+  // regression: a subProcess triggeredByEvent="true" has no parent sequence flow by design
+  const { out } = loneProcess(
+    "evsub",
+    `<?xml version="1.0"?>
+     <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+       <bpmn:process id="P">
+         <bpmn:startEvent id="s"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+         <bpmn:task id="t"><bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing></bpmn:task>
+         <bpmn:endEvent id="e"><bpmn:incoming>f2</bpmn:incoming></bpmn:endEvent>
+         <bpmn:sequenceFlow id="f1" sourceRef="s" targetRef="t"/>
+         <bpmn:sequenceFlow id="f2" sourceRef="t" targetRef="e"/>
+         <bpmn:subProcess id="EventSub" triggeredByEvent="true">
+           <bpmn:startEvent id="es"><bpmn:outgoing>g1</bpmn:outgoing></bpmn:startEvent>
+           <bpmn:task id="et"><bpmn:incoming>g1</bpmn:incoming><bpmn:outgoing>g2</bpmn:outgoing></bpmn:task>
+           <bpmn:endEvent id="ee"><bpmn:incoming>g2</bpmn:incoming></bpmn:endEvent>
+           <bpmn:sequenceFlow id="g1" sourceRef="es" targetRef="et"/>
+           <bpmn:sequenceFlow id="g2" sourceRef="et" targetRef="ee"/>
+         </bpmn:subProcess>
+       </bpmn:process>
+     </bpmn:definitions>`,
+  );
+  assert.doesNotMatch(out, /EventSub is unreachable/);
+  assert.doesNotMatch(out, /EventSub is a dead end/);
+});
+
+test("a boundary event omitted from flowNodeRef is NOT flagged 'not assigned to any lane'", () => {
+  const { out } = loneProcess(
+    "bnd",
+    `<?xml version="1.0"?>
+     <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+       <bpmn:process id="P">
+         <bpmn:laneSet>
+           <bpmn:lane id="L1" name="Clerk">
+             <bpmn:flowNodeRef>s</bpmn:flowNodeRef>
+             <bpmn:flowNodeRef>t</bpmn:flowNodeRef>
+             <bpmn:flowNodeRef>e</bpmn:flowNodeRef>
+             <bpmn:flowNodeRef>e2</bpmn:flowNodeRef>
+           </bpmn:lane>
+         </bpmn:laneSet>
+         <bpmn:startEvent id="s"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+         <bpmn:task id="t"><bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing></bpmn:task>
+         <bpmn:boundaryEvent id="Bnd" attachedToRef="t"><bpmn:outgoing>f3</bpmn:outgoing></bpmn:boundaryEvent>
+         <bpmn:endEvent id="e"><bpmn:incoming>f2</bpmn:incoming></bpmn:endEvent>
+         <bpmn:endEvent id="e2"><bpmn:incoming>f3</bpmn:incoming></bpmn:endEvent>
+         <bpmn:sequenceFlow id="f1" sourceRef="s" targetRef="t"/>
+         <bpmn:sequenceFlow id="f2" sourceRef="t" targetRef="e"/>
+         <bpmn:sequenceFlow id="f3" sourceRef="Bnd" targetRef="e2"/>
+       </bpmn:process>
+     </bpmn:definitions>`,
+  );
+  assert.doesNotMatch(out, /Bnd is not assigned to any lane/);
 });
 
 test("a callActivity to a process that does not exist is a link warning (not an error)", () => {

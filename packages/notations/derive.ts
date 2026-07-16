@@ -86,7 +86,9 @@ interface BpmnMeta {
 export function deriveProcess(graph: ModelGraph): DerivedProcess {
   const meta = (graph.meta ?? {}) as BpmnMeta;
   const lanes = meta.lanes ?? [];
-  const pools = (meta.pools ?? []).map((p) => ({ id: p.id, name: p.name ?? null }));
+  // extract sets a missing participant name to "" — normalize to null so the
+  // "?? id" fallback in consumers (MCP list_processes/get_process) works
+  const pools = (meta.pools ?? []).map((p) => ({ id: p.id, name: p.name || null }));
 
   // node id → owning lane name (a node belongs to at most one lane)
   const roleOf = new Map<string, string | null>();
@@ -125,7 +127,7 @@ export function deriveProcess(graph: ModelGraph): DerivedProcess {
 
   // name: single pool name is the most process-like label; else null (the file
   // stem is the id the caller already has). Multiple pools → leave null.
-  const name = pools.length === 1 ? (pools[0]?.name ?? null) : null;
+  const name = pools.length === 1 ? pools[0]?.name || null : null;
 
   return {
     name,

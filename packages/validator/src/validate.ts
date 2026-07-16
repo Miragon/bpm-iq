@@ -123,6 +123,8 @@ function collectContainers(
     diRequired: Set<string>;
     boundaries: Map<string, string>;
     called: string[];
+    /** event sub-processes: intentionally NOT wired into the parent's flow */
+    eventSubProcesses: Set<string>;
   },
 ): FlowContainer {
   const container: FlowContainer = {
@@ -152,6 +154,9 @@ function collectContainers(
         out.diRequired.add(id);
         if (tag === "boundaryEvent") out.boundaries.set(id, rec["@_attachedToRef"] ?? "");
         if (tag === "callActivity" && rec["@_calledElement"]) out.called.push(rec["@_calledElement"]);
+        // an event sub-process is triggered by its own start event, never by a
+        // sequence flow from the parent — exempt it from parent reachability
+        if (SUB_CONTAINER_TAGS.has(tag) && String(rec["@_triggeredByEvent"]) === "true") out.eventSubProcesses.add(id);
         if (SUB_CONTAINER_TAGS.has(tag)) {
           collectContainers(node as Record<string, unknown>, `${tag} ${id}`, true, out);
         }
@@ -206,6 +211,7 @@ function checkBpmn(path: string): string[] {
     diRequired: new Set<string>(),
     boundaries: new Map<string, string>(),
     called: [] as string[],
+    eventSubProcesses: new Set<string>(),
   };
   const topContainers: FlowContainer[] = [];
   for (const proc of processes) {
@@ -233,6 +239,9 @@ function checkBpmn(path: string): string[] {
     if (!c.isSubProcess && starts !== 1) err(path, `expected exactly one start event in ${c.label}, found ${starts}`);
     if (c.isSubProcess && !c.triggeredByEvent && starts > 1) err(path, `${c.label} has ${starts} start events`);
     for (const [id, tag] of c.nodes) {
+      // an event sub-process attaches to its own trigger, not the parent flow —
+      // it is legitimately unconnected to the parent's sequence flow
+      if (collected.eventSubProcesses.has(id)) continue;
       if (tag === "startEvent" && (inc.get(id) ?? 0) > 0) err(path, `start event ${id} has incoming flows`);
       if (tag === "endEvent" && (out.get(id) ?? 0) > 0) err(path, `end event ${id} has outgoing flows`);
       if (tag !== "startEvent" && tag !== "boundaryEvent" && (inc.get(id) ?? 0) === 0)
@@ -298,7 +307,10 @@ function checkBpmn(path: string): string[] {
     }
     const topContainer = topContainers[i];
     if (topContainer)
-      for (const id of topContainer.nodes.keys()) {
+      for (const [id, tag] of topContainer.nodes) {
+        // boundary events belong to their host activity's lane implicitly and
+        // are routinely omitted from flowNodeRef by editors — don't flag them
+        if (tag === "boundaryEvent") continue;
         if (!laned.has(id)) err(path, `${id} is not assigned to any lane`);
       }
   }

@@ -92,6 +92,17 @@ test("deriveProcess: multiple pools → name stays null, both pools listed", () 
   assert.ok(p.flows.some((f) => f.kind === "messageFlow" && f.name === "order"));
 });
 
+test("deriveProcess: a single UNNAMED pool derives name=null (not ''), so the id fallback works", () => {
+  const unnamed = `<?xml version="1.0"?>
+    <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+      <bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P"/></bpmn:collaboration>
+      <bpmn:process id="P"><bpmn:task id="t" name="Do"/></bpmn:process>
+    </bpmn:definitions>`;
+  const p = deriveProcess(extractModelGraph(".bpmn", unnamed)!);
+  assert.equal(p.name, null, "an unnamed pool must not derive an empty-string name");
+  assert.equal(p.pools[0]?.name, null);
+});
+
 test("deriveProcess: a plain process with no pool/lanes derives with name=null, no roles", () => {
   const bare = `<?xml version="1.0"?>
     <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
