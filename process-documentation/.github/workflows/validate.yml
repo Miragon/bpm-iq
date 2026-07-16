@@ -1,0 +1,20 @@
+# Content-repo CI (active in the mirrored starter template — inside the bpmiq
+# monorepo this nested workflow is inert). The platform validator treats this
+# repo as pure data: schema, link integrity, BPMN/DMN structure, governance.
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npm run validate
