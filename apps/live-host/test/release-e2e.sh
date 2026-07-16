@@ -9,6 +9,8 @@
 #       (a release must never silently revert merged work)
 #   B   monorepo-shaped repos (content under process-documentation/) release
 #       to process-documentation/processes/…, not a bogus top-level processes/
+#   C   model-anchored todos over HTTP: create → tracker issue with anchor +
+#       session attribution, list with process filter, empty-title 400
 #
 # Run: bash test/release-e2e.sh   (or: pnpm --filter @bpmiq/live-host test)
 set -u
@@ -140,6 +142,18 @@ BRANCH=$(git -C "$E2E/origin/acme/monorepo.git" branch | grep release/two-pool |
 STAT=$(git -C "$E2E/origin/acme/monorepo.git" show --stat "$BRANCH")
 echo "$STAT" | grep -q "process-documentation/processes/two-pool" && ok "B: PR paths under process-documentation/ (prefix fix)" || bad "B: PR paths wrong"
 echo "$STAT" | grep -qE "^ processes/" && bad "B: bogus top-level processes/ in PR" || ok "B: no bogus top-level processes/"
+
+# ═══ Case C: model-anchored todos (HTTP route → adapter → stub issue tracker) ═══
+T=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"title":"Verify credit rule","body":"Threshold looks stale.","anchor":{"process":"two-pool","elements":[{"id":"Task_SendOffer","name":"Send offer"}]}}' \
+  "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos")
+echo "$T" | grep -q '"id": *"1"' && ok "C: todo created via HTTP (tracker issue #1)" || bad "C: todo create failed: $T"
+echo "$T" | grep -q '"author": *"dev-token"' && ok "C: author attributed from the session" || bad "C: wrong author: $T"
+L=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos?process=two-pool")
+echo "$L" | grep -q '"process": *"two-pool"' && ok "C: todo listed with parsed anchor (process filter)" || bad "C: todo list failed: $L"
+BADREQ=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -d '{"title":"  "}' \
+  "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos")
+echo "$BADREQ" | grep -q "title must be" && ok "C: blank title rejected (400)" || bad "C: expected title validation, got: $BADREQ"
 
 echo; echo "── $PASS passed, $FAIL failed ──"
 exit "$FAIL"

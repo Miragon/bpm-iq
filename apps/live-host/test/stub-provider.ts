@@ -8,8 +8,9 @@
  *   LIVE_PUSH_URL_OVERRIDE=<file:///path/to/bare.git> npm start
  *
  * Control endpoint (tests): POST /_control {"permission":"read"|"write"}
- * simulates a user with/without repo access. GET /_control returns recorded
- * pull-request payloads.
+ * simulates a user with/without repo access; {"addIssue":…} seeds tracker rows
+ * (incl. PR-shaped ones) and {"issuesForbidden":true} simulates an app missing
+ * the Issues permission. GET /_control returns recorded pull-request payloads.
  */
 import { createServer, type ServerResponse } from "node:http";
 
@@ -19,6 +20,41 @@ let permission = "write";
 let lastManifest: { redirect_url?: string; callback_urls?: string[] } | undefined;
 let installationRepos: string[] = ["acme/bpm-processes"];
 const pulls: unknown[] = [];
+// in-memory issue tracker (todo feature): labels + issues per repo. Issues are
+// GitHub-shaped; only PULL-REQUEST rows carry a pull_request key (like the real
+// list endpoint). `issuesForbidden` simulates an app without the Issues permission.
+interface StubIssue {
+  number: number;
+  html_url: string;
+  title: string;
+  state: string;
+  body: string;
+  labels: Array<{ name: string }>;
+  assignees: Array<{ login: string }>;
+  created_at: string;
+  pull_request?: { url: string };
+}
+const repoLabels = new Map<string, Set<string>>();
+const repoIssues = new Map<string, StubIssue[]>();
+let issuesForbidden = false;
+const addIssue = (repo: string, i: { title: string; body?: string; labels?: string[]; pull_request?: boolean }) => {
+  const list = repoIssues.get(repo) ?? [];
+  repoIssues.set(repo, list);
+  const number = list.length + 1;
+  const issue: StubIssue = {
+    number,
+    html_url: `http://localhost:${PORT}/${repo}/issues/${number}`,
+    title: i.title,
+    state: "open",
+    body: i.body ?? "",
+    labels: (i.labels ?? []).map((name) => ({ name })),
+    assignees: [],
+    created_at: new Date().toISOString(),
+    ...(i.pull_request ? { pull_request: { url: `http://localhost:${PORT}/${repo}/pulls/${number}` } } : {}),
+  };
+  list.push(issue);
+  return issue;
+};
 // installation directory for multi-tenant / cell tests: id -> repos
 // (defaults to the single legacy installation #1 = acme's repos)
 const installations = new Map<number, { repos: string[]; suspended: boolean; account: string }>([
@@ -145,6 +181,44 @@ createServer(async (req, res) => {
     return json(res, 201, { html_url: `http://localhost:${PORT}/fake/pr/${pulls.length}`, number: pulls.length });
   }
 
+  // Issues + labels (todo feature) — like GitHub: 422 on duplicate label, the
+  // issues list filters by labels (ALL must match) + state and includes PR rows
+  const labelsRoute = url.pathname.match(/^\/repos\/([^/]+\/[^/]+)\/labels$/);
+  const issuesRoute = url.pathname.match(/^\/repos\/([^/]+\/[^/]+)\/issues$/);
+  if ((labelsRoute || issuesRoute) && issuesForbidden) {
+    return json(res, 403, { message: "Resource not accessible by integration" });
+  }
+  if (labelsRoute && req.method === "POST") {
+    const repo = labelsRoute[1]!;
+    const { name } = JSON.parse(body) as { name: string };
+    const set = repoLabels.get(repo) ?? new Set<string>();
+    repoLabels.set(repo, set);
+    if (set.has(name)) {
+      return json(res, 422, { message: "Validation Failed", errors: [{ resource: "Label", code: "already_exists" }] });
+    }
+    set.add(name);
+    return json(res, 201, { name });
+  }
+  if (labelsRoute && req.method === "GET") {
+    return json(
+      res,
+      200,
+      [...(repoLabels.get(labelsRoute[1]!) ?? [])].map((name) => ({ name })),
+    );
+  }
+  if (issuesRoute && req.method === "POST") {
+    const payload = JSON.parse(body) as { title: string; body?: string; labels?: string[] };
+    return json(res, 201, addIssue(issuesRoute[1]!, payload));
+  }
+  if (issuesRoute && req.method === "GET") {
+    const state = url.searchParams.get("state") ?? "open";
+    const wanted = (url.searchParams.get("labels") ?? "").split(",").filter(Boolean);
+    const rows = (repoIssues.get(issuesRoute[1]!) ?? []).filter(
+      (i) => (state === "all" || i.state === state) && wanted.every((w) => i.labels.some((l) => l.name === w)),
+    );
+    return json(res, 200, rows);
+  }
+
   // test control
   if (url.pathname === "/_control" && req.method === "POST") {
     const ctl = JSON.parse(body) as {
@@ -153,8 +227,13 @@ createServer(async (req, res) => {
       repos?: string[];
       setInstallation?: { id: number; repos: string[]; account?: string; suspended?: boolean };
       removeInstallation?: number;
+      /** seed a tracker row directly — pull_request:true makes it a PR-shaped row */
+      addIssue?: { repo: string; title: string; body?: string; labels?: string[]; pull_request?: boolean };
+      issuesForbidden?: boolean;
     };
     if (ctl.permission) permission = ctl.permission;
+    if (ctl.addIssue) addIssue(ctl.addIssue.repo, ctl.addIssue);
+    if (typeof ctl.issuesForbidden === "boolean") issuesForbidden = ctl.issuesForbidden;
     if (ctl.repos) installationRepos = ctl.repos;
     if (ctl.addRepo && !installationRepos.includes(ctl.addRepo)) installationRepos.push(ctl.addRepo);
     if (ctl.setInstallation) {
