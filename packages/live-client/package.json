@@ -18,11 +18,11 @@
   },
   "dependencies": {
     "@bpmiq/contracts": "workspace:*",
-    "@hocuspocus/provider": "^4.3.0",
-    "yjs": "^13.6.20"
+    "@hocuspocus/provider": "4.3.0",
+    "yjs": "13.6.31"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
-    "typescript": "^5.9.3"
+    "@types/node": "26.1.1",
+    "typescript": "5.9.3"
   }
 }
