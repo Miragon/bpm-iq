@@ -14,6 +14,14 @@ export function AppHeader({ me }: { me?: Me }) {
         <span className="text-muted-foreground hidden text-xs sm:inline">Let your processes talk</span>
       </Link>
       <div className="flex-1" />
+      <a
+        href="https://design.miragon.ai"
+        target="_blank"
+        rel="noreferrer"
+        className="text-muted-foreground hover:text-foreground hidden text-xs transition-colors sm:inline"
+      >
+        design.miragon.ai
+      </a>
       {me && (
         <div className="flex items-center gap-2">
           <Avatar className="size-7">
