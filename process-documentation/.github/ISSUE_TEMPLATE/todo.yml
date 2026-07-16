@@ -1,0 +1,39 @@
+# Manual counterpart to the canvas-created todos (the platform files those via
+# the API with the anchor block prefilled). The `todo` label is what makes an
+# issue a todo; add the `process:<id>` label so it shows up in that process's
+# panel on the canvas.
+name: Todo (model work item)
+description: File a work item on a process model — anchored todos show up on the bpmiq canvas
+labels: ["todo"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Todos created **from the bpmiq canvas** carry their anchor automatically — this form is the
+        manual path. After submitting, also add the `process:<id>` **label** to the issue so the todo
+        appears in that process's panel.
+  - type: input
+    id: process
+    attributes:
+      label: Process id
+      description: the `processes/<id>/` directory this todo belongs to
+      placeholder: order-to-cash
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs doing?
+      placeholder: Clarify whether the credit check can be skipped for existing customers.
+    validations:
+      required: true
+  - type: textarea
+    id: anchor
+    attributes:
+      label: Anchor block (optional — pins the todo to concrete BPMN elements)
+      description: Adjust ids/names and keep the comment markers — the platform parses this block.
+      value: |
+        <!-- bpmiq:todo v1
+        process: order-to-cash
+        element: Task_CheckCredit | Check credit
+        -->
