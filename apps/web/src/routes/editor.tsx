@@ -42,7 +42,16 @@ export function ProcessEditorScreen() {
   if (processes.isError) return <NotFound repo={repo} msg={(processes.error as Error).message} />;
   const proc = processes.data?.find((p) => p.id === processId);
   if (!proc?.bpmn) return <NotFound repo={repo} msg={`Prozess '${processId}' hat kein BPMN-Modell.`} />;
-  return <LiveEditor key={`${repo}/${proc.bpmn}`} repo={repo} processId={processId} docPath={proc.bpmn} me={me.data} />;
+  return (
+    <LiveEditor
+      key={`${repo}/${proc.bpmn}`}
+      repo={repo}
+      processId={processId}
+      docPath={proc.bpmn}
+      processVersion={proc.version ?? undefined}
+      me={me.data}
+    />
+  );
 }
 
 export function FileEditorScreen() {
