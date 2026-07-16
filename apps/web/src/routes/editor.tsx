@@ -32,6 +32,8 @@ function NotFound({ repo, msg }: { repo: string; msg: string }) {
 
 export function ProcessEditorScreen() {
   const { owner, repo: name, processId } = processRoute.useParams();
+  // deep-link target (?element=<id>) — revealed once after the first diagram import
+  const { element } = processRoute.useSearch();
   const repo = `${owner}/${name}`;
   const me = useMe();
   const processes = useProcesses(repo);
@@ -49,6 +51,7 @@ export function ProcessEditorScreen() {
       processId={processId}
       docPath={proc.bpmn}
       processVersion={proc.version ?? undefined}
+      revealElementId={element}
       me={me.data}
     />
   );

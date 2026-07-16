@@ -56,3 +56,6 @@ export const createTodo = (repo: string, body: CreateTodoBody): Promise<TodoWire
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+/** close (resolve) a todo in its tracker — errors (403 permission, 501 no tracker) carry actionable messages */
+export const closeTodo = (repo: string, id: string): Promise<{ ok: true }> =>
+  api(`/api/repos/${repo}/todos/${encodeURIComponent(id)}/close`, { method: "POST" });

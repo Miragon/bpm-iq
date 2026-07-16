@@ -14,6 +14,11 @@ const repoRoute = createRoute({ getParentRoute: () => rootRoute, path: "/r/$owne
 const processEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/r/$owner/$repo/p/$processId",
+  // deep links (e.g. from todo/issue bodies): ?element=<bpmn element id> reveals
+  // that element once after the diagram's first import; unknown ids are ignored
+  validateSearch: (search: Record<string, unknown>): { element?: string } => ({
+    element: typeof search.element === "string" && search.element.length > 0 ? search.element : undefined,
+  }),
   component: ProcessEditorScreen,
 });
 const fileEditorRoute = createRoute({

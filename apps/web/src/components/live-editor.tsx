@@ -49,6 +49,7 @@ export function LiveEditor({
   processId,
   docPath,
   processVersion,
+  revealElementId,
   me,
 }: {
   repo: string;
@@ -56,6 +57,8 @@ export function LiveEditor({
   docPath: string;
   /** process.yaml version, when the route resolved it — stamped into todo anchors */
   processVersion?: string;
+  /** deep-link target (?element=<id>) — revealed ONCE after the first diagram import */
+  revealElementId?: string;
   me: Me;
 }) {
   const notation = byExtension(docPath);
@@ -87,6 +90,18 @@ export function LiveEditor({
     todosRef.current = todoList ?? [];
     todoCanvasRef.current?.setTodos(todosRef.current);
   }, [todoList]);
+
+  // deep-link reveal: hand the ?element target to the canvas controller. Before
+  // the controller exists (session still syncing) it is parked in the ref and
+  // armed once in attach(); the controller's revealOnce consumes it after the
+  // FIRST import.done, so remote re-imports / session re-attaches never re-zoom.
+  const pendingRevealRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!revealElementId) return;
+    const canvas = todoCanvasRef.current;
+    if (canvas) canvas.revealOnce(revealElementId);
+    else pendingRevealRef.current = revealElementId;
+  }, [revealElementId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +149,11 @@ export function LiveEditor({
           });
           todoCanvasRef.current = todoCanvas;
           todoCanvas.setTodos(todosRef.current);
+          if (pendingRevealRef.current) {
+            // deep link opened before the session synced — arm the one-shot now
+            todoCanvas.revealOnce(pendingRevealRef.current);
+            pendingRevealRef.current = null;
+          }
         }
       }
       if (xmlRef.current) {
@@ -269,6 +289,7 @@ export function LiveEditor({
         />
         {hasTodos && todosOpen && (
           <TodoPanel
+            repo={repo}
             todos={todoList}
             isLoading={todosQuery.isLoading}
             error={todosQuery.error}
