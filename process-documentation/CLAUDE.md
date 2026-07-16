@@ -2,7 +2,7 @@
 
 This repository models business processes and their strategic context, and turns them into
 conversational skills. **The models are the source of truth — ground every answer in them.**
-It is served by the [bpmiq](https://github.com/Miragon/bpm-architect) platform.
+It is served by the [bpmiq](https://github.com/Miragon/bpm-iq) platform.
 
 ## Map
 
