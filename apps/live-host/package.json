@@ -1,5 +1,6 @@
 {
   "name": "@bpmiq/live-host",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Live collaboration host: Hocuspocus sync + REST API + web app on one port. Multi-repo, per-(user,repo) authz, release-as-PR.",

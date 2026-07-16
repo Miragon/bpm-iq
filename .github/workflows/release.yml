@@ -4,8 +4,10 @@ name: Release (GHCR image)
 # and every SaaS cell run this exact image.
 #   push to main   → ghcr.io/miragon/bpmiq-live-host:sha-<full-sha> + :edge
 #   tag v*         → additionally :vX.Y.Z, :vX.Y and :latest
-# The sha- tag uses the FULL commit sha so a submodule pin maps to its image
-# deterministically (`git rev-parse HEAD`, no short-sha ambiguity).
+# The v* tag is cut by release-please (single whole-repo release; see
+# release-please.yml). The sha- tag uses the FULL commit sha so a submodule pin
+# maps to its image deterministically (`git rev-parse HEAD`, no short-sha
+# ambiguity).
 
 on:
   push:

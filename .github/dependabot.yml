@@ -3,17 +3,17 @@
 version: 2
 updates:
   # npm — one block covers the whole pnpm workspace (resolved from the root).
-  - package-ecosystem: 'npm'
-    directory: '/'
+  - package-ecosystem: "npm"
+    directory: "/"
     schedule:
-      interval: 'weekly'
+      interval: "weekly"
     labels:
-      - 'dependencies'
+      - "dependencies"
     # majors arrive as individual PRs — leave headroom above the default of 5
     open-pull-requests-limit: 10
     commit-message:
-      prefix: 'chore'
-      include: 'scope'
+      prefix: "chore"
+      include: "scope"
     # let new releases mature before a PR opens; security fixes are never delayed
     cooldown:
       default-days: 5
@@ -23,53 +23,53 @@ updates:
     groups:
       npm-minor-patch:
         applies-to: version-updates
-        patterns: ['*']
-        update-types: ['minor', 'patch']
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
       npm-security:
         applies-to: security-updates
-        patterns: ['*']
+        patterns: ["*"]
 
   # github-actions — SHA-pinned and CI-gated; majors are mostly mechanical, so
   # group everything. Monthly: workflows change slowly.
-  - package-ecosystem: 'github-actions'
-    directory: '/'
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
-      interval: 'monthly'
+      interval: "monthly"
     labels:
-      - 'dependencies'
+      - "dependencies"
     commit-message:
-      prefix: 'chore'
-      include: 'scope'
+      prefix: "chore"
+      include: "scope"
     cooldown:
       default-days: 5
     groups:
       github-actions:
         applies-to: version-updates
-        patterns: ['*']
+        patterns: ["*"]
       github-actions-security:
         applies-to: security-updates
-        patterns: ['*']
+        patterns: ["*"]
 
   # docker — base images for the two service Dockerfiles. A node major is a
   # runtime change, so it lands separately (minor+patch grouped).
-  - package-ecosystem: 'docker'
+  - package-ecosystem: "docker"
     directories:
-      - '/'
-      - '/apps/live-host'
+      - "/"
+      - "/apps/live-host"
     schedule:
-      interval: 'weekly'
+      interval: "weekly"
     labels:
-      - 'dependencies'
+      - "dependencies"
     commit-message:
-      prefix: 'chore'
-      include: 'scope'
+      prefix: "chore"
+      include: "scope"
     cooldown:
       default-days: 5
     groups:
       docker-minor-patch:
         applies-to: version-updates
-        patterns: ['*']
-        update-types: ['minor', 'patch']
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
       docker-security:
         applies-to: security-updates
-        patterns: ['*']
+        patterns: ["*"]
