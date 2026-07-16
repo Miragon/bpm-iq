@@ -28,6 +28,7 @@ import { Server } from "@hocuspocus/server";
 
 import type { AppCredentials } from "./adapters/github/app-auth.ts";
 import { createGitHubAppSource } from "./adapters/github/app-source.ts";
+import { createGitHubIssueTracker } from "./adapters/github/issues.ts";
 import { createGitHubProvider } from "./adapters/github/provider.ts";
 import { LineageStore } from "./adapters/sqlite/lineage-store.ts";
 import { SessionStore } from "./adapters/sqlite/sessions.ts";
@@ -200,6 +201,24 @@ workspaces.hooks = {
   },
 };
 
+// Issue-tracker seam (model-anchored todos): GitHub Issues, acting with the SAME
+// per-repo installation-token path the connection source uses (bot-authored,
+// human attributed — ADR 0001). Constructed iff the platform can mint tokens
+// (same condition family as connectionSource); tokenFor composes registry →
+// TokenService HERE, so the adapter never reads env and stays swappable.
+const issues = tokens
+  ? createGitHubIssueTracker({
+      apiUrl: GH_API,
+      tokenFor: async (repoFullName) => {
+        const installationId = registry.get(repoFullName)?.installationId;
+        if (installationId == null) {
+          throw new Error(`no app installation for ${repoFullName} — cannot act on its issue tracker`);
+        }
+        return tokens.mint(installationId);
+      },
+    })
+  : undefined;
+
 // REST backend — constructed even without login credentials (access checks +
 // releases only need tokens passed per call); login buttons need client creds
 const github = createGitHubProvider({
@@ -262,6 +281,7 @@ const httpServer = startApi(PORT, {
   devToken,
   liveDocs: () => [...liveDocs],
   connectionSource,
+  issues,
   handoffSecret: process.env.HANDOFF_SECRET,
   // control-plane origin (from the mint URL) — handoff CSRF check + failure redirect
   controlPlaneUrl: MINT_URL ? new URL(MINT_URL).origin : undefined,

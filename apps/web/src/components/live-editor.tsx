@@ -19,13 +19,17 @@ import { cn } from "@bpmiq/ui-kit/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import BpmnModeler from "bpmn-js/lib/Modeler";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, ListTodo, Loader2, Plus } from "lucide-react";
 import * as monaco from "monaco-editor";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MonacoBinding } from "y-monaco";
 
-import { config, type Me, releaseProcess } from "@/lib/api";
+import { TodoCreateDialog } from "@/components/todo-create-dialog";
+import { TodoPanel } from "@/components/todo-panel";
+import { config, type Me, releaseProcess, type TodoElementWire, type TodoWire } from "@/lib/api";
+import { useTodos } from "@/lib/queries";
+import { attachTodoCanvas, type TodoCanvas } from "@/lib/todo-canvas";
 
 interface Presence {
   name: string;
@@ -44,11 +48,14 @@ export function LiveEditor({
   repo,
   processId,
   docPath,
+  processVersion,
   me,
 }: {
   repo: string;
   processId: string;
   docPath: string;
+  /** process.yaml version, when the route resolved it — stamped into todo anchors */
+  processVersion?: string;
   me: Me;
 }) {
   const notation = byExtension(docPath);
@@ -62,6 +69,24 @@ export function LiveEditor({
   const [error, setError] = useState<string | null>(null);
   const [showXml, setShowXml] = useState(!isBpmn);
   const [presence, setPresence] = useState<Presence[]>([]);
+
+  // model-anchored todos — only for documents that belong to a process
+  const hasTodos = processId.length > 0;
+  const todosQuery = useTodos(repo, processId, hasTodos);
+  const [selectedElements, setSelectedElements] = useState<TodoElementWire[]>([]);
+  const [todosOpen, setTodosOpen] = useState(false);
+  const [todoFilter, setTodoFilter] = useState<string | null>(null);
+  const [todoCreateOpen, setTodoCreateOpen] = useState(false);
+  // the canvas controller lives inside the imperative session effect; the query
+  // data flows in through these refs (and the effect below) in either order
+  const todoCanvasRef = useRef<TodoCanvas | null>(null);
+  const todosRef = useRef<TodoWire[]>([]);
+
+  const todoList = todosQuery.data;
+  useEffect(() => {
+    todosRef.current = todoList ?? [];
+    todoCanvasRef.current?.setTodos(todosRef.current);
+  }, [todoList]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +105,7 @@ export function LiveEditor({
 
     let modeler: InstanceType<typeof BpmnModeler> | undefined;
     let unbindCanvas: (() => void) | undefined;
+    let todoCanvas: TodoCanvas | undefined;
     let monacoBinding: MonacoBinding | undefined;
     let xmlEditor: monaco.editor.IStandaloneCodeEditor | undefined;
     let xmlModel: monaco.editor.ITextModel | undefined;
@@ -96,6 +122,19 @@ export function LiveEditor({
       if (isBpmn && canvasRef.current) {
         modeler = new BpmnModeler({ container: canvasRef.current });
         unbindCanvas = bindBpmn(modeler as never, ytext, session.doc, (msg) => toast.error(msg));
+        if (hasTodos) {
+          // badges re-attach on every import.done (bindBpmn re-imports remote
+          // changes); a badge click opens the panel filtered to its element
+          todoCanvas = attachTodoCanvas(modeler as never, {
+            onBadgeClick: (elementId) => {
+              setTodoFilter(elementId);
+              setTodosOpen(true);
+            },
+            onSelectionChanged: setSelectedElements,
+          });
+          todoCanvasRef.current = todoCanvas;
+          todoCanvas.setTodos(todosRef.current);
+        }
       }
       if (xmlRef.current) {
         xmlModel = monaco.editor.createModel(ytext.toString(), monacoLanguage(docPath));
@@ -121,6 +160,8 @@ export function LiveEditor({
       clearTimeout(slow);
       offSynced();
       offPresence?.();
+      todoCanvas?.destroy();
+      todoCanvasRef.current = null;
       unbindCanvas?.();
       monacoBinding?.destroy();
       xmlEditor?.dispose();
@@ -181,6 +222,35 @@ export function LiveEditor({
             XML
           </Button>
         )}
+        {hasTodos && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              title="Offene Todos dieses Prozesses"
+              onClick={() => {
+                setTodoFilter(null);
+                setTodosOpen((v) => !v);
+              }}
+            >
+              <ListTodo />
+              Todos{todoList && todoList.length > 0 ? ` (${todoList.length})` : ""}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              title={
+                selectedElements.length > 0
+                  ? "Todo an der Auswahl verankern"
+                  : "Todo auf Prozess-Ebene anlegen (kein Element ausgewählt)"
+              }
+              onClick={() => setTodoCreateOpen(true)}
+            >
+              <Plus />
+              Todo{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ""}
+            </Button>
+          </>
+        )}
         {processId && (
           <Button size="sm" disabled={release.isPending} onClick={() => release.mutate()}>
             {release.isPending ? "Validiere & PR…" : "Release → PR"}
@@ -197,7 +267,34 @@ export function LiveEditor({
           ref={xmlRef}
           className={cn("monaco-host absolute inset-0", !xmlActive && "pointer-events-none opacity-0")}
         />
+        {hasTodos && todosOpen && (
+          <TodoPanel
+            todos={todoList}
+            isLoading={todosQuery.isLoading}
+            error={todosQuery.error}
+            filterElementId={todoFilter}
+            onClearFilter={() => setTodoFilter(null)}
+            onRevealElement={(elementId) => {
+              if (!todoCanvasRef.current?.reveal(elementId))
+                toast(`Element '${elementId}' existiert nicht (mehr) im Diagramm.`);
+            }}
+            onClose={() => {
+              setTodosOpen(false);
+              setTodoFilter(null);
+            }}
+          />
+        )}
       </div>
+      {hasTodos && todoCreateOpen && (
+        <TodoCreateDialog
+          repo={repo}
+          processId={processId}
+          docPath={docPath}
+          processVersion={processVersion}
+          elements={selectedElements}
+          onClose={() => setTodoCreateOpen(false)}
+        />
+      )}
     </div>
   );
 }

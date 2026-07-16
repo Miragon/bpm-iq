@@ -61,16 +61,21 @@ Org → **Settings → Developer settings → GitHub Apps → New GitHub App** (
 mirror the manifest in
 [`apps/live-host/src/tools/create-app.ts`](../../apps/live-host/src/tools/create-app.ts)):
 
-| Field                                                      | Value                                                                                                    |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Name / Homepage URL                                        | e.g. `BPM Live` / `https://<host>`                                                                       |
-| Callback URL                                               | `https://<host>/auth/github/callback`                                                                    |
-| **Request user authorization (OAuth) during installation** | **checked** — installing and logging in become one flow                                                  |
-| Setup URL                                                  | `https://<host>/setup/installed`, with **Redirect on update** checked                                    |
-| Webhook                                                    | Active, URL `https://<host>/webhook/github`, generate + note a webhook secret                            |
-| Repository permissions                                     | **Contents: Read and write** · **Pull requests: Read and write** · Metadata: Read (mandatory)            |
-| Subscribe to events                                        | Installation target events suffice — the server reacts to `installation` and `installation_repositories` |
-| Where can this app be installed?                           | _Only on this account_ (the app stays private to your org)                                               |
+| Field                                                      | Value                                                                                                                      |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Name / Homepage URL                                        | e.g. `BPM Live` / `https://<host>`                                                                                         |
+| Callback URL                                               | `https://<host>/auth/github/callback`                                                                                      |
+| **Request user authorization (OAuth) during installation** | **checked** — installing and logging in become one flow                                                                    |
+| Setup URL                                                  | `https://<host>/setup/installed`, with **Redirect on update** checked                                                      |
+| Webhook                                                    | Active, URL `https://<host>/webhook/github`, generate + note a webhook secret                                              |
+| Repository permissions                                     | **Contents: Read and write** · **Pull requests: Read and write** · **Issues: Read and write** · Metadata: Read (mandatory) |
+| Subscribe to events                                        | Installation target events suffice — the server reacts to `installation` and `installation_repositories`                   |
+| Where can this app be installed?                           | _Only on this account_ (the app stays private to your org)                                                                 |
+
+> **Apps registered before the todo feature:** add **Issues: Read and write** in the app's
+> permission settings. GitHub then asks each org that already installed the app to **approve
+> the added permission** (the org owner gets a prompt/notification) — todos return a clear
+> 403 until that approval happens. Contents/pull-requests features are unaffected.
 
 After creation:
 

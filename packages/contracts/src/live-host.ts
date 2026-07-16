@@ -70,3 +70,43 @@ export interface ReleaseResult {
   /** true when pushed/opened with the app installation token (self-approvable PR) */
   botAuthored: boolean;
 }
+
+/** one BPMN element a todo is anchored to (id = anchor, name = creation-time snapshot) */
+export interface TodoElementWire {
+  id: string;
+  name: string | null;
+}
+
+/** platform anchor of a todo — which process/file/elements it belongs to */
+export interface TodoAnchorWire {
+  process: string;
+  file: string | null;
+  elements: TodoElementWire[];
+  processVersion: string | null;
+}
+
+/** GET /api/repos/:fullName/todos[?process=<id>] — one row per OPEN tracker item */
+export interface TodoWire {
+  /** tracker-native id as a string (GitHub/GitLab: issue number; Jira: "PROJ-123") */
+  id: string;
+  url: string;
+  title: string;
+  state: "open" | "done";
+  /** null = no parseable anchor (e.g. created by hand in the tracker) */
+  anchor: TodoAnchorWire | null;
+  author: string | null;
+  assignees: string[];
+  createdAt: string;
+}
+
+/** POST /api/repos/:fullName/todos — response is the created TodoWire */
+export interface CreateTodoBody {
+  title: string;
+  body?: string;
+  anchor: {
+    process: string;
+    file?: string;
+    elements?: TodoElementWire[];
+    processVersion?: string;
+  };
+}

@@ -1,19 +1,21 @@
 # Extending bpmiq: git connectors
 
 A connector teaches the Live Host a new git vendor — GitLab is the worked example
-throughout. The seam is two ports in `apps/live-host/src/ports/`; GitHub is one
+throughout. The seam is three ports in `apps/live-host/src/ports/`; GitHub is one
 implementation of each, a new vendor is a second implementation, not a rewrite
 ([ADR 0003](../adr/0003-module-architecture-and-shared-packages.md),
 [ADR 0004](../adr/0004-open-source-split.md)).
 
-## The two ports
+## The three ports
 
 The provider abstraction is deliberately split by **whose credential acts**:
 
 - `GitProvider` — the USER-credentialed half (the person's OAuth grant).
 - `RepoConnectionSource` — the PLATFORM-credentialed half (the instance's own credential).
+- `IssueTracker` — model-anchored todos as first-class items in the customer's own tracker.
 
-A complete connector implements **both**.
+A complete connector implements the first two; `IssueTracker` enables the todo feature
+(the `/todos` API answers 501 without it).
 
 ### `GitProvider` — `apps/live-host/src/ports/git-provider.ts`
 
@@ -88,6 +90,16 @@ export interface RepoConnectionSource {
 `SourceRepo.fullName` is the provider-unique full path — multi-segment GitLab paths
 (`group/sub/project`) are supported end to end (rooms, API routes and the registry
 match the repo as a greedy prefix; the route shape never assumes `owner/name`).
+
+### `IssueTracker` — `apps/live-host/src/ports/issue-tracker.ts`
+
+The third port carries model-anchored **todos**: work items that live in the customer's
+OWN tracker, never in a platform database. GitHub implements it with repo issues +
+labels; GitLab maps 1:1 onto project issues; Jira maps a repo to a project via adapter
+config — which is why `Todo.id` is an opaque string and nothing in the contract assumes
+numbers, labels, or markdown. The anchor codec (which process, which BPMN elements) is
+platform domain (`domain/todo-anchor.ts`); an adapter only decides WHERE the encoded
+block is stored (GitHub: the issue body).
 
 ## The rule (ADR 0003)
 

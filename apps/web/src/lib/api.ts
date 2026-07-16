@@ -1,12 +1,31 @@
 /** Live-Host API client — session-based (git-provider OAuth), same-origin. */
 import { api } from "@bpmiq/api-client";
-import type { AppConfig, Me, ProcessInfo, ReleaseResult, RepoInfo } from "@bpmiq/contracts/live-host";
+import type {
+  AppConfig,
+  CreateTodoBody,
+  Me,
+  ProcessInfo,
+  ReleaseResult,
+  RepoInfo,
+  TodoWire,
+} from "@bpmiq/contracts/live-host";
 
 // re-export so app-internal `instanceof ApiError` call sites keep one import path
 export { ApiError } from "@bpmiq/api-client";
 // the wire types live in @bpmiq/contracts (the backend assembles them under
 // `satisfies` checks) — re-exported so component imports keep one import path
-export type { AppConfig, Me, ModelRef, ProcessInfo, ReleaseResult, RepoInfo } from "@bpmiq/contracts/live-host";
+export type {
+  AppConfig,
+  CreateTodoBody,
+  Me,
+  ModelRef,
+  ProcessInfo,
+  ReleaseResult,
+  RepoInfo,
+  TodoAnchorWire,
+  TodoElementWire,
+  TodoWire,
+} from "@bpmiq/contracts/live-host";
 
 export const config = {
   // same origin as the page (single port; wss:// behind Fly TLS). Override with
@@ -28,3 +47,12 @@ export const fetchRepos = (refresh = false): Promise<RepoInfo[]> => api(`/api/re
 export const fetchProcesses = (repo: string): Promise<ProcessInfo[]> => api(`/api/repos/${repo}/processes`);
 export const releaseProcess = (repo: string, id: string): Promise<ReleaseResult> =>
   api(`/api/repos/${repo}/release/${id}`, { method: "POST" });
+/** open todos of a repo, optionally narrowed to one process */
+export const fetchTodos = (repo: string, process?: string): Promise<TodoWire[]> =>
+  api(`/api/repos/${repo}/todos${process ? `?process=${encodeURIComponent(process)}` : ""}`);
+export const createTodo = (repo: string, body: CreateTodoBody): Promise<TodoWire> =>
+  api(`/api/repos/${repo}/todos`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });

@@ -12,6 +12,8 @@
  *   GET  /api/me, POST /api/logout
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
  *   GET  /api/repos/:owner/:repo/processes       → process list      (repo write required)
+ *   GET  /api/repos/:owner/:repo/todos           → open model-anchored todos (repo write required)
+ *   POST /api/repos/:owner/:repo/todos           → create a todo in the repo's tracker (repo write required)
  *   POST /api/repos/:owner/:repo/release/:id     → release AS THE USER (repo write required)
  *   POST /webhook/github                         → installation lifecycle (HMAC-verified)
  *   GET  /setup/installed                        → post-install sync + redirect
@@ -26,7 +28,7 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 
-import type { AppConfig, Me, ReleaseResult } from "@bpmiq/contracts/live-host";
+import type { AppConfig, CreateTodoBody, Me, ReleaseResult, TodoWire } from "@bpmiq/contracts/live-host";
 import { bearerAuth, errorBody, readBody, redirect, securityHeaders, send } from "@bpmiq/http-kit";
 
 import {
@@ -43,6 +45,7 @@ import {
 import { listProcesses, listRepos } from "../application/overview.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
+import type { IssueTracker } from "../ports/issue-tracker.ts";
 import { release } from "../release.ts";
 import type { AccessCache } from "../repos/access.ts";
 import type { ConnectedRepo, RepoRegistry } from "../repos/registry.ts";
@@ -79,6 +82,9 @@ export interface ApiOptions {
   liveDocs: () => string[];
   /** provider seam for the connected-repo set: connect URL + webhook verification */
   connectionSource?: RepoConnectionSource;
+  /** issue-tracker seam (model-anchored todos) — absent when the platform has
+   * no credentials to act on the tracker (the /todos routes then answer 501) */
+  issues?: IssueTracker;
   /** cell mode (ADR 0002): shared secret to verify control-plane handoff logins */
   handoffSecret?: string;
   /** control-plane origin (derived from TOKEN_MINT_URL) — for the handoff CSRF
@@ -362,10 +368,10 @@ export function startApi(port: number, opts: ApiOptions): Server {
         return send(res, 200, await listRepos(opts, session));
       }
 
-      // repo-scoped: processes + release. The repo segment is GREEDY (multi-
-      // segment) — GitLab projects live in subgroups, so "owner/name" must not
-      // be baked into the route shape. The registry decides what a repo is.
-      const repoRoute = url.pathname.match(/^\/api\/repos\/(.+)\/(processes|release(?:\/([a-z0-9-]+))?)$/);
+      // repo-scoped: processes + todos + release. The repo segment is GREEDY
+      // (multi-segment) — GitLab projects live in subgroups, so "owner/name" must
+      // not be baked into the route shape. The registry decides what a repo is.
+      const repoRoute = url.pathname.match(/^\/api\/repos\/(.+)\/(processes|todos|release(?:\/([a-z0-9-]+))?)$/);
       if (repoRoute) {
         const session = sessionOf(req);
         if (!session) return send(res, 401, { error: "not logged in" });
@@ -374,6 +380,49 @@ export function startApi(port: number, opts: ApiOptions): Server {
         if (repoRoute[2] === "processes") {
           const workspace = await opts.workspaces.ensure(repo);
           return send(res, 200, await listProcesses(opts, repo, workspace));
+        }
+        if (repoRoute[2] === "todos") {
+          // the tracker seam needs a platform credential (installation token) —
+          // a credential-less local spike has no way to act on the repo's issues
+          if (!opts.issues) {
+            return send(res, 501, { error: "todo tracking is not configured (requires platform credentials)" });
+          }
+          if (req.method === "GET") {
+            const todos = await opts.issues.listTodos(repo.fullName, url.searchParams.get("process") ?? undefined);
+            return send(res, 200, todos satisfies TodoWire[]);
+          }
+          if (req.method === "POST") {
+            let body: CreateTodoBody;
+            try {
+              body = JSON.parse((await readBody(req)).toString()) as CreateTodoBody;
+            } catch {
+              return send(res, 400, { error: "invalid JSON body" });
+            }
+            if (typeof body?.title !== "string" || body.title.trim().length === 0) {
+              return send(res, 400, { error: "title must be a non-empty string" });
+            }
+            if (typeof body?.anchor?.process !== "string" || body.anchor.process.trim().length === 0) {
+              return send(res, 400, { error: "anchor.process must be a non-empty string" });
+            }
+            const todo = await opts.issues.createTodo(repo.fullName, {
+              title: body.title.trim(),
+              body: typeof body.body === "string" ? body.body : "",
+              anchor: {
+                process: body.anchor.process.trim(),
+                file: typeof body.anchor.file === "string" ? body.anchor.file : null,
+                elements: (Array.isArray(body.anchor.elements) ? body.anchor.elements : [])
+                  .filter((el) => typeof el?.id === "string" && el.id.length > 0)
+                  .map((el) => ({ id: el.id, name: typeof el.name === "string" ? el.name : null })),
+                processVersion: typeof body.anchor.processVersion === "string" ? body.anchor.processVersion : null,
+              },
+              // attribution: the platform login of the SESSION is authoritative,
+              // never a client-supplied author field
+              author: session.user.login,
+            });
+            console.log(`todo created in ${repo.fullName} by @${session.user.login}: #${todo.id} "${todo.title}"`);
+            return send(res, 201, todo satisfies TodoWire);
+          }
+          return send(res, 405, { error: "method not allowed" });
         }
         if (repoRoute[2]?.startsWith("release/") && req.method === "POST") {
           const provider = opts.providers.get(session.user.provider) ?? opts.github;
