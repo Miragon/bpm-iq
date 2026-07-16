@@ -46,7 +46,7 @@ export const logout = (): Promise<{ ok: boolean }> => api("/api/logout", { metho
 export const fetchRepos = (refresh = false): Promise<RepoInfo[]> => api(`/api/repos${refresh ? "?refresh=1" : ""}`);
 export const fetchProcesses = (repo: string): Promise<ProcessInfo[]> => api(`/api/repos/${repo}/processes`);
 export const releaseProcess = (repo: string, id: string): Promise<ReleaseResult> =>
-  api(`/api/repos/${repo}/release/${id}`, { method: "POST" });
+  api(`/api/repos/${repo}/release/${encodeURIComponent(id)}`, { method: "POST" });
 /** open todos of a repo, optionally narrowed to one process */
 export const fetchTodos = (repo: string, process?: string): Promise<TodoWire[]> =>
   api(`/api/repos/${repo}/todos${process ? `?process=${encodeURIComponent(process)}` : ""}`);

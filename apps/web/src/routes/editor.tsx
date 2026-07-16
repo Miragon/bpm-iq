@@ -43,14 +43,13 @@ export function ProcessEditorScreen() {
   // data is also undefined when the query errored (don't mislabel a 500/network error)
   if (processes.isError) return <NotFound repo={repo} msg={(processes.error as Error).message} />;
   const proc = processes.data?.find((p) => p.id === processId);
-  if (!proc?.bpmn) return <NotFound repo={repo} msg={`Process '${processId}' has no BPMN model.`} />;
+  if (!proc) return <NotFound repo={repo} msg={`Process '${processId}' has no BPMN model.`} />;
   return (
     <LiveEditor
       key={`${repo}/${proc.bpmn}`}
       repo={repo}
       processId={processId}
       docPath={proc.bpmn}
-      processVersion={proc.version ?? undefined}
       revealElementId={element}
       me={me.data}
     />
@@ -61,8 +60,10 @@ export function FileEditorScreen() {
   const { owner, repo: name, _splat } = fileRoute.useParams();
   const repo = `${owner}/${name}`;
   const path = _splat ?? "";
-  const processId = path.match(/^processes\/([^/]+)\//)?.[1] ?? "";
   const me = useMe();
+  // a process is a file — resolve the id (for todos/release) from the listing
+  const processes = useProcesses(repo);
+  const processId = processes.data?.find((p) => p.models.some((m) => m.path === path))?.id ?? "";
   if (me.isLoading) return <Loading />;
   if (!me.data) return null;
   return <LiveEditor key={`${repo}/${path}`} repo={repo} processId={processId} docPath={path} me={me.data} />;

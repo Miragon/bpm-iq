@@ -28,10 +28,10 @@ webhook receiver at `POST /webhook/github`, fallback: the host's own repo when n
 private key is configured). The web app opens with a **repo overview** (`GET /api/repos`,
 filtered per user permission); rooms are **`<owner>/<repo>/<path>`**; every repo gets its
 own workspace (`.live/workspaces/<owner>/<repo>`, cloned on demand with installation
-tokens — the host's own repo keeps using this checkout). Releases are repo-scoped
-(`POST /api/repos/:owner/:repo/release/:id`) and validation always runs the PLATFORM's
-validator (`packages/validator/src/validate.ts --root <workspace>`) — never code from a
-content repo.
+tokens — the host's own repo keeps using this checkout). A repo is a BPM content
+repo when it has a root **`bpmiq.yml`** naming its BPMN processes folder; a process
+is a `.bpmn` file under it. Releases are repo-scoped
+(`POST /api/repos/:owner/:repo/release/:id`) and publish that file's live state as a PR.
 Requires in `.env` (from `pnpm create-app` in this directory): `GITHUB_APP_ID` + the app
 private key — via any of (first match wins):
 `GITHUB_APP_PRIVATE_KEY` (paste the raw PEM straight into `.env`, wrapped in double quotes —

@@ -14,7 +14,8 @@
 /deploy/                      @dominikhorn93
 /Dockerfile                   @dominikhorn93
 
-# ── Example content repo (mirrored to the starter template) ─────────
-# The starter's own CODEOWNERS lives in process-documentation/.github/CODEOWNERS
-# and is mirrored with the rest of the content by sync-starter.yml.
+# ── Content-repo contract + example content ─────────────────────────
+# starter/ is the minimal contract mirrored to the starter template by
+# sync-starter.yml; process-documentation/ is the rich internal example.
+/starter/                     @dominikhorn93
 /process-documentation/       @dominikhorn93

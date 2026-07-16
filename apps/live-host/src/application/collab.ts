@@ -13,7 +13,7 @@
  * with fake payloads while server.ts spreads them into `new Server({...})`
  * (a hook taking a narrower payload accepts Hocuspocus' full one).
  */
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 
 import { CONTENT_KEY } from "@bpmiq/contracts/live";
@@ -22,7 +22,13 @@ import * as Y from "yjs";
 import type { LineageStore } from "../adapters/sqlite/lineage-store.ts";
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import type { DocSizeGuard } from "../domain/doc-size-guard.ts";
-import { type RegistryLookup, splitRoom, toDiskPath, type WorkspaceEnsure } from "../domain/rooms.ts";
+import {
+  type ContentConfigLookup,
+  type RegistryLookup,
+  splitRoom,
+  toDiskPath,
+  type WorkspaceEnsure,
+} from "../domain/rooms.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 
 export interface CollabDeps {
@@ -33,6 +39,8 @@ export interface CollabDeps {
   access: { canWrite(session: Session, repo: ConnectedRepo): Promise<boolean> };
   registry: RegistryLookup;
   workspaces: WorkspaceEnsure;
+  /** the repo's content config (bpmiq.yml) — rooms exist only inside its processes folder */
+  contentConfig: ContentConfigLookup;
   /** optional shared token for headless clients (tests, VS Code) — off if unset */
   devToken: () => string | undefined;
   /** repo-qualified document names of live rooms (shared with reconcile + API) */
@@ -40,7 +48,28 @@ export interface CollabDeps {
 }
 
 export function makeCollabHooks(deps: CollabDeps) {
-  const { lineage, docGuard, maxDocBytes, sessions, access, registry, workspaces, devToken, liveDocs } = deps;
+  const { lineage, docGuard, maxDocBytes, sessions, access, registry, workspaces, contentConfig, devToken, liveDocs } =
+    deps;
+
+  /**
+   * Resolve a room to disk AND reject symlink escapes. toDiskPath (pure domain)
+   * does the lexical containment; resolve() is blind to symlinks, so a *.bpmn
+   * symlink escaping the checkout would otherwise be read/written through. Once
+   * the target exists, canonicalize it and re-check it stays inside the workspace
+   * (realpath lives here in the application layer — the domain module stays pure).
+   */
+  const resolveRoom = async (documentName: string): Promise<string> => {
+    const disk = await toDiskPath(documentName, registry, workspaces, contentConfig);
+    if (existsSync(disk)) {
+      const { repo } = splitRoom(documentName, registry);
+      const workspace = await workspaces.ensure(repo);
+      if (!realpathSync(disk).startsWith(realpathSync(workspace) + "/")) {
+        throw new Error(`path escapes workspace (symlink): ${documentName}`);
+      }
+    }
+    return disk;
+  };
+
   return {
     async onAuthenticate({ token, documentName }: { token: string; documentName: string }) {
       const { repo } = splitRoom(documentName, registry); // reject malformed/unknown rooms first
@@ -61,7 +90,7 @@ export function makeCollabHooks(deps: CollabDeps) {
     },
 
     async onLoadDocument({ document, documentName }: { document: Y.Doc; documentName: string }) {
-      const disk = await toDiskPath(documentName, registry, workspaces);
+      const disk = await resolveRoom(documentName);
       if (!existsSync(disk)) throw new Error(`no such file: ${documentName}`);
       // NB docGuard.load() below must stay AFTER every throw site in this hook: a
       // failed load never fires afterUnloadDocument (no document registered), so a
@@ -132,7 +161,7 @@ export function makeCollabHooks(deps: CollabDeps) {
       }
       lineage.save(documentName, update);
       const content = document.getText(CONTENT_KEY).toString();
-      await writeFile(await toDiskPath(documentName, registry, workspaces), content);
+      await writeFile(await resolveRoom(documentName), content);
       console.log(`write-through: ${documentName} (${content.length} chars)`);
     },
 

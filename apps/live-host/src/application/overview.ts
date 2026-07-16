@@ -1,9 +1,9 @@
 /**
  * The overview read-models, extracted from http/api.ts:
  *
- *   listProcesses — one row per processes/<id>/ directory of a workspace
- *                   (process.yaml metadata, declared model files with their
- *                   notation, dirty-vs-origin flag, live session count)
+ *   listProcesses — one row per .bpmn file under the repo's bpmiq.yml
+ *                   processes folder (repos/content.ts), with dirty-vs-origin
+ *                   flag and live session count
  *   listRepos     — registry ∩ the session user's per-repo permission, with
  *                   process/dirty counts for locally-present workspaces
  *
@@ -12,21 +12,17 @@
  * never here). The returned object shapes ARE the wire format
  * (@bpmiq/contracts/live-host — shape drift is a tsc error).
  */
-import { existsSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
-
-import type { ModelRef, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { byExtension } from "@bpmiq/notations";
-import { parse as parseYaml } from "yaml";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
+import { discoverProcesses, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 
 export interface OverviewDeps {
   registry: { list(): ConnectedRepo[] };
   workspaces: {
-    /** content directory (no provisioning) — the overview must never trigger clones */
+    /** checkout root (no provisioning) — the overview must never trigger clones */
     dir(repo: ConnectedRepo): string;
     /** files under `pathspec` differing from origin/<defaultBranch>; [] on error */
     changedPaths(repo: ConnectedRepo, pathspec: string): Promise<string[]>;
@@ -41,60 +37,22 @@ export async function listProcesses(
   repo: ConnectedRepo,
   workspace: string,
 ): Promise<ProcessInfo[]> {
-  const dir = join(workspace, "processes");
-  if (!existsSync(dir)) return [];
+  const cfg = loadContentConfig(workspace);
+  if (!cfg) return [];
   const live = opts.liveDocs();
-  const entries = await readdir(dir, { withFileTypes: true });
   const processes: ProcessInfo[] = [];
-  for (const e of entries) {
-    if (!e.isDirectory()) continue;
-    const yml = join(dir, e.name, "process.yaml");
-    if (!existsSync(yml)) continue;
-    // process.yaml is a live-editable (.yaml) room — an intermediate invalid
-    // parse must not take down the whole listing (adversarial review)
-    let meta;
-    try {
-      meta = parseYaml(await readFile(yml, "utf8"));
-    } catch {
-      processes.push({
-        repo: repo.fullName,
-        id: e.name,
-        name: e.name,
-        classification: null,
-        status: "invalid-yaml",
-        version: null,
-        owner: null,
-        bpmn: null,
-        models: [],
-        dirty: false,
-        liveSessions: 0,
-      });
-      continue;
-    }
-    const dirty = (await opts.workspaces.changedPaths(repo, `processes/${e.name}`)).length > 0;
-    // every declared model file, notation resolved via the registry — the web
-    // client opens each of these as its own live document
-    const models: ModelRef[] = [];
-    const addModel = (rel?: string): void => {
-      if (!rel) return;
-      models.push({ notation: byExtension(rel)?.id ?? "text", path: `processes/${e.name}/${rel}` });
-    };
-    for (const v of Object.values((meta?.models ?? {}) as Record<string, string>)) addModel(v);
-    for (const sp of meta?.subprocesses ?? []) addModel(sp?.file);
-    for (const d of meta?.decisions ?? []) addModel(d?.file);
-
+  for (const proc of await discoverProcesses(workspace, cfg)) {
+    // dirty flag comes from the injected changedPaths (git stays behind the seam)
+    const dirty = (await opts.workspaces.changedPaths(repo, proc.path)).length > 0;
     processes.push({
       repo: repo.fullName,
-      id: e.name,
-      name: meta?.name ?? e.name,
-      classification: meta?.classification ?? null,
-      status: meta?.status ?? null,
-      version: meta?.version ?? null,
-      owner: meta?.owner?.team ?? null,
-      bpmn: meta?.models?.bpmn ? `processes/${e.name}/${meta.models.bpmn}` : null,
-      models,
+      id: proc.id,
+      name: proc.id,
+      bpmn: proc.path,
+      models: [{ notation: byExtension(proc.path)?.id ?? "text", path: proc.path }],
       dirty,
-      liveSessions: live.filter((d) => d.startsWith(`${repo.fullName}/processes/${e.name}/`)).length,
+      // a process is exactly one file — its room is the exact match
+      liveSessions: live.filter((d) => d === `${repo.fullName}/${proc.path}`).length,
     });
   }
   return processes;
@@ -111,13 +69,14 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
       // no access → the repo does not exist for this user (private by default)
       continue;
     }
-    // counts only when the workspace already exists locally — the overview
-    // must never trigger clones; opening the repo does that. One repo's broken
-    // tree must not 500 the whole overview (adversarial review).
+    // counts only when the workspace already exists locally AND declares itself
+    // a content repo (bpmiq.yml) — the overview must never trigger clones;
+    // opening the repo does that. One repo's broken tree must not 500 the whole
+    // overview (adversarial review).
     const ws = opts.workspaces.dir(repo);
     let processCount: number | null = null;
     let dirtyCount: number | null = null;
-    if (existsSync(join(ws, "processes"))) {
+    if (loadContentConfig(ws)) {
       try {
         const processes = await listProcesses(opts, repo, ws);
         processCount = processes.length;

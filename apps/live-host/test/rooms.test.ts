@@ -96,9 +96,17 @@ test("splitRoom: rejects a non-editable extension", () => {
 
 // ── toDiskPath ──────────────────────────────────────────────────────────────
 
+/** the injected bpmiq.yml lookup — rooms exist only inside its processes folder */
+const contentConfig = () => ({ processes: "processes" });
+
 test("toDiskPath: resolves a valid room inside the repo workspace", async () => {
   const workspaces = { ensure: async () => "/srv/ws/acme-models" };
-  const disk = await toDiskPath("acme/models/processes/order.bpmn", fakeRegistry(repo("acme/models")), workspaces);
+  const disk = await toDiskPath(
+    "acme/models/processes/order.bpmn",
+    fakeRegistry(repo("acme/models")),
+    workspaces,
+    contentConfig,
+  );
   assert.equal(disk, resolve("/srv/ws/acme-models", "processes/order.bpmn"));
   assert.ok(disk.startsWith("/srv/ws/acme-models/")); // stays inside the workspace
 });
@@ -106,5 +114,49 @@ test("toDiskPath: resolves a valid room inside the repo workspace", async () => 
 test("toDiskPath: propagates splitRoom rejections before touching the disk", async () => {
   const reg = fakeRegistry(repo("acme/models", { suspended: true }));
   const workspaces = { ensure: async () => "/srv/ws/acme-models" };
-  await assert.rejects(() => toDiskPath("acme/models/order.bpmn", reg, workspaces), /installation suspended/);
+  await assert.rejects(
+    () => toDiskPath("acme/models/order.bpmn", reg, workspaces, contentConfig),
+    /installation suspended/,
+  );
+});
+
+test("toDiskPath: refuses rooms outside the configured processes folder", async () => {
+  const workspaces = { ensure: async () => "/srv/ws/acme-models" };
+  await assert.rejects(
+    () => toDiskPath("acme/models/docs/readme.md", fakeRegistry(repo("acme/models")), workspaces, contentConfig),
+    /outside the configured processes folder/,
+  );
+});
+
+test("toDiskPath: a repo without bpmiq.yml has no live rooms", async () => {
+  const workspaces = { ensure: async () => "/srv/ws/acme-models" };
+  await assert.rejects(
+    () =>
+      toDiskPath("acme/models/processes/order.bpmn", fakeRegistry(repo("acme/models")), workspaces, () => undefined),
+    /not a BPM content repo/,
+  );
+});
+
+test("toDiskPath: honors a nested processes folder from the config (monorepo case)", async () => {
+  const workspaces = { ensure: async () => "/srv/ws/acme-mono" };
+  const nestedConfig = () => ({ processes: "process-documentation/processes" });
+  const disk = await toDiskPath(
+    "acme/models/process-documentation/processes/order/order.bpmn",
+    fakeRegistry(repo("acme/models")),
+    workspaces,
+    nestedConfig,
+  );
+  assert.equal(disk, resolve("/srv/ws/acme-mono", "process-documentation/processes/order/order.bpmn"));
+  await assert.rejects(
+    () => toDiskPath("acme/models/processes/order.bpmn", fakeRegistry(repo("acme/models")), workspaces, nestedConfig),
+    /outside the configured processes folder/,
+  );
+});
+
+test("toDiskPath: a '.' (root) processes folder allows root-level rooms", async () => {
+  const workspaces = { ensure: async () => "/srv/ws/acme-flat" };
+  const disk = await toDiskPath("acme/models/order.bpmn", fakeRegistry(repo("acme/models")), workspaces, () => ({
+    processes: ".",
+  }));
+  assert.equal(disk, resolve("/srv/ws/acme-flat", "order.bpmn"));
 });

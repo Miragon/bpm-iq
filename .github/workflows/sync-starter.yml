@@ -1,7 +1,9 @@
-name: Sync process-documentation starter
+name: Sync starter
 
-# Mirrors process-documentation/ into Miragon/process-documentation-starter so the
+# Mirrors starter/ into Miragon/process-documentation-starter so the
 # "Use this template" repo never drifts from the monorepo source of truth.
+# The starter is the minimal content-repo contract: bpmiq.yml + a processes
+# folder + README (no build, no dependencies).
 # Requires the release-please GitHub App installed on the starter repo with
 # Contents write (and Workflows write if the template later ships workflows).
 
@@ -9,7 +11,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "process-documentation/**"
+      - "starter/**"
       - ".github/workflows/sync-starter.yml"
   workflow_dispatch:
 
@@ -22,7 +24,7 @@ concurrency:
 
 jobs:
   sync:
-    name: Push process-documentation to the starter
+    name: Push starter/ to the starter repo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -39,33 +41,27 @@ jobs:
         with:
           repository: Miragon/process-documentation-starter
           token: ${{ steps.app-token.outputs.token }}
-          path: starter
+          path: starter-repo
 
-      - name: Mirror content into the starter
-        run: rsync -a --delete --exclude ".git" process-documentation/ starter/
+      - name: Mirror the starter into the template repo
+        run: rsync -a --delete --exclude ".git" starter/ starter-repo/
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: 24
-
-      - name: Verify the mirrored starter is complete and builds standalone
-        working-directory: starter
+      - name: Verify the mirrored starter is complete
+        working-directory: starter-repo
         run: |
-          # template essentials must survive the mirror
-          for f in LICENSE README.md .github/CODEOWNERS .vscode/extensions.json scripts/validate.ts; do
+          # the contract essentials must survive the mirror
+          for f in bpmiq.yml README.md LICENSE; do
             test -f "$f" || { echo "::error::starter is missing $f"; exit 1; }
           done
-          # the starter is standalone (plain npm, no workspace: deps)
-          npm install --no-audit --no-fund
-          npm run build
-          # @bpmiq/validator is a published devDependency — validation must PASS
-          node scripts/validate.ts
-          echo "starter validated (via the published @bpmiq/validator)"
-          # build artifacts are gitignored; make sure nothing slipped through
-          git status --porcelain | grep -E "node_modules|\.vitepress/(dist|cache)" && exit 1 || true
+          # bpmiq.yml must name a processes folder that exists and holds BPMN
+          grep -E "^processes: *[A-Za-z0-9._/-]+$" bpmiq.yml || { echo "::error::bpmiq.yml has no processes key"; exit 1; }
+          dir=$(grep -E "^processes:" bpmiq.yml | sed -E "s/^processes: *//")
+          test -d "$dir" || { echo "::error::processes folder '$dir' missing"; exit 1; }
+          ls "$dir"/*.bpmn >/dev/null 2>&1 || { echo "::error::no .bpmn files in '$dir'"; exit 1; }
+          echo "starter verified (bpmiq.yml → $dir)"
 
       - name: Commit and push
-        working-directory: starter
+        working-directory: starter-repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

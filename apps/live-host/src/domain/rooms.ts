@@ -22,6 +22,9 @@ export interface WorkspaceEnsure {
   ensure(repo: ConnectedRepo): Promise<string>;
 }
 
+/** the repo's content config (bpmiq.yml) — injected so this module stays pure */
+export type ContentConfigLookup = (workspaceRoot: string) => { processes: string } | undefined;
+
 /**
  * Parse a room into its repo + repo-relative path, or throw. Rejects:
  * malformed rooms, unknown repos, a mis-cased repo prefix (a differently-cased
@@ -67,16 +70,31 @@ export function splitRoom(
 /**
  * Resolve a room to an absolute on-disk path inside the repo's workspace, guarding
  * against filesystem + cross-repo escape (defense-in-depth over splitRoom's rules).
+ * Live rooms exist only INSIDE the repo's configured processes folder (bpmiq.yml)
+ * — a repo without the config has no live-editable files at all.
  */
 export async function toDiskPath(
   documentName: string,
   registry: RegistryLookup,
   workspaces: WorkspaceEnsure,
+  contentConfig: ContentConfigLookup,
   editable: readonly string[] = EDITABLE_EXTENSIONS,
 ): Promise<string> {
   const { repo, path } = splitRoom(documentName, registry, editable);
   const workspace = await workspaces.ensure(repo);
+  const cfg = contentConfig(workspace);
+  if (!cfg) throw new Error(`not a BPM content repo (no bpmiq.yml): ${repo.fullName}`);
   const disk = resolve(workspace, path);
+  // must live INSIDE the configured processes folder — resolve() normalizes both
+  // sides so "." (root), "a//b", trailing slashes etc. all compare correctly
+  const procRoot = resolve(workspace, cfg.processes);
+  if (disk !== procRoot && !disk.startsWith(procRoot + "/")) {
+    throw new Error(`outside the configured processes folder (${cfg.processes}): ${documentName}`);
+  }
   if (!disk.startsWith(workspace + "/")) throw new Error(`path escapes workspace: ${documentName}`);
+  // NB the lexical checks above are resolve()-based and therefore blind to
+  // SYMLINKS — a *.bpmn symlink escaping the checkout passes here. The realpath
+  // guard lives in the application layer (collab.ts assertInsideWorkspace), which
+  // is where filesystem access belongs; this domain module stays pure.
   return disk;
 }

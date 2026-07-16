@@ -38,6 +38,7 @@ import { DocSizeGuard } from "./domain/doc-size-guard.ts";
 import { startApi } from "./http/api.ts";
 import type { GitProvider } from "./ports/git-provider.ts";
 import { AccessCache } from "./repos/access.ts";
+import { loadContentConfig } from "./repos/content.ts";
 import { RepoRegistry } from "./repos/registry.ts";
 import { localMintFn, remoteMintFn, TokenService } from "./repos/token-minter.ts";
 import { WorkspaceManager } from "./repos/workspaces.ts";
@@ -53,11 +54,8 @@ const PUBLIC_URL = process.env.LIVE_PUBLIC_URL ?? `http://localhost:${PORT}`;
 const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/bpm-iq";
 /** the bpmiq monorepo root: apps/live-host/src → ../../.. */
 const MONO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-/** local host content (the process-documentation example) served without a clone */
-const HOST_CONTENT = process.env.LIVE_HOST_CONTENT_DIR ?? resolve(MONO_ROOT, "process-documentation");
-/** platform validator (packages/validator) — runs against any checkout, never content-repo code */
-const VALIDATOR_SCRIPT = resolve(MONO_ROOT, "packages", "validator", "src", "validate.ts");
-const VALIDATOR_DIR = resolve(MONO_ROOT, "packages", "validator");
+/** local host checkout served without a clone — its root bpmiq.yml names the content */
+const HOST_CONTENT = process.env.LIVE_HOST_CONTENT_DIR ?? MONO_ROOT;
 /** built web app served on the same port */
 const WEB_DIST = resolve(MONO_ROOT, "apps", "web", "dist");
 /** host-owned state (Yjs lineages, sessions, registry, workspace clones) */
@@ -264,14 +262,13 @@ const server = new Server({
     access,
     registry,
     workspaces,
+    contentConfig: loadContentConfig,
     devToken,
     liveDocs,
   }),
 });
 
 const httpServer = startApi(PORT, {
-  validatorScript: VALIDATOR_SCRIPT,
-  validatorDir: VALIDATOR_DIR,
   webDist: WEB_DIST,
   publicUrl: PUBLIC_URL,
   providers,

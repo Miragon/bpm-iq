@@ -1,14 +1,15 @@
 #!/bin/bash
 # Release-flow integration test — fully offline: GitHub stub + file:// origins.
+# A content repo is bpmiq.yml + a processes folder; a process is a .bpmn file.
 #
-# Verifies the four release-gate behaviors end to end:
+# Verifies the release-gate behaviors end to end:
 #   A1  releasing an unchanged process is rejected ("nothing to release")
-#   A2  a model change without a version bump is blocked (Hard Rule 5)
+#   A2  releasing an unknown process id is a 404
 #   A3  a proper release pushes a branch + opens a PR with correct paths
 #   A4  upstream commits the workspace never absorbed block the release
 #       (a release must never silently revert merged work)
-#   B   monorepo-shaped repos (content under process-documentation/) release
-#       to process-documentation/processes/…, not a bogus top-level processes/
+#   B   monorepo-shaped repos (bpmiq.yml → process-documentation/processes)
+#       list + release with full repo-relative paths, no bogus top-level tree
 #   C   model-anchored todos over HTTP: create → tracker issue with anchor +
 #       session attribution, list with process filter, close → gone from the
 #       list, empty-title 400
@@ -44,17 +45,19 @@ edit() { # $1=file $2=search $3=replace  (portable in-place substitution)
   node -e 'const fs=require("fs");const[,f,s,r]=process.argv;const t=fs.readFileSync(f,"utf8");if(!t.includes(s))throw new Error(`edit: "${s}" not found in ${f}`);fs.writeFileSync(f,t.replace(s,r));' "$1" "$2" "$3"
 }
 
-# ── origin 1: plain content repo ─────────────────────────────────────
+# ── origin 1: plain content repo (bpmiq.yml at the root) ─────────────
 SRC1="$E2E/src1"
 cp -R "$FIXTURE" "$SRC1"
+printf 'processes: processes\n' > "$SRC1/bpmiq.yml"
 git -C "$SRC1" init -q -b main && git -C "$SRC1" add -A
 git -C "$SRC1" -c user.name=e2e -c user.email=e2e@test commit -qm "content"
 git clone -q --bare "$SRC1" "$E2E/origin/acme/bpm-processes.git"
 
-# ── origin 2: monorepo shape (content under process-documentation/) ──
+# ── origin 2: monorepo shape (bpmiq.yml → process-documentation/processes) ──
 SRC2="$E2E/src2"
 mkdir -p "$SRC2/process-documentation"
 cp -R "$FIXTURE/." "$SRC2/process-documentation/"
+printf 'processes: process-documentation/processes\n' > "$SRC2/bpmiq.yml"
 echo "# a monorepo" > "$SRC2/README.md"
 git -C "$SRC2" init -q -b main && git -C "$SRC2" add -A
 git -C "$SRC2" -c user.name=e2e -c user.email=e2e@test commit -qm "monorepo content"
@@ -92,16 +95,17 @@ WS1="$E2E/data1/workspaces/acme/bpm-processes"
 R=$(release "$PORT_A" acme/bpm-processes two-pool)
 echo "$R" | grep -q "nothing to release" && ok "A1: no-change release rejected" || bad "A1: expected 'nothing to release', got: $R"
 
-edit "$WS1/processes/two-pool/two-pool.bpmn" 'name="Send offer"' 'name="Send revised offer"'
-R=$(release "$PORT_A" acme/bpm-processes two-pool)
-echo "$R" | grep -q "Versions-Bump" && ok "A2: model change without version bump blocked" || bad "A2: expected version gate, got: $R"
+R=$(release "$PORT_A" acme/bpm-processes ghost)
+echo "$R" | grep -q "unknown process" && ok "A2: unknown process id rejected (404)" || bad "A2: expected 'unknown process', got: $R"
 
-edit "$WS1/processes/two-pool/process.yaml" "version: 0.1.0" "version: 0.2.0"
-edit "$WS1/processes/two-pool/process.yaml" "history:" "history:
-  - version: 0.2.0
-    date: 2026-07-09
-    change: rename send offer task
-    changed_by: e2e"
+# ids come from file names now — the route decodes them; a percent-encoded id
+# resolves, a malformed %-escape degrades to 404 (never a 500)
+R=$(release "$PORT_A" acme/bpm-processes "gh%6fst")
+echo "$R" | grep -q "unknown process" && ok "A2: percent-encoded id decoded (gh%6fst → ghost)" || bad "A2: decode failed: $R"
+R=$(release "$PORT_A" acme/bpm-processes "bad%zz")
+echo "$R" | grep -q "unknown process" && ok "A2: malformed %-escape is a 404, not a 500" || bad "A2: expected 404 on bad escape, got: $R"
+
+edit "$WS1/processes/two-pool/two-pool.bpmn" 'name="Send offer"' 'name="Send revised offer"'
 R=$(release "$PORT_A" acme/bpm-processes two-pool)
 echo "$R" | grep -q '"pr"' && ok "A3: release succeeded → PR" || bad "A3: release failed: $R"
 # bot-authored (ADR 0001): the dev session carries NO user token, yet the release
@@ -109,7 +113,7 @@ echo "$R" | grep -q '"pr"' && ok "A3: release succeeded → PR" || bad "A3: rele
 echo "$R" | grep -q '"botAuthored": *true' && ok "A3: release is bot-authored (no user token needed)" || bad "A3: expected botAuthored=true, got: $R"
 git -C "$E2E/origin/acme/bpm-processes.git" branch | grep -q "release/two-pool" && ok "A3: release branch on origin" || bad "A3: no release branch on origin"
 BRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/two-pool | tail -1 | tr -d ' *')
-git -C "$E2E/origin/acme/bpm-processes.git" show --stat "$BRANCH" | grep -q "processes/two-pool" && ok "A3: diff touches processes/two-pool" || bad "A3: wrong paths in release commit"
+git -C "$E2E/origin/acme/bpm-processes.git" show --stat "$BRANCH" | grep -q "processes/two-pool/two-pool.bpmn" && ok "A3: diff touches the process file" || bad "A3: wrong paths in release commit"
 # the commit is ATTRIBUTED to the human (git author), not the bot
 AUTHOR=$(git -C "$E2E/origin/acme/bpm-processes.git" show -s --format='%an' "$BRANCH")
 [ "$AUTHOR" = "dev-token" ] && ok "A3: commit authored by the releasing user (attribution)" || bad "A3: unexpected commit author '$AUTHOR'"
@@ -117,7 +121,7 @@ git -C "$E2E/origin/acme/bpm-processes.git" show -s --format='%b' "$BRANCH" | gr
 
 FOREIGN="$E2E/foreign"
 git clone -q "$E2E/origin/acme/bpm-processes.git" "$FOREIGN"
-edit "$FOREIGN/processes/two-pool/process.yaml" "Fixture -" "Fixture (upstream edit) -"
+edit "$FOREIGN/processes/two-pool/two-pool.bpmn" 'name="Review offer"' 'name="Review offer upstream"'
 git -C "$FOREIGN" -c user.name=col -c user.email=c@test commit -qam "upstream tweak"
 git -C "$FOREIGN" push -q origin main
 edit "$WS1/processes/two-pool/two-pool.bpmn" 'name="Review offer"' 'name="Review final offer"'
@@ -128,20 +132,15 @@ echo "$R" | grep -q "upstream geändert" && ok "A4: upstream guard blocks silent
 start_host "acme/monorepo" "$E2E/data2" "$PORT_B"
 sleep 2.5
 PROCS=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_B/api/repos/acme/monorepo/processes")
-echo "$PROCS" | grep -q "two-pool" && ok "B: monorepo processes listed (content root detected)" || bad "B: monorepo listing failed: $PROCS"
+echo "$PROCS" | grep -q "two-pool" && ok "B: monorepo processes listed (bpmiq.yml folder honored)" || bad "B: monorepo listing failed: $PROCS"
+echo "$PROCS" | grep -q '"bpmn": *"process-documentation/processes/two-pool/two-pool.bpmn"' && ok "B: process paths are repo-relative" || bad "B: unexpected process paths: $PROCS"
 WS2="$E2E/data2/workspaces/acme/monorepo"
 edit "$WS2/process-documentation/processes/two-pool/two-pool.bpmn" 'name="Send offer"' 'name="Send better offer"'
-edit "$WS2/process-documentation/processes/two-pool/process.yaml" "version: 0.1.0" "version: 0.2.0"
-edit "$WS2/process-documentation/processes/two-pool/process.yaml" "history:" "history:
-  - version: 0.2.0
-    date: 2026-07-09
-    change: better offer
-    changed_by: e2e"
 R=$(release "$PORT_B" acme/monorepo two-pool)
 echo "$R" | grep -q '"pr"' && ok "B: monorepo release succeeded" || bad "B: monorepo release failed: $R"
 BRANCH=$(git -C "$E2E/origin/acme/monorepo.git" branch | grep release/two-pool | tail -1 | tr -d ' *')
 STAT=$(git -C "$E2E/origin/acme/monorepo.git" show --stat "$BRANCH")
-echo "$STAT" | grep -q "process-documentation/processes/two-pool" && ok "B: PR paths under process-documentation/ (prefix fix)" || bad "B: PR paths wrong"
+echo "$STAT" | grep -q "process-documentation/processes/two-pool" && ok "B: PR paths under process-documentation/ (config prefix)" || bad "B: PR paths wrong"
 echo "$STAT" | grep -qE "^ processes/" && bad "B: bogus top-level processes/ in PR" || ok "B: no bogus top-level processes/"
 
 # ═══ Case C: model-anchored todos (HTTP route → adapter → stub issue tracker) ═══

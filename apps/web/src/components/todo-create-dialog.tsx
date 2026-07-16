@@ -19,7 +19,6 @@ export function TodoCreateDialog({
   repo,
   processId,
   docPath,
-  processVersion,
   elements,
   onClose,
 }: {
@@ -27,7 +26,6 @@ export function TodoCreateDialog({
   processId: string;
   /** repo-relative path of the open model document (the todo's anchor file) */
   docPath: string;
-  processVersion?: string;
   /** canvas selection at open time — empty ⇒ process-level todo */
   elements: TodoElementWire[];
   onClose: () => void;
@@ -56,7 +54,6 @@ export function TodoCreateDialog({
           process: processId,
           file: docPath,
           ...(elements.length > 0 ? { elements } : {}),
-          ...(processVersion ? { processVersion } : {}),
         },
       },
       { onSuccess: onClose },

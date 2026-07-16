@@ -1,8 +1,9 @@
 /**
  * Overview read-models (src/application/overview.ts) — listProcesses/listRepos
  * assembly against a tmpdir workspace with injected fakes (registry, access,
- * changedPaths). Previously untested inline code in http/api.ts; the asserted
- * object shapes ARE the wire format the web client consumes.
+ * changedPaths). A process is a .bpmn file under the bpmiq.yml processes
+ * folder; the asserted object shapes ARE the wire format the web client
+ * consumes.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -30,33 +31,16 @@ const session = (id: string, login = "petra"): Session => ({
   createdAt: Date.now(),
 });
 
-const ORDER_YAML = `name: Order to Cash
-classification: core
-status: as-is
-version: 1.2.0
-owner:
-  team: sales
-models:
-  bpmn: order.bpmn
-  wardley: strategy.owm
-subprocesses:
-  - file: subprocesses/check-credit.bpmn
-decisions:
-  - file: decisions/pricing.dmn
-  - note: no file key on this one
-docs:
-  - notes.txt
-`;
-
-/** a workspace with one healthy process, one invalid-yaml process, and noise */
+/** a workspace with a bpmiq.yml, two processes (one nested) and noise */
 function setup(over: Partial<OverviewDeps> = {}) {
   const ws = mkdtempSync(join(tmpdir(), "bpm-overview-"));
-  mkdirSync(join(ws, "processes", "order"), { recursive: true });
-  writeFileSync(join(ws, "processes", "order", "process.yaml"), ORDER_YAML);
-  mkdirSync(join(ws, "processes", "broken"), { recursive: true });
-  writeFileSync(join(ws, "processes", "broken", "process.yaml"), "name: [unclosed\nflow: sequence");
-  mkdirSync(join(ws, "processes", "no-yaml-here")); // no process.yaml → skipped
-  writeFileSync(join(ws, "processes", "stray-file.txt"), "not a directory"); // skipped
+  writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+  mkdirSync(join(ws, "processes", "sub"), { recursive: true });
+  writeFileSync(join(ws, "processes", "order.bpmn"), "<bpmn/>");
+  writeFileSync(join(ws, "processes", "sub", "check-credit.bpmn"), "<bpmn/>");
+  writeFileSync(join(ws, "processes", "notes.md"), "not a process"); // wrong extension → skipped
+  mkdirSync(join(ws, "docs"));
+  writeFileSync(join(ws, "docs", "stray.bpmn"), "<bpmn/>"); // outside the folder → skipped
 
   const changedPathsCalls: string[] = [];
   const deps: OverviewDeps = {
@@ -65,15 +49,15 @@ function setup(over: Partial<OverviewDeps> = {}) {
       dir: () => ws,
       changedPaths: async (_repo, pathspec) => {
         changedPathsCalls.push(pathspec);
-        return pathspec === "processes/order" ? ["processes/order/order.bpmn"] : [];
+        return pathspec === "processes/order.bpmn" ? ["processes/order.bpmn"] : [];
       },
     },
     access: { canWrite: async () => true },
     liveDocs: () => [
-      "acme/models/processes/order/order.bpmn",
-      "acme/models/processes/order/process.yaml",
-      "acme/models/landscape/value-chain.vc.json",
-      "other/repo/processes/order/order.bpmn", // foreign repo — never counted here
+      "acme/models/processes/order.bpmn",
+      "acme/models/processes/order.bpmn", // second session on the same room
+      "acme/models/processes/sub/check-credit.bpmn",
+      "other/repo/processes/order.bpmn", // foreign repo — never counted here
     ],
     ...over,
   };
@@ -82,58 +66,66 @@ function setup(over: Partial<OverviewDeps> = {}) {
 
 // ── listProcesses ───────────────────────────────────────────────────────────
 
-test("listProcesses: metadata row with models resolved via the notation registry", async () => {
+test("listProcesses: one row per .bpmn under the configured folder (recursive)", async () => {
   const { ws, deps, changedPathsCalls } = setup();
   const rows = await listProcesses(deps, REPO, ws);
-  assert.equal(rows.length, 2, "only real process dirs with a process.yaml are listed");
+  assert.deepEqual(
+    rows.map((r) => r.id).sort(),
+    ["check-credit", "order"],
+    "only .bpmn files under the configured folder are processes",
+  );
 
   const order = rows.find((r) => r.id === "order");
-  assert.ok(order);
-  assert.equal(order.repo, "acme/models");
-  assert.equal(order.name, "Order to Cash");
-  assert.equal(order.classification, "core");
-  assert.equal(order.status, "as-is");
-  assert.equal(order.version, "1.2.0");
-  assert.equal(order.owner, "sales");
-  assert.equal(order.bpmn, "processes/order/order.bpmn");
-  // declared models + subprocesses + decisions, notation from @bpmiq/notations;
-  // a decisions entry without `file` is skipped, unknown extensions fall back to "text"
-  assert.deepEqual(order.models, [
-    { notation: "bpmn", path: "processes/order/order.bpmn" },
-    { notation: "wardley", path: "processes/order/strategy.owm" },
-    { notation: "bpmn", path: "processes/order/subprocesses/check-credit.bpmn" },
-    { notation: "dmn", path: "processes/order/decisions/pricing.dmn" },
-  ]);
-  // dirty flag comes from the injected changedPaths (git stays behind the seam)
-  assert.equal(order.dirty, true);
-  assert.deepEqual(changedPathsCalls.filter((c) => c === "processes/order").length, 1);
-  // live sessions: only rooms under THIS repo's processes/order/ count
-  assert.equal(order.liveSessions, 2);
-});
-
-test("listProcesses: invalid process.yaml degrades to a fallback row, not a failure", async () => {
-  const { ws, deps } = setup();
-  const rows = await listProcesses(deps, REPO, ws);
-  const broken = rows.find((r) => r.id === "broken");
-  assert.deepEqual(broken, {
+  assert.deepEqual(order, {
     repo: "acme/models",
-    id: "broken",
-    name: "broken",
-    classification: null,
-    status: "invalid-yaml",
-    version: null,
-    owner: null,
-    bpmn: null,
-    models: [],
-    dirty: false,
-    liveSessions: 0,
+    id: "order",
+    name: "order",
+    bpmn: "processes/order.bpmn",
+    models: [{ notation: "bpmn", path: "processes/order.bpmn" }],
+    dirty: true, // from the injected changedPaths (git stays behind the seam)
+    liveSessions: 2, // exact room match, foreign repos never counted
   });
+  assert.equal(changedPathsCalls.filter((c) => c === "processes/order.bpmn").length, 1);
+
+  const nested = rows.find((r) => r.id === "check-credit");
+  assert.equal(nested?.bpmn, "processes/sub/check-credit.bpmn");
+  assert.equal(nested?.dirty, false);
+  assert.equal(nested?.liveSessions, 1);
 });
 
-test("listProcesses: a workspace without processes/ lists nothing", async () => {
+test("listProcesses: a workspace without bpmiq.yml lists nothing", async () => {
   const { deps } = setup();
   const empty = mkdtempSync(join(tmpdir(), "bpm-overview-empty-"));
   assert.deepEqual(await listProcesses(deps, REPO, empty), []);
+});
+
+test("listProcesses: a config pointing at a missing folder lists nothing", async () => {
+  const { deps } = setup();
+  const ws = mkdtempSync(join(tmpdir(), "bpm-overview-missing-"));
+  writeFileSync(join(ws, "bpmiq.yml"), "processes: not-there\n");
+  assert.deepEqual(await listProcesses(deps, REPO, ws), []);
+});
+
+test("listProcesses: an invalid bpmiq.yml degrades to an empty listing, not a failure", async () => {
+  const { deps } = setup();
+  const ws = mkdtempSync(join(tmpdir(), "bpm-overview-invalid-"));
+  writeFileSync(join(ws, "bpmiq.yml"), "processes: [unclosed\n");
+  assert.deepEqual(await listProcesses(deps, REPO, ws), []);
+  writeFileSync(join(ws, "bpmiq.yml"), "processes: ../outside\n");
+  assert.deepEqual(await listProcesses(deps, REPO, ws), [], "traversal in the config is refused");
+});
+
+test("listProcesses: duplicate file names — the first (sorted) wins, the shadow is skipped", async () => {
+  const { deps } = setup();
+  const ws = mkdtempSync(join(tmpdir(), "bpm-overview-dup-"));
+  writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+  mkdirSync(join(ws, "processes", "a"), { recursive: true });
+  mkdirSync(join(ws, "processes", "b"), { recursive: true });
+  writeFileSync(join(ws, "processes", "a", "order.bpmn"), "<bpmn/>");
+  writeFileSync(join(ws, "processes", "b", "order.bpmn"), "<bpmn/>");
+  const rows = await listProcesses(deps, REPO, ws);
+  assert.equal(rows.length, 1, "an id must stay unique");
+  assert.equal(rows[0]?.bpmn, "processes/a/order.bpmn");
 });
 
 // ── listRepos ───────────────────────────────────────────────────────────────
@@ -159,7 +151,7 @@ test("listRepos: a repo the user cannot write is invisible (private by default)"
   assert.deepEqual(await listRepos(deps, session("sess-petra")), []);
 });
 
-test("listRepos: no local workspace → null counts (the overview must not clone)", async () => {
+test("listRepos: no bpmiq.yml (workspace absent or plain repo) → null counts", async () => {
   const empty = mkdtempSync(join(tmpdir(), "bpm-overview-nows-"));
   const { deps } = setup({ workspaces: { dir: () => empty, changedPaths: async () => [] } });
   const repos = await listRepos(deps, session("sess-petra"));

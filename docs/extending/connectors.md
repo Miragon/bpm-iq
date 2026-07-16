@@ -153,8 +153,8 @@ assertions.
 3. Replace the network git remotes with local bare repos:
    `LIVE_GIT_URL_OVERRIDE=file://…` (clone/fetch) + `LIVE_PUSH_URL_OVERRIDE=file://….git` (push).
 4. Drive the API with `LIVE_DEV_TOKEN=demo` and assert the release gates end to end
-   (no-change rejection, version-bump gate, branch + PR with correct paths,
-   upstream-drift guard, monorepo-shaped content roots).
+   (no-change rejection, unknown-process 404, branch + PR with correct paths,
+   upstream-drift guard, monorepo-shaped `bpmiq.yml` folders).
 
 A GitLab connector gets a sibling `test/stub-gitlab.ts` shaped like GitLab's API and
 its own e2e script on the same skeleton — the whole login → repo-gate → session →

@@ -11,10 +11,9 @@ time, release as a pull request, and let AI agents query every process.
   `.md`) syncs as a shared Y.Text document; the web client and VS Code bind their editors to
   it. Login authenticates, **repos authorize**: what you see and edit follows your git write
   permission.
-- **Release as PR** — one click validates the process, cuts a branch from
-  `origin/<default>`, pushes **as the user**, and opens the PR in their name. Merge =
-  approval — governance stays at the git provider (CODEOWNERS / branch protection), not in
-  the tool.
+- **Release as PR** — one click cuts a branch from `origin/<default>`, pushes **as the
+  user**, and opens the PR in their name. Merge = approval — governance stays at the git
+  provider (CODEOWNERS / branch protection), not in the tool.
 - **Processes talk** — the MCP server answers questions live from the content repo, the AI
   skill layer (capture, import, review, feedback, export …) travels with it, and
   `export-process-skill` packages a process with its resolved dependencies as a portable
@@ -59,18 +58,19 @@ multi-tenant SaaS; its tenant provisioning and billing control plane is not in t
 but the cell mode it drives is. The code you read here is the code the SaaS runs
 ([ADR 0004](docs/adr/0004-open-source-split.md)).
 
-| Path                     | Package                 | What it is                                                                                                                                                                                                                         |
-| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/live-host/`        | `@bpmiq/live-host`      | The platform server: Hocuspocus (Yjs) sync + REST API + web app on **one port**. Multi-repo, per-(user,repo) authz, release-as-PR. Published as `ghcr.io/miragon/bpmiq-live-host`.                                                 |
-| `apps/web/`              | `@bpmiq/web`            | Collaborative web client: bpmn-js + Monaco on a shared Y.Text, repo overview.                                                                                                                                                      |
-| `apps/vscode/`           | `@bpmiq/vscode`         | VS Code extension: opens `bpm-live://` model documents synced through the Live Host.                                                                                                                                               |
-| `packages/mcp/`          | `@bpmiq/mcp`            | Read-only MCP server exposing a content repo's process graph (stdio + Streamable HTTP).                                                                                                                                            |
-| `packages/notations/`    | `@bpmiq/notations`      | Notation registry: one descriptor per modeling notation — live-host, validator and web derive extensions/editors from it.                                                                                                          |
-| `packages/validator/`    | `@bpmiq/validator`      | Platform validator: schema, link integrity, BPMN/DMN structure, governance, export freshness. Runs against any checkout via `--root`; holds the canonical `schemas/`.                                                              |
-| `packages/…`             | —                       | Shared foundations: `http-kit`, `github-app`, `contracts`, `live-client`, `ui-kit`, `api-client` — see `CLAUDE.md` for the full map.                                                                                               |
-| `process-documentation/` | `process-documentation` | Example **BPM content repo** + VitePress portal — the content contract the platform serves. Mirrored to [`Miragon/process-documentation-starter`](https://github.com/Miragon/process-documentation-starter) ("Use this template"). |
-| `deploy/`                | —                       | Docker Compose reference for self-hosting.                                                                                                                                                                                         |
-| `docs/`                  | —                       | Platform docs: concept, multi-repo architecture, MCP integration, [ADRs](docs/adr/), [self-hosting](docs/on-prem/), [extending](docs/extending/).                                                                                  |
+| Path                     | Package                 | What it is                                                                                                                                                                                                                   |
+| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/live-host/`        | `@bpmiq/live-host`      | The platform server: Hocuspocus (Yjs) sync + REST API + web app on **one port**. Multi-repo, per-(user,repo) authz, release-as-PR. Published as `ghcr.io/miragon/bpmiq-live-host`.                                           |
+| `apps/web/`              | `@bpmiq/web`            | Collaborative web client: bpmn-js + Monaco on a shared Y.Text, repo overview.                                                                                                                                                |
+| `apps/vscode/`           | `@bpmiq/vscode`         | VS Code extension: opens `bpm-live://` model documents synced through the Live Host.                                                                                                                                         |
+| `packages/mcp/`          | `@bpmiq/mcp`            | Read-only MCP server exposing a content repo's process graph (stdio + Streamable HTTP).                                                                                                                                      |
+| `packages/notations/`    | `@bpmiq/notations`      | Notation registry: one descriptor per modeling notation — live-host, validator and web derive extensions/editors from it.                                                                                                    |
+| `packages/validator/`    | `@bpmiq/validator`      | Platform validator: schema, link integrity, BPMN/DMN structure, governance, export freshness. Runs against any checkout via `--root`; holds the canonical `schemas/`.                                                        |
+| `packages/…`             | —                       | Shared foundations: `http-kit`, `github-app`, `contracts`, `live-client`, `ui-kit`, `api-client` — see `CLAUDE.md` for the full map.                                                                                         |
+| `starter/`               | —                       | The minimal **content-repo contract** (root `bpmiq.yml` + processes folder + README). Mirrored to [`Miragon/process-documentation-starter`](https://github.com/Miragon/process-documentation-starter) ("Use this template"). |
+| `process-documentation/` | `process-documentation` | Example **BPM content repo** + VitePress portal — the rich internal example consumed by validator, portal and MCP.                                                                                                           |
+| `deploy/`                | —                       | Docker Compose reference for self-hosting.                                                                                                                                                                                   |
+| `docs/`                  | —                       | Platform docs: concept, multi-repo architecture, MCP integration, [ADRs](docs/adr/), [self-hosting](docs/on-prem/), [extending](docs/extending/).                                                                            |
 
 ## Self-hosting
 

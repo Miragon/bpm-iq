@@ -18,7 +18,7 @@ See [README.md](README.md) for the install guide and
 | `LIVE_DATA_DIR`         | `<repo>/.live` (image: `/data`) | Host-owned state: `live.db` (Yjs lineages, sessions, repo registry, token cache) + `workspaces/` (cloned repos). Mount a volume here.                                                                         |
 | `GITHUB_REPO`           | `Miragon/bpm-iq`                | Static fallback repository (`<owner>/<repo>`) registered when the GitHub App cannot enumerate installations — the single-repo mode. Set it to your own content repo; in app mode the installations take over. |
 | `BASE_BRANCH`           | `main`                          | Default branch recorded for the static fallback repo (release PRs target the repo's default branch).                                                                                                          |
-| `LIVE_HOST_CONTENT_DIR` | `<repo>/process-documentation`  | Serve a local content checkout in place of cloning `GITHUB_REPO` — takes effect only when the directory contains `processes/`. Dev mode; not for production.                                                  |
+| `LIVE_HOST_CONTENT_DIR` | `<repo>` (the checkout root)    | Serve a local content checkout in place of cloning `GITHUB_REPO` — takes effect only when the directory has a root `bpmiq.yml`. Dev mode; not for production.                                                 |
 
 ## Login — GitHub OAuth
 

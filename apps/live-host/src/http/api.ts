@@ -21,9 +21,7 @@
  *   GET  /healthz, /*                            → liveness, built web app (public)
  *
  * Releases push with the USER's token and open the PR in their name — merge
- * rights stay at the provider (CODEOWNERS/branch protection). Validation runs
- * the PLATFORM's validator against the target repo's checkout — never code
- * from the content repo.
+ * rights stay at the provider (CODEOWNERS/branch protection).
  */
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -63,10 +61,6 @@ const MIME: Record<string, string> = {
 };
 
 export interface ApiOptions {
-  /** platform validator entry (packages/validator) — runs against any checkout */
-  validatorScript: string;
-  /** validator package dir (cwd so its own deps resolve) */
-  validatorDir: string;
   webDist: string;
   publicUrl: string;
   providers: Map<string, GitProvider>;
@@ -375,7 +369,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // Group 3 = todo id (tracker-native, opaque: GitHub numbers, Jira "PROJ-123"),
       // group 4 = release process id.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([a-z0-9-]+))?)$/,
+        /^\/api\/repos\/(.+)\/(processes|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
       );
       if (repoRoute) {
         const session = sessionOf(req);
@@ -441,8 +435,16 @@ export function startApi(port: number, opts: ApiOptions): Server {
         }
         if (repoRoute[2]?.startsWith("release/") && req.method === "POST") {
           const provider = opts.providers.get(session.user.provider) ?? opts.github;
-          const result = await release(opts, session, provider, repo, repoRoute[4] ?? "");
-          console.log(`released ${repo.fullName}#${repoRoute[4]} by @${result.by} → ${result.pr}`);
+          // process ids come from file names — decode so any URL-safe encoding
+          // works; a malformed %-escape is simply an unknown process, not a 500
+          let id: string;
+          try {
+            id = decodeURIComponent(repoRoute[4] ?? "");
+          } catch {
+            return send(res, 404, { error: `unknown process: ${repoRoute[4]} (${repo.fullName})` });
+          }
+          const result = await release(opts, session, provider, repo, id);
+          console.log(`released ${repo.fullName}#${id} by @${result.by} → ${result.pr}`);
           return send(res, 200, result satisfies ReleaseResult);
         }
         return send(res, 405, { error: "method not allowed" });

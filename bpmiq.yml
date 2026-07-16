@@ -1,0 +1,4 @@
+# bpmiq.yml — marks this repo as a BPM content repo for the bpmiq platform.
+# `processes` is the repo-root-relative folder holding the BPMN process models;
+# here it points into the example content repo bundled with the monorepo.
+processes: process-documentation/processes

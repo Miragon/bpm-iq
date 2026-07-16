@@ -30,8 +30,9 @@ export function ProcessList() {
         <p className="text-muted-foreground text-sm">Loading… (the first load clones the repository)</p>
       ) : list.length === 0 ? (
         <p className="text-muted-foreground max-w-prose text-sm">
-          No processes found — does this repository match the starter layout (
-          <code className="bg-muted rounded px-1">processes/&lt;id&gt;/process.yaml</code>)?
+          No processes found — a BPM repository needs a <code className="bg-muted rounded px-1">bpmiq.yml</code> at its
+          root naming the folder its BPMN files live in (
+          <code className="bg-muted rounded px-1">processes: processes</code>).
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -39,25 +40,18 @@ export function ProcessList() {
             <Card key={p.id}>
               <CardHeader>
                 <CardTitle className="text-base">
-                  {p.bpmn ? (
-                    <Link
-                      to="/r/$owner/$repo/p/$processId"
-                      params={{ owner, repo: name, processId: p.id }}
-                      className="hover:underline"
-                    >
-                      {p.name}
-                    </Link>
-                  ) : (
-                    p.name
-                  )}
+                  <Link
+                    to="/r/$owner/$repo/p/$processId"
+                    params={{ owner, repo: name, processId: p.id }}
+                    className="hover:underline"
+                  >
+                    {p.name}
+                  </Link>
                 </CardTitle>
-                <p className="text-muted-foreground text-sm">
-                  {[p.classification, p.version ? `v${p.version}` : null, p.owner].filter(Boolean).join(" · ")}
-                </p>
+                <p className="text-muted-foreground text-sm">{p.bpmn}</p>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
                 <div className="flex flex-wrap gap-1.5">
-                  <Badge variant="success">released: {p.status ?? "—"}</Badge>
                   {p.dirty && <Badge variant="warning">live changes</Badge>}
                   {p.liveSessions > 0 && <Badge>{p.liveSessions} active</Badge>}
                 </div>

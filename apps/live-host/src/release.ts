@@ -1,9 +1,10 @@
 /**
- * Release-as-PR (ADR 0001): validate → worktree → push → open PR. Extracted from
- * api.ts. The git + network orchestration is integration-tested by
- * test/release-e2e.sh; the pure governance/security sub-logic below (version-bump
- * gate, model-change detection, push-token redaction, attribution strings) is
- * unit-tested in test/release.test.ts.
+ * Release-as-PR (ADR 0001): worktree → push → open PR. Extracted from api.ts.
+ * A process is a single .bpmn file under the repo's bpmiq.yml processes folder
+ * (repos/content.ts) — the release publishes the live state of exactly that
+ * file. The git + network orchestration is integration-tested by
+ * test/release-e2e.sh; the pure sub-logic below (push-token redaction,
+ * attribution strings) is unit-tested in test/release.test.ts.
  *
  * Bot-authored: push + PR run with the app INSTALLATION token, so the PR is opened
  * by the platform bot — which lets the releasing human approve their own release
@@ -13,35 +14,26 @@
  * OAuth-only mode (no app installation token).
  *
  * Error convention: user-actionable release GATES throw typed AppErrors
- * (http-kit) — the http catch-all maps them to 404/409/422 with their message
- * exposed. Internal failures (validator run, missing credential, git push)
- * stay plain Errors → 500, message only for authenticated sessions.
+ * (http-kit) — the http catch-all maps them to 404/409 with their message
+ * exposed. Internal failures (missing credential, git push) stay plain
+ * Errors → 500, message only for authenticated sessions.
  */
-import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { promisify } from "node:util";
+import { dirname, join } from "node:path";
 
 import type { ReleaseResult } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
-import { parse as parseYaml } from "yaml";
 
 import { runGit } from "./adapters/git/run.ts";
 import type { Session } from "./adapters/sqlite/sessions.ts";
 import type { RepoConnectionSource } from "./ports/connection-source.ts";
 import type { GitProvider } from "./ports/git-provider.ts";
+import { CONTENT_CONFIG_FILE, discoverProcesses, loadContentConfig } from "./repos/content.ts";
 import type { ConnectedRepo } from "./repos/registry.ts";
 import type { WorkspaceManager } from "./repos/workspaces.ts";
 
-// ONLY the platform validator run — every git call goes through adapters/git/run.ts
-const exec = promisify(execFile);
-
 // ── pure helpers (unit-tested in test/release.test.ts) ──────────────────────
-
-/** extensions whose change requires a version bump (governance Hard Rule 5) */
-const MODEL_RE = /\.(bpmn|dmn|owm|tt|vc\.json)$/;
 
 /** the release branch for a process, stamped to the minute */
 export function releaseBranch(id: string, now: Date): string {
@@ -57,27 +49,9 @@ export function parseStagedFiles(gitOutput: string): string[] {
     .filter(Boolean);
 }
 
-/** does any staged file touch a model (vs. only docs / metadata)? */
-export function hasModelChange(files: string[]): boolean {
-  return files.some((f) => MODEL_RE.test(f));
-}
-
-/** governance gate: a model change must carry a version bump (Hard Rule 5) */
-export function needsVersionBump(modelChanged: boolean, baseVersion: unknown, newVersion: unknown): boolean {
-  return modelChanged && baseVersion !== undefined && String(newVersion) === String(baseVersion);
-}
-
 /** redact a push token a git error might echo, so it never reaches a client */
 export function redactToken(message: string, token: string | undefined): string {
   return token ? message.split(token).join("«redacted»") : message;
-}
-
-/** keep only the validator's "[...]" finding lines from its stdout */
-export function validatorFindings(stdout: string): string {
-  return stdout
-    .split("\n")
-    .filter((l) => l.startsWith("["))
-    .join("\n");
 }
 
 /** the noreply attribution email for a releasing user on a provider */
@@ -99,11 +73,9 @@ export function releasePrBody(id: string, repoFullName: string, login: string, b
   return [
     `Release of **${id}** in \`${repoFullName}\` from the live collaboration workspace, by @${login}.`,
     "",
-    "- validated with the platform validator before this PR was created",
     botAuthored
       ? "- opened by the bpmiq platform on behalf of the releaser — **you can approve this PR yourself** (merge = approval, CODEOWNERS)"
       : "- merge = approval (CODEOWNERS)",
-    "- the pipeline validates again and redeploys portal + MCP",
   ].join("\n");
 }
 
@@ -112,10 +84,6 @@ export function releasePrBody(id: string, repoFullName: string, login: string, b
 /** the subset of ApiOptions release() needs — keeps the dep one-way (api → release) */
 export interface ReleaseDeps {
   workspaces: Pick<WorkspaceManager, "ensure">;
-  /** platform validator entry (packages/validator) — runs against any checkout */
-  validatorScript: string;
-  /** validator package dir (cwd so its own deps resolve) */
-  validatorDir: string;
   /** REST backend for the app installation clone token (bot-authored release) */
   connectionSource?: Pick<RepoConnectionSource, "cloneToken">;
 }
@@ -129,35 +97,30 @@ export async function release(
   now: Date = new Date(),
 ): Promise<ReleaseResult> {
   const workspace = await opts.workspaces.ensure(repo);
-  const processDir = join(workspace, "processes", id);
-  if (!existsSync(processDir)) {
+  const cfg = loadContentConfig(workspace);
+  if (!cfg) {
+    throw new AppError(
+      "release/not-a-content-repo",
+      `${repo.fullName} has no ${CONTENT_CONFIG_FILE} — not a BPM content repo`,
+      { status: 404, expose: true },
+    );
+  }
+  const proc = (await discoverProcesses(workspace, cfg)).find((p) => p.id === id);
+  if (!proc) {
     throw new AppError("release/unknown-process", `unknown process: ${id} (${repo.fullName})`, {
       status: 404,
       expose: true,
     });
   }
-
-  // where the content lives inside the git checkout: "" for plain content repos,
-  // "process-documentation/" when the workspace is a monorepo subdirectory —
-  // without this the PR would create a bogus top-level processes/ tree
-  const { stdout: prefixRaw } = await runGit(["-C", workspace, "rev-parse", "--show-prefix"]);
-  const prefix = prefixRaw.trim();
-  const relProcess = `${prefix}processes/${id}`;
-
-  try {
-    // the PLATFORM's validator (packages/validator), target checkout as data — never repo code
-    await exec("node", [opts.validatorScript, "--root", workspace, id], { cwd: opts.validatorDir });
-  } catch (e) {
-    const out = (e as { stdout?: string }).stdout ?? "";
-    throw new Error(`validation failed:\n${validatorFindings(out)}`);
-  }
+  // the released artifact is exactly this repo-root-relative file
+  const relFile = proc.path;
 
   const branch = releaseBranch(id, now);
   const worktree = await mkdtemp(join(tmpdir(), "bpm-release-"));
   try {
     await runGit(["-C", workspace, "fetch", "origin", repo.defaultBranch]);
 
-    // upstream guard: commits on origin touching this process that this workspace
+    // upstream guard: commits on origin touching this file that this workspace
     // has never absorbed would be silently REVERTED by the copy below
     const { stdout: upstream } = await runGit([
       "-C",
@@ -166,12 +129,12 @@ export async function release(
       "--oneline",
       `HEAD..origin/${repo.defaultBranch}`,
       "--",
-      relProcess,
+      relFile,
     ]);
     if (upstream.trim().length > 0) {
       throw new AppError(
         "release/upstream-changed",
-        `processes/${id} wurde upstream geändert, seit dieser Workspace zuletzt synchronisiert wurde:\n${upstream.trim()}\n` +
+        `${relFile} wurde upstream geändert, seit dieser Workspace zuletzt synchronisiert wurde:\n${upstream.trim()}\n` +
           `Ein Release jetzt würde diese Änderungen still zurückdrehen. Der Workspace gleicht sich automatisch ab, ` +
           `sobald keine Live-Sessions offen sind — danach erneut releasen.`,
         { status: 409, expose: true },
@@ -180,13 +143,10 @@ export async function release(
 
     await runGit(["-C", workspace, "worktree", "add", "-b", branch, worktree, `origin/${repo.defaultBranch}`]);
 
-    // governance gate (Hard Rule 5): a semantic model change requires a version bump
-    const baseYaml = join(worktree, relProcess, "process.yaml");
-    const baseVersion = existsSync(baseYaml) ? parseYaml(await readFile(baseYaml, "utf8"))?.version : undefined;
-
-    await rm(join(worktree, relProcess), { recursive: true, force: true });
-    await cp(processDir, join(worktree, relProcess), { recursive: true });
-    await runGit(["-C", worktree, "add", "--all", relProcess]);
+    // a brand-new process file may not exist on origin yet — create its folder
+    await mkdir(dirname(join(worktree, relFile)), { recursive: true });
+    await cp(join(workspace, relFile), join(worktree, relFile));
+    await runGit(["-C", worktree, "add", "--", relFile]);
     const { stdout: staged } = await runGit(["-C", worktree, "diff", "--cached", "--name-only"]);
     const stagedFiles = parseStagedFiles(staged);
     if (stagedFiles.length === 0) {
@@ -197,16 +157,6 @@ export async function release(
           status: 409,
           expose: true,
         },
-      );
-    }
-
-    const newVersion = parseYaml(await readFile(join(processDir, "process.yaml"), "utf8"))?.version;
-    if (needsVersionBump(hasModelChange(stagedFiles), baseVersion, newVersion)) {
-      throw new AppError(
-        "release/version-bump-required",
-        `Modelländerung ohne Versions-Bump: version ist weiterhin '${newVersion}'. ` +
-          `Bitte version erhöhen und einen history-Eintrag ergänzen (docs/governance.md), dann erneut releasen.`,
-        { status: 422, expose: true },
       );
     }
 
