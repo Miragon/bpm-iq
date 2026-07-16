@@ -1,6 +1,6 @@
 {
   "name": "@bpmiq/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read-only MCP server exposing a BPM content repo’s process dependency graph (process.yaml + landscape models) to any MCP client.",
   "type": "module",
   "license": "MIT",
