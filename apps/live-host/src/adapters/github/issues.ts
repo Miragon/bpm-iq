@@ -13,7 +13,7 @@
  * (remote mint). Nothing GitHub-specific leaks through the port — GitLab/Jira
  * implement the same contract against their own issue APIs.
  */
-import { encodeAnchor, parseAnchor } from "@bpmiq/contracts/todo-anchor";
+import { encodeAnchor, parseAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 import { paginate } from "@bpmiq/github-app";
 import { AppError } from "@bpmiq/http-kit";
 
@@ -39,9 +39,41 @@ export function parseAuthor(body: string): string | null {
   return ATTRIBUTION_RE.exec(body)?.[1] ?? null;
 }
 
-/** anchor block + author text + attribution, blank-line separated */
-export function todoBody(input: TodoInput): string {
-  return [encodeAnchor(input.anchor), input.body.trim(), attributionLine(input.author)]
+/** where a todo's deep links point: the web app served at the live host's public URL */
+export interface DeepLinkTarget {
+  /** the live host's public origin (PUBLIC_URL in server.ts), no trailing slash needed */
+  publicUrl: string;
+  repoFullName: string;
+}
+
+/** one 📍 line per anchored element, linking into the web app's process-editor
+ * route (`/r/$owner/$repo/p/$processId`, TanStack router — apps/web/src/router.tsx).
+ * The repo segment is split at the FIRST slash: GitHub is always owner/name;
+ * GitLab subgroups (multi-segment repos) need the router to capture the repo as
+ * a splat first — mirror of the comment in apps/web/src/router.tsx. */
+function deepLinkLines(anchor: TodoAnchor, target: DeepLinkTarget): string {
+  const slash = target.repoFullName.indexOf("/");
+  const owner = slash === -1 ? target.repoFullName : target.repoFullName.slice(0, slash);
+  const repo = slash === -1 ? "" : target.repoFullName.slice(slash + 1);
+  const base = target.publicUrl.replace(/\/$/, "");
+  return anchor.elements
+    .map((el) => {
+      const url =
+        `${base}/r/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
+        `/p/${encodeURIComponent(anchor.process)}?element=${encodeURIComponent(el.id)}`;
+      return `📍 [${el.name ?? el.id}](${url})`;
+    })
+    .join("\n");
+}
+
+/** anchor block + author text + element deep links + attribution, blank-line separated */
+export function todoBody(input: TodoInput, deepLink?: DeepLinkTarget): string {
+  return [
+    encodeAnchor(input.anchor),
+    input.body.trim(),
+    deepLink ? deepLinkLines(input.anchor, deepLink) : "",
+    attributionLine(input.author),
+  ]
     .filter((part) => part.length > 0)
     .join("\n\n");
 }
@@ -51,6 +83,9 @@ export interface GitHubIssuesDeps {
   apiUrl: string;
   /** installation token for ONE repo — server.ts composes registry → TokenService */
   tokenFor(repoFullName: string): Promise<string>;
+  /** the live host's public URL — when set, issue bodies carry 📍 deep links
+   * into the web app's process editor for every anchored element */
+  publicUrl?: string;
 }
 
 /** the slice of GitHub's issue wire shape this adapter maps */
@@ -146,7 +181,7 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
         method: "POST",
         body: JSON.stringify({
           title: input.title,
-          body: todoBody(input),
+          body: todoBody(input, deps.publicUrl ? { publicUrl: deps.publicUrl, repoFullName } : undefined),
           labels: [TODO_LABEL, processLabel(input.anchor.process)],
         }),
       });

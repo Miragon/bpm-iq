@@ -26,10 +26,17 @@ and `landscape/` at call time. No build step; the tool definitions live in
 | `who_owns(id)`               | Who owns it, who participates, how?                                       | `owner` + `participants` resolved against `landscape/team-topology.tt` (label, type, description)                                                                   |
 | `which_processes_use(query)` | Impact: what depends on this system / component / team / step / decision? | `systems[].name`, `wardley.components[]`, team ids, `value_chain.steps[]`, `supports[]`, `related_processes[]`, `subprocesses[]`, `decisions[]`, `kpis[]`           |
 | `search_glossary(term)`      | What does this word mean here?                                            | `landscape/glossary.yaml` (term, definition, synonyms)                                                                                                              |
+| `list_todos(process?)`       | What model-anchored work is open (opt-in)?                                | the content repo's issue tracker (label `todo` + `process:<id>`), anchors parsed from the issue bodies — id, URL, title, anchor, assignees, createdAt               |
 
 All tools carry `readOnlyHint` annotations, so clients may auto-approve them.
 The content repo is configurable: `node server.ts --root /path/to/repo` or the
 `BPM_CONTENT_ROOT` env var — the bundled `process-documentation/` is only the default.
+
+`list_todos` is the one tool that leaves the checkout (a read-only query against the repo's
+issue tracker) and is **strictly opt-in**: it only registers when both `BPM_TODOS_REPO`
+(`owner/name`) and `BPM_TODOS_TOKEN` (a token with issues:read) are set — without them the
+server stays zero-auth and the tool does not exist. `GITHUB_API_URL` overrides the REST base
+(default `https://api.github.com`).
 
 ### Live from HEAD vs. exported snapshots
 

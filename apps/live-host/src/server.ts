@@ -209,6 +209,8 @@ workspaces.hooks = {
 const issues = tokens
   ? createGitHubIssueTracker({
       apiUrl: GH_API,
+      // issue bodies deep-link anchored elements into the web app served here
+      publicUrl: PUBLIC_URL,
       tokenFor: async (repoFullName) => {
         const installationId = registry.get(repoFullName)?.installationId;
         if (installationId == null) {
