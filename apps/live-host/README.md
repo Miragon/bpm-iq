@@ -45,7 +45,7 @@ cross-repo bleed) and per-(user,repo) authorization.
 ## Todos — model-anchored work items in the repo's own tracker
 
 `GET/POST /api/repos/:fullName/todos` stores todos as **GitHub Issues in the content repo**
-(label `todo` + `process:<id>`, the anchor block from `src/domain/todo-anchor.ts` embedded in
+(label `todo` + `process:<id>`, the anchor block from `src/@bpmiq/contracts/todo-anchor` embedded in
 the issue body) — never in a platform database. Issues are created with the app installation
 token (bot-authored, the human is attributed in the body — same model as releases); without
 platform credentials the routes answer 501. Requires the GitHub App permission

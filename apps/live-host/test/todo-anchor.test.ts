@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { encodeAnchor, parseAnchor, type TodoAnchor } from "../src/domain/todo-anchor.ts";
+import { encodeAnchor, parseAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 
 test("roundtrip: encode → parse yields the same anchor", () => {
   const anchor: TodoAnchor = {

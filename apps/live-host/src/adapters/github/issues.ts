@@ -2,7 +2,7 @@
  * GitHub implementation of the IssueTracker port — todos are repo ISSUES in
  * the customer's own repository, never rows in a platform database. Each todo
  * carries the `todo` label plus `process:<id>` for the anchored process; the
- * platform anchor block (domain/todo-anchor.ts owns the codec) lives invisibly
+ * platform anchor block (the codec lives in @bpmiq/contracts/todo-anchor (mcp needs it too)) lives invisibly
  * at the top of the issue body, followed by the author's text and a textual
  * attribution line (issues are bot-authored via the installation token, the
  * human stays attributed — same model as releases, ADR 0001).
@@ -13,10 +13,10 @@
  * (remote mint). Nothing GitHub-specific leaks through the port — GitLab/Jira
  * implement the same contract against their own issue APIs.
  */
+import { encodeAnchor, parseAnchor } from "@bpmiq/contracts/todo-anchor";
 import { paginate } from "@bpmiq/github-app";
 import { AppError } from "@bpmiq/http-kit";
 
-import { encodeAnchor, parseAnchor } from "../../domain/todo-anchor.ts";
 import type { IssueTracker, Todo, TodoInput } from "../../ports/issue-tracker.ts";
 import { githubApi } from "./app-auth.ts";
 
@@ -30,6 +30,9 @@ export const processLabel = (processId: string): string => `process:${processId}
 export const attributionLine = (author: string): string => `_Created from the bpmiq live model by @${author}_`;
 
 const ATTRIBUTION_RE = /_Created from the bpmiq live model by @([A-Za-z0-9-]+)_/;
+
+/** attribution comment posted before closing (the close itself is bot-authored) */
+export const closeAttributionLine = (closedBy: string): string => `_Closed from the bpmiq live model by @${closedBy}_`;
 
 /** parse the platform author back out of an issue body (null: created by hand) */
 export function parseAuthor(body: string): string | null {
@@ -168,6 +171,23 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
       }
       // GitHub's issues list INCLUDES pull requests (they carry a pull_request key)
       return issues.filter((issue) => issue.pull_request === undefined).map(toTodo);
+    },
+
+    async closeTodo(repoFullName, id, closedBy) {
+      const token = await deps.tokenFor(repoFullName);
+      // attribution first — a closed issue without the trail would look bot-arbitrary
+      const comment = await rest(token, `/repos/${repoFullName}/issues/${id}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body: closeAttributionLine(closedBy) }),
+      });
+      if (!comment.ok) await raise(comment, repoFullName, `todo #${id} close attribution`);
+      await comment.text();
+      const res = await rest(token, `/repos/${repoFullName}/issues/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ state: "closed" }),
+      });
+      if (!res.ok) await raise(res, repoFullName, `todo #${id} close`);
+      await res.text();
     },
   };
 }

@@ -8,10 +8,10 @@
  * adapter config and issue ids look like "PROJ-123" — which is why `Todo.id`
  * is an opaque string and why nothing in this contract assumes numbers,
  * labels, or markdown. Anchor semantics (which process, which BPMN elements)
- * are platform domain — domain/todo-anchor.ts owns the codec; adapters only
+ * are platform domain — the codec lives in @bpmiq/contracts/todo-anchor (mcp needs it too); adapters only
  * decide WHERE the encoded block lives (GitHub: issue body).
  */
-import type { TodoAnchor } from "../domain/todo-anchor.ts";
+import type { TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 
 export interface TodoInput {
   title: string;
@@ -46,4 +46,6 @@ export interface IssueTracker {
   createTodo(repoFullName: string, input: TodoInput): Promise<Todo>;
   /** OPEN todos for one repo, optionally narrowed to a process */
   listTodos(repoFullName: string, processId?: string): Promise<Todo[]>;
+  /** close one todo; closedBy = platform login (attribution is textual, items stay bot-authored) */
+  closeTodo(repoFullName: string, id: string, closedBy: string): Promise<void>;
 }

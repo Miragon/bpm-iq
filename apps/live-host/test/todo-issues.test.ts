@@ -11,10 +11,10 @@ import { dirname, join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import type { TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 import { AppError } from "@bpmiq/http-kit";
 
 import { createGitHubIssueTracker } from "../src/adapters/github/issues.ts";
-import type { TodoAnchor } from "../src/domain/todo-anchor.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const STUB_PORT = Number(process.env.TODO_STUB_PORT ?? 8531);
