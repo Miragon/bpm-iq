@@ -8,8 +8,8 @@
     "moduleResolution": "bundler",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
+    // no baseUrl (deprecated as of TS 6) — paths resolve relative to this file
+    "paths": { "@/*": ["./src/*"] },
     "types": ["vite/client", "node"]
   },
   "include": ["src", "test"]
