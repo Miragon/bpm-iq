@@ -17,7 +17,6 @@ the wrong package manager.
 pnpm install
 pnpm live-host      # platform server: sync + API + web app on http://localhost:8301
 pnpm web:dev        # web client with hot reload (proxies to the Live Host)
-pnpm portal:dev     # VitePress content portal, renders all models live
 ```
 
 ## Local gates (mirror CI, run in this order)
@@ -32,9 +31,9 @@ pnpm test           # workspace tests
 pnpm build          # SPAs + extension bundle
 ```
 
-A PR is expected green on all seven. If you edit **content** — anything under
-`process-documentation/` (models, `process.yaml`, landscape files) — `pnpm validate` must
-pass before you finish; broken references are hard rule 1 in `CLAUDE.md`.
+A PR is expected green on all seven. If you edit **content** — the `.bpmn` models under
+`process-documentation/` — `pnpm validate` must pass before you finish; incomplete BPMNDI or
+a dangling `callActivity` are caught here (hard rule 1 in `CLAUDE.md`).
 
 ## Architecture rules (ADR 0003)
 

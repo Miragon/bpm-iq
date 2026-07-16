@@ -164,15 +164,11 @@ moves host-side; connected repos ship **content only**:
   release-time validation returns, it must ship with the platform (pinned, versioned,
   `validate --root <checkout>`), never run repo code — the packaged `@bpmiq/validator`
   already works this way for the `process-documentation/` example.
-- **Portal**: `.vitepress/` (config, theme, viewers, `processes/[id].paths.ts`) is
-  portal _code_ interleaved with content and builds exactly one site from one repo.
-  It moves platform-side, parameterized by checkout, served per repo
-  (`/:owner/:repo/…`). Content updates arrive via webhook-synced checkouts — not by
-  redeploying the service with content baked into the image (today's deploy.yml).
-- **MCP**: `tools.ts` is already root-parameterized (`createMcpServer(root)` — the one
-  multi-repo-ready seam found); `http.ts` always serves `DEFAULT_ROOT`. Route per repo
-  (`POST /mcp/:owner/:repo`) or add a repo argument + `list_repositories` tool.
-  Cross-repo impact analysis becomes a new platform capability.
+- **Portal**: removed with the slim contract — the web client (`apps/web`) renders the
+  models live from the Live Host, so there is no separate VitePress site to serve per repo.
+- **MCP**: `tools.ts` is root-parameterized (`createMcpServer(root)`); the standalone
+  `http.ts` serves `DEFAULT_ROOT`. A per-repo Live Host endpoint over the live content
+  (`POST /mcp/:owner/:repo`, with per-repo auth) is designed in issue #35.
 - **Skill export**: per-repo resolution and output; the platform needs a cross-repo
   view of published skills (overview badge).
 
@@ -183,10 +179,11 @@ repo): a **`bpmiq.yml` at the repo root** naming the folder the BPMN processes
 live in (`processes: <folder>`). Every `.bpmn` under that folder is a process
 (id = file name without extension); a repo without the config is simply not a
 content repo — the Live Host neither lists nor serves it, and live rooms exist
-only inside the configured folder. The richer starter layout of the past
-(`process.yaml` metadata, `landscape/`, `INDEX.md`, governance fields) lives on
-in `process-documentation/` as the internal example consumed by validator,
-portal and MCP; those conventions grow back into the contract as it evolves.
+only inside the configured folder. There is no hand-written metadata: the process
+view (name, roles from BPMN lanes, steps, flow, sub-process calls) is **derived**
+from the BPMN (`@bpmiq/notations/derive`), consumed the same way by the validator,
+the MCP server, and the Live Host. Richer metadata can grow back into the contract
+as it evolves — the `bpmiq.yml` is the seam for it.
 
 ## Suggested milestones
 

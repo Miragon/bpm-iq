@@ -1,9 +1,12 @@
 # @bpmiq/mcp
 
-Read-only MCP server that exposes a BPM content repo's process graph — processes, owners,
-KPIs, dependency paths, cycles, glossary, landscape models — to any MCP client (Claude Code,
-Claude Desktop, IDEs, ...). Read-only by construction: the tools only ever read files, and all
-of them carry `readOnlyHint`.
+Read-only MCP server that exposes a BPM content repo's processes to any MCP client (Claude
+Code, Claude Desktop, IDEs, ...). A content repo is a root `bpmiq.yml` naming its BPMN
+processes folder; a process IS a `.bpmn` file there, and its view — name, roles (BPMN lanes),
+steps, gateways, flow, and sub-process calls — is **derived from the BPMN** on the fly. Tools:
+`list_processes`, `get_process`, `get_model`, `enumerate_paths`, `find_cycles`, `who_owns`,
+`which_processes_use`. Read-only by construction: the tools only ever read files, and all of
+them carry `readOnlyHint`.
 
 ## Usage
 

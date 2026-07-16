@@ -73,6 +73,25 @@ test("deriveProcess: callActivity surfaces the sub-process it calls", () => {
   assert.equal(p.steps.find((s) => s.id === "Call_Invoice")?.calls, "invoice-handling");
 });
 
+test("deriveProcess: multiple pools → name stays null, both pools listed", () => {
+  const collab = `<?xml version="1.0"?>
+    <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+      <bpmn:collaboration id="C">
+        <bpmn:participant id="Pool_A" name="Customer" processRef="PA" />
+        <bpmn:participant id="Pool_B" name="Supplier" processRef="PB" />
+        <bpmn:messageFlow id="mf" sourceRef="t_a" targetRef="t_b" name="order" />
+      </bpmn:collaboration>
+      <bpmn:process id="PA"><bpmn:task id="t_a" name="Place order"/></bpmn:process>
+      <bpmn:process id="PB"><bpmn:task id="t_b" name="Fulfil order"/></bpmn:process>
+    </bpmn:definitions>`;
+  const p = deriveProcess(extractModelGraph(".bpmn", collab)!);
+  assert.equal(p.name, null, "two pools → no single derivable name");
+  assert.deepEqual(p.pools.map((pool) => pool.name).sort(), ["Customer", "Supplier"]);
+  assert.equal(p.steps.length, 2);
+  // the message flow is an edge, kind messageFlow
+  assert.ok(p.flows.some((f) => f.kind === "messageFlow" && f.name === "order"));
+});
+
 test("deriveProcess: a plain process with no pool/lanes derives with name=null, no roles", () => {
   const bare = `<?xml version="1.0"?>
     <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">

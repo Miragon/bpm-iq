@@ -1,16 +1,15 @@
 ## What changed & why
 
-<!-- One or two sentences. Link the feedback entry (processes/<id>/feedback/) if this PR resolves one. -->
+<!-- One or two sentences. Link the feedback entry (feedback/<id>/) if this PR resolves one. -->
 
 ## Checklist
 
-<!-- Delete lines that don't apply. Merge approval = release (docs/governance.md). -->
+<!-- Delete lines that don't apply. Merge approval = release. -->
 
 - [ ] `pnpm validate` passes with 0 errors
-- [ ] Semantic model change → `version` bumped (semver) **and** a `history` entry added in `process.yaml`
-- [ ] `last_reviewed` touched **only** if a human confirmed model = reality (never for CI or cosmetic edits)
-- [ ] `as-is` model changed → `approval` block updated so `approval.version` equals the new `version`
-- [ ] Affected exports re-run via `export-process-skill` → `dist/skills/<id>` matches the new version
-- [ ] `processes/INDEX.md` row updated (status, version, last reviewed)
-- [ ] New terms used in the model or docs added to `landscape/glossary.yaml` (with synonyms)
-- [ ] Landscape / schema / convention change → affected process owners requested as reviewers
+- [ ] BPMN edits keep semantics (`bpmn:*`) and layout (`bpmndi:*`) in sync — every flow node,
+      lane, pool and edge has a `bpmndi:` shape (or the visual editor breaks)
+- [ ] Modeling conventions followed (tasks verb+object, events object+past participle,
+      gateways as questions, lanes = team/role labels)
+- [ ] Any `callActivity` `calledElement` resolves to a process in the repo (its `.bpmn` stem)
+- [ ] Affected exports re-run via `export-process-skill` (`dist/skills/<id>`), if any exist

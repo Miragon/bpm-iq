@@ -43,9 +43,8 @@ pnpm live-host                   # sync + API + web app on http://localhost:8301
 #   GitHub login (one-time vendor step): GITHUB_REPO=<owner>/<repo> pnpm --filter @bpmiq/live-host create-app
 ```
 
-More entry points: `pnpm portal:dev` (VitePress portal, renders all models live),
-`pnpm web:dev` (web client with hot reload, proxies to the Live Host), `pnpm validate`
-(content validation, runs in CI on every PR).
+More entry points: `pnpm web:dev` (web client with hot reload, proxies to the Live Host),
+`pnpm validate` (content validation of the example repo, runs in CI on every PR).
 
 **Talk to the processes**: open [Claude Code](https://claude.com/claude-code) in the repo —
 `.mcp.json` auto-connects the MCP server (`packages/mcp`) — and ask _"Walk me through
@@ -58,19 +57,19 @@ multi-tenant SaaS; its tenant provisioning and billing control plane is not in t
 but the cell mode it drives is. The code you read here is the code the SaaS runs
 ([ADR 0004](docs/adr/0004-open-source-split.md)).
 
-| Path                     | Package                 | What it is                                                                                                                                                                                                                   |
-| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/live-host/`        | `@bpmiq/live-host`      | The platform server: Hocuspocus (Yjs) sync + REST API + web app on **one port**. Multi-repo, per-(user,repo) authz, release-as-PR. Published as `ghcr.io/miragon/bpmiq-live-host`.                                           |
-| `apps/web/`              | `@bpmiq/web`            | Collaborative web client: bpmn-js + Monaco on a shared Y.Text, repo overview.                                                                                                                                                |
-| `apps/vscode/`           | `@bpmiq/vscode`         | VS Code extension: opens `bpm-live://` model documents synced through the Live Host.                                                                                                                                         |
-| `packages/mcp/`          | `@bpmiq/mcp`            | Read-only MCP server exposing a content repo's process graph (stdio + Streamable HTTP).                                                                                                                                      |
-| `packages/notations/`    | `@bpmiq/notations`      | Notation registry: one descriptor per modeling notation — live-host, validator and web derive extensions/editors from it.                                                                                                    |
-| `packages/validator/`    | `@bpmiq/validator`      | Platform validator: schema, link integrity, BPMN/DMN structure, governance, export freshness. Runs against any checkout via `--root`; holds the canonical `schemas/`.                                                        |
-| `packages/…`             | —                       | Shared foundations: `http-kit`, `github-app`, `contracts`, `live-client`, `ui-kit`, `api-client` — see `CLAUDE.md` for the full map.                                                                                         |
-| `starter/`               | —                       | The minimal **content-repo contract** (root `bpmiq.yml` + processes folder + README). Mirrored to [`Miragon/process-documentation-starter`](https://github.com/Miragon/process-documentation-starter) ("Use this template"). |
-| `process-documentation/` | `process-documentation` | Example **BPM content repo** + VitePress portal — the rich internal example consumed by validator, portal and MCP.                                                                                                           |
-| `deploy/`                | —                       | Docker Compose reference for self-hosting.                                                                                                                                                                                   |
-| `docs/`                  | —                       | Platform docs: concept, multi-repo architecture, MCP integration, [ADRs](docs/adr/), [self-hosting](docs/on-prem/), [extending](docs/extending/).                                                                            |
+| Path                     | Package            | What it is                                                                                                                                                                                                                   |
+| ------------------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/live-host/`        | `@bpmiq/live-host` | The platform server: Hocuspocus (Yjs) sync + REST API + web app on **one port**. Multi-repo, per-(user,repo) authz, release-as-PR. Published as `ghcr.io/miragon/bpmiq-live-host`.                                           |
+| `apps/web/`              | `@bpmiq/web`       | Collaborative web client: bpmn-js + Monaco on a shared Y.Text, repo overview.                                                                                                                                                |
+| `apps/vscode/`           | `@bpmiq/vscode`    | VS Code extension: opens `bpm-live://` model documents synced through the Live Host.                                                                                                                                         |
+| `packages/mcp/`          | `@bpmiq/mcp`       | Read-only MCP server exposing a content repo's processes (discovered from `bpmiq.yml`, derived from BPMN) — stdio + Streamable HTTP.                                                                                         |
+| `packages/notations/`    | `@bpmiq/notations` | Notation registry + BPMN analysis: extensions/editors, `extract` (BPMN→graph), `derive` (graph→process view), and the `bpmiq.yml` content discovery.                                                                         |
+| `packages/validator/`    | `@bpmiq/validator` | Platform validator: `bpmiq.yml` discovery + BPMN structure and BPMNDI coverage + callActivity link integrity. Runs against any checkout via `--root`.                                                                        |
+| `packages/…`             | —                  | Shared foundations: `http-kit`, `github-app`, `contracts`, `live-client`, `ui-kit`, `api-client` — see `CLAUDE.md` for the full map.                                                                                         |
+| `starter/`               | —                  | The minimal **content-repo contract** (root `bpmiq.yml` + processes folder + README). Mirrored to [`Miragon/process-documentation-starter`](https://github.com/Miragon/process-documentation-starter) ("Use this template"). |
+| `process-documentation/` | —                  | Example **BPM content repo** (`bpmiq.yml` + `.bpmn` files) — the internal example the MCP server and validator run against.                                                                                                  |
+| `deploy/`                | —                  | Docker Compose reference for self-hosting.                                                                                                                                                                                   |
+| `docs/`                  | —                  | Platform docs: concept, multi-repo architecture, MCP integration, [ADRs](docs/adr/), [self-hosting](docs/on-prem/), [extending](docs/extending/).                                                                            |
 
 ## Self-hosting
 

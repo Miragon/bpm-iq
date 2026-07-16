@@ -33,6 +33,9 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/pnpm-workspace.yaml /app/.npmrc /app/package.json ./
 COPY --from=build /app/packages/notations ./packages/notations
+# tools.ts imports @bpmiq/contracts/todo-anchor (list_todos) — the workspace
+# symlink in node_modules dangles without the real package source
+COPY --from=build /app/packages/contracts ./packages/contracts
 COPY --from=build /app/packages/mcp ./packages/mcp
 COPY --from=build /app/process-documentation ./process-documentation
 EXPOSE 8080
