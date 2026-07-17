@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.0](https://github.com/Miragon/bpm-iq/compare/v2.1.0...v2.2.0) (2026-07-17)
+
+
+### Features
+
+* folder tree, create-folder and create-process in the repository view ([#50](https://github.com/Miragon/bpm-iq/issues/50)) ([d61b466](https://github.com/Miragon/bpm-iq/commit/d61b466dc536090b78fd1005f55d430d793b0881))
+* load latest from main in the repository view ([#48](https://github.com/Miragon/bpm-iq/issues/48)) ([67310d8](https://github.com/Miragon/bpm-iq/commit/67310d89b72eb929364371cbfc8533d09848a8cb))
+
 ## [2.1.0](https://github.com/Miragon/bpm-iq/compare/v2.0.0...v2.1.0) (2026-07-17)
 
 
