@@ -60,12 +60,15 @@ export function LiveEditor({
   repo,
   processId,
   docPath,
+  backDir,
   revealElementId,
   me,
 }: {
   repo: string;
   processId: string;
   docPath: string;
+  /** processes-root-relative folder the Back arrow returns to ("" = root) */
+  backDir?: string;
   /** deep-link target (?element=<id>) — revealed ONCE after the first diagram import */
   revealElementId?: string;
   me: Me;
@@ -281,7 +284,7 @@ export function LiveEditor({
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
         <Button asChild variant="ghost" size="icon" title="Back">
-          <Link to="/r/$owner/$repo" params={{ owner, repo: name }}>
+          <Link to="/r/$owner/$repo" params={{ owner, repo: name }} search={backDir ? { dir: backDir } : {}}>
             <ArrowLeft />
           </Link>
         </Button>

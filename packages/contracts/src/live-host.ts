@@ -28,8 +28,35 @@ export interface ProcessInfo {
   bpmn: string;
   /** the process's model files with their notation */
   models: ModelRef[];
+  /** folder of the BPMN file relative to the processes root ("" = root) */
+  folder: string;
   dirty: boolean;
   liveSessions: number;
+}
+
+/** POST /api/repos/:fullName/processes — response is the created ProcessInfo.
+ * The process id (= file stem) is derived from `name`; it must be unique
+ * repo-wide, so a duplicate is a 409 regardless of `folder`. */
+export interface CreateProcessBody {
+  /** human title — becomes the pool name; the file stem is its kebab-case slug */
+  name: string;
+  /** target folder relative to the processes root ("" / absent = root) */
+  folder?: string;
+}
+
+/** GET /api/repos/:fullName/folders — every folder under the processes root
+ * (recursive, sorted, includes empty ones), processes-root-relative */
+export type FolderListWire = string[];
+
+/** POST /api/repos/:fullName/folders — response is the created FolderWire */
+export interface CreateFolderBody {
+  /** processes-root-relative folder path to create (may be nested) */
+  path: string;
+}
+
+export interface FolderWire {
+  /** the created folder, processes-root-relative and normalized */
+  path: string;
 }
 
 /** GET /api/repos — registry ∩ the session user's per-repo permission */

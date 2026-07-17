@@ -3,15 +3,20 @@ import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/re
 
 import {
   closeTodo,
+  createFolder,
+  createProcess,
+  type CreateProcessBody,
   createTodo,
   type CreateTodoBody,
   fetchConfig,
   fetchFileHistory,
+  fetchFolders,
   fetchMe,
   fetchProcesses,
   fetchRepos,
   fetchTodos,
   logout,
+  type ProcessInfo,
   syncRepo,
   type TodoWire,
 } from "@/lib/api";
@@ -43,6 +48,48 @@ export function useProcesses(repo: string) {
   return useQuery({ queryKey: ["processes", repo], queryFn: () => fetchProcesses(repo), enabled: repo.length > 0 });
 }
 
+/** folders under the repo's processes root — the repo view shows them as rows
+ *  (empty ones included, so a just-created folder survives a reload) */
+export function useFolders(repo: string) {
+  return useQuery({ queryKey: ["folders", repo], queryFn: () => fetchFolders(repo), enabled: repo.length > 0 });
+}
+
+/** create a folder; the response is authoritative — seed it into the folder
+ *  list right away (same rationale as useCreateTodo) and reconcile via refetch */
+export function useCreateFolder(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) => createFolder(repo, { path }),
+    onSuccess: (created) => {
+      qc.setQueryData<string[]>(["folders", repo], (old) =>
+        old ? (old.includes(created.path) ? old : [...old, created.path].sort()) : [created.path],
+      );
+      void qc.invalidateQueries({ queryKey: ["folders", repo] });
+    },
+  });
+}
+
+/** create a process from the blank template.
+ *
+ *  The editor route resolves /p/$processId against the CACHED process list
+ *  (staleTime 30s) — navigating right after the create would hit a permanent
+ *  NotFound. The create response IS the new row: seed it into the cache before
+ *  the caller navigates, then refetch in the background. */
+export function useCreateProcess(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateProcessBody) => createProcess(repo, body),
+    onSuccess: (created) => {
+      qc.setQueryData<ProcessInfo[]>(["processes", repo], (old) =>
+        old ? (old.some((p) => p.id === created.id) ? old : [...old, created]) : [created],
+      );
+      void qc.invalidateQueries({ queryKey: ["processes", repo] });
+      void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the folder may be brand-new too
+      void qc.invalidateQueries({ queryKey: ["repos"] }); // processCount/dirtyCount changed
+    },
+  });
+}
+
 /** hard-reset the repo's workspace onto its default branch ("load latest from
  *  main") — discards unreleased live edits, so the caller confirms first. On
  *  success the process list (dirty flags) and the overview (dirty counts) are
@@ -53,6 +100,7 @@ export function useSyncRepo(repo: string) {
     mutationFn: () => syncRepo(repo),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["processes", repo] });
+      void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the reset deletes never-released folders
       void qc.invalidateQueries({ queryKey: ["repos"] });
     },
   });

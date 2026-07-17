@@ -12,6 +12,9 @@
  *   GET  /api/me, POST /api/logout
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
  *   GET  /api/repos/:owner/:repo/processes       → process list      (repo write required)
+ *   POST /api/repos/:owner/:repo/processes       → create a process from the blank template (repo write required)
+ *   GET  /api/repos/:owner/:repo/folders         → folders under the processes root (repo write required)
+ *   POST /api/repos/:owner/:repo/folders         → create a folder   (repo write required)
  *   POST /api/repos/:owner/:repo/sync            → hard-reset workspace to origin/<default> (repo write required)
  *   GET  /api/repos/:owner/:repo/history         → default-branch commits of one model file (repo write required)
  *   GET  /api/repos/:owner/:repo/history/content → that file's content at a commit (repo write required)
@@ -32,10 +35,15 @@ import { extname, join, normalize } from "node:path";
 
 import type {
   AppConfig,
+  CreateFolderBody,
+  CreateProcessBody,
   CreateTodoBody,
   FileAtCommitWire,
   FileCommitWire,
+  FolderListWire,
+  FolderWire,
   Me,
+  ProcessInfo,
   ReleaseResult,
   SyncResult,
   TodoWire,
@@ -55,6 +63,7 @@ import {
 } from "../adapters/sqlite/sessions.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
 import { listProcesses, listRepos } from "../application/overview.ts";
+import { createFolder, createProcess, listFolders } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
@@ -114,6 +123,16 @@ export interface ApiOptions {
 // whitespace-tolerant (`"key": *"value"`), verified before the switch.
 // listProcesses/listRepos (the overview read-models) live in application/overview.ts —
 // ApiOptions structurally satisfies their injected OverviewDeps surface.
+
+/** parse a JSON request body; sends the 400 itself and returns undefined */
+async function jsonBody<T>(req: IncomingMessage, res: ServerResponse): Promise<T | undefined> {
+  try {
+    return JSON.parse((await readBody(req)).toString()) as T;
+  } catch {
+    send(res, 400, { error: "invalid JSON body" });
+    return undefined;
+  }
+}
 
 function serveStatic(dist: string, urlPath: string, res: ServerResponse): void {
   let decoded: string;
@@ -386,7 +405,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // Group 3 = todo id (tracker-native, opaque: GitHub numbers, Jira "PROJ-123"),
       // group 4 = release process id.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
+        /^\/api\/repos\/(.+)\/(processes|folders|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
       );
       if (repoRoute) {
         const session = sessionOf(req);
@@ -395,7 +414,36 @@ export function startApi(port: number, opts: ApiOptions): Server {
         if (!repo) return;
         if (repoRoute[2] === "processes") {
           const workspace = await opts.workspaces.ensure(repo);
+          if (req.method === "POST") {
+            const body = await jsonBody<CreateProcessBody>(req, res);
+            if (body === undefined) return;
+            if (typeof body?.name !== "string" || body.name.trim().length === 0) {
+              return send(res, 400, { error: "name must be a non-empty string" });
+            }
+            if (body.folder !== undefined && typeof body.folder !== "string") {
+              return send(res, 400, { error: "folder must be a string" });
+            }
+            const created = await createProcess(repo, workspace, { name: body.name, folder: body.folder });
+            console.log(`process created in ${repo.fullName} by @${session.user.login}: ${created.bpmn}`);
+            return send(res, 201, created satisfies ProcessInfo);
+          }
+          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
           return send(res, 200, await listProcesses(opts, repo, workspace));
+        }
+        if (repoRoute[2] === "folders") {
+          const workspace = await opts.workspaces.ensure(repo);
+          if (req.method === "POST") {
+            const body = await jsonBody<CreateFolderBody>(req, res);
+            if (body === undefined) return;
+            if (typeof body?.path !== "string" || body.path.trim().length === 0) {
+              return send(res, 400, { error: "path must be a non-empty string" });
+            }
+            const path = await createFolder(repo, workspace, body.path);
+            console.log(`folder created in ${repo.fullName} by @${session.user.login}: ${path}/`);
+            return send(res, 201, { path } satisfies FolderWire);
+          }
+          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
+          return send(res, 200, (await listFolders(workspace)) satisfies FolderListWire);
         }
         // hard-reset the workspace onto origin/<default> ("load latest from main")
         // — DISCARDS unreleased live edits (the web client confirms first). Refuses
@@ -442,12 +490,8 @@ export function startApi(port: number, opts: ApiOptions): Server {
             return send(res, 200, todos satisfies TodoWire[]);
           }
           if (req.method === "POST") {
-            let body: CreateTodoBody;
-            try {
-              body = JSON.parse((await readBody(req)).toString()) as CreateTodoBody;
-            } catch {
-              return send(res, 400, { error: "invalid JSON body" });
-            }
+            const body = await jsonBody<CreateTodoBody>(req, res);
+            if (body === undefined) return;
             if (typeof body?.title !== "string" || body.title.trim().length === 0) {
               return send(res, 400, { error: "title must be a non-empty string" });
             }

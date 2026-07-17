@@ -2,9 +2,13 @@
 import { api } from "@bpmiq/api-client";
 import type {
   AppConfig,
+  CreateFolderBody,
+  CreateProcessBody,
   CreateTodoBody,
   FileAtCommitWire,
   FileCommitWire,
+  FolderListWire,
+  FolderWire,
   Me,
   ProcessInfo,
   ReleaseResult,
@@ -19,9 +23,13 @@ export { ApiError } from "@bpmiq/api-client";
 // `satisfies` checks) — re-exported so component imports keep one import path
 export type {
   AppConfig,
+  CreateFolderBody,
+  CreateProcessBody,
   CreateTodoBody,
   FileAtCommitWire,
   FileCommitWire,
+  FolderListWire,
+  FolderWire,
   Me,
   ModelRef,
   ProcessInfo,
@@ -51,6 +59,21 @@ export const fetchMe = (): Promise<Me> => api("/api/me");
 export const logout = (): Promise<{ ok: boolean }> => api("/api/logout", { method: "POST" });
 export const fetchRepos = (refresh = false): Promise<RepoInfo[]> => api(`/api/repos${refresh ? "?refresh=1" : ""}`);
 export const fetchProcesses = (repo: string): Promise<ProcessInfo[]> => api(`/api/repos/${repo}/processes`);
+/** create a new process from the blank template; response is its ProcessInfo row */
+export const createProcess = (repo: string, body: CreateProcessBody): Promise<ProcessInfo> =>
+  api(`/api/repos/${repo}/processes`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+/** folders under the repo's processes root (recursive, includes empty ones) */
+export const fetchFolders = (repo: string): Promise<FolderListWire> => api(`/api/repos/${repo}/folders`);
+export const createFolder = (repo: string, body: CreateFolderBody): Promise<FolderWire> =>
+  api(`/api/repos/${repo}/folders`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 /** hard-reset the repo's workspace onto origin/<default> — discards unreleased live edits */
 export const syncRepo = (repo: string): Promise<SyncResult> => api(`/api/repos/${repo}/sync`, { method: "POST" });
 export const releaseProcess = (repo: string, id: string): Promise<ReleaseResult> =>

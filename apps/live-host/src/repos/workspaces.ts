@@ -178,26 +178,42 @@ export class WorkspaceManager {
 
   /**
    * Files under `pathspec` in which the working tree differs from
-   * origin/<defaultBranch> — the overview's "dirty" signal. Runs in the
-   * checkout root (paths come back repo-root-relative, matching room names).
+   * origin/<defaultBranch> — the overview's "dirty" signal. `git diff` only
+   * sees TRACKED files, so untracked ones (a live-created process that never
+   * released) are collected separately — the same idiom resetToDefault uses;
+   * without it a brand-new .bpmn would show as clean. Runs in the checkout
+   * root (paths come back repo-root-relative, matching room names).
    * Errors (no git, no origin — e.g. the in-place host checkout) yield []
    * silently: "not dirty" is the honest answer with nothing to diff against.
    */
   async changedPaths(repo: ConnectedRepo, pathspec: string): Promise<string[]> {
     try {
-      const { stdout } = await runGit([
+      const dir = this.dir(repo);
+      const { stdout: diff } = await runGit([
         "-C",
-        this.dir(repo),
+        dir,
         "diff",
         "--name-only",
         `origin/${repo.defaultBranch}`,
         "--",
         pathspec,
       ]);
-      return stdout
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
+      const { stdout: untracked } = await runGit([
+        "-C",
+        dir,
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "--",
+        pathspec,
+      ]);
+      const paths = new Set(
+        `${diff}\n${untracked}`
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean),
+      );
+      return [...paths];
     } catch {
       /* no git/origin — leave clean */
       return [];

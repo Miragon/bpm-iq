@@ -82,6 +82,7 @@ test("listProcesses: one row per .bpmn under the configured folder (recursive)",
     name: "order",
     bpmn: "processes/order.bpmn",
     models: [{ notation: "bpmn", path: "processes/order.bpmn" }],
+    folder: "", // directly inside the processes root
     dirty: true, // from the injected changedPaths (git stays behind the seam)
     liveSessions: 2, // exact room match, foreign repos never counted
   });
@@ -89,6 +90,7 @@ test("listProcesses: one row per .bpmn under the configured folder (recursive)",
 
   const nested = rows.find((r) => r.id === "check-credit");
   assert.equal(nested?.bpmn, "processes/sub/check-credit.bpmn");
+  assert.equal(nested?.folder, "sub", "the folder is processes-root-relative");
   assert.equal(nested?.dirty, false);
   assert.equal(nested?.liveSessions, 1);
 });

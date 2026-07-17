@@ -76,6 +76,21 @@ export function byExtension(path: string): NotationDescriptor | undefined {
   return best;
 }
 
+/**
+ * Derive a process id (= file stem, kebab-case) from a human title — the ONE
+ * slug rule the create-process backend and the web client's live preview
+ * share. "" means the title contains nothing usable (caller rejects).
+ */
+export function processIdFromName(name: string): string {
+  return name
+    .normalize("NFKD") // decompose accents (\u00e4 -> a + combining mark), stripped next
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\u00df/g, "ss")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 const NOTATION_EXTENSIONS: readonly string[] = NOTATIONS.flatMap((n) => n.extensions);
 
 /**
