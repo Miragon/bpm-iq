@@ -25,7 +25,7 @@ import { dirname, join } from "node:path";
 import type { ReleaseResult } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 
-import { runGit } from "./adapters/git/run.ts";
+import { gitEnv, runGit } from "./adapters/git/run.ts";
 import type { Session } from "./adapters/sqlite/sessions.ts";
 import type { RepoConnectionSource } from "./ports/connection-source.ts";
 import type { GitProvider } from "./ports/git-provider.ts";
@@ -116,9 +116,21 @@ export async function release(
   const relFile = proc.path;
 
   const branch = releaseBranch(id, now);
+  // the credential for the whole release: fetch, push, PR. Prefer the app
+  // installation token (bot-authored → the human can approve their own
+  // release); fall back to the user token only when there is no installation.
+  const instToken =
+    repo.installationId !== null
+      ? await opts.connectionSource?.cloneToken(repo.installationId).catch(() => undefined)
+      : undefined;
   const worktree = await mkdtemp(join(tmpdir(), "bpm-release-"));
   try {
-    await runGit(["-C", workspace, "fetch", "origin", repo.defaultBranch]);
+    // authenticated like every WorkspaceManager fetch (gitEnv → http.extraHeader):
+    // an anonymous fetch of a PRIVATE repo has no credential and no TTY in the
+    // container — git dies on "could not read Username for 'https://github.com'"
+    await runGit(["-C", workspace, "fetch", "origin", repo.defaultBranch], {
+      env: gitEnv(instToken ?? (session.providerToken || undefined)),
+    });
 
     // upstream guard: commits on origin touching this file that this workspace
     // has never absorbed would be silently REVERTED by the copy below
@@ -160,13 +172,6 @@ export async function release(
       );
     }
 
-    // the credential that pushes + opens the PR. Prefer the app installation token
-    // (bot-authored → the human can approve their own release); fall back to the
-    // user token only when there is no app installation.
-    const instToken =
-      repo.installationId !== null
-        ? await opts.connectionSource?.cloneToken(repo.installationId).catch(() => undefined)
-        : undefined;
     const releaseToken = instToken ?? session.providerToken;
     const botAuthored = Boolean(instToken);
     if (!releaseToken && !process.env.LIVE_PUSH_URL_OVERRIDE) {
