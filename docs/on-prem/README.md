@@ -161,6 +161,19 @@ Pull the new tag and recreate — SIGTERM triggers the graceful flush, `/data` c
 state across. Releases are semver-tagged; breaking changes (env, data layout) are called
 out in the release notes. For production, pin `vX.Y.Z` and move deliberately.
 
+### Volume permissions
+
+The live-host image runs as a non-root user (UID 1000).
+
+Before running `docker compose up` for the first time, create the data directory and give it matching ownership:
+
+```bash
+mkdir -p ./data
+chown 1000:1000 ./data
+```
+
+This allows the container to write to the bind-mounted `/data` directory.
+
 ## Health
 
 `GET /healthz` — liveness plus a deep check: SQLite writability and disk headroom (<5 %
