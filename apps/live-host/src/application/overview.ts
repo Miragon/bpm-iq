@@ -40,16 +40,21 @@ export async function listProcesses(
   const cfg = loadContentConfig(workspace);
   if (!cfg) return [];
   const live = opts.liveDocs();
+  // proc.path is repo-root-relative; the folder the UI groups by is relative
+  // to the processes root ("" = directly inside it)
+  const rootPrefix = cfg.processes === "." ? "" : `${cfg.processes}/`;
   const processes: ProcessInfo[] = [];
   for (const proc of await discoverProcesses(workspace, cfg)) {
     // dirty flag comes from the injected changedPaths (git stays behind the seam)
     const dirty = (await opts.workspaces.changedPaths(repo, proc.path)).length > 0;
+    const rel = proc.path.startsWith(rootPrefix) ? proc.path.slice(rootPrefix.length) : proc.path;
     processes.push({
       repo: repo.fullName,
       id: proc.id,
       name: proc.id,
       bpmn: proc.path,
       models: [{ notation: byExtension(proc.path)?.id ?? "text", path: proc.path }],
+      folder: rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "",
       dirty,
       // a process is exactly one file — its room is the exact match
       liveSessions: live.filter((d) => d === `${repo.fullName}/${proc.path}`).length,

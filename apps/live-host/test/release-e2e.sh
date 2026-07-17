@@ -13,6 +13,9 @@
 #   C   model-anchored todos over HTTP: create → tracker issue with anchor +
 #       session attribution, list with process filter, close → gone from the
 #       list, empty-title 400
+#   D   folder + process creation over HTTP: folder create/list (empty folders
+#       survive), traversal/duplicate gates, created process is dirty
+#       (untracked) in the listing, and a brand-new file releases as a PR
 #
 # Run: bash test/release-e2e.sh   (or: pnpm --filter @bpmiq/live-host test)
 set -u
@@ -159,6 +162,38 @@ echo "$L2" | grep -q '"id": *"1"' && bad "C: closed todo still listed: $L2" || o
 BADREQ=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -d '{"title":"  "}' \
   "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos")
 echo "$BADREQ" | grep -q "title must be" && ok "C: blank title rejected (400)" || bad "C: expected title validation, got: $BADREQ"
+
+# ═══ Case D: folder + process creation (repo view create endpoints) ═══
+F=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"path":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
+echo "$F" | grep -q '"path": *"onboarding"' && ok "D: folder created" || bad "D: folder create failed: $F"
+FL=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
+echo "$FL" | grep -q '"onboarding"' && ok "D: EMPTY folder listed (survives before its first process)" || bad "D: folder missing from list: $FL"
+FDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"path":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
+echo "$FDUP" | grep -q "already exists" && ok "D: duplicate folder is a 409" || bad "D: expected 409, got: $FDUP"
+FBAD=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"path":"../escape"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
+echo "$FBAD" | grep -q "invalid folder" && ok "D: traversal in the folder path refused (400)" || bad "D: expected 400, got: $FBAD"
+
+P=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"name":"Employee Onboarding","folder":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
+echo "$P" | grep -q '"id": *"employee-onboarding"' && ok "D: process created (title slugged to the id)" || bad "D: process create failed: $P"
+echo "$P" | grep -q '"folder": *"onboarding"' && ok "D: created row carries its folder" || bad "D: folder field wrong: $P"
+[ -f "$WS1/processes/onboarding/employee-onboarding.bpmn" ] && ok "D: template written into the workspace" || bad "D: file not in workspace"
+PROCS=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
+echo "$PROCS" | grep -q '"bpmn": *"processes/onboarding/employee-onboarding.bpmn"' && ok "D: new process in the listing" || bad "D: not listed: $PROCS"
+# untracked files must count as dirty (changedPaths includes ls-files --others)
+echo "$PROCS" | grep -q '"folder": *"onboarding", *"dirty": *true' && ok "D: brand-new (untracked) process is dirty" || bad "D: expected dirty:true for the new process: $PROCS"
+PDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"name":"Employee Onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
+echo "$PDUP" | grep -q "already exists" && ok "D: duplicate id refused repo-wide (409)" || bad "D: expected 409, got: $PDUP"
+
+# the never-committed file must release cleanly (worktree cp + add of a new path)
+R=$(release "$PORT_A" acme/bpm-processes employee-onboarding)
+echo "$R" | grep -q '"pr"' && ok "D: brand-new process released → PR" || bad "D: release of new file failed: $R"
+BRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/employee-onboarding | tail -1 | tr -d ' *')
+git -C "$E2E/origin/acme/bpm-processes.git" show --stat "$BRANCH" | grep -q "processes/onboarding/employee-onboarding.bpmn" && ok "D: release ships the new file" || bad "D: new file missing from release commit"
 
 echo; echo "── $PASS passed, $FAIL failed ──"
 exit "$FAIL"

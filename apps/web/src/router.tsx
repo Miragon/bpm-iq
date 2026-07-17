@@ -10,7 +10,21 @@ const rootRoute = createRootRoute({ component: RootLayout });
 const overviewRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Overview });
 // repo = owner/name (GitHub). GitLab subgroups (multi-segment) are a follow-up —
 // they'd need the repo captured as a splat instead of two params.
-const repoRoute = createRoute({ getParentRoute: () => rootRoute, path: "/r/$owner/$repo", component: ProcessList });
+const repoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/r/$owner/$repo",
+  // ?dir=<folder path> shows one folder of the processes tree as its own table
+  // (processes-root-relative; absent/empty = root). Slashes are trimmed so a
+  // hand-edited "/sub/" matches what the API returns; a value with traversal,
+  // empty or dot-leading segments can never name a listed folder — degrade to
+  // the root instead of rendering a fake empty folder the creates would reject.
+  validateSearch: (search: Record<string, unknown>): { dir?: string } => {
+    const dir = typeof search.dir === "string" ? search.dir.replace(/^\/+|\/+$/g, "") : "";
+    if (dir.length === 0 || dir.split("/").some((s) => s === "" || s.startsWith("."))) return {};
+    return { dir };
+  },
+  component: ProcessList,
+});
 const processEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/r/$owner/$repo/p/$processId",

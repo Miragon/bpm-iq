@@ -50,6 +50,7 @@ export function ProcessEditorScreen() {
       repo={repo}
       processId={processId}
       docPath={proc.bpmn}
+      backDir={proc.folder}
       revealElementId={element}
       me={me.data}
     />
@@ -63,8 +64,17 @@ export function FileEditorScreen() {
   const me = useMe();
   // a process is a file — resolve the id (for todos/release) from the listing
   const processes = useProcesses(repo);
-  const processId = processes.data?.find((p) => p.models.some((m) => m.path === path))?.id ?? "";
+  const proc = processes.data?.find((p) => p.models.some((m) => m.path === path));
   if (me.isLoading) return <Loading />;
   if (!me.data) return null;
-  return <LiveEditor key={`${repo}/${path}`} repo={repo} processId={processId} docPath={path} me={me.data} />;
+  return (
+    <LiveEditor
+      key={`${repo}/${path}`}
+      repo={repo}
+      processId={proc?.id ?? ""}
+      docPath={path}
+      backDir={proc?.folder}
+      me={me.data}
+    />
+  );
 }
