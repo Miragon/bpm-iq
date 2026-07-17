@@ -5,6 +5,8 @@
  *                   processes folder (repos/content.ts), with dirty-vs-origin
  *                   flag and live session count
  *   listDecisions — the .dmn sibling of listProcesses
+ *   listChanges   — every file differing from origin/<default>, the pool a
+ *                   file-selection release picks from
  *   listRepos     — registry ∩ the session user's per-repo permission, with
  *                   process/dirty counts for locally-present workspaces
  *
@@ -13,7 +15,7 @@
  * never here). The returned object shapes ARE the wire format
  * (@bpmiq/contracts/live-host — shape drift is a tsc error).
  */
-import type { DecisionInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { ChangedFileWire, DecisionInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { byExtension } from "@bpmiq/notations";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
@@ -27,6 +29,8 @@ export interface OverviewDeps {
     dir(repo: ConnectedRepo): string;
     /** files under `pathspec` differing from origin/<defaultBranch>; [] on error */
     changedPaths(repo: ConnectedRepo, pathspec: string): Promise<string[]>;
+    /** all changed files with status; [] on error */
+    changedFiles(repo: ConnectedRepo): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>>;
   };
   access: { canWrite(session: Session, repo: ConnectedRepo): Promise<boolean> };
   /** repo-qualified document names of live rooms */
@@ -89,6 +93,20 @@ export async function listDecisions(
     });
   }
   return decisions;
+}
+
+/**
+ * Every file in which the shared workspace differs from origin/<default> —
+ * the pool a file-selection release picks from. liveSessions marks files a
+ * colleague currently has open, so the release dialog can warn before
+ * shipping somebody's work in progress.
+ */
+export async function listChanges(opts: OverviewDeps, repo: ConnectedRepo): Promise<ChangedFileWire[]> {
+  const live = opts.liveDocs();
+  return (await opts.workspaces.changedFiles(repo)).map((c) => ({
+    ...c,
+    liveSessions: live.filter((d) => d === `${repo.fullName}/${c.path}`).length,
+  }));
 }
 
 /** Repo overview: registry ∩ the session user's per-repo permission. */

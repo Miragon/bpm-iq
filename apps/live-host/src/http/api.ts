@@ -17,6 +17,8 @@
  *   POST /api/repos/:owner/:repo/decisions       → create a decision from the blank template (repo write required)
  *   GET  /api/repos/:owner/:repo/folders         → folders under the processes root (repo write required)
  *   POST /api/repos/:owner/:repo/folders         → create a folder   (repo write required)
+ *   GET  /api/repos/:owner/:repo/changes         → files differing from origin (release selection pool)
+ *   POST /api/repos/:owner/:repo/release         → release a FILE SELECTION as one PR (repo write required)
  *   POST /api/repos/:owner/:repo/sync            → hard-reset workspace to origin/<default> (repo write required)
  *   GET  /api/repos/:owner/:repo/history         → default-branch commits of one model file (repo write required)
  *   GET  /api/repos/:owner/:repo/history/content → that file's content at a commit (repo write required)
@@ -37,6 +39,7 @@ import { extname, join, normalize } from "node:path";
 
 import type {
   AppConfig,
+  ChangedFileWire,
   CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
@@ -48,6 +51,7 @@ import type {
   FolderWire,
   Me,
   ProcessInfo,
+  ReleaseFilesBody,
   ReleaseResult,
   SyncResult,
   TodoWire,
@@ -66,13 +70,13 @@ import {
   type SessionStore,
 } from "../adapters/sqlite/sessions.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
-import { listDecisions, listProcesses, listRepos } from "../application/overview.ts";
+import { listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
 import { createDecision, createFolder, createProcess, listFolders } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
-import { release } from "../release.ts";
+import { release, releaseFiles } from "../release.ts";
 import type { AccessCache } from "../repos/access.ts";
 import type { ConnectedRepo, RepoRegistry } from "../repos/registry.ts";
 import type { WorkspaceManager } from "../repos/workspaces.ts";
@@ -409,7 +413,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // Group 3 = todo id (tracker-native, opaque: GitHub numbers, Jira "PROJ-123"),
       // group 4 = release process id.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|decisions|folders|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
+        /^\/api\/repos\/(.+)\/(processes|decisions|folders|changes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
       );
       if (repoRoute) {
         const session = sessionOf(req);
@@ -539,6 +543,27 @@ export function startApi(port: number, opts: ApiOptions): Server {
             return send(res, 201, todo satisfies TodoWire);
           }
           return send(res, 405, { error: "method not allowed" });
+        }
+        // the release dialog's selection pool: every file differing from origin
+        if (repoRoute[2] === "changes") {
+          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
+          await opts.workspaces.ensure(repo);
+          return send(res, 200, (await listChanges(opts, repo)) satisfies ChangedFileWire[]);
+        }
+        // file-selection release: ship exactly the picked changed files as one PR
+        if (repoRoute[2] === "release" && req.method === "POST") {
+          const provider = opts.providers.get(session.user.provider) ?? opts.github;
+          const body = await jsonBody<ReleaseFilesBody>(req, res);
+          if (body === undefined) return;
+          if (!Array.isArray(body?.files) || body.files.some((f) => typeof f !== "string")) {
+            return send(res, 400, { error: "files must be an array of repo-relative paths" });
+          }
+          if (body.title !== undefined && typeof body.title !== "string") {
+            return send(res, 400, { error: "title must be a string" });
+          }
+          const result = await releaseFiles(opts, session, provider, repo, { files: body.files, title: body.title });
+          console.log(`released ${repo.fullName} (${result.files.length} file(s)) by @${result.by} → ${result.pr}`);
+          return send(res, 200, result satisfies ReleaseResult);
         }
         if (repoRoute[2]?.startsWith("release/") && req.method === "POST") {
           const provider = opts.providers.get(session.user.provider) ?? opts.github;

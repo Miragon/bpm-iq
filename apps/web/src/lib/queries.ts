@@ -11,6 +11,7 @@ import {
   createTodo,
   type CreateTodoBody,
   type DecisionInfo,
+  fetchChanges,
   fetchConfig,
   fetchDecisions,
   fetchFileHistory,
@@ -21,6 +22,8 @@ import {
   fetchTodos,
   logout,
   type ProcessInfo,
+  releaseFiles,
+  type ReleaseFilesBody,
   syncRepo,
   type TodoWire,
 } from "@/lib/api";
@@ -69,6 +72,30 @@ export function useCreateDecision(repo: string) {
       );
       void qc.invalidateQueries({ queryKey: ["decisions", repo] });
       void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the folder may be brand-new too
+    },
+  });
+}
+
+/** the release dialog's selection pool — refetched on every open (the shared
+ *  workspace moves under live edits, a 30s-stale list would mislead) */
+export function useChanges(repo: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["changes", repo],
+    queryFn: () => fetchChanges(repo),
+    enabled,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+/** release a file selection as one PR; the changes pool stays dirty until the
+ *  PR merges and the workspace reconciles — refetch anyway to reflect deletes */
+export function useReleaseFiles(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ReleaseFilesBody) => releaseFiles(repo, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["changes", repo] });
     },
   });
 }

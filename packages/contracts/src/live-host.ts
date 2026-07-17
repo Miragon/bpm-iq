@@ -113,7 +113,7 @@ export interface AppConfig {
   installUrl: string | null;
 }
 
-/** POST /api/repos/:fullName/release/:id */
+/** POST /api/repos/:fullName/release/:id and /release (file selection) */
 export interface ReleaseResult {
   /** the opened pull request's URL */
   pr: string;
@@ -122,6 +122,30 @@ export interface ReleaseResult {
   repo: string;
   /** true when pushed/opened with the app installation token (self-approvable PR) */
   botAuthored: boolean;
+  /** the repo-relative files the release shipped */
+  files: string[];
+}
+
+/**
+ * GET /api/repos/:fullName/changes — every file in which the shared workspace
+ * differs from origin/<defaultBranch>, the pool a release selects from. The
+ * workspace is shared per repo, so this may include colleagues' in-progress
+ * edits — liveSessions marks files somebody currently has open.
+ */
+export interface ChangedFileWire {
+  /** repo-root-relative path (the same identifier live rooms use) */
+  path: string;
+  status: "modified" | "added" | "deleted";
+  liveSessions: number;
+}
+
+/** POST /api/repos/:fullName/release — release exactly the selected files.
+ * Every entry must currently be changed vs origin (GET /changes), otherwise 409. */
+export interface ReleaseFilesBody {
+  /** repo-relative paths to ship (non-empty) */
+  files: string[];
+  /** optional human title — becomes the PR/commit subject and the branch slug */
+  title?: string;
 }
 
 /**

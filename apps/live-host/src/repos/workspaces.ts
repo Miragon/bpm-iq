@@ -221,6 +221,41 @@ export class WorkspaceManager {
   }
 
   /**
+   * changedPaths with a status per file — the release dialog's file list.
+   * `--no-renames` keeps a rename visible as delete + add (the release stages
+   * per file, so that is exactly how it would ship). Same untracked idiom and
+   * same silent-[] error contract as changedPaths.
+   */
+  async changedFiles(repo: ConnectedRepo): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>> {
+    try {
+      const dir = this.dir(repo);
+      const { stdout: diff } = await runGit([
+        "-C",
+        dir,
+        "diff",
+        "--name-status",
+        "--no-renames",
+        `origin/${repo.defaultBranch}`,
+      ]);
+      const { stdout: untracked } = await runGit(["-C", dir, "ls-files", "--others", "--exclude-standard"]);
+      const out = new Map<string, "modified" | "added" | "deleted">();
+      for (const line of diff.split("\n")) {
+        const [status, path] = line.split("\t").map((c) => c.trim());
+        if (!status || !path) continue;
+        out.set(path, status.startsWith("D") ? "deleted" : status.startsWith("A") ? "added" : "modified");
+      }
+      for (const line of untracked.split("\n")) {
+        const path = line.trim();
+        if (path) out.set(path, "added");
+      }
+      return [...out].map(([path, status]) => ({ path, status })).sort((a, b) => a.path.localeCompare(b.path));
+    } catch {
+      /* no git/origin — leave clean */
+      return [];
+    }
+  }
+
+  /**
    * Hard-reset the workspace onto origin/<defaultBranch> — "load the latest
    * state from main", DISCARDING every uncommitted live edit (the opposite of
    * reconcile, which refuses to touch a dirty tree). Fetches first, records the

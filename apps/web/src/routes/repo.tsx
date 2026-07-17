@@ -21,6 +21,7 @@ import {
   ArrowDownToLine,
   ArrowLeft,
   ArrowUpDown,
+  ArrowUpToLine,
   ChevronDown,
   ChevronUp,
   Folder,
@@ -35,6 +36,7 @@ import { toast } from "sonner";
 import { CreateDecisionDialog } from "@/components/create-decision-dialog";
 import { CreateFolderDialog } from "@/components/create-folder-dialog";
 import { CreateProcessDialog } from "@/components/create-process-dialog";
+import { ReleaseDialog } from "@/components/release-dialog";
 import { SyncRepoDialog } from "@/components/sync-repo-dialog";
 import { type ProcessInfo } from "@/lib/api";
 import { useDecisions, useFolders, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
@@ -71,6 +73,7 @@ export function ProcessList() {
   const [folderOpen, setFolderOpen] = useState(false);
   const [processOpen, setProcessOpen] = useState(false);
   const [decisionOpen, setDecisionOpen] = useState(false);
+  const [releaseOpen, setReleaseOpen] = useState(false);
 
   // processes with unreleased live edits the reset would discard, and repos
   // being actively edited (Variant A: a reset can't safely race an open session)
@@ -242,6 +245,9 @@ export function ProcessList() {
               {sync.isPending ? "Loading…" : `Load latest from ${branch}`}
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={() => setReleaseOpen(true)}>
+            <ArrowUpToLine /> Release
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm">
@@ -470,6 +476,7 @@ export function ProcessList() {
           }}
         />
       )}
+      {releaseOpen && <ReleaseDialog repo={repo} onClose={() => setReleaseOpen(false)} />}
     </div>
   );
 }

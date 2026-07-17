@@ -2,6 +2,7 @@
 import { api } from "@bpmiq/api-client";
 import type {
   AppConfig,
+  ChangedFileWire,
   CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
@@ -13,6 +14,7 @@ import type {
   FolderWire,
   Me,
   ProcessInfo,
+  ReleaseFilesBody,
   ReleaseResult,
   RepoInfo,
   SyncResult,
@@ -25,6 +27,7 @@ export { ApiError } from "@bpmiq/api-client";
 // `satisfies` checks) — re-exported so component imports keep one import path
 export type {
   AppConfig,
+  ChangedFileWire,
   CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
@@ -37,6 +40,7 @@ export type {
   Me,
   ModelRef,
   ProcessInfo,
+  ReleaseFilesBody,
   ReleaseResult,
   RepoInfo,
   SyncResult,
@@ -91,6 +95,15 @@ export const createFolder = (repo: string, body: CreateFolderBody): Promise<Fold
 export const syncRepo = (repo: string): Promise<SyncResult> => api(`/api/repos/${repo}/sync`, { method: "POST" });
 export const releaseProcess = (repo: string, id: string): Promise<ReleaseResult> =>
   api(`/api/repos/${repo}/release/${encodeURIComponent(id)}`, { method: "POST" });
+/** every file differing from origin — the release dialog's selection pool */
+export const fetchChanges = (repo: string): Promise<ChangedFileWire[]> => api(`/api/repos/${repo}/changes`);
+/** release exactly the selected changed files as one PR */
+export const releaseFiles = (repo: string, body: ReleaseFilesBody): Promise<ReleaseResult> =>
+  api(`/api/repos/${repo}/release`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 /** the backend's hard cap on history length — a full response means truncation */
 export const HISTORY_LIMIT = 200;
 /** default-branch commits touching one model file, newest first */

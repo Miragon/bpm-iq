@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" id="Definitions_des" name="des" namespace="http://bpmiq.dev/dmn/des">
+  <decision id="des" name="des">
+    <decisionTable id="DecisionTable_des">
+      <input id="Input_1">
+        <inputExpression id="InputExpression_1" typeRef="string">
+          <text></text>
+        </inputExpression>
+      </input>
+      <input id="InputClause_05g02i7">
+        <inputExpression id="LiteralExpression_0b5mw0o" typeRef="string">
+          <text></text>
+        </inputExpression>
+      </input>
+      <output id="Output_1" typeRef="string" />
+      <rule id="DecisionRule_18vnjd8">
+        <inputEntry id="UnaryTests_1qgt6kb">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="UnaryTests_1vs1smd">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="LiteralExpression_1oqqg6a">
+          <text></text>
+        </outputEntry>
+      </rule>
+      <rule id="DecisionRule_1nxxuhi">
+        <inputEntry id="UnaryTests_17gnvad">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="UnaryTests_0g4ft9q">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="LiteralExpression_1ocjywc">
+          <text></text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram id="DMNDiagram_des">
+      <dmndi:DMNShape id="DMNShape_des" dmnElementRef="des">
+        <dc:Bounds height="80" width="180" x="160" y="100" />
+      </dmndi:DMNShape>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>

@@ -51,6 +51,7 @@ function setup(over: Partial<OverviewDeps> = {}) {
         changedPathsCalls.push(pathspec);
         return pathspec === "processes/order.bpmn" ? ["processes/order.bpmn"] : [];
       },
+      changedFiles: async () => [{ path: "processes/order.bpmn", status: "modified" as const }],
     },
     access: { canWrite: async () => true },
     liveDocs: () => [
@@ -155,7 +156,9 @@ test("listRepos: a repo the user cannot write is invisible (private by default)"
 
 test("listRepos: no bpmiq.yml (workspace absent or plain repo) → null counts", async () => {
   const empty = mkdtempSync(join(tmpdir(), "bpm-overview-nows-"));
-  const { deps } = setup({ workspaces: { dir: () => empty, changedPaths: async () => [] } });
+  const { deps } = setup({
+    workspaces: { dir: () => empty, changedPaths: async () => [], changedFiles: async () => [] },
+  });
   const repos = await listRepos(deps, session("sess-petra"));
   assert.equal(repos.length, 1);
   assert.equal(repos[0]?.processCount, null);

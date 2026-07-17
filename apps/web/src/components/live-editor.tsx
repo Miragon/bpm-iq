@@ -33,6 +33,7 @@ import type * as Y from "yjs";
 
 import { HistoryDiffDialog } from "@/components/history-diff-dialog";
 import { HistoryPanel } from "@/components/history-panel";
+import { ReleaseDialog } from "@/components/release-dialog";
 import { TodoCreateDialog } from "@/components/todo-create-dialog";
 import { TodoPanel } from "@/components/todo-panel";
 import {
@@ -40,7 +41,6 @@ import {
   fetchFileAtCommit,
   type FileCommitWire,
   type Me,
-  releaseProcess,
   type TodoElementWire,
   type TodoWire,
 } from "@/lib/api";
@@ -238,16 +238,8 @@ export function LiveEditor({
     };
   }, [repo, docPath, me.wsToken]);
 
-  const release = useMutation({
-    mutationFn: () => releaseProcess(repo, processId),
-    onSuccess: ({ pr }) =>
-      toast.success("Release created", {
-        description: pr,
-        action: { label: "Open PR", onClick: () => window.open(pr, "_blank") },
-        duration: 15_000,
-      }),
-    onError: (e) => toast.error((e as Error).message),
-  });
+  // release = pick files in the ReleaseDialog, THIS document preselected
+  const [releaseOpen, setReleaseOpen] = useState(false);
 
   // TanStack v5 runs hook-level onSuccess/onError even after unmount and for
   // superseded mutate() calls — guard both: only the LATEST action may apply,
@@ -386,11 +378,9 @@ export function LiveEditor({
             </Button>
           </>
         )}
-        {processId && (
-          <Button size="sm" disabled={release.isPending} onClick={() => release.mutate()}>
-            {release.isPending ? "Creating PR…" : "Release → PR"}
-          </Button>
-        )}
+        <Button size="sm" onClick={() => setReleaseOpen(true)}>
+          Release → PR
+        </Button>
       </div>
       {error && <div className="bg-destructive/10 text-destructive border-b px-4 py-2 text-sm">{error}</div>}
       <div className="relative min-h-0 flex-1">
@@ -458,6 +448,7 @@ export function LiveEditor({
           onClose={() => setDiff(null)}
         />
       )}
+      {releaseOpen && <ReleaseDialog repo={repo} preselect={[docPath]} onClose={() => setReleaseOpen(false)} />}
     </div>
   );
 }
