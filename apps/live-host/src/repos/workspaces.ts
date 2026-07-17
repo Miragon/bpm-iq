@@ -19,9 +19,15 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import type { FileCommitWire } from "@bpmiq/contracts/live-host";
+
 import { runGit, scrub } from "../adapters/git/run.ts";
+import { FILE_LOG_FORMAT, parseFileLog } from "../domain/file-history.ts";
 import { CONTENT_CONFIG_FILE } from "./content.ts";
 import type { ConnectedRepo, RepoRegistry } from "./registry.ts";
+
+/** model blobs can exceed execFile's 1 MB default (large BPMN diagrams) */
+const GIT_OUT_MAX = 16 * 1024 * 1024;
 
 /** git env carrying the token as an auth header — not in argv, not in config files */
 function gitEnv(token: string | undefined): NodeJS.ProcessEnv {
@@ -209,5 +215,82 @@ export class WorkspaceManager {
       /* no git/origin — leave clean */
       return [];
     }
+  }
+
+  /**
+   * Commit history of ONE content file on the default branch, newest first.
+   * Prefers origin/<defaultBranch> (the released truth release/dirty diff
+   * against — local HEAD may carry unmerged release commits); the in-place
+   * host checkout may have no origin, so fall back to the local branch, then
+   * HEAD. Runs in the checkout root — the path is repo-root-relative (= the
+   * room path). Deliberately NO --follow: it would list pre-rename commits
+   * whose content fileAtCommit(currentPath) can never fetch — every row the
+   * panel shows must be comparable/restorable, so a rename honestly cuts the
+   * visible history instead of offering dead actions. Errors (no git, no
+   * commits yet) yield []: an empty history, not a 500.
+   */
+  async fileHistory(repo: ConnectedRepo, path: string, limit: number): Promise<FileCommitWire[]> {
+    await this.freshenHostRepo(repo);
+    const dir = this.dir(repo);
+    try {
+      const ref = await this.historyRef(repo, dir);
+      const { stdout } = await runGit(
+        ["-C", dir, "log", `--max-count=${limit}`, `--format=${FILE_LOG_FORMAT}`, ref, "--", path],
+        { maxBuffer: GIT_OUT_MAX },
+      );
+      return parseFileLog(stdout);
+    } catch (e) {
+      console.log(`history ${repo.fullName}/${path}: ${scrub((e as Error).message).split("\n")[0]}`);
+      return [];
+    }
+  }
+
+  /**
+   * ensure() never fetches the in-place host checkout, so its origin/<branch>
+   * would stay frozen at deploy time and the history panel would never see a
+   * merged release. Refresh the REF here (same 60s throttle) — a fetch only
+   * moves remote-tracking refs, it never touches the operator's working tree.
+   * Failures (no remote, no credentials) are throttled too, then served from
+   * the last known ref — historyRef falls back to the local branch anyway.
+   */
+  private async freshenHostRepo(repo: ConnectedRepo): Promise<void> {
+    if (!this.isHostRepo(repo.fullName)) return; // clones are fetched by ensure()
+    if (Date.now() - (this.ensured.get(repo.fullName) ?? 0) <= 60_000) return;
+    this.ensured.set(repo.fullName, Date.now());
+    try {
+      const token = await this.registry.tokenFor(repo);
+      await runGit(["-C", this.checkoutDir(repo), "fetch", "origin", repo.defaultBranch], { env: gitEnv(token) });
+    } catch (e) {
+      console.log(`history fetch ${repo.fullName}: ${scrub((e as Error).message).split("\n")[0]}`);
+    }
+  }
+
+  /**
+   * Content of ONE file at a commit — `git show <sha>:./<path>` in the
+   * checkout root (`./` pins the blob path as cwd-relative). null when the
+   * commit is unknown or the file does not exist at it.
+   */
+  async fileAtCommit(repo: ConnectedRepo, path: string, sha: string): Promise<string | null> {
+    try {
+      const { stdout } = await runGit(["-C", this.dir(repo), "show", `${sha}:./${path}`], {
+        maxBuffer: GIT_OUT_MAX,
+      });
+      return stdout;
+    } catch {
+      return null;
+    }
+  }
+
+  /** best available "default branch" ref: fetched origin, local branch, HEAD */
+  private async historyRef(repo: ConnectedRepo, dir: string): Promise<string> {
+    for (const ref of [`origin/${repo.defaultBranch}`, repo.defaultBranch]) {
+      try {
+        await runGit(["-C", dir, "rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+        return ref;
+      } catch {
+        /* not present — try the next */
+      }
+    }
+    return "HEAD";
   }
 }

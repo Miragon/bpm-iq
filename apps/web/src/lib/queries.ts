@@ -6,6 +6,7 @@ import {
   createTodo,
   type CreateTodoBody,
   fetchConfig,
+  fetchFileHistory,
   fetchMe,
   fetchProcesses,
   fetchRepos,
@@ -39,6 +40,20 @@ export function useRepos() {
 
 export function useProcesses(repo: string) {
   return useQuery({ queryKey: ["processes", repo], queryFn: () => fetchProcesses(repo), enabled: repo.length > 0 });
+}
+
+/** default-branch commit history of one model file — fetched while the panel
+ *  is open (`enabled`). It moves OUTSIDE the app (a release PR merges on the
+ *  provider), so poll once a minute while the panel is open and re-sync on
+ *  focus — the same pattern as useTodos, same rationale. */
+export function useFileHistory(repo: string, path: string, enabled = true) {
+  return useQuery({
+    queryKey: ["history", repo, path],
+    queryFn: () => fetchFileHistory(repo, path),
+    enabled: enabled && repo.length > 0 && path.length > 0,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
 }
 
 /** open todos of a repo, optionally narrowed to one process (`?process=<id>`) */

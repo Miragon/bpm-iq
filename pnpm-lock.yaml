@@ -151,6 +151,9 @@ importers:
       bpmn-js:
         specifier: 18.21.0
         version: 18.21.0
+      bpmn-js-differ:
+        specifier: 3.2.0
+        version: 3.2.0
       lucide-react:
         specifier: 1.24.0
         version: 1.24.0(react@19.2.7)
@@ -1301,6 +1304,9 @@ packages:
     resolution: {integrity: sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw==}
     engines: {node: '>=18'}
 
+  bpmn-js-differ@3.2.0:
+    resolution: {integrity: sha512-FdLXHzoysjVL5mr0pIbbsPmVV04/qcHBxrQHsQxXb2blAw4u9sDnJmaHTh/PMGrPRRZyVVcKaY1sMFRNx64fCw==}
+
   bpmn-js@18.21.0:
     resolution: {integrity: sha512-TVPsgsTnD24jrcZ5bjU3LAfhEp4UtfnRIQ53Spf7Cs2nMofFU27uZ/Z5MTxNzfB5PVczjZbx7UTRmq+RcCZ7HA==}
 
@@ -1461,6 +1467,11 @@ packages:
   didi@11.0.0:
     resolution: {integrity: sha512-PzCfRzQttvFpVcYMbSF7h8EsWjeJpVjWH4qDhB5LkMi1ILvHq4Ob0vhM2wLFziPkbUBi+PAo7ODbe2sacR7nJQ==}
     engines: {node: '>= 20.12'}
+
+  diffpatch@0.6.0:
+    resolution: {integrity: sha512-VEhkRPD6j3U+QU+1DhbWulYLNWhk5WkP4rz0S8L3iAiJ+has2eCCAFZwdFiw10LXdPpB3XHjtl6CpbvBCPjZuw==}
+    engines: {node: '>=8'}
+    hasBin: true
 
   domify@3.0.0:
     resolution: {integrity: sha512-bs2yO68JDFOm6rKv8f0EnrM2cENduhRkpqOtt/s5l5JBA/eqGBZCzLPmdYoHtJ6utgLGgcBajFsEQbl12pT0lQ==}
@@ -3568,6 +3579,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  bpmn-js-differ@3.2.0:
+    dependencies:
+      diffpatch: 0.6.0
+      min-dash: 5.1.0
+
   bpmn-js@18.21.0:
     dependencies:
       bpmn-moddle: 10.0.0
@@ -3732,6 +3748,10 @@ snapshots:
       - preact-render-to-string
 
   didi@11.0.0: {}
+
+  diffpatch@0.6.0:
+    dependencies:
+      picocolors: 1.1.1
 
   domify@3.0.0: {}
 

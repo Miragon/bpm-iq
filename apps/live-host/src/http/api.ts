@@ -12,6 +12,8 @@
  *   GET  /api/me, POST /api/logout
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
  *   GET  /api/repos/:owner/:repo/processes       → process list      (repo write required)
+ *   GET  /api/repos/:owner/:repo/history         → default-branch commits of one model file (repo write required)
+ *   GET  /api/repos/:owner/:repo/history/content → that file's content at a commit (repo write required)
  *   GET  /api/repos/:owner/:repo/todos           → open model-anchored todos (repo write required)
  *   POST /api/repos/:owner/:repo/todos           → create a todo in the repo's tracker (repo write required)
  *   POST /api/repos/:owner/:repo/todos/:id/close → close a todo in the tracker (repo write required)
@@ -27,7 +29,15 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 
-import type { AppConfig, CreateTodoBody, Me, ReleaseResult, TodoWire } from "@bpmiq/contracts/live-host";
+import type {
+  AppConfig,
+  CreateTodoBody,
+  FileAtCommitWire,
+  FileCommitWire,
+  Me,
+  ReleaseResult,
+  TodoWire,
+} from "@bpmiq/contracts/live-host";
 import { bearerAuth, errorBody, readBody, redirect, securityHeaders, send } from "@bpmiq/http-kit";
 
 import {
@@ -41,6 +51,7 @@ import {
   sessionCookie,
   type SessionStore,
 } from "../adapters/sqlite/sessions.ts";
+import { fileAtCommit, fileHistory } from "../application/history.ts";
 import { listProcesses, listRepos } from "../application/overview.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
@@ -363,13 +374,14 @@ export function startApi(port: number, opts: ApiOptions): Server {
         return send(res, 200, await listRepos(opts, session));
       }
 
-      // repo-scoped: processes + todos (+ close) + release. The repo segment is
-      // GREEDY (multi-segment) — GitLab projects live in subgroups, so "owner/name"
-      // must not be baked into the route shape. The registry decides what a repo is.
+      // repo-scoped: processes + history (+ /content) + todos (+ close) + release.
+      // The repo segment is GREEDY (multi-segment) — GitLab projects live in
+      // subgroups, so "owner/name" must not be baked into the route shape. The
+      // registry decides what a repo is.
       // Group 3 = todo id (tracker-native, opaque: GitHub numbers, Jira "PROJ-123"),
       // group 4 = release process id.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
+        /^\/api\/repos\/(.+)\/(processes|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
       );
       if (repoRoute) {
         const session = sessionOf(req);
@@ -379,6 +391,19 @@ export function startApi(port: number, opts: ApiOptions): Server {
         if (repoRoute[2] === "processes") {
           const workspace = await opts.workspaces.ensure(repo);
           return send(res, 200, await listProcesses(opts, repo, workspace));
+        }
+        // file history (read-models in application/history.ts) — ?path is the
+        // content-relative model path, the same identifier the live rooms use
+        if (repoRoute[2] === "history" || repoRoute[2] === "history/content") {
+          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
+          const path = url.searchParams.get("path") ?? "";
+          if (!path) return send(res, 400, { error: "missing ?path=<content-relative model path>" });
+          if (repoRoute[2] === "history") {
+            const commits = await fileHistory(opts, repo, path, url.searchParams.get("limit"));
+            return send(res, 200, commits satisfies FileCommitWire[]);
+          }
+          const file = await fileAtCommit(opts, repo, path, url.searchParams.get("sha") ?? "");
+          return send(res, 200, file satisfies FileAtCommitWire);
         }
         if (repoRoute[2]?.startsWith("todos")) {
           // the tracker seam needs a platform credential (installation token) —

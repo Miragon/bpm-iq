@@ -34,3 +34,30 @@
 .bpm-todo-badge:hover {
   transform: scale(1.15);
 }
+
+/* semantic BPMN diff markers in the history compare dialog — set imperatively
+   via canvas.addMarker() (components/history-diff-dialog.tsx), styled here.
+   !important: bpmn-js renders stroke/fill as inline presentation attributes. */
+.bpm-diff-viewer {
+  height: 100%;
+  width: 100%;
+}
+.bpm-diff-viewer .bpm-diff-added:not(.djs-connection) .djs-visual > :first-child,
+.bpm-diff-viewer .bpm-diff-added.djs-connection .djs-visual > path {
+  stroke: var(--success) !important;
+  stroke-width: 4px !important;
+}
+.bpm-diff-viewer .bpm-diff-removed:not(.djs-connection) .djs-visual > :first-child,
+.bpm-diff-viewer .bpm-diff-removed.djs-connection .djs-visual > path {
+  stroke: var(--destructive) !important;
+  stroke-width: 4px !important;
+}
+.bpm-diff-viewer .bpm-diff-changed:not(.djs-connection) .djs-visual > :first-child,
+.bpm-diff-viewer .bpm-diff-changed.djs-connection .djs-visual > path {
+  stroke: var(--warning) !important;
+  stroke-width: 4px !important;
+}
+.bpm-diff-viewer .bpm-diff-layout:not(.djs-connection) .djs-visual > :first-child,
+.bpm-diff-viewer .bpm-diff-layout.djs-connection .djs-visual > path {
+  stroke-dasharray: 6 3 !important;
+}
