@@ -189,9 +189,13 @@ export class WorkspaceManager {
   async changedPaths(repo: ConnectedRepo, pathspec: string): Promise<string[]> {
     try {
       const dir = this.dir(repo);
+      // quotepath off: git would C-quote non-ASCII names ("\303\244…"), which
+      // must never leak into wire paths / room-name comparisons
       const { stdout: diff } = await runGit([
         "-C",
         dir,
+        "-c",
+        "core.quotepath=false",
         "diff",
         "--name-only",
         `origin/${repo.defaultBranch}`,
@@ -201,6 +205,8 @@ export class WorkspaceManager {
       const { stdout: untracked } = await runGit([
         "-C",
         dir,
+        "-c",
+        "core.quotepath=false",
         "ls-files",
         "--others",
         "--exclude-standard",
@@ -214,6 +220,61 @@ export class WorkspaceManager {
           .filter(Boolean),
       );
       return [...paths];
+    } catch {
+      /* no git/origin — leave clean */
+      return [];
+    }
+  }
+
+  /**
+   * changedPaths with a status per file — the release dialog's file list,
+   * confined to `pathspec` (the bpmiq.yml content scope: the release surface
+   * must never expose checkout files outside it, e.g. the in-place host
+   * checkout's server sources). `--no-renames` keeps a rename visible as
+   * delete + add (the release stages per file, so that is exactly how it
+   * would ship). Same untracked idiom and same silent-[] error contract as
+   * changedPaths.
+   */
+  async changedFiles(
+    repo: ConnectedRepo,
+    pathspec: string,
+  ): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>> {
+    try {
+      const dir = this.dir(repo);
+      const { stdout: diff } = await runGit([
+        "-C",
+        dir,
+        "-c",
+        "core.quotepath=false",
+        "diff",
+        "--name-status",
+        "--no-renames",
+        `origin/${repo.defaultBranch}`,
+        "--",
+        pathspec,
+      ]);
+      const { stdout: untracked } = await runGit([
+        "-C",
+        dir,
+        "-c",
+        "core.quotepath=false",
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "--",
+        pathspec,
+      ]);
+      const out = new Map<string, "modified" | "added" | "deleted">();
+      for (const line of diff.split("\n")) {
+        const [status, path] = line.split("\t").map((c) => c.trim());
+        if (!status || !path) continue;
+        out.set(path, status.startsWith("D") ? "deleted" : status.startsWith("A") ? "added" : "modified");
+      }
+      for (const line of untracked.split("\n")) {
+        const path = line.trim();
+        if (path) out.set(path, "added");
+      }
+      return [...out].map(([path, status]) => ({ path, status })).sort((a, b) => a.path.localeCompare(b.path));
     } catch {
       /* no git/origin — leave clean */
       return [];

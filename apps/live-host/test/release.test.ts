@@ -13,6 +13,10 @@ import {
   redactToken,
   releaseBranch,
   releaseCommitMessage,
+  releaseFilesBranch,
+  releaseFilesPrBody,
+  releaseFilesSlug,
+  releaseFilesSubject,
   releasePrBody,
 } from "../src/release.ts";
 
@@ -53,4 +57,45 @@ test("releasePrBody: bot-authored PRs advertise self-approval, user-token PRs do
   const user = releasePrBody("order-flow", "acme/models", "ada", false);
   assert.ok(!user.includes("you can approve this PR yourself"));
   assert.ok(user.includes("merge = approval (CODEOWNERS)"));
+});
+
+test("releaseFilesSlug: title wins, else lone file stem, else 'changes'", () => {
+  assert.equal(releaseFilesSlug(["a.bpmn"], "Q3 Credit Rules!"), "q3-credit-rules");
+  assert.equal(releaseFilesSlug(["processes/orders/credit-check.dmn"]), "credit-check");
+  assert.equal(releaseFilesSlug(["a.bpmn", "b.dmn"]), "changes");
+  assert.equal(releaseFilesSlug(["..."], "!!!"), "changes"); // nothing slug-able anywhere
+});
+
+test("releaseFilesSlug: caps runaway titles so the git ref stays well under NAME_MAX", () => {
+  const slug = releaseFilesSlug(["a.bpmn"], "x".repeat(400));
+  assert.ok(slug.length <= 60, `slug too long: ${slug.length}`);
+  assert.ok(!slug.endsWith("-"), "no dangling separator after the cut");
+});
+
+test("releaseFilesBranch: stamps to the SECOND (untitled selections share one slug)", () => {
+  assert.equal(
+    releaseFilesBranch("changes", new Date("2026-07-14T08:45:30.123Z")),
+    "release/changes-2026-07-14-08-45-30",
+  );
+});
+
+test("releaseFilesSubject: optional title becomes the headline", () => {
+  assert.equal(releaseFilesSubject("Q3 credit rules"), "release: Q3 credit rules");
+  assert.equal(releaseFilesSubject("   "), "release: publish live model state");
+  assert.equal(releaseFilesSubject(undefined), "release: publish live model state");
+});
+
+test("releaseFilesPrBody: lists every shipped file, marks deletions", () => {
+  const body = releaseFilesPrBody(
+    [
+      { path: "processes/a.bpmn", deleted: false },
+      { path: "processes/old.dmn", deleted: true },
+    ],
+    "acme/models",
+    "ada",
+    true,
+  );
+  assert.ok(body.includes("- `processes/a.bpmn`"));
+  assert.ok(body.includes("- `processes/old.dmn` (deleted)"));
+  assert.ok(body.includes("you can approve this PR yourself"));
 });

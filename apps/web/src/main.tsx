@@ -1,6 +1,16 @@
 import "bpmn-js/dist/assets/diagram-js.css";
 import "bpmn-js/dist/assets/bpmn-js.css";
 import "bpmn-js/dist/assets/bpmn-font/css/bpmn.css";
+// dmn-js view styles — its own diagram-js.css is skipped: bpmn-js already ships
+// the (newer) copy and both target the same global .djs-* classes
+import "dmn-js/dist/assets/dmn-js-shared.css";
+import "dmn-js/dist/assets/dmn-js-drd.css";
+import "dmn-js/dist/assets/dmn-js-decision-table.css";
+import "dmn-js/dist/assets/dmn-js-decision-table-controls.css";
+import "dmn-js/dist/assets/dmn-js-literal-expression.css";
+import "dmn-js/dist/assets/dmn-js-boxed-expression.css";
+import "dmn-js/dist/assets/dmn-js-boxed-expression-controls.css";
+import "dmn-js/dist/assets/dmn-font/css/dmn.css";
 import "./index.css";
 
 import { QueryClientProvider } from "@tanstack/react-query";

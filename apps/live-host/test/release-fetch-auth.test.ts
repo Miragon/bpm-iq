@@ -65,7 +65,7 @@ test("release: the upstream-guard fetch carries the installation token", async (
     await assert.rejects(
       release(
         {
-          workspaces: { ensure: async () => workspace },
+          workspaces: { ensure: async () => workspace, changedFiles: async () => [] },
           connectionSource: { cloneToken: async () => "inst-tok-123" },
         },
         session,

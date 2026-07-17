@@ -44,6 +44,33 @@ export interface CreateProcessBody {
   folder?: string;
 }
 
+/**
+ * GET /api/repos/:fullName/decisions — one row per .dmn file under the
+ * repo's bpmiq.yml processes folder (a decision IS its DMN file; id = file
+ * name without extension, unique repo-wide like process ids).
+ */
+export interface DecisionInfo {
+  repo: string;
+  id: string;
+  name: string;
+  /** the decision's DMN file (repo-relative path) */
+  path: string;
+  /** folder of the DMN file relative to the processes root ("" = root) */
+  folder: string;
+  dirty: boolean;
+  liveSessions: number;
+}
+
+/** POST /api/repos/:fullName/decisions — response is the created DecisionInfo.
+ * The decision id (= file stem) is derived from `name`; it must be unique
+ * among .dmn files repo-wide, so a duplicate is a 409 regardless of `folder`. */
+export interface CreateDecisionBody {
+  /** human title — becomes the decision name; the file stem is its kebab-case slug */
+  name: string;
+  /** target folder relative to the processes root ("" / absent = root) */
+  folder?: string;
+}
+
 /** GET /api/repos/:fullName/folders — every folder under the processes root
  * (recursive, sorted, includes empty ones), processes-root-relative */
 export type FolderListWire = string[];
@@ -86,7 +113,7 @@ export interface AppConfig {
   installUrl: string | null;
 }
 
-/** POST /api/repos/:fullName/release/:id */
+/** POST /api/repos/:fullName/release/:id and /release (file selection) */
 export interface ReleaseResult {
   /** the opened pull request's URL */
   pr: string;
@@ -95,6 +122,30 @@ export interface ReleaseResult {
   repo: string;
   /** true when pushed/opened with the app installation token (self-approvable PR) */
   botAuthored: boolean;
+  /** the repo-relative files the release shipped */
+  files: string[];
+}
+
+/**
+ * GET /api/repos/:fullName/changes — every file in which the shared workspace
+ * differs from origin/<defaultBranch>, the pool a release selects from. The
+ * workspace is shared per repo, so this may include colleagues' in-progress
+ * edits — liveSessions marks files somebody currently has open.
+ */
+export interface ChangedFileWire {
+  /** repo-root-relative path (the same identifier live rooms use) */
+  path: string;
+  status: "modified" | "added" | "deleted";
+  liveSessions: number;
+}
+
+/** POST /api/repos/:fullName/release — release exactly the selected files.
+ * Every entry must currently be changed vs origin (GET /changes), otherwise 409. */
+export interface ReleaseFilesBody {
+  /** repo-relative paths to ship (non-empty) */
+  files: string[];
+  /** optional human title — becomes the PR/commit subject and the branch slug */
+  title?: string;
 }
 
 /**

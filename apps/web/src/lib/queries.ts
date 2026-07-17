@@ -1,14 +1,20 @@
 import { queryDefaults } from "@bpmiq/api-client";
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   closeTodo,
+  createDecision,
+  type CreateDecisionBody,
   createFolder,
   createProcess,
   type CreateProcessBody,
   createTodo,
   type CreateTodoBody,
+  type DecisionInfo,
+  fetchChanges,
   fetchConfig,
+  fetchDecisions,
   fetchFileHistory,
   fetchFolders,
   fetchMe,
@@ -17,6 +23,8 @@ import {
   fetchTodos,
   logout,
   type ProcessInfo,
+  releaseFiles,
+  type ReleaseFilesBody,
   syncRepo,
   type TodoWire,
 } from "@/lib/api";
@@ -46,6 +54,58 @@ export function useRepos() {
 
 export function useProcesses(repo: string) {
   return useQuery({ queryKey: ["processes", repo], queryFn: () => fetchProcesses(repo), enabled: repo.length > 0 });
+}
+
+/** decisions (.dmn files) under the repo's processes root */
+export function useDecisions(repo: string) {
+  return useQuery({ queryKey: ["decisions", repo], queryFn: () => fetchDecisions(repo), enabled: repo.length > 0 });
+}
+
+/** create a decision from the blank template — cache seeding mirrors
+ *  useCreateProcess (the repo view renders from the cached decision list) */
+export function useCreateDecision(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateDecisionBody) => createDecision(repo, body),
+    onSuccess: (created) => {
+      qc.setQueryData<DecisionInfo[]>(["decisions", repo], (old) =>
+        old ? (old.some((d) => d.id === created.id) ? old : [...old, created]) : [created],
+      );
+      void qc.invalidateQueries({ queryKey: ["decisions", repo] });
+      void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the folder may be brand-new too
+    },
+  });
+}
+
+/** the release dialog's selection pool — refetched on every open (the shared
+ *  workspace moves under live edits, a 30s-stale list would mislead) */
+export function useChanges(repo: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["changes", repo],
+    queryFn: () => fetchChanges(repo),
+    enabled,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+/** release a file selection as one PR; the changes pool stays dirty until the
+ *  PR merges and the workspace reconciles — refetch anyway to reflect deletes.
+ *  The PR toast lives HERE (hook level): mutate-level callbacks are skipped
+ *  once the dialog unmounted, and a created PR must never go unannounced. */
+export function useReleaseFiles(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ReleaseFilesBody) => releaseFiles(repo, body),
+    onSuccess: ({ pr }) => {
+      toast.success("Release created", {
+        description: pr,
+        action: { label: "Open PR", onClick: () => window.open(pr, "_blank") },
+        duration: 15_000,
+      });
+      void qc.invalidateQueries({ queryKey: ["changes", repo] });
+    },
+  });
 }
 
 /** folders under the repo's processes root — the repo view shows them as rows
@@ -100,6 +160,7 @@ export function useSyncRepo(repo: string) {
     mutationFn: () => syncRepo(repo),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["processes", repo] });
+      void qc.invalidateQueries({ queryKey: ["decisions", repo] }); // never-released .dmn files are gone too
       void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the reset deletes never-released folders
       void qc.invalidateQueries({ queryKey: ["repos"] });
     },

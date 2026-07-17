@@ -6,6 +6,8 @@
 export {
   CONTENT_CONFIG_FILE,
   type ContentConfig,
+  discoverDecisions,
+  type DiscoveredDecision,
   type DiscoveredProcess,
   discoverProcesses,
   loadContentConfig,

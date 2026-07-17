@@ -189,11 +189,77 @@ PDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content
   -d '{"name":"Employee Onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
 echo "$PDUP" | grep -q "already exists" && ok "D: duplicate id refused repo-wide (409)" || bad "D: expected 409, got: $PDUP"
 
+# decisions: the .dmn sibling of the process create endpoint
+DEC=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"name":"Travel Approval","folder":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
+echo "$DEC" | grep -q '"id": *"travel-approval"' && ok "D: decision created (title slugged to the id)" || bad "D: decision create failed: $DEC"
+[ -f "$WS1/processes/onboarding/travel-approval.dmn" ] && ok "D: dmn template written into the workspace" || bad "D: dmn file not in workspace"
+grep -q '<decisionTable' "$WS1/processes/onboarding/travel-approval.dmn" && ok "D: dmn template holds a decision table" || bad "D: dmn template malformed"
+DECS=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
+echo "$DECS" | grep -q '"path": *"processes/onboarding/travel-approval.dmn"' && ok "D: new decision in the listing" || bad "D: decision not listed: $DECS"
+echo "$DECS" | grep -q '"dirty": *true' && ok "D: brand-new (untracked) decision is dirty" || bad "D: expected dirty:true for the new decision: $DECS"
+DDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"name":"Travel Approval"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
+echo "$DDUP" | grep -q "already exists" && ok "D: duplicate decision id refused repo-wide (409)" || bad "D: expected 409, got: $DDUP"
+
 # the never-committed file must release cleanly (worktree cp + add of a new path)
 R=$(release "$PORT_A" acme/bpm-processes employee-onboarding)
 echo "$R" | grep -q '"pr"' && ok "D: brand-new process released → PR" || bad "D: release of new file failed: $R"
 BRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/employee-onboarding | tail -1 | tr -d ' *')
 git -C "$E2E/origin/acme/bpm-processes.git" show --stat "$BRANCH" | grep -q "processes/onboarding/employee-onboarding.bpmn" && ok "D: release ships the new file" || bad "D: new file missing from release commit"
+
+# ═══ Case E: file-selection release (GET /changes + POST /release) ═══
+CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+echo "$CH" | grep -q '"path": *"processes/onboarding/travel-approval.dmn"' && ok "E: changes lists the new decision" || bad "E: changes wrong: $CH"
+echo "$CH" | grep -q '"status": *"added"' && ok "E: untracked files report status added" || bad "E: no added status: $CH"
+
+# a modified + a deleted file join the pool
+printf '<!-- release-e2e tweak -->\n' >> "$WS1/processes/order-to-cash/order-to-cash.bpmn"
+rm "$WS1/processes/order-to-cash/decisions/credit-check.dmn"
+CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+echo "$CH" | grep -q '"path": *"processes/order-to-cash/order-to-cash.bpmn", *"status": *"modified"' && ok "E: tracked edit reports modified" || bad "E: no modified status: $CH"
+echo "$CH" | grep -q '"path": *"processes/order-to-cash/decisions/credit-check.dmn", *"status": *"deleted"' && ok "E: workspace delete reports deleted" || bad "E: no deleted status: $CH"
+
+# gates: empty selection 400, unchanged file 409
+R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"files":[]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q "at least one" && ok "E: empty selection refused (400)" || bad "E: expected 400, got: $R"
+R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"files":["bpmiq.yml"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q "not changed" && ok "E: unchanged file refused (409)" || bad "E: expected not-changed, got: $R"
+# a file that moved UPSTREAM is in the pool but the guard must block it
+R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"files":["processes/two-pool/two-pool.bpmn"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q "upstream geändert" && ok "E: upstream guard blocks per selected file" || bad "E: expected upstream guard, got: $R"
+
+# release a SELECTION: the new dmn + the deletion, NOT the modified bpmn
+R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"files":["processes/onboarding/travel-approval.dmn","processes/order-to-cash/decisions/credit-check.dmn"],"title":"Decision cleanup"}' \
+  "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q '"pr"' && ok "E: file selection released → PR" || bad "E: selection release failed: $R"
+echo "$R" | grep -q '"branch": *"release/decision-cleanup-' && ok "E: branch slug derives from the title" || bad "E: wrong branch: $R"
+EBRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/decision-cleanup | tail -1 | tr -d ' *')
+ESHIP=$(git -C "$E2E/origin/acme/bpm-processes.git" show --name-status --format= "$EBRANCH")
+echo "$ESHIP" | grep -q "A	processes/onboarding/travel-approval.dmn" && ok "E: new decision shipped as add" || bad "E: dmn missing from commit: $ESHIP"
+echo "$ESHIP" | grep -q "D	processes/order-to-cash/decisions/credit-check.dmn" && ok "E: workspace delete shipped as delete" || bad "E: deletion missing: $ESHIP"
+echo "$ESHIP" | grep -q "order-to-cash.bpmn" && bad "E: UNSELECTED file leaked into the release: $ESHIP" || ok "E: unselected modified file stays behind"
+
+# non-ASCII filenames must survive the git listing un-quoted (core.quotepath)
+printf '<definitions/>' > "$WS1/processes/onboarding/prüfung.dmn"
+CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+echo "$CH" | grep -q '"path": *"processes/onboarding/prüfung.dmn"' && ok "E: umlaut filename listed un-quoted" || bad "E: quoted/mangled path: $CH"
+R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"files":["processes/onboarding/prüfung.dmn"],"title":"Umlaut check"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q '"pr"' && ok "E: umlaut filename releases" || bad "E: umlaut release failed: $R"
+
+# the pool is confined to the bpmiq.yml content scope — checkout files outside
+# the processes folder never appear and never release
+printf 'operator scratch\n' > "$WS1/NOTES.md"
+CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+echo "$CH" | grep -q "NOTES.md" && bad "E: out-of-scope file leaked into the pool: $CH" || ok "E: out-of-scope file stays out of the pool"
+R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"files":["NOTES.md"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q "not changed" && ok "E: out-of-scope file refused (409)" || bad "E: expected not-changed for out-of-scope, got: $R"
 
 echo; echo "── $PASS passed, $FAIL failed ──"
 exit "$FAIL"
