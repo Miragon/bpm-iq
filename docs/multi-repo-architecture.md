@@ -4,7 +4,7 @@
 > webhook receiver + static fallback), workspace manager (clone on demand, host repo =
 > this checkout), repo-qualified rooms incl. lineage migration, per-(user,repo)
 > authorization (login authenticates, repos authorize), repo overview + repo-scoped
-> routes/release, platform validator (`--root`). Verified: 13-check browser E2E.
+> routes/release. Verified: 13-check browser E2E.
 >
 > **Update (2026-07-09): provider seam split + GitLab groundwork.**
 >
@@ -157,35 +157,33 @@ generic install URL — the install picker then does what it always did.
 The content repo currently carries platform machinery. For N repos, the machinery
 moves host-side; connected repos ship **content only**:
 
-- **Validation**: `release()` executes `node scripts/validate.ts` _from the content
-  repo_ (`api.ts:110`). With a public app that is **remote code execution by any
-  third-party repo on the host** — the class-changing security finding of this
-  analysis. The validator (plus the canonical `process.schema.json`) must ship with
-  the platform, pinned and versioned, invoked as `validate --root <checkout>` against
-  untrusted repo content. The starter template may keep a thin CI copy for the repo's
-  own status checks.
-- **Portal**: `.vitepress/` (config, theme, viewers, `processes/[id].paths.ts`) is
-  portal _code_ interleaved with content and builds exactly one site from one repo.
-  It moves platform-side, parameterized by checkout, served per repo
-  (`/:owner/:repo/…`). Content updates arrive via webhook-synced checkouts — not by
-  redeploying the service with content baked into the image (today's deploy.yml).
-- **MCP**: `tools.ts` is already root-parameterized (`createMcpServer(root)` — the one
-  multi-repo-ready seam found); `http.ts` always serves `DEFAULT_ROOT`. Route per repo
-  (`POST /mcp/:owner/:repo`) or add a repo argument + `list_repositories` tool.
-  Cross-repo impact analysis becomes a new platform capability.
+- **Validation**: releasing no longer runs any validator (the content contract is now
+  just `bpmiq.yml` + `.bpmn` files — see "The repo contract" below). Historically
+  `release()` executed `node scripts/validate.ts` _from the content repo_, which under a
+  public app was **remote code execution by any third-party repo on the host**. If
+  release-time validation returns, it must ship with the platform (pinned, versioned,
+  `validate --root <checkout>`), never run repo code — the packaged `@bpmiq/validator`
+  already works this way for the `process-documentation/` example.
+- **Portal**: removed with the slim contract — the web client (`apps/web`) renders the
+  models live from the Live Host, so there is no separate VitePress site to serve per repo.
+- **MCP**: `tools.ts` is root-parameterized (`createMcpServer(root)`); the standalone
+  `http.ts` serves `DEFAULT_ROOT`. A per-repo Live Host endpoint over the live content
+  (`POST /mcp/:owner/:repo`, with per-repo auth) is designed in issue #35.
 - **Skill export**: per-repo resolution and output; the platform needs a cross-repo
   view of published skills (overview badge).
 
 ## The repo contract (what a connected repo must fulfill)
 
-The starter template **is** the contract, versioned: `processes/<id>/process.yaml`
-(id = directory name) with models/docs relative to the process dir; `landscape/`
-(team-topology.tt, value-chain.vc.json, wardley-map.owm, glossary.yaml);
-`processes/INDEX.md`; compound model extensions (`.bpmn/.dmn/.owm/.tt/.vc.json`);
-governance fields (version/history/approval/last_reviewed). A conformance check
-("is this a BPM content repo, which contract version") replaces today's hard parse
-errors — non-conformant repos appear on the overview as "not conformant" instead of
-breaking.
+The contract is deliberately minimal (v0; `process-documentation/` is the example
+and is mirrored to the template repo): a **`bpmiq.yml` at the repo root** naming the
+folder the BPMN processes live in (`processes: <folder>`). Every `.bpmn` under that folder is a process
+(id = file name without extension); a repo without the config is simply not a
+content repo — the Live Host neither lists nor serves it, and live rooms exist
+only inside the configured folder. There is no hand-written metadata: the process
+view (name, roles from BPMN lanes, steps, flow, sub-process calls) is **derived**
+from the BPMN (`@bpmiq/notations/derive`), consumed the same way by the validator,
+the MCP server, and the Live Host. Richer metadata can grow back into the contract
+as it evolves — the `bpmiq.yml` is the seam for it.
 
 ## Suggested milestones
 

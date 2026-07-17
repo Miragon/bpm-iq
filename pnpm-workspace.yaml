@@ -2,7 +2,7 @@ packages:
   - "apps/*"
   - "apps/*/ui"
   - "packages/*"
-  - "process-documentation"
+  # process-documentation is example CONTENT (bpmiq.yml + .bpmn), not a package
 # postinstall build scripts pnpm may run (blocked by default for security)
 allowBuilds:
   esbuild: true

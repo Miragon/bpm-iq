@@ -3,7 +3,7 @@
 export default {
   "*.{ts,tsx,mts}": ["eslint --fix", "prettier --write"],
   "*.{js,mjs,cjs,css,json,md,yml,yaml,html}": "prettier --write",
-  // any change under the content repo's data trees → run the platform validator
+  // any change to the example content's BPMN → run the platform validator
   // (CLAUDE.md hard rule 1). Fast, no network; the function form runs it once.
-  "process-documentation/{processes,landscape,schemas}/**/*": () => "pnpm validate",
+  "process-documentation/processes/**/*.bpmn": () => "pnpm validate",
 };

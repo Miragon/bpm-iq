@@ -8,7 +8,7 @@
  * never re-seeded on top — the historic every-character-duplicates bug class.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -52,6 +52,7 @@ function setup(over: Partial<CollabDeps> = {}) {
     access: { canWrite: async () => true },
     registry: { get: (n) => (n.toLowerCase() === REPO.fullName ? REPO : undefined) },
     workspaces: { ensure: async () => ws },
+    contentConfig: () => ({ processes: "processes" }),
     devToken: () => undefined,
     liveDocs: new Set<string>(),
     ...over,
@@ -121,6 +122,41 @@ test("onLoadDocument: throws for a missing file (room validated, nothing registe
   // a failed load must leak neither a live room nor a guard entry
   assert.equal(deps.liveDocs.size, 0);
   assert.equal(deps.docGuard.tracked, 0);
+});
+
+test("onLoadDocument: rooms outside the configured processes folder are refused", async () => {
+  const { ws, hooks } = setup();
+  writeFileSync(join(ws, "notes.md"), "outside the processes folder");
+  await assert.rejects(
+    () => hooks.onLoadDocument({ document: new Y.Doc(), documentName: "acme/models/notes.md" }),
+    /outside the configured processes folder/,
+  );
+});
+
+test("onLoadDocument: a repo without bpmiq.yml has no live rooms at all", async () => {
+  const { ws, hooks } = setup({ contentConfig: () => undefined });
+  writeFileSync(join(ws, "processes", "order", "order.bpmn"), "<bpmn/>");
+  await assert.rejects(
+    () => hooks.onLoadDocument({ document: new Y.Doc(), documentName: ROOM }),
+    /not a BPM content repo/,
+  );
+});
+
+test("onLoadDocument: a *.bpmn symlink escaping the checkout is refused (no arbitrary host read)", async () => {
+  // a symlink inside the processes folder pointing outside the checkout passes
+  // the lexical containment but must be caught by resolveRoom's realpath guard
+  const { ws, hooks } = setup();
+  const outside = mkdtempSync(join(tmpdir(), "bpm-collab-out-"));
+  writeFileSync(join(outside, "secret"), "not-yours");
+  symlinkSync(join(outside, "secret"), join(ws, "processes", "order", "pwn.bpmn"));
+  await assert.rejects(
+    () =>
+      hooks.onLoadDocument({
+        document: new Y.Doc(),
+        documentName: "acme/models/processes/order/pwn.bpmn",
+      }),
+    /symlink/,
+  );
 });
 
 // ── liveDocs + docGuard symmetry ────────────────────────────────────────────

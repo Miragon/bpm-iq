@@ -1,64 +1,52 @@
 ---
 name: new-process
-description: Scaffolds a new business process in this repository — creates the directory from the template, fills in process.yaml metadata, wires it into the landscape models (value chain, Wardley map, team topology), and prepares the initial BPMN skeleton. Use when the process facts (trigger, outcome, owner, rough flow) are already known — from the user or a capture-process interview — and the user wants to add, scaffold, or start modeling a new process.
+description: Scaffolds a new business process in this repository — creates a single BPMN file under the processes folder with a complete diagram (semantics + layout), lanes for the owning roles, and callActivity links to any sub-processes. Use when the process facts (trigger, outcome, roles, rough flow) are already known — from the user or a capture-process interview — and the user wants to add, scaffold, or start modeling a new process.
 ---
 
 # New Process
 
-Scaffold a process directory that follows the repository conventions from day one.
+Scaffold a process as a single `.bpmn` file. The slim content contract is just
+`bpmiq.yml` + `.bpmn` files: a process IS its BPMN, there is no `process.yaml`,
+no landscape, no INDEX. The process id is the file name without the extension.
 
 ## Inputs to gather
 
 From the user's request (ask only for what you cannot infer):
 
-1. **id** — kebab-case, becomes the directory name (e.g. `customer-onboarding`)
-2. **name, purpose, trigger, outcome** — one sentence each
-3. **classification** — `core` (creates customer value → needs value chain steps), `support`
-   (enables others → needs `supports[]`), or `management`
-4. **owner team** — must exist in `landscape/team-topology.tt`; list available teams if unclear
-5. **value chain step(s)** (core) or **supports** targets (support) — must resolve
-6. **wardley components** the process depends on — match against `landscape/wardley-map.owm`
-7. Optional: KPIs (with `source`), systems, participants, related processes
-
-If the user only has tacit knowledge and no clear flow yet, hand over to the
-`capture-process` skill first — it interviews, this skill scaffolds.
+- **id** — kebab-case, unique across the repo (the `.bpmn` file stem), e.g. `order-to-cash`.
+- **name** — human title; model it as the pool name so it is derivable.
+- **trigger** — the start event (object + past participle, e.g. "Order received").
+- **outcome(s)** — the end event(s).
+- **happy path** — the ordered steps between trigger and outcome.
+- **roles** — who does what → BPMN **lanes** (lane name = team/role label).
+- **decisions** — branch points → gateways phrased as questions.
+- **sub-processes** — steps complex enough to be their own `.bpmn`; link via a
+  `callActivity` whose `calledElement` is the sub-process's id (its file stem).
 
 ## Steps
 
-1. **Check for collisions**: the id must not already exist under `processes/`.
-2. **Copy the template**: `templates/process/` → `processes/<id>/`.
-3. **Rename** `process.bpmn` → `<id>.bpmn`; inside it, set the process `id="<id>"` and `name`
-   to the process name — then update the DI to match: `<bpmndi:BPMNPlane bpmnElement=...>` must
-   reference the new process id (also rename the `Definitions_`/`BPMNDiagram_`/`BPMNPlane_` ids
-   for consistency). A DI plane pointing at the old id renders an empty canvas.
-4. **Fill `process.yaml`**: replace every `<placeholder>`. Set `status: draft`,
-   `version: 0.1.0`, `last_reviewed:` today — for a draft this is the scaffold date, not a
-   confirmed review (see `docs/process-metadata.md`); say so in your report. Follow
-   `docs/process-metadata.md` for all fields.
-5. **Validate landscape links** (do not skip):
-   - `owner.team` and every `participants[].team` exist as node ids in `landscape/team-topology.tt`
-   - every `value_chain.steps[]` exists as an element id in `landscape/value-chain.vc.json`
-   - every `wardley.components[]` matches a `component <Name>` line in `landscape/wardley-map.owm` exactly
-   - If a reference is missing, ask whether to (a) add the element to the landscape model or
-     (b) pick an existing one. Extending the landscape is a strategic act — confirm before editing.
-6. **Sketch the first BPMN draft** if the user described the flow: rename/extend the skeleton
-   elements following `docs/modeling-conventions.md` (tasks = verb + object, events = object +
-   past participle, gateways = closed questions with labeled yes/no flows). Keep DI coordinates
-   consistent — copy the layout patterns from `templates/process/process.bpmn` or any existing
-   process (e.g. `processes/order-to-cash/order-to-cash.bpmn` if still present).
-7. **Fill `docs/overview.md`** with what is known; leave explicit `<todo>` markers for gaps.
-8. **Register**: add a row to `processes/INDEX.md`; write the initial `history` entry
-   (version 0.1.0, "Initial scaffold"); propose `landscape/glossary.yaml` entries for domain
-   terms the process introduces (ask before adding).
-9. **Validate & report**: run `node scripts/validate.ts <id>`; report created files,
-   resolved links, validator output, and open todos. Suggest opening the `.bpmn` in the
-   BPMN Modeler for visual refinement, and `process-review` once the model has substance.
+1. Find the processes folder from `bpmiq.yml` (`processes:` key). Confirm the id
+   is free: no existing `<folder>/**/<id>.bpmn`.
+2. Write `<folder>/<id>.bpmn` — one `<bpmn:process>` (or a collaboration with one
+   pool named after the process). Include:
+   - a **laneSet** with one lane per role, every flow node assigned to a lane;
+   - the flow: start event → tasks/gateways → end event(s), all `sequenceFlow`s
+     wired (`sourceRef`/`targetRef`);
+   - a **complete `bpmndi:BPMNPlane`**: a `BPMNShape` for every flow node, lane
+     and pool, and a `BPMNEdge` for every sequence/message flow. Missing DI breaks
+     the visual editor (Hard Rule).
+3. For each sub-process, create a separate `<folder>/subprocesses/<sub-id>.bpmn`
+   the same way, and reference it from the parent via
+   `<callActivity calledElement="<sub-id>">`.
+4. Follow the modeling conventions: tasks **verb + object** ("Check credit limit"),
+   events **object + past participle**, gateways as **questions** ("Approved?").
+5. Validate before finishing:
+   `node packages/validator/src/validate.ts --root .` (from the monorepo root) —
+   fix every error. The validator checks XML well-formedness, flow structure,
+   BPMNDI coverage, and that each `callActivity` resolves to a real process.
 
-## Rules
+## Output
 
-- Never leave a `<placeholder>` in a committed `process.yaml` — either fill it or remove the
-  optional block.
-- One directory = one level-2 process. Sub-steps that deserve their own diagram go to
-  `subprocesses/` and are referenced via a `callActivity` with `calledElement="<subprocess-id>"`.
-- New BPMN files must contain a BPMNDI diagram section, otherwise the visual editor shows an
-  empty canvas.
+Report the new file path(s) and the derived view the platform will show
+(`get_process` via the MCP server, or `deriveProcess`): name, roles, steps,
+gateways, and sub-process calls. Do not invent metadata that is not in the model.

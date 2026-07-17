@@ -31,7 +31,7 @@ if (!existsSync(root)) {
     [
       `bpm-mcp-server: content root not found: ${root}`,
       "",
-      "Point the server at a BPM content repo (a checkout with processes/ + landscape/):",
+      "Point the server at a BPM content repo (a checkout with a root bpmiq.yml):",
       "  bpmiq-mcp --root <path-to-content-repo>",
       "  BPM_CONTENT_ROOT=<path-to-content-repo> bpmiq-mcp",
     ].join("\n"),

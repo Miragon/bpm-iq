@@ -28,12 +28,12 @@ export interface TodoElement {
 }
 
 export interface TodoAnchor {
-  /** process id (processes/<id>/) */
+  /** process id (the .bpmn file stem) */
   process: string;
   /** repo-relative model file the elements live in */
   file: string | null;
   elements: TodoElement[];
-  /** process.yaml version at creation time */
+  /** process version at creation time, if known (optional — no metadata on the slim contract) */
   processVersion: string | null;
 }
 

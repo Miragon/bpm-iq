@@ -48,15 +48,12 @@ export function LiveEditor({
   repo,
   processId,
   docPath,
-  processVersion,
   revealElementId,
   me,
 }: {
   repo: string;
   processId: string;
   docPath: string;
-  /** process.yaml version, when the route resolved it — stamped into todo anchors */
-  processVersion?: string;
   /** deep-link target (?element=<id>) — revealed ONCE after the first diagram import */
   revealElementId?: string;
   me: Me;
@@ -273,7 +270,7 @@ export function LiveEditor({
         )}
         {processId && (
           <Button size="sm" disabled={release.isPending} onClick={() => release.mutate()}>
-            {release.isPending ? "Validating & PR…" : "Release → PR"}
+            {release.isPending ? "Creating PR…" : "Release → PR"}
           </Button>
         )}
       </div>
@@ -311,7 +308,6 @@ export function LiveEditor({
           repo={repo}
           processId={processId}
           docPath={docPath}
-          processVersion={processVersion}
           elements={selectedElements}
           onClose={() => setTodoCreateOpen(false)}
         />

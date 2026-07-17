@@ -7,27 +7,26 @@
  */
 import type { GitUserWire } from "./common.ts";
 
-/** one declared model file of a process — each opens as its own live document */
+/** one model file of a process — each opens as its own live document */
 export interface ModelRef {
   /** notation registry id (@bpmiq/notations); "text" fallback */
   notation: string;
-  /** repo-relative path, e.g. "processes/<id>/<file>" */
+  /** repo-relative path, e.g. "processes/<file>.bpmn" */
   path: string;
 }
 
-/** GET /api/repos/:fullName/processes — one row per processes/<id>/ directory */
+/**
+ * GET /api/repos/:fullName/processes — one row per .bpmn file under the
+ * repo's bpmiq.yml processes folder (a process IS its BPMN file; id = file
+ * name without extension).
+ */
 export interface ProcessInfo {
   repo: string;
   id: string;
   name: string;
-  classification: string | null;
-  /** process.yaml status; "invalid-yaml" for an unparseable intermediate state */
-  status: string | null;
-  version: string | null;
-  owner: string | null;
-  /** primary BPMN model (repo-relative path) */
-  bpmn: string | null;
-  /** every declared model file with its notation */
+  /** the process's BPMN file (repo-relative path) */
+  bpmn: string;
+  /** the process's model files with their notation */
   models: ModelRef[];
   dirty: boolean;
   liveSessions: number;

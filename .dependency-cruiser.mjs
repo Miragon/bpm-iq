@@ -36,16 +36,15 @@ export default {
     {
       name: "child-process-only-in-designated-adapters",
       severity: "error",
-      comment: "Shelling out (git/validator) is an adapter concern.",
+      comment: "Shelling out (git) is an adapter concern.",
       from: {
         path: "^(apps|packages)/",
         pathNot: [
           "(^|/)test/",
           "\\.test\\.ts$",
-          // live-host: every git call goes through adapters/git/run.ts (workspaces +
-          // release use runGit); release.ts keeps ONE subprocess of its own — the
-          // platform validator run (`node validate.ts`).
-          "^apps/live-host/src/(release\\.ts|adapters/git/run\\.ts)$",
+          // live-host: every subprocess (git) goes through adapters/git/run.ts —
+          // workspaces + release use runGit, nothing else shells out.
+          "^apps/live-host/src/adapters/git/run\\.ts$",
         ],
       },
       to: { dependencyTypes: ["core"], path: "^(node:)?child_process$" },

@@ -20,6 +20,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { runGit, scrub } from "../adapters/git/run.ts";
+import { CONTENT_CONFIG_FILE } from "./content.ts";
 import type { ConnectedRepo, RepoRegistry } from "./registry.ts";
 
 /** git env carrying the token as an auth header — not in argv, not in config files */
@@ -68,10 +69,10 @@ export class WorkspaceManager {
   }
 
   isHostRepo(fullName: string): boolean {
-    // Serve the local host content (process-documentation) in place — no clone —
-    // when it actually holds process content. In a deployed image without that
-    // folder, the host repo is cloned like any other via an installation token.
-    return fullName.toLowerCase() === this.hostRepo && existsSync(join(this.hostRoot, "processes"));
+    // Serve the local host checkout in place — no clone — when it actually is a
+    // BPM content repo (bpmiq.yml at its root). In a deployed image without the
+    // config, the host repo is cloned like any other via an installation token.
+    return fullName.toLowerCase() === this.hostRepo && existsSync(join(this.hostRoot, CONTENT_CONFIG_FILE));
   }
 
   /** git checkout location for a connected repo (clone target; no provisioning) */
@@ -81,23 +82,13 @@ export class WorkspaceManager {
   }
 
   /**
-   * Content directory for a connected repo (no provisioning). Everything
-   * downstream — rooms, process listing, releases — is content-relative.
+   * Checkout root of a connected repo (no provisioning). Everything downstream
+   * — rooms, process listing, releases — is repo-root-relative; where the BPM
+   * content lives inside the repo is the content config's business (bpmiq.yml,
+   * repos/content.ts), not a filesystem heuristic.
    */
   dir(repo: ConnectedRepo): string {
-    return this.contentRoot(this.checkoutDir(repo));
-  }
-
-  /**
-   * Where the BPM content lives inside a checkout. Normally the repo root; a
-   * monorepo (like bpmiq itself) keeps its content under process-documentation/.
-   * Release paths re-derive the git prefix via `git rev-parse --show-prefix`.
-   */
-  private contentRoot(checkout: string): string {
-    if (existsSync(join(checkout, "processes"))) return checkout;
-    const nested = join(checkout, "process-documentation");
-    if (existsSync(join(nested, "processes"))) return nested;
-    return checkout;
+    return this.checkoutDir(repo);
   }
 
   /** clean remote URL (no credentials — the token travels via gitEnv) */
@@ -139,7 +130,7 @@ export class WorkspaceManager {
           console.log(`fetch ${repo.fullName} failed: ${scrub((e as Error).message).split("\n")[0]}`);
         }
       }
-      return this.contentRoot(dir);
+      return dir;
     }
 
     await mkdir(dirname(dir), { recursive: true });
@@ -150,7 +141,7 @@ export class WorkspaceManager {
       throw new Error(`clone ${repo.fullName} failed: ${scrub((e as Error).message)}`);
     }
     this.ensured.set(repo.fullName, Date.now());
-    return this.contentRoot(dir);
+    return dir;
   }
 
   /**
@@ -181,14 +172,11 @@ export class WorkspaceManager {
       "--name-only",
       `${oldHead.trim()}..${newHead.trim()}`,
     ]);
-    // lineage keys are content-relative — strip the content prefix (monorepo case)
-    const content = this.contentRoot(dir);
-    const prefix = content === dir ? "" : `${content.slice(dir.length + 1)}/`;
+    // lineage keys are repo-root-relative — exactly what git diff emits
     const changedPaths = changed
       .split("\n")
       .map((l) => l.trim())
-      .filter((l) => l && l.startsWith(prefix))
-      .map((l) => l.slice(prefix.length));
+      .filter(Boolean);
     console.log(
       `reconciled ${repo.fullName}: ${oldHead.trim().slice(0, 7)} → ${newHead.trim().slice(0, 7)} (${changedPaths.length} content file(s))`,
     );
@@ -197,10 +185,10 @@ export class WorkspaceManager {
 
   /**
    * Files under `pathspec` in which the working tree differs from
-   * origin/<defaultBranch> — the overview's "dirty" signal. Runs in the CONTENT
-   * directory (paths come back content-relative, matching room names). Errors
-   * (no git, no origin — e.g. the in-place host content) yield [] silently:
-   * "not dirty" is the honest answer when there is nothing to diff against.
+   * origin/<defaultBranch> — the overview's "dirty" signal. Runs in the
+   * checkout root (paths come back repo-root-relative, matching room names).
+   * Errors (no git, no origin — e.g. the in-place host checkout) yield []
+   * silently: "not dirty" is the honest answer with nothing to diff against.
    */
   async changedPaths(repo: ConnectedRepo, pathspec: string): Promise<string[]> {
     try {

@@ -1,7 +1,6 @@
 /**
- * The git subprocess seam — the ONE place (besides release.ts's validator run)
- * that is allowed to shell out (enforced by .dependency-cruiser.mjs,
- * child-process-only-in-designated-adapters).
+ * The git subprocess seam — the ONE place that is allowed to shell out
+ * (enforced by .dependency-cruiser.mjs, child-process-only-in-designated-adapters).
  *
  * Credentials travel in `opts.env` (GIT_CONFIG_* → http.extraHeader), never in
  * argv — so a token never appears in a process listing or an error's command
