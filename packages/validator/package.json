@@ -1,6 +1,6 @@
 {
   "name": "@bpmiq/validator",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "module",
   "description": "Platform-owned validator for BPM content repos — bpmiq.yml discovery + BPMN structure and BPMNDI coverage. Runs against any checkout via --root; never executes content-repo code.",
   "license": "MIT",

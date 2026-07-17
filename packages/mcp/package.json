@@ -1,6 +1,6 @@
 {
   "name": "@bpmiq/mcp",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Read-only MCP server exposing a BPM content repo's processes — discovered from bpmiq.yml, derived from the BPMN — to any MCP client.",
   "type": "module",
   "license": "MIT",
