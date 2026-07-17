@@ -71,9 +71,19 @@ export interface CreateDecisionBody {
   folder?: string;
 }
 
-/** GET /api/repos/:fullName/folders — every folder under the processes root
- * (recursive, sorted, includes empty ones), processes-root-relative */
-export type FolderListWire = string[];
+/**
+ * GET /api/repos/:fullName/folders — the repo's folder tree plus whether the
+ * repo is a bpm content repo at all. `isContentRepo` is false when the repo has
+ * NO root bpmiq.yml; the repo view hides its create/release actions then (a
+ * create would 422, a release has nothing to ship — "not a matching repo").
+ */
+export interface FolderListWire {
+  /** the repo declares itself a bpm content repo (a root bpmiq.yml is present) */
+  isContentRepo: boolean;
+  /** every folder under the processes root (recursive, sorted, includes empty
+   * ones), processes-root-relative — [] when there is no config or no folder */
+  folders: string[];
+}
 
 /** POST /api/repos/:fullName/folders — response is the created FolderWire */
 export interface CreateFolderBody {

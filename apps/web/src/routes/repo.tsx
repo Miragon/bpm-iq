@@ -66,6 +66,11 @@ export function ProcessList() {
   const decisionsQuery = useDecisions(repo);
   const decisions = useMemo(() => decisionsQuery.data ?? [], [decisionsQuery.data]);
   const folders = useFolders(repo);
+  // a content repo declares itself with a root bpmiq.yml; without one, creating
+  // folders/processes 422s and a release has nothing to ship — so the view hides
+  // those actions. Assume yes until the (cloning) folders query proves otherwise,
+  // so the actions don't flicker for the overwhelmingly common content repo.
+  const isContentRepo = folders.data?.isContentRepo ?? true;
   const repos = useRepos();
   const branch = repos.data?.find((r) => r.fullName === repo)?.defaultBranch ?? "main";
   const sync = useSyncRepo(repo);
@@ -84,7 +89,7 @@ export function ProcessList() {
   // process/decision path — so rows render even while the folders query is
   // still loading
   const folderSet = useMemo(() => {
-    const set = new Set<string>(folders.data ?? []);
+    const set = new Set<string>(folders.data?.folders ?? []);
     for (const m of [...list, ...decisions]) {
       for (let f = m.folder; f !== ""; f = parentOf(f)) set.add(f);
     }
@@ -245,30 +250,37 @@ export function ProcessList() {
               {sync.isPending ? "Loading…" : `Load latest from ${branch}`}
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => setReleaseOpen(true)}>
-            <ArrowUpToLine /> Release
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm">
-                <Plus /> New
+          {/* create/release only make sense in a content repo (a root bpmiq.yml).
+              Without one, a create 422s and a release has nothing to ship — so
+              the actions are hidden and the body explains it's not a BPM repo. */}
+          {isContentRepo && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setReleaseOpen(true)}>
+                <ArrowUpToLine /> Release
               </Button>
-            </DropdownMenuTrigger>
-            {/* the menu items open DIALOGS — mount them a tick AFTER radix
-                finished its close/focus handling (and suppress the trigger
-                refocus), or the name field's autoFocus is stolen */}
-            <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
-              <DropdownMenuItem onSelect={() => setTimeout(() => setFolderOpen(true), 0)}>
-                <FolderPlus /> Folder
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setTimeout(() => setProcessOpen(true), 0)}>
-                <Workflow /> BPMN process
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setTimeout(() => setDecisionOpen(true), 0)}>
-                <Table2 /> DMN decision
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm">
+                    <Plus /> New
+                  </Button>
+                </DropdownMenuTrigger>
+                {/* the menu items open DIALOGS — mount them a tick AFTER radix
+                    finished its close/focus handling (and suppress the trigger
+                    refocus), or the name field's autoFocus is stolen */}
+                <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+                  <DropdownMenuItem onSelect={() => setTimeout(() => setFolderOpen(true), 0)}>
+                    <FolderPlus /> Folder
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setTimeout(() => setProcessOpen(true), 0)}>
+                    <Workflow /> BPMN process
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setTimeout(() => setDecisionOpen(true), 0)}>
+                    <Table2 /> DMN decision
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
         </div>
       </div>
 
@@ -303,6 +315,12 @@ export function ProcessList() {
 
       {processes.isLoading ? (
         <p className="text-muted-foreground text-sm">Loading… (the first load clones the repository)</p>
+      ) : !isContentRepo ? (
+        <p className="text-muted-foreground max-w-prose text-sm">
+          Not a BPM repository — this repo has no <code className="bg-muted rounded px-1">bpmiq.yml</code> at its root
+          naming the folder its models live in (e.g. <code className="bg-muted rounded px-1">processes: processes</code>
+          ). Add one to create folders, processes and releases here.
+        </p>
       ) : empty && dir !== "" ? (
         <p className="text-muted-foreground max-w-prose text-sm">
           This folder is empty — create a process or folder here, or head back to the{" "}
@@ -313,9 +331,7 @@ export function ProcessList() {
         </p>
       ) : empty ? (
         <p className="text-muted-foreground max-w-prose text-sm">
-          No processes found — a BPM repository needs a <code className="bg-muted rounded px-1">bpmiq.yml</code> at its
-          root naming the folder its BPMN files live in (
-          <code className="bg-muted rounded px-1">processes: processes</code>).
+          No models yet — create a process, decision or folder with the <span className="font-medium">New</span> button.
         </p>
       ) : (
         <div className="rounded-xl border">
