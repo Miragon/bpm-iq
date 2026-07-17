@@ -12,8 +12,9 @@ import { test } from "node:test";
 
 import { AppError } from "@bpmiq/http-kit";
 
-import { createFolder, createProcess, listFolders } from "../src/application/scaffold.ts";
+import { createDecision, createFolder, createProcess, listFolders } from "../src/application/scaffold.ts";
 import { escapeXml, newBpmnXml, xmlProcessId } from "../src/domain/bpmn-template.ts";
+import { newDmnXml } from "../src/domain/dmn-template.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 const REPO: ConnectedRepo = {
@@ -173,7 +174,70 @@ test("createProcess: processes root at '.' works (config 'processes: .')", async
   assert.ok(existsSync(join(ws, "intake.bpmn")));
 });
 
+// ── createDecision ──────────────────────────────────────────────────────────
+
+test("createDecision: writes the template and returns the wire row (dirty)", async () => {
+  const ws = workspace();
+  const created = await createDecision(REPO, ws, { name: "Credit Check", folder: "orders" });
+  assert.deepEqual(created, {
+    repo: "acme/models",
+    id: "credit-check",
+    name: "credit-check",
+    path: "processes/orders/credit-check.dmn",
+    folder: "orders",
+    dirty: true,
+    liveSessions: 0,
+  });
+  const xml = readFileSync(join(ws, "processes", "orders", "credit-check.dmn"), "utf8");
+  assert.match(xml, /<decision id="credit-check" name="Credit Check">/);
+  assert.match(xml, /<decisionTable id="DecisionTable_credit-check"/, "starts as a decision table");
+  assert.match(xml, /<dmndi:DMNShape [^>]*dmnElementRef="credit-check"/, "DMNDI present (DRD renders)");
+});
+
+test("createDecision: duplicate .dmn stem in ANY folder is a 409; a same-named PROCESS is not", async () => {
+  const ws = workspace();
+  await createDecision(REPO, ws, { name: "Credit Check", folder: "orders" });
+  await assert.rejects(
+    () => createDecision(REPO, ws, { name: "Credit Check" }),
+    rejectsWith("scaffold/decision-exists", 409),
+  );
+  // process ids and decision ids are separate namespaces (different extensions)
+  const sameStem = await createDecision(REPO, ws, { name: "Order" });
+  assert.equal(sameStem.path, "processes/order.dmn");
+});
+
+test("createDecision: invalid name/folder and missing config gate like createProcess", async () => {
+  const ws = workspace();
+  await assert.rejects(() => createDecision(REPO, ws, { name: "!!!" }), rejectsWith("scaffold/invalid-name", 400));
+  await assert.rejects(
+    () => createDecision(REPO, ws, { name: "Ok", folder: "../out" }),
+    rejectsWith("scaffold/invalid-folder", 400),
+  );
+  const empty = mkdtempSync(join(tmpdir(), "bpm-scaffold-nocfg3-"));
+  await assert.rejects(
+    () => createDecision(REPO, empty, { name: "Ok" }),
+    rejectsWith("scaffold/not-a-content-repo", 422),
+  );
+});
+
+test("createDecision: a symlinked folder escaping the checkout is refused", async () => {
+  const ws = workspace();
+  const outside = mkdtempSync(join(tmpdir(), "bpm-scaffold-outside2-"));
+  symlinkSync(outside, join(ws, "processes", "evil"));
+  await assert.rejects(
+    () => createDecision(REPO, ws, { name: "Escape", folder: "evil" }),
+    rejectsWith("scaffold/outside-processes-root", 400),
+  );
+  assert.ok(!existsSync(join(outside, "escape.dmn")), "nothing was written outside the workspace");
+});
+
 // ── blank-diagram template ──────────────────────────────────────────────────
+
+test("dmn template: XML ids stay NCNames for digit-leading stems; title is escaped", () => {
+  const xml = newDmnXml("2nd-check", `Tom & Jerry's "Check"`);
+  assert.match(xml, /<decision id="p-2nd-check" name="Tom &amp; Jerry's &quot;Check&quot;">/);
+  assert.match(xml, /dmnElementRef="p-2nd-check"/);
+});
 
 test("template: XML ids stay NCNames for digit-leading stems; title is escaped", () => {
   assert.equal(xmlProcessId("order-to-cash"), "order-to-cash");

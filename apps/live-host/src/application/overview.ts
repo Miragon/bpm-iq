@@ -4,6 +4,7 @@
  *   listProcesses — one row per .bpmn file under the repo's bpmiq.yml
  *                   processes folder (repos/content.ts), with dirty-vs-origin
  *                   flag and live session count
+ *   listDecisions — the .dmn sibling of listProcesses
  *   listRepos     — registry ∩ the session user's per-repo permission, with
  *                   process/dirty counts for locally-present workspaces
  *
@@ -12,11 +13,11 @@
  * never here). The returned object shapes ARE the wire format
  * (@bpmiq/contracts/live-host — shape drift is a tsc error).
  */
-import type { ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { DecisionInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { byExtension } from "@bpmiq/notations";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
-import { discoverProcesses, loadContentConfig } from "../repos/content.ts";
+import { discoverDecisions, discoverProcesses, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 
 export interface OverviewDeps {
@@ -61,6 +62,33 @@ export async function listProcesses(
     });
   }
   return processes;
+}
+
+/** The .dmn sibling of listProcesses — one row per decision file. */
+export async function listDecisions(
+  opts: OverviewDeps,
+  repo: ConnectedRepo,
+  workspace: string,
+): Promise<DecisionInfo[]> {
+  const cfg = loadContentConfig(workspace);
+  if (!cfg) return [];
+  const live = opts.liveDocs();
+  const rootPrefix = cfg.processes === "." ? "" : `${cfg.processes}/`;
+  const decisions: DecisionInfo[] = [];
+  for (const decision of await discoverDecisions(workspace, cfg)) {
+    const dirty = (await opts.workspaces.changedPaths(repo, decision.path)).length > 0;
+    const rel = decision.path.startsWith(rootPrefix) ? decision.path.slice(rootPrefix.length) : decision.path;
+    decisions.push({
+      repo: repo.fullName,
+      id: decision.id,
+      name: decision.id,
+      path: decision.path,
+      folder: rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "",
+      dirty,
+      liveSessions: live.filter((d) => d === `${repo.fullName}/${decision.path}`).length,
+    });
+  }
+  return decisions;
 }
 
 /** Repo overview: registry ∩ the session user's per-repo permission. */

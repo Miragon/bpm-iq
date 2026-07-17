@@ -3,12 +3,16 @@ import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/re
 
 import {
   closeTodo,
+  createDecision,
+  type CreateDecisionBody,
   createFolder,
   createProcess,
   type CreateProcessBody,
   createTodo,
   type CreateTodoBody,
+  type DecisionInfo,
   fetchConfig,
+  fetchDecisions,
   fetchFileHistory,
   fetchFolders,
   fetchMe,
@@ -46,6 +50,27 @@ export function useRepos() {
 
 export function useProcesses(repo: string) {
   return useQuery({ queryKey: ["processes", repo], queryFn: () => fetchProcesses(repo), enabled: repo.length > 0 });
+}
+
+/** decisions (.dmn files) under the repo's processes root */
+export function useDecisions(repo: string) {
+  return useQuery({ queryKey: ["decisions", repo], queryFn: () => fetchDecisions(repo), enabled: repo.length > 0 });
+}
+
+/** create a decision from the blank template — cache seeding mirrors
+ *  useCreateProcess (the repo view renders from the cached decision list) */
+export function useCreateDecision(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateDecisionBody) => createDecision(repo, body),
+    onSuccess: (created) => {
+      qc.setQueryData<DecisionInfo[]>(["decisions", repo], (old) =>
+        old ? (old.some((d) => d.id === created.id) ? old : [...old, created]) : [created],
+      );
+      void qc.invalidateQueries({ queryKey: ["decisions", repo] });
+      void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the folder may be brand-new too
+    },
+  });
 }
 
 /** folders under the repo's processes root — the repo view shows them as rows
@@ -100,6 +125,7 @@ export function useSyncRepo(repo: string) {
     mutationFn: () => syncRepo(repo),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["processes", repo] });
+      void qc.invalidateQueries({ queryKey: ["decisions", repo] }); // never-released .dmn files are gone too
       void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the reset deletes never-released folders
       void qc.invalidateQueries({ queryKey: ["repos"] });
     },

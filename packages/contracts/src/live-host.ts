@@ -44,6 +44,33 @@ export interface CreateProcessBody {
   folder?: string;
 }
 
+/**
+ * GET /api/repos/:fullName/decisions — one row per .dmn file under the
+ * repo's bpmiq.yml processes folder (a decision IS its DMN file; id = file
+ * name without extension, unique repo-wide like process ids).
+ */
+export interface DecisionInfo {
+  repo: string;
+  id: string;
+  name: string;
+  /** the decision's DMN file (repo-relative path) */
+  path: string;
+  /** folder of the DMN file relative to the processes root ("" = root) */
+  folder: string;
+  dirty: boolean;
+  liveSessions: number;
+}
+
+/** POST /api/repos/:fullName/decisions — response is the created DecisionInfo.
+ * The decision id (= file stem) is derived from `name`; it must be unique
+ * among .dmn files repo-wide, so a duplicate is a 409 regardless of `folder`. */
+export interface CreateDecisionBody {
+  /** human title — becomes the decision name; the file stem is its kebab-case slug */
+  name: string;
+  /** target folder relative to the processes root ("" / absent = root) */
+  folder?: string;
+}
+
 /** GET /api/repos/:fullName/folders — every folder under the processes root
  * (recursive, sorted, includes empty ones), processes-root-relative */
 export type FolderListWire = string[];

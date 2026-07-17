@@ -1,5 +1,11 @@
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@bpmiq/ui-kit/components/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@bpmiq/ui-kit/components/table";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -20,15 +26,18 @@ import {
   Folder,
   FolderPlus,
   Plus,
+  Table2,
+  Workflow,
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { CreateDecisionDialog } from "@/components/create-decision-dialog";
 import { CreateFolderDialog } from "@/components/create-folder-dialog";
 import { CreateProcessDialog } from "@/components/create-process-dialog";
 import { SyncRepoDialog } from "@/components/sync-repo-dialog";
 import { type ProcessInfo } from "@/lib/api";
-import { useFolders, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
+import { useDecisions, useFolders, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
 
 const route = getRouteApi("/r/$owner/$repo");
 
@@ -37,7 +46,8 @@ interface FolderRow {
   name: string;
   /** processes-root-relative path */
   path: string;
-  processCount: number;
+  /** processes + decisions inside (recursive) */
+  modelCount: number;
   dirty: boolean;
 }
 
@@ -51,6 +61,8 @@ export function ProcessList() {
   const navigate = useNavigate();
   const processes = useProcesses(repo);
   const list = useMemo(() => processes.data ?? [], [processes.data]);
+  const decisionsQuery = useDecisions(repo);
+  const decisions = useMemo(() => decisionsQuery.data ?? [], [decisionsQuery.data]);
   const folders = useFolders(repo);
   const repos = useRepos();
   const branch = repos.data?.find((r) => r.fullName === repo)?.defaultBranch ?? "main";
@@ -58,6 +70,7 @@ export function ProcessList() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [folderOpen, setFolderOpen] = useState(false);
   const [processOpen, setProcessOpen] = useState(false);
+  const [decisionOpen, setDecisionOpen] = useState(false);
 
   // processes with unreleased live edits the reset would discard, and repos
   // being actively edited (Variant A: a reset can't safely race an open session)
@@ -65,14 +78,15 @@ export function ProcessList() {
   const activeSessions = list.reduce((n, p) => n + p.liveSessions, 0);
 
   // the folder tree: disk folders (includes empty ones) ∪ ancestors of every
-  // process path — so rows render even while the folders query is still loading
+  // process/decision path — so rows render even while the folders query is
+  // still loading
   const folderSet = useMemo(() => {
     const set = new Set<string>(folders.data ?? []);
-    for (const p of list) {
-      for (let f = p.folder; f !== ""; f = parentOf(f)) set.add(f);
+    for (const m of [...list, ...decisions]) {
+      for (let f = m.folder; f !== ""; f = parentOf(f)) set.add(f);
     }
     return set;
-  }, [folders.data, list]);
+  }, [folders.data, list, decisions]);
 
   const childFolders = useMemo<FolderRow[]>(
     () =>
@@ -80,18 +94,22 @@ export function ProcessList() {
         .filter((f) => parentOf(f) === dir)
         .sort()
         .map((path) => {
-          const inside = list.filter((p) => p.folder === path || p.folder.startsWith(`${path}/`));
+          const inside = [...list, ...decisions].filter((m) => m.folder === path || m.folder.startsWith(`${path}/`));
           return {
             name: path.split("/").pop() ?? path,
             path,
-            processCount: inside.length,
-            dirty: inside.some((p) => p.dirty),
+            modelCount: inside.length,
+            dirty: inside.some((m) => m.dirty),
           };
         }),
-    [folderSet, list, dir],
+    [folderSet, list, decisions, dir],
   );
 
   const visible = useMemo(() => list.filter((p) => p.folder === dir), [list, dir]);
+  const visibleDecisions = useMemo(
+    () => decisions.filter((d) => d.folder === dir).sort((a, b) => a.name.localeCompare(b.name)),
+    [decisions, dir],
+  );
   const segments = dir === "" ? [] : dir.split("/");
 
   const runSync = () =>
@@ -191,7 +209,7 @@ export function ProcessList() {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const empty = childFolders.length === 0 && visible.length === 0;
+  const empty = childFolders.length === 0 && visible.length === 0 && visibleDecisions.length === 0;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
@@ -224,12 +242,27 @@ export function ProcessList() {
               {sync.isPending ? "Loading…" : `Load latest from ${branch}`}
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => setFolderOpen(true)}>
-            <FolderPlus /> New folder
-          </Button>
-          <Button size="sm" onClick={() => setProcessOpen(true)}>
-            <Plus /> New process
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm">
+                <Plus /> New
+              </Button>
+            </DropdownMenuTrigger>
+            {/* the menu items open DIALOGS — mount them a tick AFTER radix
+                finished its close/focus handling (and suppress the trigger
+                refocus), or the name field's autoFocus is stolen */}
+            <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+              <DropdownMenuItem onSelect={() => setTimeout(() => setFolderOpen(true), 0)}>
+                <FolderPlus /> Folder
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setTimeout(() => setProcessOpen(true), 0)}>
+                <Workflow /> BPMN process
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setTimeout(() => setDecisionOpen(true), 0)}>
+                <Table2 /> DMN decision
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -318,7 +351,7 @@ export function ProcessList() {
                   </TableCell>
                   <TableCell>
                     <span className="text-muted-foreground">
-                      {f.processCount === 0 ? "empty" : `${f.processCount} process${f.processCount === 1 ? "" : "es"}`}
+                      {f.modelCount === 0 ? "empty" : `${f.modelCount} model${f.modelCount === 1 ? "" : "s"}`}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -344,6 +377,41 @@ export function ProcessList() {
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
+                </TableRow>
+              ))}
+              {visibleDecisions.map((d) => (
+                <TableRow
+                  key={`decision:${d.path}`}
+                  className="cursor-pointer"
+                  onClick={() => navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: d.path } })}
+                >
+                  <TableCell>
+                    <Link
+                      to="/r/$owner/$repo/f/$"
+                      params={{ owner, repo: name, _splat: d.path }}
+                      className="flex items-center gap-2 font-medium hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Table2 className="text-muted-foreground size-4" />
+                      {d.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-muted-foreground font-mono text-xs">{d.path}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">DMN</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {!d.dirty && d.liveSessions === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {d.dirty && <Badge variant="warning">live changes</Badge>}
+                        {d.liveSessions > 0 && <Badge>{d.liveSessions} active</Badge>}
+                      </div>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -387,6 +455,18 @@ export function ProcessList() {
               to: "/r/$owner/$repo/p/$processId",
               params: { owner, repo: name, processId: created.id },
             });
+          }}
+        />
+      )}
+      {decisionOpen && (
+        <CreateDecisionDialog
+          repo={repo}
+          folder={dir}
+          onClose={() => setDecisionOpen(false)}
+          onCreated={(created) => {
+            setDecisionOpen(false);
+            toast.success(`Decision '${created.id}' created`);
+            void navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: created.path } });
           }}
         />
       )}

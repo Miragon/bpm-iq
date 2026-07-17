@@ -1,11 +1,12 @@
 /**
  * Create-side use-cases of the repository view, extracted like overview.ts:
  *
- *   listFolders   — every folder under the repo's bpmiq.yml processes root
- *                   (recursive, includes EMPTY ones — a just-created folder
- *                   must survive a reload before its first process exists)
- *   createFolder  — mkdir under the processes root
- *   createProcess — write a fresh, validator-clean BPMN file (domain/bpmn-template)
+ *   listFolders    — every folder under the repo's bpmiq.yml processes root
+ *                    (recursive, includes EMPTY ones — a just-created folder
+ *                    must survive a reload before its first process exists)
+ *   createFolder   — mkdir under the processes root
+ *   createProcess  — write a fresh, validator-clean BPMN file (domain/bpmn-template)
+ *   createDecision — write a fresh DMN file (domain/dmn-template)
  *
  * Both creates write into the repo's WORKSPACE tree only — exactly like the
  * live write-through (collab.ts). Nothing is committed here: the file shows up
@@ -19,12 +20,19 @@ import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
-import type { ProcessInfo } from "@bpmiq/contracts/live-host";
+import type { DecisionInfo, ProcessInfo } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 import { byExtension, processIdFromName } from "@bpmiq/notations";
 
 import { newBpmnXml } from "../domain/bpmn-template.ts";
-import { CONTENT_CONFIG_FILE, type ContentConfig, discoverProcesses, loadContentConfig } from "../repos/content.ts";
+import { newDmnXml } from "../domain/dmn-template.ts";
+import {
+  CONTENT_CONFIG_FILE,
+  type ContentConfig,
+  discoverDecisions,
+  discoverProcesses,
+  loadContentConfig,
+} from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 
 /** one path segment of a folder: no leading dot (discovery hides dotfiles),
@@ -212,6 +220,62 @@ export async function createProcess(
     name: id,
     bpmn: repoPath,
     models: [{ notation: byExtension(repoPath)?.id ?? "text", path: repoPath }],
+    folder: segments.join("/"),
+    dirty: true, // brand-new — by definition not on origin yet
+    liveSessions: 0,
+  };
+}
+
+/**
+ * Create a new decision: <processes root>/<folder>/<slug(name)>.dmn seeded
+ * with the blank-decision template — the dmn sibling of createProcess with
+ * the same gates: repo-wide unique file stem (a duplicate would shadow in
+ * discovery), traversal/symlink guards, EEXIST → 409.
+ */
+export async function createDecision(
+  repo: ConnectedRepo,
+  workspace: string,
+  body: { name: string; folder?: string },
+): Promise<DecisionInfo> {
+  const cfg = requireConfig(repo, workspace);
+  const segments = folderSegments(body.folder ?? "");
+  const id = processIdFromName(body.name);
+  if (id === "") {
+    throw new AppError(
+      "scaffold/invalid-name",
+      `'${body.name}' does not yield a usable file name — use at least one letter or digit`,
+      { status: 400, expose: true },
+    );
+  }
+  const duplicate = (await discoverDecisions(workspace, cfg)).find((d) => d.id === id);
+  if (duplicate) {
+    throw new AppError(
+      "scaffold/decision-exists",
+      `decision '${id}' already exists (${duplicate.path}) — ids are unique across all folders`,
+      { status: 409, expose: true },
+    );
+  }
+  const root = processesRoot(workspace, cfg);
+  const file = resolve(root, ...segments, `${id}.dmn`);
+  assertInsideRoot(file, root, `decision '${id}'`);
+  assertRealInsideWorkspace(file, workspace, `decision '${id}'`);
+  if (existsSync(file)) {
+    // not discovered (e.g. under a dot-folder clash) but present on disk
+    throw new AppError("scaffold/decision-exists", `'${relative(workspace, file)}' already exists`, {
+      status: 409,
+      expose: true,
+    });
+  }
+  await writeGuarded(`decision '${id}'`, async () => {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, newDmnXml(id, body.name.trim()), { flag: "wx" });
+  });
+
+  return {
+    repo: repo.fullName,
+    id,
+    name: id,
+    path: relative(workspace, file).split(sep).join("/"),
     folder: segments.join("/"),
     dirty: true, // brand-new — by definition not on origin yet
     liveSessions: 0,

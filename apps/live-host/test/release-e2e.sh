@@ -189,6 +189,19 @@ PDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content
   -d '{"name":"Employee Onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
 echo "$PDUP" | grep -q "already exists" && ok "D: duplicate id refused repo-wide (409)" || bad "D: expected 409, got: $PDUP"
 
+# decisions: the .dmn sibling of the process create endpoint
+DEC=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"name":"Travel Approval","folder":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
+echo "$DEC" | grep -q '"id": *"travel-approval"' && ok "D: decision created (title slugged to the id)" || bad "D: decision create failed: $DEC"
+[ -f "$WS1/processes/onboarding/travel-approval.dmn" ] && ok "D: dmn template written into the workspace" || bad "D: dmn file not in workspace"
+grep -q '<decisionTable' "$WS1/processes/onboarding/travel-approval.dmn" && ok "D: dmn template holds a decision table" || bad "D: dmn template malformed"
+DECS=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
+echo "$DECS" | grep -q '"path": *"processes/onboarding/travel-approval.dmn"' && ok "D: new decision in the listing" || bad "D: decision not listed: $DECS"
+echo "$DECS" | grep -q '"dirty": *true' && ok "D: brand-new (untracked) decision is dirty" || bad "D: expected dirty:true for the new decision: $DECS"
+DDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"name":"Travel Approval"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
+echo "$DDUP" | grep -q "already exists" && ok "D: duplicate decision id refused repo-wide (409)" || bad "D: expected 409, got: $DDUP"
+
 # the never-committed file must release cleanly (worktree cp + add of a new path)
 R=$(release "$PORT_A" acme/bpm-processes employee-onboarding)
 echo "$R" | grep -q '"pr"' && ok "D: brand-new process released → PR" || bad "D: release of new file failed: $R"

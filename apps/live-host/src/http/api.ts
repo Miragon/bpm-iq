@@ -13,6 +13,8 @@
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
  *   GET  /api/repos/:owner/:repo/processes       → process list      (repo write required)
  *   POST /api/repos/:owner/:repo/processes       → create a process from the blank template (repo write required)
+ *   GET  /api/repos/:owner/:repo/decisions       → decision (.dmn) list (repo write required)
+ *   POST /api/repos/:owner/:repo/decisions       → create a decision from the blank template (repo write required)
  *   GET  /api/repos/:owner/:repo/folders         → folders under the processes root (repo write required)
  *   POST /api/repos/:owner/:repo/folders         → create a folder   (repo write required)
  *   POST /api/repos/:owner/:repo/sync            → hard-reset workspace to origin/<default> (repo write required)
@@ -35,9 +37,11 @@ import { extname, join, normalize } from "node:path";
 
 import type {
   AppConfig,
+  CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
   CreateTodoBody,
+  DecisionInfo,
   FileAtCommitWire,
   FileCommitWire,
   FolderListWire,
@@ -62,8 +66,8 @@ import {
   type SessionStore,
 } from "../adapters/sqlite/sessions.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
-import { listProcesses, listRepos } from "../application/overview.ts";
-import { createFolder, createProcess, listFolders } from "../application/scaffold.ts";
+import { listDecisions, listProcesses, listRepos } from "../application/overview.ts";
+import { createDecision, createFolder, createProcess, listFolders } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
@@ -405,7 +409,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // Group 3 = todo id (tracker-native, opaque: GitHub numbers, Jira "PROJ-123"),
       // group 4 = release process id.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|folders|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
+        /^\/api\/repos\/(.+)\/(processes|decisions|folders|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
       );
       if (repoRoute) {
         const session = sessionOf(req);
@@ -429,6 +433,24 @@ export function startApi(port: number, opts: ApiOptions): Server {
           }
           if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
           return send(res, 200, await listProcesses(opts, repo, workspace));
+        }
+        if (repoRoute[2] === "decisions") {
+          const workspace = await opts.workspaces.ensure(repo);
+          if (req.method === "POST") {
+            const body = await jsonBody<CreateDecisionBody>(req, res);
+            if (body === undefined) return;
+            if (typeof body?.name !== "string" || body.name.trim().length === 0) {
+              return send(res, 400, { error: "name must be a non-empty string" });
+            }
+            if (body.folder !== undefined && typeof body.folder !== "string") {
+              return send(res, 400, { error: "folder must be a string" });
+            }
+            const created = await createDecision(repo, workspace, { name: body.name, folder: body.folder });
+            console.log(`decision created in ${repo.fullName} by @${session.user.login}: ${created.path}`);
+            return send(res, 201, created satisfies DecisionInfo);
+          }
+          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
+          return send(res, 200, await listDecisions(opts, repo, workspace));
         }
         if (repoRoute[2] === "folders") {
           const workspace = await opts.workspaces.ensure(repo);

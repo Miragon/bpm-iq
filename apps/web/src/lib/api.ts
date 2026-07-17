@@ -2,9 +2,11 @@
 import { api } from "@bpmiq/api-client";
 import type {
   AppConfig,
+  CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
   CreateTodoBody,
+  DecisionInfo,
   FileAtCommitWire,
   FileCommitWire,
   FolderListWire,
@@ -23,9 +25,11 @@ export { ApiError } from "@bpmiq/api-client";
 // `satisfies` checks) — re-exported so component imports keep one import path
 export type {
   AppConfig,
+  CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
   CreateTodoBody,
+  DecisionInfo,
   FileAtCommitWire,
   FileCommitWire,
   FolderListWire,
@@ -62,6 +66,15 @@ export const fetchProcesses = (repo: string): Promise<ProcessInfo[]> => api(`/ap
 /** create a new process from the blank template; response is its ProcessInfo row */
 export const createProcess = (repo: string, body: CreateProcessBody): Promise<ProcessInfo> =>
   api(`/api/repos/${repo}/processes`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+/** decisions (.dmn files) under the repo's processes root */
+export const fetchDecisions = (repo: string): Promise<DecisionInfo[]> => api(`/api/repos/${repo}/decisions`);
+/** create a new decision from the blank template; response is its DecisionInfo row */
+export const createDecision = (repo: string, body: CreateDecisionBody): Promise<DecisionInfo> =>
+  api(`/api/repos/${repo}/decisions`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
