@@ -244,5 +244,22 @@ echo "$ESHIP" | grep -q "A	processes/onboarding/travel-approval.dmn" && ok "E: n
 echo "$ESHIP" | grep -q "D	processes/order-to-cash/decisions/credit-check.dmn" && ok "E: workspace delete shipped as delete" || bad "E: deletion missing: $ESHIP"
 echo "$ESHIP" | grep -q "order-to-cash.bpmn" && bad "E: UNSELECTED file leaked into the release: $ESHIP" || ok "E: unselected modified file stays behind"
 
+# non-ASCII filenames must survive the git listing un-quoted (core.quotepath)
+printf '<definitions/>' > "$WS1/processes/onboarding/prüfung.dmn"
+CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+echo "$CH" | grep -q '"path": *"processes/onboarding/prüfung.dmn"' && ok "E: umlaut filename listed un-quoted" || bad "E: quoted/mangled path: $CH"
+R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"files":["processes/onboarding/prüfung.dmn"],"title":"Umlaut check"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q '"pr"' && ok "E: umlaut filename releases" || bad "E: umlaut release failed: $R"
+
+# the pool is confined to the bpmiq.yml content scope — checkout files outside
+# the processes folder never appear and never release
+printf 'operator scratch\n' > "$WS1/NOTES.md"
+CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+echo "$CH" | grep -q "NOTES.md" && bad "E: out-of-scope file leaked into the pool: $CH" || ok "E: out-of-scope file stays out of the pool"
+R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+  -d '{"files":["NOTES.md"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q "not changed" && ok "E: out-of-scope file refused (409)" || bad "E: expected not-changed for out-of-scope, got: $R"
+
 echo; echo "── $PASS passed, $FAIL failed ──"
 exit "$FAIL"

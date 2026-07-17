@@ -54,16 +54,29 @@ export function releaseBranch(id: string, now: Date): string {
   return `release/${id}-${stamp}`;
 }
 
-/** the branch slug of a file-selection release: title, else lone file stem, else "changes" */
+/** the branch slug of a file-selection release: title, else lone file stem, else
+ * "changes" — capped so the ref name stays far below the filesystem's NAME_MAX */
 export function releaseFilesSlug(files: string[], title?: string): string {
-  const fromTitle = title ? processIdFromName(title) : "";
+  const cap = (slug: string) => slug.slice(0, 60).replace(/-+$/, "");
+  const fromTitle = title ? cap(processIdFromName(title)) : "";
   if (fromTitle) return fromTitle;
   if (files.length === 1) {
     const name = files[0]?.split("/").pop() ?? "";
-    const fromStem = processIdFromName(name.replace(/\.[^.]*$/, ""));
+    const fromStem = cap(processIdFromName(name.replace(/\.[^.]*$/, "")));
     if (fromStem) return fromStem;
   }
   return "changes";
+}
+
+/**
+ * The file-selection release branch — stamped to the SECOND: unlike process
+ * releases (branch keyed by a unique process id), untitled selections share
+ * the "changes" slug, so a minute stamp would collide for back-to-back
+ * releases from the repo view.
+ */
+export function releaseFilesBranch(slug: string, now: Date): string {
+  const stamp = now.toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  return `release/${slug}-${stamp}`;
 }
 
 /** parse `git diff --cached --name-only` output into a clean file list */
@@ -155,7 +168,8 @@ interface PublishArgs {
   /** commit subject line; attribution body is appended with the session user */
   subject: string;
   prTitle: string;
-  prBody: (botAuthored: boolean) => string;
+  /** rendered AFTER staging — `staged` is what the commit actually ships */
+  prBody: (botAuthored: boolean, staged: string[]) => string;
 }
 
 /**
@@ -272,7 +286,7 @@ async function publish(
       branch: args.branch,
       base: repo.defaultBranch,
       title: args.prTitle,
-      body: args.prBody(botAuthored),
+      body: args.prBody(botAuthored, stagedFiles),
     });
     return {
       pr: pr.url,
@@ -347,7 +361,7 @@ export async function releaseFiles(
   now: Date = new Date(),
 ): Promise<ReleaseResult> {
   const workspace = await opts.workspaces.ensure(repo);
-  requireContentRepo(repo, workspace);
+  const cfg = requireContentRepo(repo, workspace);
   const requested = [...new Set(body.files.map((f) => f.trim()).filter(Boolean))];
   if (requested.length === 0) {
     throw new AppError("release/no-files", "select at least one changed file to release", {
@@ -361,7 +375,8 @@ export async function releaseFiles(
       expose: true,
     });
   }
-  const changed = new Map((await opts.workspaces.changedFiles(repo)).map((c) => [c.path, c.status]));
+  // the pool is confined to the bpmiq.yml content scope, like GET /changes
+  const changed = new Map((await opts.workspaces.changedFiles(repo, cfg.processes)).map((c) => [c.path, c.status]));
   const unknown = requested.filter((f) => !changed.has(f));
   if (unknown.length > 0) {
     throw new AppError(
@@ -372,10 +387,18 @@ export async function releaseFiles(
   }
   const files = requested.map((path) => ({ path, deleted: changed.get(path) === "deleted" }));
   return publish(opts, session, provider, repo, workspace, {
-    branch: releaseBranch(releaseFilesSlug(requested, body.title), now),
+    branch: releaseFilesBranch(releaseFilesSlug(requested, body.title), now),
     files,
     subject: releaseFilesSubject(body.title),
     prTitle: releaseFilesSubject(body.title),
-    prBody: (botAuthored) => releaseFilesPrBody(files, repo.fullName, session.user.login, botAuthored),
+    // list what the commit actually ships — a file that healed to the origin
+    // state between the gate and the staging must not be advertised
+    prBody: (botAuthored, staged) =>
+      releaseFilesPrBody(
+        files.filter((f) => staged.includes(f.path)),
+        repo.fullName,
+        session.user.login,
+        botAuthored,
+      ),
   });
 }

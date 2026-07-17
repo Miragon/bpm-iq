@@ -13,6 +13,7 @@ import {
   redactToken,
   releaseBranch,
   releaseCommitMessage,
+  releaseFilesBranch,
   releaseFilesPrBody,
   releaseFilesSlug,
   releaseFilesSubject,
@@ -63,6 +64,19 @@ test("releaseFilesSlug: title wins, else lone file stem, else 'changes'", () => 
   assert.equal(releaseFilesSlug(["processes/orders/credit-check.dmn"]), "credit-check");
   assert.equal(releaseFilesSlug(["a.bpmn", "b.dmn"]), "changes");
   assert.equal(releaseFilesSlug(["..."], "!!!"), "changes"); // nothing slug-able anywhere
+});
+
+test("releaseFilesSlug: caps runaway titles so the git ref stays well under NAME_MAX", () => {
+  const slug = releaseFilesSlug(["a.bpmn"], "x".repeat(400));
+  assert.ok(slug.length <= 60, `slug too long: ${slug.length}`);
+  assert.ok(!slug.endsWith("-"), "no dangling separator after the cut");
+});
+
+test("releaseFilesBranch: stamps to the SECOND (untitled selections share one slug)", () => {
+  assert.equal(
+    releaseFilesBranch("changes", new Date("2026-07-14T08:45:30.123Z")),
+    "release/changes-2026-07-14-08-45-30",
+  );
 });
 
 test("releaseFilesSubject: optional title becomes the headline", () => {

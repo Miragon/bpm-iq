@@ -29,8 +29,11 @@ export interface OverviewDeps {
     dir(repo: ConnectedRepo): string;
     /** files under `pathspec` differing from origin/<defaultBranch>; [] on error */
     changedPaths(repo: ConnectedRepo, pathspec: string): Promise<string[]>;
-    /** all changed files with status; [] on error */
-    changedFiles(repo: ConnectedRepo): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>>;
+    /** changed files under `pathspec` with status; [] on error */
+    changedFiles(
+      repo: ConnectedRepo,
+      pathspec: string,
+    ): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>>;
   };
   access: { canWrite(session: Session, repo: ConnectedRepo): Promise<boolean> };
   /** repo-qualified document names of live rooms */
@@ -96,14 +99,22 @@ export async function listDecisions(
 }
 
 /**
- * Every file in which the shared workspace differs from origin/<default> —
- * the pool a file-selection release picks from. liveSessions marks files a
+ * Every CONTENT file in which the shared workspace differs from
+ * origin/<default> — the pool a file-selection release picks from, confined
+ * to the bpmiq.yml processes scope (like live rooms; checkout files outside
+ * it are not part of the platform's surface). liveSessions marks files a
  * colleague currently has open, so the release dialog can warn before
  * shipping somebody's work in progress.
  */
-export async function listChanges(opts: OverviewDeps, repo: ConnectedRepo): Promise<ChangedFileWire[]> {
+export async function listChanges(
+  opts: OverviewDeps,
+  repo: ConnectedRepo,
+  workspace: string,
+): Promise<ChangedFileWire[]> {
+  const cfg = loadContentConfig(workspace);
+  if (!cfg) return [];
   const live = opts.liveDocs();
-  return (await opts.workspaces.changedFiles(repo)).map((c) => ({
+  return (await opts.workspaces.changedFiles(repo, cfg.processes)).map((c) => ({
     ...c,
     liveSessions: live.filter((d) => d === `${repo.fullName}/${c.path}`).length,
   }));

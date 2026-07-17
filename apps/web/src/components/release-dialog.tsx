@@ -8,7 +8,6 @@
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 
 import { type ChangedFileWire } from "@/lib/api";
 import { useChanges, useReleaseFiles } from "@/lib/queries";
@@ -63,22 +62,12 @@ export function ReleaseDialog({
       return next;
     });
 
+  // the PR toast is HOOK-level in useReleaseFiles (it must survive an unmount
+  // mid-release) — this callback only closes the dialog
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (files.length === 0 || release.isPending) return;
-    release.mutate(
-      { files, ...(title.trim() ? { title: title.trim() } : {}) },
-      {
-        onSuccess: ({ pr }) => {
-          toast.success("Release created", {
-            description: pr,
-            action: { label: "Open PR", onClick: () => window.open(pr, "_blank") },
-            duration: 15_000,
-          });
-          onClose();
-        },
-      },
-    );
+    release.mutate({ files, ...(title.trim() ? { title: title.trim() } : {}) }, { onSuccess: () => onClose() });
   };
 
   return (

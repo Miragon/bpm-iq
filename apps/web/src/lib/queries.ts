@@ -1,5 +1,6 @@
 import { queryDefaults } from "@bpmiq/api-client";
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   closeTodo,
@@ -89,12 +90,19 @@ export function useChanges(repo: string, enabled: boolean) {
 }
 
 /** release a file selection as one PR; the changes pool stays dirty until the
- *  PR merges and the workspace reconciles — refetch anyway to reflect deletes */
+ *  PR merges and the workspace reconciles — refetch anyway to reflect deletes.
+ *  The PR toast lives HERE (hook level): mutate-level callbacks are skipped
+ *  once the dialog unmounted, and a created PR must never go unannounced. */
 export function useReleaseFiles(repo: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ReleaseFilesBody) => releaseFiles(repo, body),
-    onSuccess: () => {
+    onSuccess: ({ pr }) => {
+      toast.success("Release created", {
+        description: pr,
+        action: { label: "Open PR", onClick: () => window.open(pr, "_blank") },
+        duration: 15_000,
+      });
       void qc.invalidateQueries({ queryKey: ["changes", repo] });
     },
   });

@@ -544,11 +544,11 @@ export function startApi(port: number, opts: ApiOptions): Server {
           }
           return send(res, 405, { error: "method not allowed" });
         }
-        // the release dialog's selection pool: every file differing from origin
+        // the release dialog's selection pool: every content file differing from origin
         if (repoRoute[2] === "changes") {
           if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
-          await opts.workspaces.ensure(repo);
-          return send(res, 200, (await listChanges(opts, repo)) satisfies ChangedFileWire[]);
+          const workspace = await opts.workspaces.ensure(repo);
+          return send(res, 200, (await listChanges(opts, repo, workspace)) satisfies ChangedFileWire[]);
         }
         // file-selection release: ship exactly the picked changed files as one PR
         if (repoRoute[2] === "release" && req.method === "POST") {
@@ -560,6 +560,9 @@ export function startApi(port: number, opts: ApiOptions): Server {
           }
           if (body.title !== undefined && typeof body.title !== "string") {
             return send(res, 400, { error: "title must be a string" });
+          }
+          if (typeof body.title === "string" && body.title.length > 200) {
+            return send(res, 400, { error: "title must be at most 200 characters" });
           }
           const result = await releaseFiles(opts, session, provider, repo, { files: body.files, title: body.title });
           console.log(`released ${repo.fullName} (${result.files.length} file(s)) by @${result.by} → ${result.pr}`);
