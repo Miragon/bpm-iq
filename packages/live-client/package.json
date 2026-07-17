@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Shared live-session client: the ONE Hocuspocus wiring (socket + provider + sync lifecycle) for the web editor, the VS Code extension and headless guests — plus minimal-diff Y.Text writing and the Y.Text ↔ bpmn-js sync bridge.",
+  "description": "Shared live-session client: the ONE Hocuspocus wiring (socket + provider + sync lifecycle) for the web editor, the VS Code extension and headless guests — plus minimal-diff Y.Text writing and the Y.Text ↔ bpmn-js / dmn-js sync bridges.",
   "engines": {
     "node": ">=23.6"
   },
   "exports": {
     ".": "./src/session.ts",
     "./text": "./src/text-diff.ts",
-    "./bpmn-sync": "./src/bpmn-sync.ts"
+    "./bpmn-sync": "./src/bpmn-sync.ts",
+    "./dmn-sync": "./src/dmn-sync.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

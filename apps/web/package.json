@@ -20,6 +20,7 @@
     "@tanstack/react-table": "8.21.3",
     "bpmn-js": "18.21.0",
     "bpmn-js-differ": "3.2.0",
+    "dmn-js": "17.9.0",
     "lucide-react": "1.24.0",
     "monaco-editor": "0.55.1",
     "react": "19.2.7",

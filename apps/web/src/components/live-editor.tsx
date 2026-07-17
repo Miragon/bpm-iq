@@ -2,16 +2,19 @@
  * The collaborative editor — chosen per notation (@bpmiq/notations):
  *   bpmn        → bpmn-js canvas (primary) + Monaco XML toggle, both bound to the
  *                 same shared Y.Text
+ *   dmn         → dmn-js (DRD + decision table + literal expression) + the same
+ *                 Monaco XML toggle, same shared Y.Text
  *   everything  → Monaco text editor on the shared Y.Text, language from the
- *   else          registry (DMN/OWM/TT/VC live-edit as text)
+ *   else          registry (OWM/TT/VC live-edit as text)
  *
  * React owns the shell (toolbar, presence, release); the editor ENGINES stay
- * imperative — bpmn-js / Monaco / Yjs live in refs inside one effect whose
- * cleanup tears the whole live session down (provider, sockets, bindings).
+ * imperative — bpmn-js / dmn-js / Monaco / Yjs live in refs inside one effect
+ * whose cleanup tears the whole live session down (provider, sockets, bindings).
  */
 import { roomName } from "@bpmiq/contracts/live";
 import { openLiveSession } from "@bpmiq/live-client";
 import { bindBpmn } from "@bpmiq/live-client/bpmn-sync";
+import { bindDmn } from "@bpmiq/live-client/dmn-sync";
 import { updateText } from "@bpmiq/live-client/text";
 import { byExtension } from "@bpmiq/notations";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
@@ -20,6 +23,7 @@ import { cn } from "@bpmiq/ui-kit/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import BpmnModeler from "bpmn-js/lib/Modeler";
+import DmnModeler from "dmn-js/lib/Modeler";
 import { ArrowLeft, History, ListTodo, Loader2, Plus } from "lucide-react";
 import * as monaco from "monaco-editor";
 import { useEffect, useRef, useState } from "react";
@@ -75,6 +79,8 @@ export function LiveEditor({
 }) {
   const notation = byExtension(docPath);
   const isBpmn = notation?.id === "bpmn";
+  const isDmn = notation?.id === "dmn";
+  const isVisual = isBpmn || isDmn;
   const fileName = docPath.split("/").pop() ?? docPath;
   const [owner = "", name = ""] = repo.split("/");
 
@@ -82,7 +88,7 @@ export function LiveEditor({
   const xmlRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"connecting" | "slow" | "live" | "error">("connecting");
   const [error, setError] = useState<string | null>(null);
-  const [showXml, setShowXml] = useState(!isBpmn);
+  const [showXml, setShowXml] = useState(!isVisual);
   const [presence, setPresence] = useState<Presence[]>([]);
 
   // model-anchored todos — only for documents that belong to a process
@@ -138,6 +144,7 @@ export function LiveEditor({
     session.setUser({ name: me.user.name || me.user.login, color: config.color });
 
     let modeler: InstanceType<typeof BpmnModeler> | undefined;
+    let dmnModeler: InstanceType<typeof DmnModeler> | undefined;
     let unbindCanvas: (() => void) | undefined;
     let todoCanvas: TodoCanvas | undefined;
     let monacoBinding: MonacoBinding | undefined;
@@ -176,6 +183,20 @@ export function LiveEditor({
             pendingRevealRef.current = null;
           }
         }
+      } else if (isDmn && canvasRef.current) {
+        dmnModeler = new DmnModeler({ container: canvasRef.current });
+        unbindCanvas = bindDmn(
+          dmnModeler as never,
+          ytext,
+          session.doc,
+          (msg) => toast.error(msg),
+          // malformed from the start: nothing to render — surface the error and
+          // fall back to the XML view, where the document stays editable
+          (msg) => {
+            toast.error(`DMN import failed: ${msg}`);
+            setShowXml(true);
+          },
+        );
       }
       if (xmlRef.current) {
         xmlModel = monaco.editor.createModel(ytext.toString(), monacoLanguage(docPath));
@@ -209,6 +230,7 @@ export function LiveEditor({
       xmlEditor?.dispose();
       xmlModel?.dispose();
       modeler?.destroy();
+      dmnModeler?.destroy();
       session.destroy(); // provider AND socket
     };
   }, [repo, docPath, me.wsToken]);
@@ -257,7 +279,7 @@ export function LiveEditor({
   });
 
   // Restore: write the commit's content into the shared Y.Text — updateText's
-  // minimal diff syncs to every client, bindBpmn re-imports the canvas
+  // minimal diff syncs to every client, the canvas binding re-imports the view
   const restore = useMutation({
     mutationFn: fetchCommitContent,
     onSuccess: ({ commit, historical, seq }) => {
@@ -278,7 +300,7 @@ export function LiveEditor({
       ? (restore.variables?.sha ?? null)
       : null;
 
-  const xmlActive = showXml || !isBpmn;
+  const xmlActive = showXml || !isVisual;
 
   return (
     <div className="flex h-full flex-col">
@@ -290,7 +312,7 @@ export function LiveEditor({
         </Button>
         <span className="truncate text-sm font-medium">
           {repo} · {processId || fileName}
-          {isBpmn ? "" : ` · ${fileName}`}
+          {!isBpmn && processId ? ` · ${fileName}` : ""}
         </span>
         {status === "live" && <Badge variant="success">live</Badge>}
         {(status === "connecting" || status === "slow") && (
@@ -313,7 +335,7 @@ export function LiveEditor({
             </div>
           ))}
         </div>
-        {isBpmn && (
+        {isVisual && (
           <Button variant="outline" size="sm" onClick={() => setShowXml((v) => !v)}>
             XML
           </Button>
@@ -371,7 +393,11 @@ export function LiveEditor({
       <div className="relative min-h-0 flex-1">
         <div
           ref={canvasRef}
-          className={cn("bpmn-canvas absolute inset-0", xmlActive && "pointer-events-none opacity-0")}
+          className={cn(
+            isDmn ? "dmn-canvas" : "bpmn-canvas",
+            "absolute inset-0",
+            xmlActive && "pointer-events-none opacity-0",
+          )}
         />
         <div
           ref={xmlRef}

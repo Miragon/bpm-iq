@@ -5,11 +5,17 @@
    Tailwind to pick up the utility classes its components use */
 @source "../node_modules/@bpmiq/ui-kit/src";
 
-/* the collaborative editor fills its route; bpmn-js + Monaco need explicit height */
+/* the collaborative editor fills its route; bpmn-js/dmn-js + Monaco need explicit height */
 .bpmn-canvas,
+.dmn-canvas,
 .monaco-host {
   height: 100%;
   width: 100%;
+}
+/* decision tables grow with their rules — scroll inside the editor pane
+   (the DRD fills 100% height, so no scrollbars appear there) */
+.dmn-canvas {
+  overflow: auto;
 }
 
 /* todo count badge on BPMN elements — created imperatively by lib/todo-canvas.ts
