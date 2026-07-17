@@ -3,6 +3,8 @@ import { api } from "@bpmiq/api-client";
 import type {
   AppConfig,
   CreateTodoBody,
+  FileAtCommitWire,
+  FileCommitWire,
   Me,
   ProcessInfo,
   ReleaseResult,
@@ -17,6 +19,8 @@ export { ApiError } from "@bpmiq/api-client";
 export type {
   AppConfig,
   CreateTodoBody,
+  FileAtCommitWire,
+  FileCommitWire,
   Me,
   ModelRef,
   ProcessInfo,
@@ -47,6 +51,14 @@ export const fetchRepos = (refresh = false): Promise<RepoInfo[]> => api(`/api/re
 export const fetchProcesses = (repo: string): Promise<ProcessInfo[]> => api(`/api/repos/${repo}/processes`);
 export const releaseProcess = (repo: string, id: string): Promise<ReleaseResult> =>
   api(`/api/repos/${repo}/release/${encodeURIComponent(id)}`, { method: "POST" });
+/** the backend's hard cap on history length — a full response means truncation */
+export const HISTORY_LIMIT = 200;
+/** default-branch commits touching one model file, newest first */
+export const fetchFileHistory = (repo: string, path: string): Promise<FileCommitWire[]> =>
+  api(`/api/repos/${repo}/history?path=${encodeURIComponent(path)}&limit=${HISTORY_LIMIT}`);
+/** the file's content at one commit — the Compare/Restore source */
+export const fetchFileAtCommit = (repo: string, path: string, sha: string): Promise<FileAtCommitWire> =>
+  api(`/api/repos/${repo}/history/content?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(sha)}`);
 /** open todos of a repo, optionally narrowed to one process */
 export const fetchTodos = (repo: string, process?: string): Promise<TodoWire[]> =>
   api(`/api/repos/${repo}/todos${process ? `?process=${encodeURIComponent(process)}` : ""}`);

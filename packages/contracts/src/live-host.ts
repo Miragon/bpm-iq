@@ -70,6 +70,28 @@ export interface ReleaseResult {
   botAuthored: boolean;
 }
 
+/** GET /api/repos/:fullName/history?path=<model path>[&limit=<n>] — commits on
+ * the default branch touching the file, newest first */
+export interface FileCommitWire {
+  /** full commit sha */
+  sha: string;
+  subject: string;
+  /** message body below the subject line; "" when none */
+  body: string;
+  author: string;
+  /** ISO-8601 author date */
+  authoredAt: string;
+}
+
+/** GET /api/repos/:fullName/history/content?path=<model path>&sha=<sha> */
+export interface FileAtCommitWire {
+  sha: string;
+  /** content-relative model path (the room path) */
+  path: string;
+  /** the file's full content at that commit */
+  content: string;
+}
+
 /** one BPMN element a todo is anchored to (id = anchor, name = creation-time snapshot) */
 export interface TodoElementWire {
   id: string;

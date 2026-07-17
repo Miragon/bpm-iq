@@ -13,7 +13,7 @@ const exec = promisify(execFile);
 
 export function runGit(
   args: string[],
-  opts?: { cwd?: string; env?: NodeJS.ProcessEnv },
+  opts?: { cwd?: string; env?: NodeJS.ProcessEnv; maxBuffer?: number },
 ): Promise<{ stdout: string; stderr: string }> {
   return exec("git", args, opts ?? {});
 }

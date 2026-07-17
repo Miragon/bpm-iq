@@ -12,6 +12,7 @@
 import { roomName } from "@bpmiq/contracts/live";
 import { openLiveSession } from "@bpmiq/live-client";
 import { bindBpmn } from "@bpmiq/live-client/bpmn-sync";
+import { updateText } from "@bpmiq/live-client/text";
 import { byExtension } from "@bpmiq/notations";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
@@ -19,16 +20,27 @@ import { cn } from "@bpmiq/ui-kit/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import BpmnModeler from "bpmn-js/lib/Modeler";
-import { ArrowLeft, ListTodo, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, History, ListTodo, Loader2, Plus } from "lucide-react";
 import * as monaco from "monaco-editor";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MonacoBinding } from "y-monaco";
+import type * as Y from "yjs";
 
+import { HistoryDiffDialog } from "@/components/history-diff-dialog";
+import { HistoryPanel } from "@/components/history-panel";
 import { TodoCreateDialog } from "@/components/todo-create-dialog";
 import { TodoPanel } from "@/components/todo-panel";
-import { config, type Me, releaseProcess, type TodoElementWire, type TodoWire } from "@/lib/api";
-import { useTodos } from "@/lib/queries";
+import {
+  config,
+  fetchFileAtCommit,
+  type FileCommitWire,
+  type Me,
+  releaseProcess,
+  type TodoElementWire,
+  type TodoWire,
+} from "@/lib/api";
+import { useFileHistory, useTodos } from "@/lib/queries";
 import { attachTodoCanvas, type TodoCanvas } from "@/lib/todo-canvas";
 
 interface Presence {
@@ -82,6 +94,13 @@ export function LiveEditor({
   const todoCanvasRef = useRef<TodoCanvas | null>(null);
   const todosRef = useRef<TodoWire[]>([]);
 
+  // default-branch commit history of THIS file — fetched while the panel is open
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyQuery = useFileHistory(repo, docPath, historyOpen);
+  // the shared Y.Text, exposed from the session effect for Compare/Restore
+  const contentRef = useRef<Y.Text | null>(null);
+  const [diff, setDiff] = useState<{ commit: FileCommitWire; historical: string; current: string } | null>(null);
+
   const todoList = todosQuery.data;
   useEffect(() => {
     todosRef.current = todoList ?? [];
@@ -131,6 +150,7 @@ export function LiveEditor({
       if (cancelled || attached) return;
       attached = true;
       const ytext = session.content;
+      contentRef.current = ytext;
       if (isBpmn && canvasRef.current) {
         modeler = new BpmnModeler({ container: canvasRef.current });
         unbindCanvas = bindBpmn(modeler as never, ytext, session.doc, (msg) => toast.error(msg));
@@ -139,6 +159,7 @@ export function LiveEditor({
           // changes); a badge click opens the panel filtered to its element
           todoCanvas = attachTodoCanvas(modeler as never, {
             onBadgeClick: (elementId) => {
+              setHistoryOpen(false); // the side panels are mutually exclusive
               setTodoFilter(elementId);
               setTodosOpen(true);
             },
@@ -177,6 +198,7 @@ export function LiveEditor({
       clearTimeout(slow);
       offSynced();
       offPresence?.();
+      contentRef.current = null;
       todoCanvas?.destroy();
       todoCanvasRef.current = null;
       unbindCanvas?.();
@@ -198,6 +220,60 @@ export function LiveEditor({
       }),
     onError: (e) => toast.error((e as Error).message),
   });
+
+  // TanStack v5 runs hook-level onSuccess/onError even after unmount and for
+  // superseded mutate() calls — guard both: only the LATEST action may apply,
+  // and nothing toasts onto an unrelated screen after this editor is gone
+  const actionSeqRef = useRef(0);
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+  const fetchCommitContent = async (commit: FileCommitWire) => {
+    const seq = ++actionSeqRef.current;
+    const file = await fetchFileAtCommit(repo, docPath, commit.sha);
+    return { commit, historical: file.content, seq };
+  };
+  const onActionError = (e: Error) => {
+    if (aliveRef.current) toast.error(e.message);
+  };
+
+  // Compare: fetch the commit's content, snapshot the live doc, open the diff
+  const compare = useMutation({
+    mutationFn: fetchCommitContent,
+    onSuccess: ({ commit, historical, seq }) => {
+      if (seq !== actionSeqRef.current || !aliveRef.current) return; // superseded or editor gone
+      const current = contentRef.current?.toString();
+      if (current === undefined) return; // session not attached — nothing to diff against
+      setDiff({ commit, historical, current });
+    },
+    onError: onActionError,
+  });
+
+  // Restore: write the commit's content into the shared Y.Text — updateText's
+  // minimal diff syncs to every client, bindBpmn re-imports the canvas
+  const restore = useMutation({
+    mutationFn: fetchCommitContent,
+    onSuccess: ({ commit, historical, seq }) => {
+      if (seq !== actionSeqRef.current || !aliveRef.current) return; // superseded or editor gone
+      const ytext = contentRef.current;
+      if (!ytext) {
+        return void toast.error("Restore cancelled — the live session ended before the commit content arrived.");
+      }
+      updateText(ytext, historical);
+      setDiff(null);
+      toast.success(`Restored ${fileName} to ${commit.sha.slice(0, 7)}`, { description: commit.subject });
+    },
+    onError: onActionError,
+  });
+  const historyActionSha = compare.isPending
+    ? (compare.variables?.sha ?? null)
+    : restore.isPending
+      ? (restore.variables?.sha ?? null)
+      : null;
 
   const xmlActive = showXml || !isBpmn;
 
@@ -239,6 +315,19 @@ export function LiveEditor({
             XML
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          title="History of this file on the default branch"
+          onClick={() => {
+            setTodosOpen(false);
+            setTodoFilter(null);
+            setHistoryOpen((v) => !v);
+          }}
+        >
+          <History />
+          History
+        </Button>
         {hasTodos && (
           <>
             <Button
@@ -246,6 +335,7 @@ export function LiveEditor({
               size="sm"
               title="Open todos for this process"
               onClick={() => {
+                setHistoryOpen(false);
                 setTodoFilter(null);
                 setTodosOpen((v) => !v);
               }}
@@ -284,6 +374,18 @@ export function LiveEditor({
           ref={xmlRef}
           className={cn("monaco-host absolute inset-0", !xmlActive && "pointer-events-none opacity-0")}
         />
+        {historyOpen && (
+          <HistoryPanel
+            commits={historyQuery.data}
+            isLoading={historyQuery.isLoading}
+            error={historyQuery.error}
+            pendingSha={historyActionSha}
+            actionsEnabled={status === "live"}
+            onCompare={(c) => compare.mutate(c)}
+            onRestore={(c) => restore.mutate(c)}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
         {hasTodos && todosOpen && (
           <TodoPanel
             repo={repo}
@@ -310,6 +412,18 @@ export function LiveEditor({
           docPath={docPath}
           elements={selectedElements}
           onClose={() => setTodoCreateOpen(false)}
+        />
+      )}
+      {diff && (
+        <HistoryDiffDialog
+          commit={diff.commit}
+          historical={diff.historical}
+          current={diff.current}
+          language={monacoLanguage(docPath)}
+          isBpmn={isBpmn}
+          restorePending={restore.isPending}
+          onRestore={() => restore.mutate(diff.commit)}
+          onClose={() => setDiff(null)}
         />
       )}
     </div>
