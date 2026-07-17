@@ -21,26 +21,13 @@ import { dirname, join } from "node:path";
 
 import type { FileCommitWire } from "@bpmiq/contracts/live-host";
 
-import { runGit, scrub } from "../adapters/git/run.ts";
+import { gitEnv, runGit, scrub } from "../adapters/git/run.ts";
 import { FILE_LOG_FORMAT, parseFileLog } from "../domain/file-history.ts";
 import { CONTENT_CONFIG_FILE } from "./content.ts";
 import type { ConnectedRepo, RepoRegistry } from "./registry.ts";
 
 /** model blobs can exceed execFile's 1 MB default (large BPMN diagrams) */
 const GIT_OUT_MAX = 16 * 1024 * 1024;
-
-/** git env carrying the token as an auth header — not in argv, not in config files */
-function gitEnv(token: string | undefined): NodeJS.ProcessEnv {
-  if (!token) return { ...process.env, GIT_TERMINAL_PROMPT: "0" };
-  const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
-  return {
-    ...process.env,
-    GIT_TERMINAL_PROMPT: "0",
-    GIT_CONFIG_COUNT: "1",
-    GIT_CONFIG_KEY_0: "http.extraHeader",
-    GIT_CONFIG_VALUE_0: `AUTHORIZATION: Basic ${basic}`,
-  };
-}
 
 export interface WorkspaceHooks {
   /** true while any live document of this repo has connections — blocks reconcile */

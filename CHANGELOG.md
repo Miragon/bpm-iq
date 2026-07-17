@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.1.0](https://github.com/Miragon/bpm-iq/compare/v2.0.0...v2.1.0) (2026-07-17)
+
+
+### Features
+
+* **web:** show a repository's processes as a sortable table ([#42](https://github.com/Miragon/bpm-iq/issues/42)) ([70d185e](https://github.com/Miragon/bpm-iq/commit/70d185eaa101b87c36e4508a2c7133f193d099d2))
+
+
+### Bug Fixes
+
+* authenticate the release upstream-guard fetch ([#41](https://github.com/Miragon/bpm-iq/issues/41)) ([219a716](https://github.com/Miragon/bpm-iq/commit/219a716cbffdc8352092b6a6d617ecd595b5c911))
+* **web:** pin @tanstack/react-table to an exact version ([#47](https://github.com/Miragon/bpm-iq/issues/47)) ([f1f6bf4](https://github.com/Miragon/bpm-iq/commit/f1f6bf44e7ba99a10131056d1abde161e74de896))
+
 ## [2.0.0](https://github.com/Miragon/bpm-iq/compare/v1.0.0...v2.0.0) (2026-07-17)
 
 

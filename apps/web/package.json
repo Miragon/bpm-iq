@@ -17,6 +17,7 @@
     "@tailwindcss/vite": "4.3.2",
     "@tanstack/react-query": "5.101.2",
     "@tanstack/react-router": "1.170.17",
+    "@tanstack/react-table": "8.21.3",
     "bpmn-js": "18.21.0",
     "bpmn-js-differ": "3.2.0",
     "lucide-react": "1.24.0",
