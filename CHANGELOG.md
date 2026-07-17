@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.0](https://github.com/Miragon/bpm-iq/compare/v2.2.0...v2.3.0) (2026-07-17)
+
+
+### Features
+
+* hide create/release actions when a repo has no bpmiq.yml ([#53](https://github.com/Miragon/bpm-iq/issues/53)) ([34546dd](https://github.com/Miragon/bpm-iq/commit/34546dd67f85a1655681ac8cca03b42ea4b7d98f))
+* visual dmn-js editor for .dmn artifacts in the web client ([#51](https://github.com/Miragon/bpm-iq/issues/51)) ([d31ce72](https://github.com/Miragon/bpm-iq/commit/d31ce728b1ac33eab97abdc524ab9b45c9b987ec))
+
 ## [2.2.0](https://github.com/Miragon/bpm-iq/compare/v2.1.0...v2.2.0) (2026-07-17)
 
 
