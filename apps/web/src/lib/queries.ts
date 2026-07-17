@@ -12,6 +12,7 @@ import {
   fetchRepos,
   fetchTodos,
   logout,
+  syncRepo,
   type TodoWire,
 } from "@/lib/api";
 
@@ -40,6 +41,21 @@ export function useRepos() {
 
 export function useProcesses(repo: string) {
   return useQuery({ queryKey: ["processes", repo], queryFn: () => fetchProcesses(repo), enabled: repo.length > 0 });
+}
+
+/** hard-reset the repo's workspace onto its default branch ("load latest from
+ *  main") — discards unreleased live edits, so the caller confirms first. On
+ *  success the process list (dirty flags) and the overview (dirty counts) are
+ *  stale, so refetch both. */
+export function useSyncRepo(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => syncRepo(repo),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["processes", repo] });
+      void qc.invalidateQueries({ queryKey: ["repos"] });
+    },
+  });
 }
 
 /** default-branch commit history of one model file — fetched while the panel

@@ -70,6 +70,18 @@ export interface ReleaseResult {
   botAuthored: boolean;
 }
 
+/**
+ * POST /api/repos/:fullName/sync — hard-reset the repo's workspace onto
+ * origin/<defaultBranch> ("load the latest state from main"). Unreleased live
+ * edits (the dirty processes) are discarded, so the client confirms first.
+ */
+export interface SyncResult {
+  /** the branch the workspace was reset onto (the repo's default branch) */
+  branch: string;
+  /** repo-relative paths whose content the reset changed or removed */
+  changed: string[];
+}
+
 /** GET /api/repos/:fullName/history?path=<model path>[&limit=<n>] — commits on
  * the default branch touching the file, newest first */
 export interface FileCommitWire {

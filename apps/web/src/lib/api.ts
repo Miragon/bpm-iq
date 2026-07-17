@@ -9,6 +9,7 @@ import type {
   ProcessInfo,
   ReleaseResult,
   RepoInfo,
+  SyncResult,
   TodoWire,
 } from "@bpmiq/contracts/live-host";
 
@@ -26,6 +27,7 @@ export type {
   ProcessInfo,
   ReleaseResult,
   RepoInfo,
+  SyncResult,
   TodoAnchorWire,
   TodoElementWire,
   TodoWire,
@@ -49,6 +51,8 @@ export const fetchMe = (): Promise<Me> => api("/api/me");
 export const logout = (): Promise<{ ok: boolean }> => api("/api/logout", { method: "POST" });
 export const fetchRepos = (refresh = false): Promise<RepoInfo[]> => api(`/api/repos${refresh ? "?refresh=1" : ""}`);
 export const fetchProcesses = (repo: string): Promise<ProcessInfo[]> => api(`/api/repos/${repo}/processes`);
+/** hard-reset the repo's workspace onto origin/<default> — discards unreleased live edits */
+export const syncRepo = (repo: string): Promise<SyncResult> => api(`/api/repos/${repo}/sync`, { method: "POST" });
 export const releaseProcess = (repo: string, id: string): Promise<ReleaseResult> =>
   api(`/api/repos/${repo}/release/${encodeURIComponent(id)}`, { method: "POST" });
 /** the backend's hard cap on history length — a full response means truncation */
