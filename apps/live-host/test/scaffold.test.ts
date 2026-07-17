@@ -50,14 +50,19 @@ test("listFolders: every folder under the processes root, empty ones included", 
   mkdirSync(join(ws, "processes", "orders", "archive"), { recursive: true }); // empty nested
   mkdirSync(join(ws, "processes", ".hidden")); // dot → invisible
   mkdirSync(join(ws, "processes", "node_modules")); // noise → invisible
-  assert.deepEqual(await listFolders(ws), ["orders", "orders/archive", "subprocesses"]);
+  assert.deepEqual(await listFolders(ws), {
+    isContentRepo: true,
+    folders: ["orders", "orders/archive", "subprocesses"],
+  });
 });
 
-test("listFolders: no config or missing folder degrades to []", async () => {
+test("listFolders: no bpmiq.yml → not a content repo; missing folder still is one", async () => {
   const empty = mkdtempSync(join(tmpdir(), "bpm-scaffold-empty-"));
-  assert.deepEqual(await listFolders(empty), []);
+  assert.deepEqual(await listFolders(empty), { isContentRepo: false, folders: [] });
+  // a bpmiq.yml whose processes folder does not exist yet is still a content
+  // repo — an empty tree, not a missing config (create would just mkdir it)
   writeFileSync(join(empty, "bpmiq.yml"), "processes: not-there\n");
-  assert.deepEqual(await listFolders(empty), []);
+  assert.deepEqual(await listFolders(empty), { isContentRepo: true, folders: [] });
 });
 
 // ── createFolder ────────────────────────────────────────────────────────────
@@ -66,7 +71,10 @@ test("createFolder: creates (nested) and normalizes the path", async () => {
   const ws = workspace();
   assert.equal(await createFolder(REPO, ws, "orders/archive/"), "orders/archive");
   assert.ok(existsSync(join(ws, "processes", "orders", "archive")));
-  assert.deepEqual(await listFolders(ws), ["orders", "orders/archive", "subprocesses"]);
+  assert.deepEqual(await listFolders(ws), {
+    isContentRepo: true,
+    folders: ["orders", "orders/archive", "subprocesses"],
+  });
 });
 
 test("createFolder: rejects invalid names, traversal and noise segments", async () => {

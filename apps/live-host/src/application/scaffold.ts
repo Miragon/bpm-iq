@@ -20,7 +20,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
-import type { DecisionInfo, ProcessInfo } from "@bpmiq/contracts/live-host";
+import type { DecisionInfo, FolderListWire, ProcessInfo } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 import { byExtension, processIdFromName } from "@bpmiq/notations";
 
@@ -123,26 +123,31 @@ async function writeGuarded<T>(what: string, write: () => Promise<T>): Promise<T
 }
 
 /**
- * Every folder under the processes root, processes-root-relative, sorted.
- * Same skip rules as process discovery (dot segments, node_modules) so the
- * listing never shows a folder whose content would be invisible. Missing or
- * unconfigured root → [] — the folder list must never 500 an overview.
+ * The repo's folder tree plus whether it is a content repo at all. `folders`:
+ * every folder under the processes root, processes-root-relative, sorted — same
+ * skip rules as process discovery (dot segments, node_modules) so the listing
+ * never shows a folder whose content would be invisible. `isContentRepo` is
+ * false exactly when there is no root bpmiq.yml (the repo view hides its
+ * create/release actions then). Missing/unreadable processes folder still
+ * counts as a content repo with an empty tree — the folder list must never 500
+ * an overview, and a create would just mkdir it.
  */
-export async function listFolders(workspace: string): Promise<string[]> {
+export async function listFolders(workspace: string): Promise<FolderListWire> {
   const cfg = loadContentConfig(workspace);
-  if (!cfg) return [];
+  if (!cfg) return { isContentRepo: false, folders: [] };
   const root = processesRoot(workspace, cfg);
   let entries;
   try {
     entries = await readdir(root, { withFileTypes: true, recursive: true });
   } catch {
-    return [];
+    return { isContentRepo: true, folders: [] };
   }
-  return entries
+  const folders = entries
     .filter((e) => e.isDirectory())
     .map((e) => relative(root, join(e.parentPath, e.name)).split(sep).join("/"))
     .filter((p) => !p.split("/").some((s) => s.startsWith(".") || s === "node_modules"))
     .sort();
+  return { isContentRepo: true, folders };
 }
 
 /** create a folder under the processes root; returns the normalized path */

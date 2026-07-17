@@ -21,6 +21,7 @@ import {
   fetchProcesses,
   fetchRepos,
   fetchTodos,
+  type FolderListWire,
   logout,
   type ProcessInfo,
   releaseFiles,
@@ -121,9 +122,12 @@ export function useCreateFolder(repo: string) {
   return useMutation({
     mutationFn: (path: string) => createFolder(repo, { path }),
     onSuccess: (created) => {
-      qc.setQueryData<string[]>(["folders", repo], (old) =>
-        old ? (old.includes(created.path) ? old : [...old, created.path].sort()) : [created.path],
-      );
+      // creating a folder only succeeds in a content repo, so seed isContentRepo
+      qc.setQueryData<FolderListWire>(["folders", repo], (old) => {
+        const folders = old?.folders ?? [];
+        if (folders.includes(created.path)) return old;
+        return { isContentRepo: true, folders: [...folders, created.path].sort() };
+      });
       void qc.invalidateQueries({ queryKey: ["folders", repo] });
     },
   });
