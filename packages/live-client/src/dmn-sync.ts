@@ -35,9 +35,16 @@ interface DmnViewerLike {
   off(event: string, cb: () => void): void;
 }
 
+interface DmnView {
+  type: string;
+  id?: string;
+}
+
 interface DmnModelerLike {
-  getActiveView(): { type: string } | null | undefined;
+  getActiveView(): DmnView | null | undefined;
   getActiveViewer(): DmnViewerLike | null | undefined;
+  getViews(): DmnView[];
+  open(view: DmnView): Promise<unknown>;
   on(event: string, cb: (event: never) => void): void;
   off(event: string, cb: (event: never) => void): void;
   importXML(xml: string): Promise<unknown>;
@@ -58,9 +65,39 @@ export function bindDmn(
       ? (modeler.getActiveViewer()?.get("canvas", false) as DrdCanvasLike | undefined)
       : undefined;
 
+  // dmn-js clears the stage BEFORE parsing (Manager#importXML), so a failed
+  // re-import would blank the visual editor — unlike bpmn-js, which keeps the
+  // old canvas. Track the last good XML and restore its render on failure; the
+  // engine still treats the import as failed (lastExport unchanged, heals later).
+  let lastGoodXml: string | undefined;
+
   return bindModelSync(
     {
-      importXML: (xml) => modeler.importXML(xml),
+      importXML: async (xml) => {
+        // the failing import nulls the active view BEFORE parsing, so the
+        // recovery import would fall back to the default view — capture the
+        // user's view now and re-open it after the recovery render
+        const activeView = modeler.getActiveView();
+        try {
+          await modeler.importXML(xml);
+          lastGoodXml = xml;
+        } catch (err) {
+          if (lastGoodXml !== undefined) {
+            await modeler
+              .importXML(lastGoodXml)
+              .then(() => {
+                const view =
+                  activeView &&
+                  modeler
+                    .getViews()
+                    .find((v) => (activeView.id !== undefined ? v.id === activeView.id : v.type === activeView.type));
+                return view ? modeler.open(view) : undefined;
+              })
+              .catch(() => undefined);
+          }
+          throw err;
+        }
+      },
       saveXML: async () => (await modeler.saveXML({ format: true })).xml,
 
       beforeImport(isFirstImport) {

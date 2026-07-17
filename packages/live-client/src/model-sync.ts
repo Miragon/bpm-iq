@@ -40,10 +40,11 @@ export function bindModelSync(
   doc: Y.Doc,
   onConflict?: (message: string) => void,
   /**
-   * fires when the FIRST import fails (the document is malformed from the
-   * start — there is no last good state to keep rendering), at most once until
-   * an import succeeds; later rejections are transient interleavings that the
-   * next update usually heals, those stay on the console
+   * fires when the FIRST import fails or never happens (the document is
+   * malformed or empty from the start — there is no last good state to keep
+   * rendering), at most once until an import succeeds; later rejections are
+   * transient interleavings that the next update usually heals, those stay
+   * on the console
    */
   onImportError?: (message: string) => void,
 ): () => void {
@@ -58,6 +59,13 @@ export function bindModelSync(
     s.trim().length > 0 &&
     new DOMParser().parseFromString(s, "application/xml").getElementsByTagName("parsererror").length === 0;
 
+  // a document that never rendered has no fallback view — surface that once
+  const reportFirstImportFailure = (message: string): void => {
+    if (lastExport !== "" || importErrorReported) return;
+    importErrorReported = true;
+    onImportError?.(message);
+  };
+
   async function importFromY(): Promise<void> {
     // Local edits win: importXML replaces the whole canvas, so an in-flight user
     // edit would be lost. Wait for a short quiet period — the local edit exports
@@ -67,8 +75,17 @@ export function bindModelSync(
       return;
     }
     const xml = ytext.toString();
-    if (xml === lastExport) return; // echo of our own edit
-    if (!looksValidXml(xml)) return; // rule 4: keep last good canvas, wait for next update
+    if (xml === lastExport) {
+      // both empty = a 0-byte document, not an echo — there is nothing to render
+      if (xml === "") reportFirstImportFailure("the document is empty");
+      return;
+    }
+    if (!looksValidXml(xml)) {
+      // rule 4: keep last good canvas, wait for next update — but a document
+      // that is broken from the START has no last good canvas to keep
+      reportFirstImportFailure("the document is not well-formed XML");
+      return;
+    }
     importing = true;
     try {
       const isFirstImport = lastExport === "";
@@ -79,10 +96,7 @@ export function bindModelSync(
       importErrorReported = false;
     } catch (err) {
       console.warn("[bpm-live] remote XML not importable, keeping last good state", err);
-      if (lastExport === "" && !importErrorReported) {
-        importErrorReported = true;
-        onImportError?.(err instanceof Error ? err.message : String(err));
-      }
+      reportFirstImportFailure(err instanceof Error ? err.message : String(err));
     } finally {
       importing = false;
       if (pendingLocalExport) {

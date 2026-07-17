@@ -189,10 +189,13 @@ export function LiveEditor({
           dmnModeler as never,
           ytext,
           session.doc,
-          (msg) => toast.error(msg),
+          (msg) => {
+            if (!cancelled) toast.error(msg);
+          },
           // malformed from the start: nothing to render — surface the error and
           // fall back to the XML view, where the document stays editable
           (msg) => {
+            if (cancelled) return; // an in-flight first import can settle after unmount
             toast.error(`DMN import failed: ${msg}`);
             setShowXml(true);
           },

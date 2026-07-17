@@ -18,10 +18,13 @@ import * as Y from "yjs";
 
 import { bindDmn } from "../src/dmn-sync.ts";
 
-// importFromY's validity gate uses DOMParser; a permissive stub is enough here
+// importFromY's validity gate uses DOMParser; the stub flags a marker string
+// as non-well-formed so the gate itself is testable
 (globalThis as Record<string, unknown>).DOMParser = class {
-  parseFromString() {
-    return { getElementsByTagName: () => [] };
+  parseFromString(s: string) {
+    return {
+      getElementsByTagName: (tag: string) => (tag === "parsererror" && s.includes("NOTWELLFORMED") ? [{}] : []),
+    };
   }
 };
 
@@ -59,6 +62,7 @@ type FakeViewer = ReturnType<typeof makeFakeViewer>;
 
 function makeFakeDmnModeler(initial: string, opts: { rejectWhen?: (xml: string) => boolean } = {}) {
   let xml = initial;
+  const importCalls: string[] = [];
   const managerHandlers: Record<string, Array<(event: never) => void>> = {};
   const viewers: Record<string, FakeViewer> = {};
   let activeType: string | null = null;
@@ -81,17 +85,26 @@ function makeFakeDmnModeler(initial: string, opts: { rejectWhen?: (xml: string) 
     viewer: (type: string) => viewers[type] as FakeViewer,
     getActiveView: () => (activeType ? { type: activeType } : null),
     getActiveViewer: () => (activeType ? viewers[activeType] : null),
+    getViews: () => ["drd", "decisionTable"].map((type) => ({ type })),
+    open: async (view: { type: string }) => {
+      openView(view.type);
+    },
     on: (ev: string, cb: (event: never) => void) => {
       (managerHandlers[ev] ??= []).push(cb);
     },
     off: (ev: string, cb: (event: never) => void) => {
       managerHandlers[ev] = (managerHandlers[ev] ?? []).filter((h) => h !== cb);
     },
-    // like dmn-js: re-opens the previously active view (or the DRD initially)
+    importCalls,
+    // like dmn-js: clears the stage BEFORE parsing, then re-opens the
+    // previously active view (or the DRD initially) on success
     importXML: async (x: string) => {
+      importCalls.push(x);
+      const previousActive = activeType;
+      activeType = null;
       if (opts.rejectWhen?.(x)) throw new Error("unparsable DMN");
       xml = x;
-      openView(activeType ?? "drd");
+      openView(previousActive ?? "drd");
     },
     saveXML: async () => ({ xml }),
   };
@@ -136,7 +149,7 @@ test("edits from a viewer created after binding (view switch) sync as minimal di
   unbind();
 });
 
-test("a viewer active BEFORE binding is picked up via views.changed", async () => {
+test("a viewer active BEFORE binding syncs from the moment of binding", async () => {
   const { doc, ytext, modeler } = setup();
   modeler.openView("decisionTable"); // exists before bindDmn
   const unbind = bindDmn(modeler as never, ytext, doc);
@@ -148,6 +161,22 @@ test("a viewer active BEFORE binding is picked up via views.changed", async () =
   assert.ok(ytext.toString().includes("Alpha-EARLY"));
 
   // exactly ONE subscription despite viewer.created/views.changed both firing later
+  assert.equal(modeler.viewer("decisionTable").listenerCount("commandStack.changed"), 1);
+  unbind();
+});
+
+test("a viewer created before binding but INACTIVE at bind time is picked up via views.changed", async () => {
+  const { doc, ytext, modeler } = setup();
+  modeler.openView("decisionTable"); // viewer.created fired before the binding listens
+  modeler.openView("drd"); // ...and the table viewer is not active at bind time
+  const unbind = bindDmn(modeler as never, ytext, doc);
+  await wait(100);
+
+  modeler.openView("decisionTable"); // re-activation → views.changed → subscribe
+  modeler.setXml(BASE.replace('name="Beta"', 'name="Beta-LATE"'));
+  modeler.viewer("decisionTable").fire("commandStack.changed");
+  await wait(100);
+  assert.ok(ytext.toString().includes("Beta-LATE"), "edits from a pre-existing viewer must sync");
   assert.equal(modeler.viewer("decisionTable").listenerCount("commandStack.changed"), 1);
   unbind();
 });
@@ -193,6 +222,74 @@ test("unbind detaches from every viewer", async () => {
   modeler.viewer("decisionTable").fire("commandStack.changed");
   await wait(100);
   assert.ok(!ytext.toString().includes("Alpha-AFTER"), "no export after unbind");
+});
+
+test("failed re-import restores the last good render AND the user's view (dmn-js clears before parsing)", async () => {
+  const errors: string[] = [];
+  const { doc, ytext, modeler } = setup(BASE, { rejectWhen: (x) => x.includes("BROKEN") });
+  const unbind = bindDmn(modeler as never, ytext, doc, undefined, (msg) => errors.push(msg));
+  await wait(100); // initial import succeeds
+  modeler.openView("decisionTable"); // the user is editing a table
+
+  doc.transact(() => {
+    ytext.delete(0, ytext.length);
+    ytext.insert(0, "<definitions>BROKEN</definitions>");
+  }, "remote-user");
+  await wait(500);
+  assert.deepEqual(modeler.importCalls.at(-1), BASE, "adapter re-imports the last good XML");
+  assert.equal(modeler.xml(), BASE, "visual editor keeps rendering the last good state");
+  assert.equal(
+    modeler.getActiveView()?.type,
+    "decisionTable",
+    "the failing import nulled the active view — the recovery must re-open the user's view",
+  );
+  assert.equal(errors.length, 0, "mid-session interleavings are not surfaced as import errors");
+
+  // the document heals — the merged state imports normally again
+  doc.transact(() => {
+    ytext.delete(0, ytext.length);
+    ytext.insert(0, BASE.replace('name="Beta"', 'name="Beta-HEALED"'));
+  }, "remote-user");
+  await wait(500);
+  assert.ok(modeler.xml().includes("Beta-HEALED"));
+  assert.equal(modeler.getActiveView()?.type, "decisionTable", "the healed import keeps the restored view");
+  unbind();
+});
+
+test("a document that is empty from the start reports the import error once", async () => {
+  const errors: string[] = [];
+  const { doc, ytext, modeler } = setup("");
+  const unbind = bindDmn(modeler as never, ytext, doc, undefined, (msg) => errors.push(msg));
+  await wait(100);
+  assert.equal(errors.length, 1, "empty document surfaces exactly once");
+  assert.equal(modeler.importCalls.length, 0, "nothing is imported");
+
+  // content arrives (e.g. typed in the XML view) — the visual editor mounts
+  doc.transact(() => {
+    ytext.insert(0, BASE);
+  }, "remote-user");
+  await wait(500);
+  assert.equal(modeler.xml(), BASE);
+  assert.equal(errors.length, 1);
+  unbind();
+});
+
+test("a non-well-formed document reports the import error once without an import attempt", async () => {
+  const errors: string[] = [];
+  const { doc, ytext, modeler } = setup("<definitions NOTWELLFORMED");
+  const unbind = bindDmn(modeler as never, ytext, doc, undefined, (msg) => errors.push(msg));
+  await wait(100);
+  assert.equal(errors.length, 1, "well-formedness gate failure surfaces exactly once");
+  assert.equal(modeler.importCalls.length, 0, "the import is never attempted");
+
+  doc.transact(() => {
+    ytext.delete(0, ytext.length);
+    ytext.insert(0, BASE);
+  }, "remote-user");
+  await wait(500);
+  assert.equal(modeler.xml(), BASE, "heals once well-formed content arrives");
+  assert.equal(errors.length, 1);
+  unbind();
 });
 
 test("malformed document: import error reported once, heals when valid content arrives", async () => {
