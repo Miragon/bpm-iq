@@ -14,8 +14,7 @@
 /deploy/                      @dominikhorn93
 /Dockerfile                   @dominikhorn93
 
-# ── Content-repo contract + example content ─────────────────────────
-# starter/ is the minimal contract mirrored to the starter template by
-# sync-starter.yml; process-documentation/ is the rich internal example.
-/starter/                     @dominikhorn93
+# ── Example content repo ────────────────────────────────────────────
+# process-documentation/ is the internal example AND the content-repo
+# contract mirrored to the starter template by sync-starter.yml.
 /process-documentation/       @dominikhorn93

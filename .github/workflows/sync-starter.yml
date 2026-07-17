@@ -1,9 +1,9 @@
 name: Sync starter
 
-# Mirrors starter/ into Miragon/process-documentation-starter so the
-# "Use this template" repo never drifts from the monorepo source of truth.
-# The starter is the minimal content-repo contract: bpmiq.yml + a processes
-# folder + README (no build, no dependencies).
+# Mirrors process-documentation/ into Miragon/process-documentation-starter so
+# the "Use this template" repo never drifts from the monorepo source of truth.
+# process-documentation/ IS the content-repo contract: a root bpmiq.yml + .bpmn
+# files, plus the .claude/skills toolset that travels with a content repo.
 # Requires the release-please GitHub App installed on the starter repo with
 # Contents write (and Workflows write if the template later ships workflows).
 
@@ -11,7 +11,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "starter/**"
+      - "process-documentation/**"
       - ".github/workflows/sync-starter.yml"
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   sync:
-    name: Push starter/ to the starter repo
+    name: Push process-documentation/ to the starter repo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -43,10 +43,10 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           path: starter-repo
 
-      - name: Mirror the starter into the template repo
-        run: rsync -a --delete --exclude ".git" starter/ starter-repo/
+      - name: Mirror the content repo into the starter template
+        run: rsync -a --delete --exclude ".git" process-documentation/ starter-repo/
 
-      - name: Verify the mirrored starter is complete
+      - name: Verify the mirrored starter is a valid content repo
         working-directory: starter-repo
         run: |
           # the contract essentials must survive the mirror
@@ -57,7 +57,7 @@ jobs:
           grep -E "^processes: *[A-Za-z0-9._/-]+$" bpmiq.yml || { echo "::error::bpmiq.yml has no processes key"; exit 1; }
           dir=$(grep -E "^processes:" bpmiq.yml | sed -E "s/^processes: *//")
           test -d "$dir" || { echo "::error::processes folder '$dir' missing"; exit 1; }
-          ls "$dir"/*.bpmn >/dev/null 2>&1 || { echo "::error::no .bpmn files in '$dir'"; exit 1; }
+          find "$dir" -name '*.bpmn' | grep -q . || { echo "::error::no .bpmn files in '$dir'"; exit 1; }
           echo "starter verified (bpmiq.yml → $dir)"
 
       - name: Commit and push

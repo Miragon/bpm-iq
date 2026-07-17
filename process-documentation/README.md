@@ -38,5 +38,5 @@ processes/
   root) checks BPMN structure + BPMNDI coverage.
 - **Skills**: `.claude/skills/` carries the AI toolset that operates on this repo.
 
-The minimal seed of this contract lives in the monorepo's `starter/` and is
-mirrored to [`Miragon/process-documentation-starter`](https://github.com/Miragon/process-documentation-starter).
+This repo is mirrored to [`Miragon/process-documentation-starter`](https://github.com/Miragon/process-documentation-starter)
+as the "Use this template" starter.

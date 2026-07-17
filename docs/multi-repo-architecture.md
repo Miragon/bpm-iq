@@ -174,9 +174,9 @@ moves host-side; connected repos ship **content only**:
 
 ## The repo contract (what a connected repo must fulfill)
 
-The contract is deliberately minimal (v0, `starter/` mirrors it to the template
-repo): a **`bpmiq.yml` at the repo root** naming the folder the BPMN processes
-live in (`processes: <folder>`). Every `.bpmn` under that folder is a process
+The contract is deliberately minimal (v0; `process-documentation/` is the example
+and is mirrored to the template repo): a **`bpmiq.yml` at the repo root** naming the
+folder the BPMN processes live in (`processes: <folder>`). Every `.bpmn` under that folder is a process
 (id = file name without extension); a repo without the config is simply not a
 content repo — the Live Host neither lists nor serves it, and live rooms exist
 only inside the configured folder. There is no hand-written metadata: the process
