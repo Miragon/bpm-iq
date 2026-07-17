@@ -23,7 +23,6 @@ COPY packages/github-app/package.json ./packages/github-app/
 COPY packages/http-kit/package.json ./packages/http-kit/
 COPY packages/validator/package.json ./packages/validator/
 COPY packages/mcp/package.json ./packages/mcp/
-COPY process-documentation/package.json ./process-documentation/
 # --frozen-lockfile: install the EXACT versions CI validated (reproducible + closes
 # in-range dependency substitution into the OAuth/token-minting image)
 RUN pnpm install --frozen-lockfile
