@@ -218,6 +218,51 @@ export class WorkspaceManager {
   }
 
   /**
+   * Hard-reset the workspace onto origin/<defaultBranch> — "load the latest
+   * state from main", DISCARDING every uncommitted live edit (the opposite of
+   * reconcile, which refuses to touch a dirty tree). Fetches first, records the
+   * paths the reset will overwrite or remove (tracked diffs vs origin PLUS
+   * untracked files git clean will delete) so their Yjs lineage can be dropped,
+   * then `reset --hard` + `clean -fd`. Returns those repo-root-relative paths.
+   *
+   * REFUSES the in-place host checkout: a `reset --hard` there would wipe the
+   * operator's own working tree (the whole monorepo, not just models). Only
+   * cloned workspaces under <dataDir>/workspaces are reset-safe — the caller
+   * (application/sync.ts) already rejects the host repo with a 422, this is the
+   * defense-in-depth backstop.
+   */
+  async resetToDefault(repo: ConnectedRepo): Promise<string[]> {
+    if (this.isHostRepo(repo.fullName)) {
+      throw new Error(`refusing to hard-reset the in-place host checkout ${repo.fullName}`);
+    }
+    const dir = this.dir(repo);
+    const token = await this.registry.tokenFor(repo);
+    await runGit(["-C", dir, "fetch", "origin", repo.defaultBranch], { env: gitEnv(token) });
+    const affected = new Set<string>();
+    // tracked files whose working-tree content (committed or not) differs from
+    // origin — exactly what `reset --hard` will overwrite
+    const { stdout: diff } = await runGit(["-C", dir, "diff", "--name-only", `origin/${repo.defaultBranch}`], {
+      maxBuffer: GIT_OUT_MAX,
+    });
+    // untracked files (live-created, never committed) — `clean -fd` removes them
+    const { stdout: untracked } = await runGit(["-C", dir, "ls-files", "--others", "--exclude-standard"], {
+      maxBuffer: GIT_OUT_MAX,
+    });
+    for (const list of [diff, untracked]) {
+      for (const line of list.split("\n")) {
+        const p = line.trim();
+        if (p) affected.add(p);
+      }
+    }
+    await runGit(["-C", dir, "reset", "--hard", `origin/${repo.defaultBranch}`]);
+    await runGit(["-C", dir, "clean", "-fd"]);
+    // the tree now matches the ref we just fetched — keep provision()'s 60s
+    // throttle honest so it doesn't immediately re-fetch/reconcile behind us
+    this.ensured.set(repo.fullName, Date.now());
+    return [...affected];
+  }
+
+  /**
    * Commit history of ONE content file on the default branch, newest first.
    * Prefers origin/<defaultBranch> (the released truth release/dirty diff
    * against — local HEAD may carry unmerged release commits); the in-place

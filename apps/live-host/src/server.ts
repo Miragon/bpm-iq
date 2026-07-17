@@ -279,6 +279,9 @@ const httpServer = startApi(PORT, {
   access,
   devToken,
   liveDocs: () => [...liveDocs],
+  // sync-to-default invalidates the lineage of every file it reset — same
+  // LineageStore the reconcile hook drops through
+  dropLineage: (room) => lineage.drop(room),
   connectionSource,
   issues,
   handoffSecret: process.env.HANDOFF_SECRET,

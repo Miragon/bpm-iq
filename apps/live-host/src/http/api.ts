@@ -12,6 +12,7 @@
  *   GET  /api/me, POST /api/logout
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
  *   GET  /api/repos/:owner/:repo/processes       → process list      (repo write required)
+ *   POST /api/repos/:owner/:repo/sync            → hard-reset workspace to origin/<default> (repo write required)
  *   GET  /api/repos/:owner/:repo/history         → default-branch commits of one model file (repo write required)
  *   GET  /api/repos/:owner/:repo/history/content → that file's content at a commit (repo write required)
  *   GET  /api/repos/:owner/:repo/todos           → open model-anchored todos (repo write required)
@@ -36,6 +37,7 @@ import type {
   FileCommitWire,
   Me,
   ReleaseResult,
+  SyncResult,
   TodoWire,
 } from "@bpmiq/contracts/live-host";
 import { bearerAuth, errorBody, readBody, redirect, securityHeaders, send } from "@bpmiq/http-kit";
@@ -53,6 +55,7 @@ import {
 } from "../adapters/sqlite/sessions.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
 import { listProcesses, listRepos } from "../application/overview.ts";
+import { syncRepo } from "../application/sync.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
@@ -86,6 +89,8 @@ export interface ApiOptions {
   devUser?: string;
   /** repo-qualified document names of live rooms */
   liveDocs: () => string[];
+  /** invalidate a room's Yjs lineage — sync-to-default drops the reset files' lineage */
+  dropLineage: (room: string) => void;
   /** provider seam for the connected-repo set: connect URL + webhook verification */
   connectionSource?: RepoConnectionSource;
   /** issue-tracker seam (model-anchored todos) — absent when the platform has
@@ -381,7 +386,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // Group 3 = todo id (tracker-native, opaque: GitHub numbers, Jira "PROJ-123"),
       // group 4 = release process id.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
+        /^\/api\/repos\/(.+)\/(processes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
       );
       if (repoRoute) {
         const session = sessionOf(req);
@@ -391,6 +396,17 @@ export function startApi(port: number, opts: ApiOptions): Server {
         if (repoRoute[2] === "processes") {
           const workspace = await opts.workspaces.ensure(repo);
           return send(res, 200, await listProcesses(opts, repo, workspace));
+        }
+        // hard-reset the workspace onto origin/<default> ("load latest from main")
+        // — DISCARDS unreleased live edits (the web client confirms first). Refuses
+        // the in-place host checkout (422) and repos with open sessions (409).
+        if (repoRoute[2] === "sync") {
+          if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+          const result = await syncRepo(opts, repo);
+          console.log(
+            `synced ${repo.fullName} → origin/${repo.defaultBranch} by @${session.user.login}: ${result.changed.length} file(s) reset`,
+          );
+          return send(res, 200, result satisfies SyncResult);
         }
         // file history (read-models in application/history.ts) — ?path is the
         // content-relative model path, the same identifier the live rooms use
