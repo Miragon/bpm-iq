@@ -55,8 +55,10 @@ COPY --from=build /app/packages/contracts ./packages/contracts
 COPY --from=build /app/packages/github-app ./packages/github-app
 COPY --from=build /app/packages/http-kit ./packages/http-kit
 COPY --from=build /app/packages/validator ./packages/validator
-RUN mkdir -p /data
+RUN mkdir -p /data \
+    && chown -R node:node /app /data
+
+USER node
 EXPOSE 8080
-# runs as root so the mounted /data volume (root-owned) is writable — the
-# platform key lives in Fly secrets, not on this box; harden per MR-3.
+# Run as the dedicated non-root user.
 CMD ["node", "apps/live-host/src/server.ts"]
