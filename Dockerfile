@@ -6,7 +6,7 @@
 # Build (from the repo root):  docker build -t bpmiq-mcp .
 # Serves any content repo: set BPM_CONTENT_ROOT / mount your checkout (docs/on-prem).
 
-FROM node:24-slim AS build
+FROM node:26-slim AS build
 RUN corepack enable
 WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
@@ -24,7 +24,7 @@ COPY packages/mcp/package.json ./packages/mcp/
 RUN pnpm install --frozen-lockfile
 COPY . .
 
-FROM node:24-slim
+FROM node:26-slim
 RUN corepack enable
 ENV NODE_ENV=production PORT=8080
 WORKDIR /app
