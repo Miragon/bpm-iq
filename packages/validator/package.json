@@ -43,11 +43,11 @@
     "test": "node --test test/validate.test.ts"
   },
   "dependencies": {
-    "fast-xml-parser": "5.9.3",
+    "fast-xml-parser": "5.10.1",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@bpmiq/notations": "workspace:*",
-    "tsdown": "0.22.8"
+    "tsdown": "0.22.12"
   }
 }
