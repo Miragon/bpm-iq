@@ -21,13 +21,13 @@
     "@bpmiq/github-app": "workspace:*",
     "@bpmiq/notations": "workspace:*",
     "@bpmiq/validator": "workspace:*",
-    "@hocuspocus/server": "4.3.0",
+    "@hocuspocus/server": "4.4.0",
     "yaml": "2.9.0",
     "yjs": "13.6.31"
   },
   "devDependencies": {
     "@bpmiq/live-client": "workspace:*",
     "@types/ws": "8.18.1",
-    "ws": "8.21.0"
+    "ws": "8.21.1"
   }
 }
