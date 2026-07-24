@@ -231,3 +231,40 @@ export interface CreateTodoBody {
     processVersion?: string;
   };
 }
+
+/** GET /api/repos/:fullName/content?path=<model path> — the LIVE document content
+ *  (the same Y.Text the collaborative rooms edit, read server-side) */
+export interface ContentWire {
+  repo: string;
+  /** content-relative model path (the room path) */
+  path: string;
+  xml: string;
+  /** opaque optimistic-concurrency token — changes on ANY edit (incl. delete-only) */
+  baseVersion: string;
+}
+
+/** PUT /api/repos/:fullName/content?path=… — request body. baseVersion is REQUIRED
+ *  (from a prior GET); a stale one returns 409 ContentConflictWire instead of overwriting. */
+export interface PutContentBody {
+  xml: string;
+  baseVersion: string;
+}
+
+/** PUT success response */
+export interface PutContentResultWire {
+  path: string;
+  /** the new token to continue editing against */
+  baseVersion: string;
+  /** validator WARN findings (non-blocking; [] for non-.bpmn files) */
+  warnings: string[];
+}
+
+/** PUT 409 — the document changed since the client's read */
+export interface ContentConflictWire {
+  error: string;
+  code: "content/conflict";
+  path: string;
+  /** re-derive the edit against this and retry with the fresh baseVersion */
+  currentXml: string;
+  baseVersion: string;
+}
