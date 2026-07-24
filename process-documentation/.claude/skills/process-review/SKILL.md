@@ -11,7 +11,7 @@ only fix them when the user asks.
 ## Step 0 — Run the deterministic validator first
 
 ```
-node packages/validator/src/validate.ts --root . [<process-id>]
+node packages/validator/src/cli.ts --root . [<process-id>]
 ```
 
 (from the monorepo root; `--root <checkout>` for another repo). It covers the

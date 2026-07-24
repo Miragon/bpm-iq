@@ -80,7 +80,7 @@ Recommendations are recommendations — accept/reject is the human's call.
    semantics and BPMNDI in sync).
 2. Set the report's `status: accepted` and append a `## Decision` section: who
    confirmed, what changed.
-3. Validate: `node packages/validator/src/validate.ts --root . <id>`.
+3. Validate: `node packages/validator/src/cli.ts --root . <id>`.
 4. If the process was exported (`dist/skills/<id>/` exists), say so — the deployed
    snapshot now lags; re-export with `export-process-skill`.
 

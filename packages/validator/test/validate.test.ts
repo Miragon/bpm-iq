@@ -16,7 +16,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const VALIDATE = resolve(HERE, "..", "src", "validate.ts");
+const VALIDATE = resolve(HERE, "..", "src", "cli.ts");
 const FIXTURE = resolve(HERE, "fixtures", "content-repo");
 
 function run(args: string[]): { status: number; out: string } {

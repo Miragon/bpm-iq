@@ -49,7 +49,7 @@ the process id (kebab-case).
    mapped — unknown roles, dangling flows, illegible shapes.
 
 5. **Validate and report**: run
-   `node packages/validator/src/validate.ts --root . <id>`, report its findings,
+   `node packages/validator/src/cli.ts --root . <id>`, report its findings,
    then list what a human must confirm — gateway logic, exception handling, and
    every item from the unmapped list. Recommend a `capture-process` playback with
    the process owner as the confirmation path, and `process-review` once the draft
