@@ -59,6 +59,27 @@ The **app private key** is resolved by the shared loader
 app manifest, defaulting to `$LIVE_PUBLIC_URL/webhook/github` when the public URL isn't
 localhost). The running server always receives webhooks at `/webhook/github`.
 
+## OIDC token auth (MCP & headless clients)
+
+Lets MCP clients and other headless callers authenticate with an audience-bound JWT from
+your identity provider (Keycloak, WorkOS, Auth0, … — GitHub as a social connection behind
+it). The Live Host only **verifies** tokens (a resource server); it never runs its own
+authorization server. Identity is not authorization: per-repo write permission is still
+checked app-side against real GitHub permissions, which requires the GitHub-App connection
+source (JWT sessions hold no user token). When configured, the server publishes RFC-9728
+protected-resource metadata at `/.well-known/oauth-protected-resource` and 401 responses
+carry `WWW-Authenticate: Bearer resource_metadata="…"`, so MCP clients discover your IdP
+automatically. Browser login is unaffected (stays GitHub OAuth). Decision record:
+[ADR 0005](../adr/0005-in-process-mcp-and-oidc-resource-server.md).
+
+| Variable                | Default           | Meaning                                                                                                                                                                                             |
+| ----------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LIVE_OIDC_ISSUER`      | —                 | The IdP's issuer URL (expected `iss` claim). Must be set together with `LIVE_OIDC_JWKS_URL` — one without the other refuses startup.                                                                |
+| `LIVE_OIDC_JWKS_URL`    | —                 | The IdP's JWKS endpoint, used to verify token signatures.                                                                                                                                           |
+| `LIVE_OIDC_AUDIENCE`    | `LIVE_PUBLIC_URL` | The audience (`aud`) tokens must be bound to — this instance.                                                                                                                                       |
+| `LIVE_OIDC_LOGIN_CLAIM` | `github_login`    | The claim carrying the user's GitHub login. **Must be IdP-populated with the verified GitHub login — never user-editable.** A token without it is refused (no `preferred_username`/`sub` fallback). |
+| `LIVE_MCP_READONLY`     | —                 | `1` = the MCP endpoint registers **no** write tools (absent from `tools/list`, not erroring).                                                                                                       |
+
 ## GitHub Enterprise
 
 | Variable          | Default                  | Meaning                                           |
@@ -78,11 +99,11 @@ localhost). The running server always receives webhooks at `/webhook/github`.
 
 ## Dev/test only — never set in production
 
-| Variable                 | Meaning                                                                                                                                                                                                                                                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LIVE_DEV_TOKEN`         | Bot session token for headless clients (`Authorization: Bearer <token>`). **It bypasses per-repo authorization entirely** — all-repos access. Defaults to `demo` only in the bare local spike (no login provider AND no GitHub App configured); the moment any provider exists it is off unless set explicitly. Leave unset. |
-| `LIVE_GIT_URL_OVERRIDE`  | Redirect clone/fetch URLs to a stub git server — test harness.                                                                                                                                                                                                                                                               |
-| `LIVE_PUSH_URL_OVERRIDE` | Redirect release pushes to a stub git server — test harness.                                                                                                                                                                                                                                                                 |
+| Variable                 | Meaning                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `LIVE_DEV_TOKEN`         | Bot session token for headless clients (`Authorization: Bearer <token>` — also accepted on `POST /mcp` and the `/api/repos/:owner/:repo/content` routes). **It bypasses per-repo authorization entirely** — all-repos access. Defaults to `demo` only in the bare local spike (no login provider AND no GitHub App configured); the moment any provider exists it is off unless set explicitly. Leave unset. |
+| `LIVE_GIT_URL_OVERRIDE`  | Redirect clone/fetch URLs to a stub git server — test harness.                                                                                                                                                                                                                                                                                                                                               |
+| `LIVE_PUSH_URL_OVERRIDE` | Redirect release pushes to a stub git server — test harness.                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Cell mode — leave unset on-prem
 

@@ -2,6 +2,15 @@
 
 Ways for tools _outside_ the content repo's skill layer to consume the models.
 
+The platform has **two MCP surfaces**:
+
+- **`packages/mcp`** — read-only, runs against any checkout, zero infrastructure.
+- **the Live Host's `POST /mcp`** — read-write against the **live**, collaboratively-edited
+  state, with per-repo auth, served by the running platform.
+
+Rule of thumb: talk _about_ released models → `packages/mcp`; read or **edit**
+work-in-progress → the Live Host endpoint.
+
 ## MCP server (`packages/mcp/`)
 
 A minimal, read-only [MCP](https://modelcontextprotocol.io) server that exposes a content
@@ -70,10 +79,10 @@ Requires Node >= 23.6 (runs the TypeScript server directly via built-in type str
   }
   ```
 
-### Remote: MCP over HTTP
+### Remote: the read-only server over HTTP
 
-A deployed instance serves the tools at `POST /mcp` over Streamable HTTP — stateless, so no
-session management is needed:
+A deployed instance of the read-only server serves its tools at `POST /mcp` over
+Streamable HTTP — stateless, so no session management is needed:
 
 ```sh
 # Claude Code
@@ -85,12 +94,74 @@ claude mcp add --transport http bpm https://<app>/mcp
 The MCP endpoint is public by default; to require auth, set `MCP_TOKEN=<token>` — clients must
 then send `Authorization: Bearer <token>`. Local development: `PORT=8080 node packages/mcp/http.ts`.
 
-> A **Live Host** MCP endpoint — querying the live, collaboratively-edited state with per-repo
-> auth — is designed in [issue #35](https://github.com/Miragon/bpm-iq/issues/35) and not yet built.
+## Live Host MCP endpoint (`apps/live-host`)
 
-### Read-only guarantee
+The Live Host serves its own MCP endpoint at `POST /mcp` (official
+`@modelcontextprotocol/sdk`, stateless Streamable HTTP) — same container, same port as
+sync, REST API and web app. Where `packages/mcp` reads a checkout, this endpoint reads and
+**writes the live collaborative state**: the same Y.Text the browser tabs and VS Code edit,
+accessed server-side via a Hocuspocus direct connection. `repo` is a **tool argument**
+(`owner/name`), not a URL segment — one endpoint serves every connected repo, and every
+call is gated by the caller's per-repo permission.
 
-The server only ever reads files; no tool creates, edits, or deletes anything, and missing or
-invalid files produce an explanatory message instead of an error. Changes keep going through
-the modeling workflow: edit in VS Code, check with `process-review` and `pnpm validate`,
-commit. The MCP server is a window onto the models, never a pen.
+| Tool              | Kind  | What it does                                                                      |
+| ----------------- | ----- | --------------------------------------------------------------------------------- |
+| `list_repos`      | read  | The connected repos the caller may work on.                                       |
+| `list_processes`  | read  | The processes of one repo (id, derived name, path).                               |
+| `get_process`     | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.        |
+| `get_bpmn_xml`    | read  | The live BPMN XML plus the `baseVersion` for a later save.                        |
+| `validate_bpmn`   | read  | Dry-run the platform validator on submitted XML — check before saving.            |
+| `list_changes`    | read  | A repo's unreleased live changes.                                                 |
+| `create_process`  | write | Scaffold a new process `.bpmn` in the live workspace.                             |
+| `save_bpmn_xml`   | write | Validated, conflict-guarded save into the live document (requires `baseVersion`). |
+| `release_process` | write | Open the release PR — merge rights stay at the git provider.                      |
+
+`save_bpmn_xml` is compare-and-set: the caller passes the `baseVersion` from a prior
+`get_bpmn_xml`, and if the live document moved in between, the save is refused with a
+retryable `{conflict: true, currentXml}` — re-read (or rebase onto `currentXml`) and retry;
+nothing is overwritten. Saves are validation-gated (`@bpmiq/validator`: ERROR findings
+refuse the save, WARN findings come back as warnings) and land in the live Yjs state —
+every open editor sees them instantly, exactly like a keystroke.
+
+**Auth** is the Live Host's one auth surface: a browser session cookie,
+`Authorization: Bearer <session-id>`, the dev token (`LIVE_DEV_TOKEN` — local only), or an
+**OIDC JWT** from your IdP (`LIVE_OIDC_ISSUER` + `LIVE_OIDC_JWKS_URL`; audience defaults
+to `LIVE_PUBLIC_URL`, and the login claim — default `github_login` — must carry the
+IdP-verified GitHub login; see [on-prem/configuration.md](on-prem/configuration.md)).
+Per-repo authorization always runs app-side against real GitHub permissions.
+`LIVE_MCP_READONLY=1` registers **no** write tools — they are absent from `tools/list`,
+not erroring.
+
+Connect a client:
+
+```sh
+claude mcp add --transport http bpm-live http://localhost:8301/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Locally the token is `LIVE_DEV_TOKEN`; in production it is an OIDC access token obtained
+via the client's OAuth flow — when OIDC is configured the host publishes RFC-9728
+protected-resource metadata at `/.well-known/oauth-protected-resource`, so clients like
+claude.ai discover the IdP themselves. Manual smoke test:
+`SMOKE_TOKEN=<dev-token> node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]`.
+
+Non-MCP clients get the same live content over plain REST:
+`GET/PUT /api/repos/:owner/:repo/content?path=<model path>` — GET returns
+`{repo, path, xml, baseVersion}`; PUT requires `{xml, baseVersion}` and applies the same
+validation + compare-and-set (a stale `baseVersion` → `409` with the current state instead
+of overwriting).
+
+Decision record: [ADR 0005](adr/0005-in-process-mcp-and-oidc-resource-server.md).
+
+## Read-only vs. write-capable — which server holds a pen
+
+**`packages/mcp` stays read-only by construction.** The server only ever reads files; no
+tool creates, edits, or deletes anything, and missing or invalid files produce an
+explanatory message instead of an error. Changes keep going through the modeling workflow:
+edit in VS Code, check with `process-review` and `pnpm validate`, commit. That MCP server
+is a window onto the models, never a pen.
+
+**The Live Host's `/mcp` IS write-capable** — but its writes land in the live Yjs state
+(and its write-through workspace file), never directly in git. Every save is
+validation-gated and conflict-guarded (`baseVersion`), and changes reach the repository
+only through the release-as-PR flow — merge stays a human decision at the git provider.
