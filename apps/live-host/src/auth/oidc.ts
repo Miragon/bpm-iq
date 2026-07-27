@@ -31,6 +31,13 @@ export interface OidcVerifierConfig {
   audience: string;
   /** JWT claim carrying the git-provider login (default `github_login`) */
   loginClaim: string;
+  /** exact-match claims the token MUST carry (cell mode: installation_id ==
+   * TENANT_INSTALLATION_ID). Needed because in the SaaS the audience is a shared
+   * fleet value (WorkOS resource indicators are dashboard-only, no per-tenant
+   * audiences) — so the tenant boundary is this claim, not `aud`. A token for
+   * tenant A replayed at cell B fails here (the claim is IdP-injected from the
+   * org membership, not client-influencable). Empty/absent → not enforced. */
+  requiredClaims?: Record<string, string>;
 }
 
 export interface VerifiedIdentity {
@@ -51,6 +58,16 @@ export function makeOidcVerifier(cfg: OidcVerifierConfig): OidcVerify {
       ({ payload } = await jwtVerify(token, jwks, { issuer: cfg.issuer, audience: cfg.audience }));
     } catch (e) {
       throw mapJoseError(e);
+    }
+    // tenant gate (cell mode): the token must belong to THIS tenant. Checked
+    // before the login claim so a cross-tenant token is rejected as such.
+    for (const [claim, expected] of Object.entries(cfg.requiredClaims ?? {})) {
+      if (payload[claim] !== expected) {
+        throw new AppError("auth/wrong-tenant", `token '${claim}' claim does not match this tenant`, {
+          status: 401,
+          expose: true,
+        });
+      }
     }
     const login = payload[cfg.loginClaim];
     if (typeof login !== "string" || login.length === 0) {

@@ -269,6 +269,11 @@ const oidc =
           jwksUrl: OIDC_JWKS_URL,
           audience: process.env.LIVE_OIDC_AUDIENCE ?? PUBLIC_URL,
           loginClaim: process.env.LIVE_OIDC_LOGIN_CLAIM ?? "github_login",
+          // cell mode: the SaaS audience is a shared fleet value, so THIS is the
+          // tenant boundary — a token must carry our installation_id (IdP-injected
+          // from the org membership; a cross-tenant token fails auth/wrong-tenant)
+          requiredClaims:
+            TENANT_INSTALLATION_ID !== undefined ? { installation_id: String(TENANT_INSTALLATION_ID) } : undefined,
         }),
       }
     : undefined;

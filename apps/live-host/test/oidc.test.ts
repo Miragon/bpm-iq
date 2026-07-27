@@ -117,3 +117,21 @@ test("a custom login claim is honored; name falls back to the login", async () =
   assert.equal(id.login, "petra-gl");
   assert.equal(id.name, "petra-gl");
 });
+
+test("cell mode: a required claim gates the tenant — wrong installation_id → 401, matching → ok", async () => {
+  const port = (jwks.address() as { port: number }).port;
+  const cell = makeOidcVerifier({
+    issuer: ISSUER,
+    jwksUrl: `http://127.0.0.1:${port}/jwks`,
+    audience: AUDIENCE,
+    loginClaim: "github_login",
+    requiredClaims: { installation_id: "145185795" },
+  });
+  // a token minted for another tenant (shared audience) is rejected as wrong-tenant
+  assert.equal(await codeOf(cell(await token({ claims: { installation_id: "999" } }))), "auth/wrong-tenant");
+  // a token with no installation_id at all is rejected (absent !== expected)
+  assert.equal(await codeOf(cell(await token({}))), "auth/wrong-tenant");
+  // the matching tenant passes and still yields the identity
+  const id = await cell(await token({ claims: { installation_id: "145185795" } }));
+  assert.equal(id.login, "petra");
+});

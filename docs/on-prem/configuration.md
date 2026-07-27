@@ -114,3 +114,11 @@ holds the GitHub App key and each tenant gets its own cell
 ([ADR 0002](../adr/0002-multi-tenant-cell-architecture.md),
 [ADR 0004](../adr/0004-open-source-split.md)). Leave **all** of them unset — the server
 then runs standalone with its own app key, which is the on-prem model.
+
+When `TENANT_INSTALLATION_ID` **is** set (cell mode) **and** `LIVE_OIDC_*` is configured,
+the OIDC verifier additionally requires every token to carry `installation_id` equal to
+this cell's tenant, refusing anything else with `401 auth/wrong-tenant`. This is the tenant
+boundary in the SaaS, where the OIDC audience is a shared fleet value (the IdP's resource
+indicators are one per environment, not per tenant): the claim is IdP-injected from the
+user's organization membership, so a token minted for another tenant fails here. On-prem
+(single tenant, `TENANT_INSTALLATION_ID` unset) this check is inert.
