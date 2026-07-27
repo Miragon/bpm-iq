@@ -43,8 +43,8 @@
   "dependencies": {
     "@bpmiq/contracts": "workspace:*",
     "@bpmiq/live-client": "workspace:*",
-    "@hocuspocus/provider": "4.3.0",
-    "ws": "8.21.0",
+    "@hocuspocus/provider": "4.4.0",
+    "ws": "8.21.1",
     "yjs": "13.6.31"
   },
   "devDependencies": {
