@@ -34,7 +34,7 @@ processes/
 
 1. BPMN files need a complete BPMNDI section (every flow node), or the visual
    editor breaks. Keep semantics (`bpmn:*`) and layout (`bpmndi:*`) in sync.
-2. After ANY model edit, validate: `node packages/validator/src/validate.ts --root .`
+2. After ANY model edit, validate: `node packages/validator/src/cli.ts --root .`
    (from the monorepo root) — fix errors before finishing.
 3. Modeling conventions: tasks verb+object, events object+past participle,
    gateways as questions, lanes = team/role labels.

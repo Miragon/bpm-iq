@@ -14,7 +14,8 @@ time, release as a pull request, and let AI agents query every process.
 - **Release as PR** — one click cuts a branch from `origin/<default>`, pushes **as the
   user**, and opens the PR in their name. Merge = approval — governance stays at the git
   provider (CODEOWNERS / branch protection), not in the tool.
-- **Processes talk** — the MCP server answers questions live from the content repo, the AI
+- **Processes talk** — the MCP server answers questions live from the content repo, agents
+  read and edit work-in-progress models through the Live Host's own `/mcp` endpoint, the AI
   skill layer (capture, import, review, feedback, export …) travels with it, and
   `export-process-skill` packages a process with its resolved dependencies as a portable
   skill for any agent.
@@ -62,7 +63,7 @@ but the cell mode it drives is. The code you read here is the code the SaaS runs
 | `apps/live-host/`        | `@bpmiq/live-host` | The platform server: Hocuspocus (Yjs) sync + REST API + web app on **one port**. Multi-repo, per-(user,repo) authz, release-as-PR. Published as `ghcr.io/miragon/bpmiq-live-host`.                                                                                        |
 | `apps/web/`              | `@bpmiq/web`       | Collaborative web client: bpmn-js + Monaco on a shared Y.Text, repo overview.                                                                                                                                                                                             |
 | `apps/vscode/`           | `@bpmiq/vscode`    | VS Code extension: opens `bpm-live://` model documents synced through the Live Host.                                                                                                                                                                                      |
-| `packages/mcp/`          | `@bpmiq/mcp`       | Read-only MCP server exposing a content repo's processes (discovered from `bpmiq.yml`, derived from BPMN) — stdio + Streamable HTTP.                                                                                                                                      |
+| `packages/mcp/`          | `@bpmiq/mcp`       | Read-only MCP server exposing a content repo's processes (discovered from `bpmiq.yml`, derived from BPMN) — stdio + Streamable HTTP. Read-only, against a checkout — the live, writable MCP endpoint lives in the Live Host (`/mcp`).                                     |
 | `packages/notations/`    | `@bpmiq/notations` | Notation registry + BPMN analysis: extensions/editors, `extract` (BPMN→graph), `derive` (graph→process view), and the `bpmiq.yml` content discovery.                                                                                                                      |
 | `packages/validator/`    | `@bpmiq/validator` | Platform validator: `bpmiq.yml` discovery + BPMN structure and BPMNDI coverage + callActivity link integrity. Runs against any checkout via `--root`.                                                                                                                     |
 | `packages/…`             | —                  | Shared foundations: `http-kit`, `github-app`, `contracts`, `live-client`, `ui-kit`, `api-client` — see `CLAUDE.md` for the full map.                                                                                                                                      |

@@ -22,6 +22,7 @@ export default tseslint.config(
       "apps/vscode/.vscode-test/**",
       "process-documentation/**",
       "packages/validator/test/fixtures/**",
+      "apps/*/scripts/**", // manual smoke/ops scripts (plain .mjs, outside the tsconfig projects)
       "**/*.vue",
       "**/*.config.{js,ts,mjs,mts}",
       "eslint.config.js",

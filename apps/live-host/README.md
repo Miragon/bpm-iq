@@ -57,6 +57,33 @@ registered earlier must add the permission in the app settings, and **existing i
 must approve the added permission** (GitHub prompts the org owner) before todos work — until
 then the API returns a clear 403 explaining exactly that.
 
+## MCP endpoint + live content API
+
+`POST /mcp` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP) serves nine
+tools over the **live** models: `list_repos`, `list_processes`, `get_process`,
+`get_bpmn_xml`, `validate_bpmn`, `list_changes`, `create_process`, `save_bpmn_xml`,
+`release_process`. The repo is a **tool argument**, not a URL segment; every call runs
+through the same per-(user,repo) authorization as the rest of the API, and `save_bpmn_xml`
+is compare-and-set — it requires the `baseVersion` from a prior `get_bpmn_xml`, and a
+stale one returns a retryable `{conflict: true, currentXml}`. `LIVE_MCP_READONLY=1`
+registers no write tools at all. Non-MCP clients use the REST twins:
+`GET/PUT /api/repos/:owner/:repo/content?path=<model path>` — GET returns
+`{repo, path, xml, baseVersion}`; PUT requires `{xml, baseVersion}`, validates `.bpmn` via
+`@bpmiq/validator` (ERROR findings → 422, WARN returned as warnings), enforces the doc
+size cap (413), and CASes (stale `baseVersion` → 409 with the current state). Writes land
+in the live Y.Text (the `@bpmiq/live-client/text` minimal-diff writer over a Hocuspocus
+direct connection), so every open editor sees them instantly — git is only reached through
+the release-as-PR flow. Full doc: docs/mcp-integration.md; decision record:
+docs/adr/0005-in-process-mcp-and-oidc-resource-server.md.
+
+| Env                     | Default           | Meaning                                                                                    |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------ |
+| `LIVE_OIDC_ISSUER`      | —                 | IdP issuer URL — set together with `LIVE_OIDC_JWKS_URL` to accept OIDC bearer JWTs.        |
+| `LIVE_OIDC_JWKS_URL`    | —                 | IdP JWKS endpoint for token signature verification.                                        |
+| `LIVE_OIDC_AUDIENCE`    | `LIVE_PUBLIC_URL` | Required `aud` of accepted tokens.                                                         |
+| `LIVE_OIDC_LOGIN_CLAIM` | `github_login`    | Claim carrying the IdP-verified GitHub login; a token without it is refused (fail closed). |
+| `LIVE_MCP_READONLY`     | —                 | `1` = register no MCP write tools (absent from `tools/list`, not erroring).                |
+
 ## Authentication — the git provider's grant IS the login
 
 Implemented target state (verified with an 11-check browser E2E against the stub provider):
@@ -111,6 +138,13 @@ is independent of the provider handshake.
 - `LIVE_DEV_TOKEN=<token>` grants a bot session for tests and the VS Code extension (which
   gets its own OAuth device flow later). With no provider configured, it defaults to `demo`
   (local spike mode); once a provider is configured it is **off unless set explicitly**.
+  It is also accepted as Bearer auth on `POST /mcp` and the content routes.
+- **OIDC bearer JWTs** join the dev token: with `LIVE_OIDC_ISSUER` + `LIVE_OIDC_JWKS_URL`
+  configured, `Authorization: Bearer <IdP JWT>` (audience-bound; the login claim must
+  carry the IdP-verified GitHub login) authenticates `/mcp` and the REST routes — per-repo
+  authorization still runs app-side via `checkUserPermission`. Caveat: for a JWT session
+  the `wsToken` returned by `/api/me` is a synthetic id — NOT usable to open the
+  websocket.
 - `test/stub-provider.ts` fakes GitHub's OAuth+REST endpoints (plus a `_control` endpoint for
   the permission gate) — full login/release flow without internet, also used by the E2E.
 
@@ -154,6 +188,9 @@ pnpm live-host
 
 # Terminal 2 — automated exit-criterion test (two headless guests)
 pnpm --filter @bpmiq/live-host test:sync
+
+# MCP smoke test against the running host (needs LIVE_DEV_TOKEN on the server)
+SMOKE_TOKEN=<dev-token> node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]
 
 # Web client (dev server with hot reload; the Live Host serves the built app)
 pnpm web:dev                     # http://localhost:5173
@@ -209,12 +246,15 @@ client is open — watch the canvas follow the browser edits.
 
 ## What's in here
 
-| Path                | What                                                                                                                                    |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/server.ts`     | The Live Host: Hocuspocus with `onAuthenticate`, `onLoadDocument` (seed from working tree), `onStoreDocument` (debounced write-through) |
-| `src/guest-test.ts` | Two headless guests: connect, co-edit, measure, revert                                                                                  |
-| `../web/`           | Browser client: bpmn-js + Monaco + `HocuspocusProvider` + y-monaco (remote cursors via awareness)                                       |
-| `../vscode/`        | Thin extension skeleton: `bpm-live://` FileSystemProvider bound to the shared Y.Text                                                    |
+| Path                    | What                                                                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/server.ts`         | The Live Host: Hocuspocus with `onAuthenticate`, `onLoadDocument` (seed from working tree), `onStoreDocument` (debounced write-through) |
+| `src/http/mcp.ts`       | `POST /mcp`: the MCP endpoint (official SDK) — nine tools over the live models, repo as a tool argument                                 |
+| `src/auth/oidc.ts`      | OIDC resource server: verifies audience-bound IdP JWTs for `/mcp` + the content routes                                                  |
+| `scripts/mcp-smoke.mjs` | Manual MCP smoke test against a running host (`SMOKE_TOKEN=…`)                                                                          |
+| `src/guest-test.ts`     | Two headless guests: connect, co-edit, measure, revert                                                                                  |
+| `../web/`               | Browser client: bpmn-js + Monaco + `HocuspocusProvider` + y-monaco (remote cursors via awareness)                                       |
+| `../vscode/`            | Thin extension skeleton: `bpm-live://` FileSystemProvider bound to the shared Y.Text                                                    |
 
 ## Spike shortcuts (M1 turns these into the real thing)
 

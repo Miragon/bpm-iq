@@ -34,7 +34,7 @@ processes/
   you can co-edit. Release → PR publishes a process's live state.
 - **Ask the processes**: the MCP server (`packages/mcp`) answers questions over
   this content (`list_processes`, `get_process`, `who_owns`, `enumerate_paths`, …).
-- **Validate**: `node packages/validator/src/validate.ts --root .` (from the repo
+- **Validate**: `node packages/validator/src/cli.ts --root .` (from the repo
   root) checks BPMN structure + BPMNDI coverage.
 - **Skills**: `.claude/skills/` carries the AI toolset that operates on this repo.
 

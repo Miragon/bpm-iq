@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Deterministic validation of a BPM content repository (the slim contract).
  *
@@ -10,52 +9,23 @@
  * breaks). It also cross-checks callActivity → calledElement against the other
  * processes in the repo. Nothing else about the layout is assumed.
  *
- * Usage:  node src/validate.ts                     # validate this repo
- *         node src/validate.ts <process>           # one process id (file stem)
- *         node src/validate.ts --root <dir> [<id>] # validate ANOTHER checkout
- *
- * --root makes this the PLATFORM validator: the target checkout is pure data —
- * no code from the target is ever executed.
- *
- * Exit code 0 = no errors (warnings allowed), 1 = errors found.
- * Requires Node >= 23.6 (built-in TypeScript type stripping).
+ * Library use:  import { checkBpmnXml } from "@bpmiq/validator" — a PURE function
+ * over a single BPMN XML string (no filesystem, no process.exit). The CLI lives
+ * in src/cli.ts (a dedicated entry, so importing this module never runs it).
  */
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
-import { discoverProcesses, loadContentConfig } from "@bpmiq/notations/content";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 
-const argv = process.argv.slice(2);
-const rootFlag = argv.indexOf("--root");
-const rootArg = rootFlag >= 0 ? argv[rootFlag + 1] : undefined;
-if (rootFlag >= 0 && !rootArg) {
-  console.error("--root requires a directory argument");
-  process.exit(2);
-}
-/** content root: the checkout being validated (defaults to the cwd) */
-const ROOT = rootArg ? resolve(rootArg) : resolve(".");
-if (rootFlag >= 0) argv.splice(rootFlag, 2);
-/** optional single-process filter (a .bpmn file stem) */
-const only = argv[0];
-
-type Severity = "ERROR" | "WARN";
-interface Finding {
+export type Severity = "ERROR" | "WARN";
+export interface Finding {
   severity: Severity;
+  /** the file/label the finding is about (checkBpmnXml uses opts.file, else "<bpmn>") */
   file: string;
   message: string;
 }
-const findings: Finding[] = [];
 
-const rel = (p: string): string => (p.startsWith("/") ? relative(ROOT, p) : p);
-const err = (file: string, message: string): void => {
-  findings.push({ severity: "ERROR", file: rel(file), message });
-};
-const warn = (file: string, message: string): void => {
-  findings.push({ severity: "WARN", file: rel(file), message });
-};
-
-const read = (p: string): string => readFileSync(p, "utf8");
 const asArray = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true });
@@ -173,7 +143,7 @@ function collectContainers(
 }
 
 /** fast-xml-parser is not namespace-aware — check that every used prefix is declared. */
-function checkXmlNamespaces(path: string, raw: string): void {
+function checkXmlNamespaces(raw: string, err: (message: string) => void): void {
   const declared = new Set([...raw.matchAll(/xmlns:([\w.-]+)=/g)].map((m) => m[1]));
   const used = new Set<string>();
   for (const m of raw.matchAll(/<([\w.-]+):[\w.-]+[\s/>]/g)) if (m[1]) used.add(m[1]);
@@ -181,29 +151,47 @@ function checkXmlNamespaces(path: string, raw: string): void {
   for (const prefix of used) {
     if (prefix !== "xml" && prefix !== "xmlns" && !declared.has(prefix)) {
       err(
-        path,
         `namespace prefix '${prefix}:' is used but never declared (missing xmlns:${prefix}=...) — strict XML parsers reject this`,
       );
     }
   }
 }
 
-/** Validate one .bpmn file's structure + DI; returns the calledElement ids it references. */
-function checkBpmn(path: string): string[] {
-  const raw = read(path);
+/**
+ * Validate one .bpmn file's XML string (structure + BPMNDI coverage). Pure: no
+ * filesystem, no process.exit. When `opts.processIds` is given, also warns on a
+ * callActivity whose calledElement is not a process in the repo. Returns the
+ * findings and the calledElement ids the model references.
+ */
+export function checkBpmnXml(
+  raw: string,
+  opts: { file?: string; processIds?: Set<string> } = {},
+): {
+  findings: Finding[];
+  called: string[];
+} {
+  const file = opts.file ?? "<bpmn>";
+  const findings: Finding[] = [];
+  const err = (message: string): void => {
+    findings.push({ severity: "ERROR", file, message });
+  };
+  const warn = (message: string): void => {
+    findings.push({ severity: "WARN", file, message });
+  };
+
   const wf = XMLValidator.validate(raw);
   if (wf !== true) {
-    err(path, `not well-formed XML: ${wf.err.msg}`);
-    return [];
+    err(`not well-formed XML: ${wf.err.msg}`);
+    return { findings, called: [] };
   }
-  checkXmlNamespaces(path, raw);
+  checkXmlNamespaces(raw, err);
 
   const defs = xml.parse(raw).definitions;
   // collaborations have one <bpmn:process> per pool — always treat as a list
   const processes = asArray(defs?.process as Record<string, unknown>[]);
   if (processes.length === 0) {
-    err(path, "no <bpmn:process> element");
-    return [];
+    err("no <bpmn:process> element");
+    return { findings, called: [] };
   }
 
   const collected = {
@@ -229,29 +217,28 @@ function checkBpmn(path: string): string[] {
     const out = new Map<string, number>();
     for (const [fid, [s, t]] of c.flows) {
       for (const ref of [s, t]) {
-        if (!c.nodes.has(ref)) err(path, `sequenceFlow ${fid} references missing node '${ref}' (${c.label})`);
+        if (!c.nodes.has(ref)) err(`sequenceFlow ${fid} references missing node '${ref}' (${c.label})`);
       }
       out.set(s, (out.get(s) ?? 0) + 1);
       inc.set(t, (inc.get(t) ?? 0) + 1);
     }
     if (c.nodes.size === 0) continue; // empty pool / collapsed reference — nothing to check
     const starts = [...c.nodes.values()].filter((tag) => tag === "startEvent").length;
-    if (!c.isSubProcess && starts !== 1) err(path, `expected exactly one start event in ${c.label}, found ${starts}`);
-    if (c.isSubProcess && !c.triggeredByEvent && starts > 1) err(path, `${c.label} has ${starts} start events`);
+    if (!c.isSubProcess && starts !== 1) err(`expected exactly one start event in ${c.label}, found ${starts}`);
+    if (c.isSubProcess && !c.triggeredByEvent && starts > 1) err(`${c.label} has ${starts} start events`);
     for (const [id, tag] of c.nodes) {
       // an event sub-process attaches to its own trigger, not the parent flow —
       // it is legitimately unconnected to the parent's sequence flow
       if (collected.eventSubProcesses.has(id)) continue;
-      if (tag === "startEvent" && (inc.get(id) ?? 0) > 0) err(path, `start event ${id} has incoming flows`);
-      if (tag === "endEvent" && (out.get(id) ?? 0) > 0) err(path, `end event ${id} has outgoing flows`);
+      if (tag === "startEvent" && (inc.get(id) ?? 0) > 0) err(`start event ${id} has incoming flows`);
+      if (tag === "endEvent" && (out.get(id) ?? 0) > 0) err(`end event ${id} has outgoing flows`);
       if (tag !== "startEvent" && tag !== "boundaryEvent" && (inc.get(id) ?? 0) === 0)
-        err(path, `${id} is unreachable (no incoming flow, ${c.label})`);
-      if (tag !== "endEvent" && (out.get(id) ?? 0) === 0)
-        err(path, `${id} is a dead end (no outgoing flow, ${c.label})`);
+        err(`${id} is unreachable (no incoming flow, ${c.label})`);
+      if (tag !== "endEvent" && (out.get(id) ?? 0) === 0) err(`${id} is a dead end (no outgoing flow, ${c.label})`);
     }
   }
   for (const [b, attached] of collected.boundaries) {
-    if (!nodes.has(attached)) err(path, `boundary event ${b} attached to missing '${attached}'`);
+    if (!nodes.has(attached)) err(`boundary event ${b} attached to missing '${attached}'`);
   }
 
   // collaboration: participants need DI, message flows must connect real elements
@@ -267,7 +254,7 @@ function checkBpmn(path: string): string[] {
       if (mf["@_id"]) collected.diRequired.add(mf["@_id"]);
       for (const ref of [mf["@_sourceRef"], mf["@_targetRef"]]) {
         if (ref && !nodes.has(ref) && !participantIds.has(ref)) {
-          err(path, `messageFlow ${mf["@_id"]} references missing element '${ref}'`);
+          err(`messageFlow ${mf["@_id"]} references missing element '${ref}'`);
         }
       }
     }
@@ -291,7 +278,7 @@ function checkBpmn(path: string): string[] {
     }
   })(defs);
   for (const id of collected.diRequired) {
-    if (!di.has(id)) err(path, `${id} has no BPMNDI shape/edge (breaks the visual editor)`);
+    if (!di.has(id)) err(`${id} has no BPMNDI shape/edge (breaks the visual editor)`);
   }
 
   // lanes: if present, every top-level node must be assigned, and lanes render → need DI
@@ -302,7 +289,7 @@ function checkBpmn(path: string): string[] {
     const laned = new Set<string>();
     for (const lane of lanes) {
       if (lane["@_id"] && !di.has(lane["@_id"]))
-        err(path, `lane ${lane["@_id"]} has no BPMNDI shape (breaks the visual editor)`);
+        err(`lane ${lane["@_id"]} has no BPMNDI shape (breaks the visual editor)`);
       for (const ref of asArray(lane.flowNodeRef as string[])) laned.add(String(ref));
     }
     const topContainer = topContainers[i];
@@ -311,50 +298,76 @@ function checkBpmn(path: string): string[] {
         // boundary events belong to their host activity's lane implicitly and
         // are routinely omitted from flowNodeRef by editors — don't flag them
         if (tag === "boundaryEvent") continue;
-        if (!laned.has(id)) err(path, `${id} is not assigned to any lane`);
+        if (!laned.has(id)) err(`${id} is not assigned to any lane`);
       }
   }
 
   const activities = [...nodes.values()].filter(
     (tag) => tag.toLowerCase().endsWith("task") || tag === "callActivity" || tag === "subProcess",
   ).length;
-  if (activities > 9) warn(path, `${activities} activities — consider extracting a sub-process (7±2 rule)`);
+  if (activities > 9) warn(`${activities} activities — consider extracting a sub-process (7±2 rule)`);
 
-  return collected.called;
-}
-
-// ── run ───────────────────────────────────────────────────────────────────────
-
-const cfg = loadContentConfig(ROOT);
-if (!cfg) {
-  console.error(`[ERROR] ${ROOT}: no bpmiq.yml at the root — not a BPM content repo (or wrong --root)`);
-  console.error("\n1 error(s), 0 warning(s) — FAIL (0 process(es) checked)");
-  process.exit(1);
-}
-
-const all = await discoverProcesses(ROOT, cfg);
-const processes = only ? all.filter((p) => p.id === only) : all;
-if (only && processes.length === 0) {
-  console.error(`[ERROR] unknown process '${only}'. Available: ${all.map((p) => p.id).join(", ") || "(none)"}`);
-  process.exit(1);
-}
-
-const processIds = new Set(all.map((p) => p.id));
-for (const proc of processes) {
-  const called = checkBpmn(resolve(ROOT, proc.path));
   // link integrity: a callActivity should reference a process that exists in the repo
-  for (const ref of called) {
-    if (!processIds.has(ref)) {
-      warn(proc.path, `callActivity calls '${ref}', which is not a process in this repo (external or dangling?)`);
+  if (opts.processIds) {
+    for (const ref of collected.called) {
+      if (!opts.processIds.has(ref)) {
+        warn(`callActivity calls '${ref}', which is not a process in this repo (external or dangling?)`);
+      }
     }
   }
+
+  return { findings, called: collected.called };
 }
 
-for (const f of findings.sort((a, b) => a.file.localeCompare(b.file))) {
-  console.log(`[${f.severity}] ${f.file}: ${f.message}`);
+// ── CLI (invoked by src/cli.ts — the dedicated bin entry) ───────────────────────
+
+export async function runCli(): Promise<void> {
+  const argv = process.argv.slice(2);
+  const rootFlag = argv.indexOf("--root");
+  const rootArg = rootFlag >= 0 ? argv[rootFlag + 1] : undefined;
+  if (rootFlag >= 0 && !rootArg) {
+    console.error("--root requires a directory argument");
+    process.exit(2);
+  }
+  /** content root: the checkout being validated (defaults to the cwd) */
+  const ROOT = rootArg ? resolve(rootArg) : resolve(".");
+  if (rootFlag >= 0) argv.splice(rootFlag, 2);
+  /** optional single-process filter (a .bpmn file stem) */
+  const only = argv[0];
+
+  const rel = (p: string): string => (p.startsWith("/") ? relative(ROOT, p) : p);
+
+  const { discoverProcesses, loadContentConfig } = await import("@bpmiq/notations/content");
+  const cfg = loadContentConfig(ROOT);
+  if (!cfg) {
+    console.error(`[ERROR] ${ROOT}: no bpmiq.yml at the root — not a BPM content repo (or wrong --root)`);
+    console.error("\n1 error(s), 0 warning(s) — FAIL (0 process(es) checked)");
+    process.exit(1);
+  }
+
+  const all = await discoverProcesses(ROOT, cfg);
+  const processes = only ? all.filter((p) => p.id === only) : all;
+  if (only && processes.length === 0) {
+    console.error(`[ERROR] unknown process '${only}'. Available: ${all.map((p) => p.id).join(", ") || "(none)"}`);
+    process.exit(1);
+  }
+
+  const processIds = new Set(all.map((p) => p.id));
+  const findings: Finding[] = [];
+  for (const proc of processes) {
+    const abs = resolve(ROOT, proc.path);
+    const { findings: fs } = checkBpmnXml(readFileSync(abs, "utf8"), { file: rel(abs), processIds });
+    findings.push(...fs);
+  }
+
+  for (const f of findings.sort((a, b) => a.file.localeCompare(b.file))) {
+    console.log(`[${f.severity}] ${f.file}: ${f.message}`);
+  }
+  const errorCount = findings.filter((f) => f.severity === "ERROR").length;
+  const warnCount = findings.length - errorCount;
+  const verdict = errorCount === 0 ? "OK" : "FAIL";
+  console.log(
+    `\n${errorCount} error(s), ${warnCount} warning(s) — ${verdict} (${processes.length} process(es) checked)`,
+  );
+  process.exit(errorCount === 0 ? 0 : 1);
 }
-const errorCount = findings.filter((f) => f.severity === "ERROR").length;
-const warnCount = findings.length - errorCount;
-const verdict = errorCount === 0 ? "OK" : "FAIL";
-console.log(`\n${errorCount} error(s), ${warnCount} warning(s) — ${verdict} (${processes.length} process(es) checked)`);
-process.exit(errorCount === 0 ? 0 : 1);

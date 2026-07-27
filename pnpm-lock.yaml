@@ -62,6 +62,9 @@ importers:
       '@bpmiq/http-kit':
         specifier: workspace:*
         version: link:../../packages/http-kit
+      '@bpmiq/live-client':
+        specifier: workspace:*
+        version: link:../../packages/live-client
       '@bpmiq/notations':
         specifier: workspace:*
         version: link:../../packages/notations
@@ -71,16 +74,22 @@ importers:
       '@hocuspocus/server':
         specifier: 4.3.0
         version: 4.3.0(y-protocols@1.0.7(yjs@13.6.31))(yjs@13.6.31)
+      '@modelcontextprotocol/sdk':
+        specifier: 1.29.0
+        version: 1.29.0(zod@4.4.3)
+      jose:
+        specifier: 6.2.3
+        version: 6.2.3
       yaml:
         specifier: 2.9.0
         version: 2.9.0
       yjs:
         specifier: 13.6.31
         version: 13.6.31
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
-      '@bpmiq/live-client':
-        specifier: workspace:*
-        version: link:../../packages/live-client
       '@types/ws':
         specifier: 8.18.1
         version: 8.18.1

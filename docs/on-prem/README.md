@@ -1,7 +1,8 @@
 # On-premise installation
 
 Self-host the bpmiq platform with Docker: one container runs the Live Host — Hocuspocus
-document sync (WebSocket), the REST API, and the collaborative web app on **one port**.
+document sync (WebSocket), the REST API, the collaborative web app, and the MCP endpoint
+for AI clients on **one port**.
 Releases become pull requests in your own GitHub organization; review + merge stays where it
 is today. The platform never executes code from a content repository.
 
@@ -87,6 +88,22 @@ Run on-prem in **GitHub App mode**. There is also a cell mode (extra `TENANT_*`/
 variables) used by Miragon's hosted multi-tenant operation
 ([ADR 0002](../adr/0002-multi-tenant-cell-architecture.md)) — leave all of those unset;
 the server then runs standalone.
+
+## AI clients (MCP)
+
+The same container serves an MCP endpoint at `POST /mcp` — agents read and edit the live
+models under the same per-(user,repo) authorization as the web app:
+
+```bash
+claude mcp add --transport http bpm-live https://<your-host>/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+The token: in production, an OIDC access token from your identity provider — set the
+`LIVE_OIDC_*` variables
+([configuration.md](configuration.md#oidc-token-auth-mcp--headless-clients)); for a local
+evaluation, `LIVE_DEV_TOKEN` works. Set `LIVE_MCP_READONLY=1` to serve the read tools
+only. Tool list and semantics: [docs/mcp-integration.md](../mcp-integration.md).
 
 ## Reverse proxy / TLS
 

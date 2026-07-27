@@ -26,6 +26,10 @@
  *   POST /api/repos/:owner/:repo/todos           → create a todo in the repo's tracker (repo write required)
  *   POST /api/repos/:owner/:repo/todos/:id/close → close a todo in the tracker (repo write required)
  *   POST /api/repos/:owner/:repo/release/:id     → release AS THE USER (repo write required)
+ *   GET  /api/repos/:owner/:repo/content?path=   → current LIVE model content + baseVersion (repo write required)
+ *   PUT  /api/repos/:owner/:repo/content?path=   → validate + CAS-save into the live doc (repo write required)
+ *   POST /mcp                                    → MCP endpoint (stateless Streamable HTTP; session/dev token/OIDC JWT)
+ *   GET  /.well-known/oauth-protected-resource   → RFC-9728 PRM (only when OIDC is configured)
  *   POST /webhook/github                         → installation lifecycle (HMAC-verified)
  *   GET  /setup/installed                        → post-install sync + redirect
  *   GET  /healthz, /*                            → liveness, built web app (public)
@@ -40,6 +44,8 @@ import { extname, join, normalize } from "node:path";
 import type {
   AppConfig,
   ChangedFileWire,
+  ContentConflictWire,
+  ContentWire,
   CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
@@ -51,6 +57,8 @@ import type {
   FolderWire,
   Me,
   ProcessInfo,
+  PutContentBody,
+  PutContentResultWire,
   ReleaseFilesBody,
   ReleaseResult,
   SyncResult,
@@ -69,6 +77,7 @@ import {
   sessionCookie,
   type SessionStore,
 } from "../adapters/sqlite/sessions.ts";
+import { type DirectDoc, getContent, putContent } from "../application/content.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
 import { listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
 import { createDecision, createFolder, createProcess, listFolders } from "../application/scaffold.ts";
@@ -80,6 +89,7 @@ import { release, releaseFiles } from "../release.ts";
 import type { AccessCache } from "../repos/access.ts";
 import type { ConnectedRepo, RepoRegistry } from "../repos/registry.ts";
 import type { WorkspaceManager } from "../repos/workspaces.ts";
+import { handleMcp } from "./mcp.ts";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -123,6 +133,22 @@ export interface ApiOptions {
   /** cell mode: secret unlocking the /healthz DETAIL (the control-plane fleet poll
    * presents it). Unset (standalone) → detail is public (single-tenant box). */
   healthAuth?: string;
+  /** server-side handle to a live room (Hocuspocus direct connection) — the
+   * content routes and MCP tools read/write the SAME docs the ws rooms edit */
+  openDoc: (room: string) => Promise<DirectDoc>;
+  /** the room size cap — content PUT enforces it itself (the ws-side ingest
+   * guard never runs for direct connections) */
+  maxDocBytes: number;
+  /** native OIDC bearer-JWT auth (headless clients) — absent = session-ids only.
+   * The verifier throws typed AppErrors (401) on every failure; api.ts stays
+   * adapter-free, the implementation is injected from server.ts (auth/oidc.ts). */
+  oidc?: {
+    verify: (token: string) => Promise<{ login: string; name: string; sub: string }>;
+    /** advertised in the RFC-9728 protected-resource metadata */
+    issuer: string;
+  };
+  /** omit the write tools (create/save/release) from /mcp */
+  mcpReadOnly?: boolean;
 }
 
 // send/redirect/readBody/securityHeaders/bearerAuth come from @bpmiq/http-kit —
@@ -132,12 +158,16 @@ export interface ApiOptions {
 // listProcesses/listRepos (the overview read-models) live in application/overview.ts —
 // ApiOptions structurally satisfies their injected OverviewDeps surface.
 
-/** parse a JSON request body; sends the 400 itself and returns undefined */
-async function jsonBody<T>(req: IncomingMessage, res: ServerResponse): Promise<T | undefined> {
+/** parse a JSON request body; sends the 400/413 itself and returns undefined */
+async function jsonBody<T>(req: IncomingMessage, res: ServerResponse, maxBytes?: number): Promise<T | undefined> {
   try {
-    return JSON.parse((await readBody(req)).toString()) as T;
-  } catch {
-    send(res, 400, { error: "invalid JSON body" });
+    return JSON.parse((await readBody(req, { maxBytes })).toString()) as T;
+  } catch (e) {
+    if (e instanceof Error && e.message === "body too large") {
+      send(res, 413, { error: "body too large" });
+    } else {
+      send(res, 400, { error: "invalid JSON body" });
+    }
     return undefined;
   }
 }
@@ -170,11 +200,11 @@ function serveStatic(dist: string, urlPath: string, res: ServerResponse): void {
 export function startApi(port: number, opts: ApiOptions): Server {
   const secure = opts.publicUrl.startsWith("https");
 
-  const sessionOf = (req: IncomingMessage): Session | undefined => {
+  const sessionOf = async (req: IncomingMessage): Promise<Session | undefined> => {
     const sid = readCookie(req.headers.cookie, COOKIE);
     const fromCookie = opts.sessions.get(sid);
     if (fromCookie) return fromCookie;
-    // headless clients: Authorization: Bearer <session-id or dev token>
+    // headless clients: Authorization: Bearer <session-id, dev token or OIDC JWT>
     const bearer = req.headers.authorization?.replace(/^Bearer /, "");
     const devToken = opts.devToken?.();
     if (bearer && devToken && bearer === devToken) {
@@ -190,8 +220,30 @@ export function startApi(port: number, opts: ApiOptions): Server {
         createdAt: Date.now(),
       };
     }
+    // a JWS-shaped bearer (three dot-separated parts) is a JWT, never a session
+    // id — verify it (throws a typed 401 AppError) instead of a doomed lookup.
+    // The session is SYNTHETIC (never persisted): identity only; per-repo authz
+    // runs app-side against the login (AccessCache Path 1 — the user-token
+    // fallback path is impossible without a providerToken, and stays closed).
+    if (bearer && opts.oidc && bearer.split(".").length === 3) {
+      const id = await opts.oidc.verify(bearer);
+      return {
+        id: `oidc:${id.sub}`,
+        user: { login: id.login, name: id.name, avatarUrl: null, provider: "oidc" },
+        providerToken: "",
+        createdAt: Date.now(),
+      };
+    }
     return opts.sessions.get(bearer);
   };
+
+  // RFC 9728: 401s advertise where the protected-resource metadata lives, so
+  // MCP clients can discover the IdP and run their OAuth flow unattended
+  const challenge = (): Record<string, string> =>
+    opts.oidc
+      ? { "www-authenticate": `Bearer resource_metadata="${opts.publicUrl}/.well-known/oauth-protected-resource"` }
+      : {};
+  const unauthorized = (res: ServerResponse, body: unknown): void => send(res, 401, body, challenge());
 
   /** resolve + authorize a repo route segment; sends the error response itself */
   const repoOf = async (
@@ -227,6 +279,18 @@ export function startApi(port: number, opts: ApiOptions): Server {
         // control-plane fleet poll presents the cell secret to read the detail.
         const authed = !opts.healthAuth || bearerAuth(req, opts.healthAuth);
         return send(res, h.ok ? 200 : 503, authed ? { status, ...h.checks } : { status });
+      }
+
+      // RFC 9728 protected-resource metadata (public) — MCP clients resolve the
+      // IdP from here after a 401's WWW-Authenticate challenge. Only exists when
+      // OIDC is configured; a session-only deployment has nothing to advertise.
+      if (opts.oidc && url.pathname === "/.well-known/oauth-protected-resource") {
+        return send(res, 200, {
+          resource: opts.publicUrl,
+          authorization_servers: [opts.oidc.issuer],
+          bearer_methods_supported: ["header"],
+          resource_name: "bpmiq Live Host",
+        });
       }
 
       // ── installation lifecycle ───────────────────────────────────────
@@ -381,8 +445,10 @@ export function startApi(port: number, opts: ApiOptions): Server {
         } satisfies AppConfig);
       }
       if (url.pathname === "/api/me") {
-        const session = sessionOf(req);
-        if (!session) return send(res, 401, { error: "not logged in" });
+        const session = await sessionOf(req);
+        if (!session) return unauthorized(res, { error: "not logged in" });
+        // NB for an OIDC-JWT session wsToken is the synthetic id — NOT a usable
+        // ws token (the ws join stays session-id-only for now)
         return send(res, 200, { user: session.user, wsToken: session.id } satisfies Me);
       }
       if (url.pathname === "/api/logout" && req.method === "POST") {
@@ -393,8 +459,8 @@ export function startApi(port: number, opts: ApiOptions): Server {
 
       // repo OVERVIEW
       if (url.pathname === "/api/repos") {
-        const session = sessionOf(req);
-        if (!session) return send(res, 401, { error: "not logged in" });
+        const session = await sessionOf(req);
+        if (!session) return unauthorized(res, { error: "not logged in" });
         if (url.searchParams.has("refresh")) {
           // session-gated explicit refresh → force a real sync (bypass the 10s
           // coalesce) so a repo just added on GitHub appears now
@@ -412,12 +478,18 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // registry decides what a repo is.
       // Group 3 = todo id (tracker-native, opaque: GitHub numbers, Jira "PROJ-123"),
       // group 4 = release process id.
+      // `content` (the LIVE model content) is the LAST alternative with a
+      // lookbehind: without it the greedy repo group backtracks and captures
+      // ".../history" as the repo so "history/content" would match as bare
+      // "content". A repo literally NAMED "<owner>/history" therefore cannot
+      // address /content over REST (the URL is claimed by history/content) —
+      // accepted keyword-collision edge; MCP tools and ws rooms are unaffected.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|decisions|folders|changes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?)$/,
+        /^\/api\/repos\/(.+)\/(processes|decisions|folders|changes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
       );
       if (repoRoute) {
-        const session = sessionOf(req);
-        if (!session) return send(res, 401, { error: "not logged in" });
+        const session = await sessionOf(req);
+        if (!session) return unauthorized(res, { error: "not logged in" });
         const repo = await repoOf(res, session, repoRoute[1] ?? "");
         if (!repo) return;
         if (repoRoute[2] === "processes") {
@@ -481,6 +553,27 @@ export function startApi(port: number, opts: ApiOptions): Server {
             `synced ${repo.fullName} → origin/${repo.defaultBranch} by @${session.user.login}: ${result.changed.length} file(s) reset`,
           );
           return send(res, 200, result satisfies SyncResult);
+        }
+        // the LIVE model content (application/content.ts): GET reads the same
+        // Y.Text the rooms edit (+ a baseVersion token); PUT validates and
+        // compare-and-sets it — a stale token gets 409 + the current content
+        // instead of overwriting. ?path is the content-relative model path.
+        if (repoRoute[2] === "content") {
+          const path = url.searchParams.get("path") ?? "";
+          if (!path) return send(res, 400, { error: "missing ?path=<content-relative model path>" });
+          if (req.method === "GET") {
+            return send(res, 200, (await getContent(opts, repo, path)) satisfies ContentWire);
+          }
+          if (req.method === "PUT") {
+            // JSON-escape inflation of an at-cap XML stays well under 2x + slack
+            const body = await jsonBody<PutContentBody>(req, res, opts.maxDocBytes * 2 + 65_536);
+            if (body === undefined) return;
+            const out = await putContent(opts, repo, path, body);
+            if (!out.ok) return send(res, 409, out.conflict satisfies ContentConflictWire);
+            console.log(`content saved: ${repo.fullName}/${out.result.path} by @${session.user.login}`);
+            return send(res, 200, out.result satisfies PutContentResultWire);
+          }
+          return send(res, 405, { error: "method not allowed" });
         }
         // file history (read-models in application/history.ts) — ?path is the
         // content-relative model path, the same identifier the live rooms use
@@ -585,6 +678,25 @@ export function startApi(port: number, opts: ApiOptions): Server {
         return send(res, 405, { error: "method not allowed" });
       }
 
+      // MCP endpoint (http/mcp.ts): stateless Streamable HTTP on the official
+      // SDK; tools call the application use-cases in-process with the caller's
+      // session. Same auth surface as the REST API (session id, dev token, JWT).
+      if (url.pathname === "/mcp") {
+        if (req.method !== "POST") {
+          res.writeHead(405, { allow: "POST", "content-type": "application/json" });
+          return res.end(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              error: { code: -32000, message: "Stateless server: POST JSON-RPC messages to this endpoint." },
+              id: null,
+            }),
+          );
+        }
+        const session = await sessionOf(req);
+        if (!session) return unauthorized(res, { error: "not logged in" });
+        return handleMcp(req, res, opts, session);
+      }
+
       if (req.method === "GET" || req.method === "HEAD") return serveStatic(opts.webDist, url.pathname, res);
       return send(res, 405, { error: "method not allowed" });
     } catch (e) {
@@ -598,14 +710,15 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // not double-fault into an unhandled rejection that kills the process.
       let authed = false;
       try {
-        authed = Boolean(sessionOf(req));
+        authed = Boolean(await sessionOf(req));
       } catch {
-        /* degraded storage — treat as anonymous */
+        /* degraded storage or a failing JWT re-verify — treat as anonymous */
       }
-      // typed AppErrors (release gates: 409/422/404) carry their own status +
-      // machine code; plain Errors map to exactly the previous 500 body.
+      // typed AppErrors (release gates: 409/422/404; JWT verify: 401) carry
+      // their own status + machine code; plain Errors map to the 500 body.
+      // 401s additionally carry the OIDC discovery challenge (RFC 9728).
       const { status, body } = errorBody(e, { authenticated: authed });
-      return send(res, status, body);
+      return send(res, status, body, status === 401 ? challenge() : {});
     }
   });
   httpServer.listen(port, () => {

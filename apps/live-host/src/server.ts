@@ -33,6 +33,7 @@ import { createGitHubProvider } from "./adapters/github/provider.ts";
 import { LineageStore } from "./adapters/sqlite/lineage-store.ts";
 import { SessionStore } from "./adapters/sqlite/sessions.ts";
 import { makeCollabHooks } from "./application/collab.ts";
+import { makeOidcVerifier } from "./auth/oidc.ts";
 import { ConnectionLimiter } from "./domain/conn-limit.ts";
 import { DocSizeGuard } from "./domain/doc-size-guard.ts";
 import { startApi } from "./http/api.ts";
@@ -250,6 +251,29 @@ const devToken = (): string | undefined =>
 // live in ./repos/rooms.ts (pure + unit-tested). They take the registry/workspace
 // singletons as arguments so they stay testable without booting the server.
 
+// Native OIDC bearer-JWT auth for headless clients (MCP, CI, editors): a
+// ready-made IdP issues audience-bound JWTs, the Live Host only VERIFIES them
+// (auth/oidc.ts — no self-built authorization server, ADR 0005). Both vars must
+// come together; audience defaults to this host's public URL (RFC 8707).
+const OIDC_ISSUER = process.env.LIVE_OIDC_ISSUER;
+const OIDC_JWKS_URL = process.env.LIVE_OIDC_JWKS_URL;
+if (Boolean(OIDC_ISSUER) !== Boolean(OIDC_JWKS_URL)) {
+  throw new Error("LIVE_OIDC_ISSUER and LIVE_OIDC_JWKS_URL must be set together");
+}
+const oidc =
+  OIDC_ISSUER && OIDC_JWKS_URL
+    ? {
+        issuer: OIDC_ISSUER,
+        verify: makeOidcVerifier({
+          issuer: OIDC_ISSUER,
+          jwksUrl: OIDC_JWKS_URL,
+          audience: process.env.LIVE_OIDC_AUDIENCE ?? PUBLIC_URL,
+          loginClaim: process.env.LIVE_OIDC_LOGIN_CLAIM ?? "github_login",
+        }),
+      }
+    : undefined;
+const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
+
 const server = new Server({
   // no `port`: Hocuspocus does NOT open its own listener — we attach its
   // WebSocket upgrade to the single HTTP server below (one port for HTTP + ws,
@@ -296,6 +320,12 @@ const httpServer = startApi(PORT, {
   // least-privilege follow-up when re-provisioning the fleet is on the table.
   // Unset/empty in standalone → detail stays public (single-tenant box, nothing to gate).
   healthAuth: CELL_SECRET,
+  // content routes + MCP tools read/write the SAME live docs the ws rooms edit —
+  // server-side, per-request-authorized (no ws client, no second data path)
+  openDoc: (room) => server.hocuspocus.openDirectConnection(room),
+  maxDocBytes: MAX_DOC_BYTES,
+  oidc,
+  mcpReadOnly: MCP_READONLY,
 });
 
 // WebSocket connection ceiling (DoS guard): the upgrade path was uncapped, so an
@@ -379,8 +409,9 @@ void (async () => {
     `minting   : ${MINT_URL ? `remote (control plane, tenant ${TENANT_INSTALLATION_ID})` : appCreds ? "local (app key)" : "none"}`,
   );
   console.log(
-    `auth      : ${providers.size > 0 ? `github login (app: ${appSlug ?? "oauth"})` : "no login configured (pnpm create-app)"}${devToken() ? ` (+ dev token '${devToken()}')` : ""}`,
+    `auth      : ${providers.size > 0 ? `github login (app: ${appSlug ?? "oauth"})` : "no login configured (pnpm create-app)"}${devToken() ? ` (+ dev token '${devToken()}')` : ""}${oidc ? ` (+ oidc: ${oidc.issuer})` : ""}`,
   );
+  console.log(`mcp       : POST /mcp${MCP_READONLY ? " (read-only — write tools not registered)" : ""}`);
   console.log(`room name = <owner>/<repo>/<path>, Y.Text field 'content'`);
   console.log("──────────────────────────────────────────────────");
 })();

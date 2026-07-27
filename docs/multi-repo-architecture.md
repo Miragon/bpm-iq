@@ -167,8 +167,12 @@ moves host-side; connected repos ship **content only**:
 - **Portal**: removed with the slim contract — the web client (`apps/web`) renders the
   models live from the Live Host, so there is no separate VitePress site to serve per repo.
 - **MCP**: `tools.ts` is root-parameterized (`createMcpServer(root)`); the standalone
-  `http.ts` serves `DEFAULT_ROOT`. A per-repo Live Host endpoint over the live content
-  (`POST /mcp/:owner/:repo`, with per-repo auth) is designed in issue #35.
+  `http.ts` serves `DEFAULT_ROOT`. The Live Host endpoint over the live content **exists**:
+  a single `POST /mcp` with the repo as a **tool argument** (not `POST /mcp/:owner/:repo`),
+  per-repo auth on every call, plus REST content routes
+  (`GET/PUT /api/repos/:owner/:repo/content?path=…`) for non-MCP clients — see
+  [mcp-integration.md](mcp-integration.md) and
+  [ADR 0005](adr/0005-in-process-mcp-and-oidc-resource-server.md).
 - **Skill export**: per-repo resolution and output; the platform needs a cross-repo
   view of published skills (overview badge).
 

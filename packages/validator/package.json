@@ -19,7 +19,7 @@
     "node": ">=22"
   },
   "bin": {
-    "bpmiq-validate": "src/validate.ts"
+    "bpmiq-validate": "src/cli.ts"
   },
   "exports": {
     ".": "./src/validate.ts"
@@ -33,14 +33,14 @@
       ".": "./dist/validate.js"
     },
     "bin": {
-      "bpmiq-validate": "dist/validate.js"
+      "bpmiq-validate": "dist/cli.js"
     }
   },
   "scripts": {
-    "validate": "node src/validate.ts",
+    "validate": "node src/cli.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/validate.test.ts"
+    "test": "node --test test/*.test.ts"
   },
   "dependencies": {
     "fast-xml-parser": "5.9.3",

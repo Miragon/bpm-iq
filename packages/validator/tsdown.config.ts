@@ -1,10 +1,11 @@
 // Publish-boundary build ONLY (the workspace itself runs the raw .ts via Node
 // type stripping — see tsconfig.base.json). `pnpm --filter @bpmiq/validator build`
-// emits dist/validate.js for npm; dev bin/exports keep pointing at src/validate.ts.
+// emits dist/validate.js (library) + dist/cli.js (bin) for npm; dev bin/exports
+// keep pointing at src/.
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/validate.ts"],
+  entry: ["src/validate.ts", "src/cli.ts"],
   format: "esm",
   platform: "node",
   // "type": "module" package — emit dist/validate.js, not .mjs

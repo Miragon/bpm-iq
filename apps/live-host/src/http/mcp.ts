@@ -1,0 +1,340 @@
+/**
+ * The Live Host's MCP endpoint — AI clients talk to the LIVE platform state
+ * through the same application use-cases the REST routes call, in-process.
+ * Mounted at POST /mcp by api.ts (which authenticates first: session id, dev
+ * token or OIDC JWT — one auth surface for humans and agents).
+ *
+ * Stateless Streamable HTTP on the official SDK, one fresh McpServer per
+ * request (the pattern of packages/mcp/http.ts): tools close over the CALLER's
+ * session, so per-repo authorization runs per tool call — there is no warm
+ * state a different principal could ever be handed.
+ *
+ * Write path: save_bpmn_xml REQUIRES the baseVersion from a prior get — the
+ * compare-and-set lives in application/content.ts; a stale token returns the
+ * current XML as a retryable result (not an error), so agents re-derive and
+ * retry. All validation (BPMN structure, BPMNDI coverage, size cap) is
+ * enforced server-side in the use-case, never only here.
+ *
+ * LIVE_MCP_READONLY=1 (opts.mcpReadOnly) registers no write tools at all —
+ * absent from tools/list, not erroring (agents plan against reality).
+ */
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+import { readBody, send } from "@bpmiq/http-kit";
+import { deriveProcess } from "@bpmiq/notations/derive";
+import { extractModelGraph } from "@bpmiq/notations/extract";
+import { checkBpmnXml } from "@bpmiq/validator";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { z } from "zod";
+
+import type { Session } from "../adapters/sqlite/sessions.ts";
+import { type ContentDeps, getContent, putContent } from "../application/content.ts";
+import { listChanges, listProcesses, listRepos, type OverviewDeps } from "../application/overview.ts";
+import { createProcess } from "../application/scaffold.ts";
+import type { GitProvider } from "../ports/git-provider.ts";
+import { release, type ReleaseDeps, releaseFiles } from "../release.ts";
+import { discoverProcesses, loadContentConfig } from "../repos/content.ts";
+import type { ConnectedRepo } from "../repos/registry.ts";
+
+/** everything the tools need — ApiOptions satisfies this structurally (the
+ *  house DI convention), declared here so http/mcp.ts and http/api.ts share no
+ *  import cycle */
+export type McpDeps = OverviewDeps &
+  ContentDeps &
+  ReleaseDeps & {
+    providers: Map<string, GitProvider>;
+    github: GitProvider;
+    mcpReadOnly?: boolean;
+  };
+
+// ── tool result helpers (packages/mcp/tools.ts house style) ──────────────────
+const ok = (value: unknown) => ({
+  content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
+});
+const fail = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true });
+type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
+const safe =
+  // biome/eslint-safe any: the SDK validates args against the zod shape before the handler runs
+  (fn: (args: any) => unknown) =>
+    async (args: unknown): Promise<ToolResult> => {
+      try {
+        return (await fn(args ?? {})) as ToolResult;
+      } catch (err) {
+        // AppErrors from the use-cases carry actionable, English, agent-readable
+        // messages (validation findings, conflict guidance, authz denials)
+        return fail((err as Error).message);
+      }
+    };
+const READ = { readOnlyHint: true, openWorldHint: false };
+const WRITE = { readOnlyHint: false, openWorldHint: false };
+
+// ── input shapes (zod v4 raw shapes, ported from the retired apps/live-mcp) ──
+const repoArg = z.string().describe("repository full name, 'owner/repo'");
+const processRef = {
+  repo: repoArg,
+  id: z.string().optional().describe("process id = BPMN file stem (from list_processes)"),
+  path: z.string().optional().describe("repo-relative BPMN path (alternative to id; needed for sub-processes)"),
+};
+
+export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer {
+  const server = new McpServer({ name: "bpmiq-live", version: "1.0.0" });
+
+  /** registry 404 + per-repo write authz — the tool-level mirror of api.ts
+   *  repoOf (throws instead of sending; same dev bypass) */
+  const requireRepo = async (fullName: string): Promise<ConnectedRepo> => {
+    const repo = opts.registry.get(fullName);
+    if (!repo) throw new Error(`not a connected repository: ${fullName}`);
+    if (session.id !== "dev" && !(await opts.access.canWrite(session, repo))) {
+      throw new Error(`@${session.user.login}: no write access to ${repo.fullName}`);
+    }
+    return repo;
+  };
+
+  const resolveBpmnPath = async (repo: ConnectedRepo, id?: string, path?: string): Promise<string> => {
+    if (path) return path;
+    if (!id) throw new Error("provide either `id` or `path`.");
+    const workspace = await opts.workspaces.ensure(repo);
+    const procs = await listProcesses(opts, repo, workspace);
+    const hit = procs.find((p) => p.id === id);
+    if (!hit) throw new Error(`process '${id}' not found in ${repo.fullName} (use list_processes).`);
+    return hit.bpmn;
+  };
+
+  server.registerTool(
+    "list_repos",
+    {
+      description: "List the repositories you can access on this Live Host, with permission and process counts.",
+      annotations: READ,
+    },
+    safe(async () => ok({ repos: await listRepos(opts, session) })),
+  );
+
+  server.registerTool(
+    "list_processes",
+    {
+      description: "List the BPMN processes in a repository (id, name, path, dirty flag, live session count).",
+      inputSchema: { repo: repoArg },
+      annotations: READ,
+    },
+    safe(async ({ repo }: { repo: string }) => {
+      const r = await requireRepo(repo);
+      const workspace = await opts.workspaces.ensure(r);
+      return ok({ processes: await listProcesses(opts, r, workspace) });
+    }),
+  );
+
+  server.registerTool(
+    "get_process",
+    {
+      description:
+        "Derived process view (name, roles from lanes, steps, flow, sub-process calls) from the LIVE BPMN — " +
+        "the same shape the read-only content-repo MCP server derives.",
+      inputSchema: processRef,
+      annotations: READ,
+    },
+    safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+      const r = await requireRepo(repo);
+      const bpmnPath = await resolveBpmnPath(r, id, path);
+      const content = await getContent(opts, r, bpmnPath);
+      const graph = extractModelGraph(content.path, content.xml);
+      if (!graph) return fail(`could not derive a process view from ${content.path}.`);
+      return ok({ id: id ?? null, path: content.path, baseVersion: content.baseVersion, ...deriveProcess(graph) });
+    }),
+  );
+
+  server.registerTool(
+    "get_bpmn_xml",
+    {
+      description:
+        "The current LIVE BPMN XML of a process plus the baseVersion token save_bpmn_xml requires " +
+        "for conflict-safe writes.",
+      inputSchema: processRef,
+      annotations: READ,
+    },
+    safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+      const r = await requireRepo(repo);
+      const bpmnPath = await resolveBpmnPath(r, id, path);
+      return ok(await getContent(opts, r, bpmnPath));
+    }),
+  );
+
+  server.registerTool(
+    "validate_bpmn",
+    {
+      description:
+        "Dry-run the platform validator on BPMN XML WITHOUT writing anything — structure, BPMNDI " +
+        "coverage, callActivity links (against the repo's processes when `repo` is given). " +
+        "Iterate here until ok before calling save_bpmn_xml.",
+      inputSchema: {
+        xml: z.string().describe("the complete BPMN XML to check"),
+        repo: repoArg.optional(),
+        path: z.string().optional().describe("repo-relative path, used to label findings"),
+      },
+      annotations: READ,
+    },
+    safe(async ({ xml, repo, path }: { xml: string; repo?: string; path?: string }) => {
+      let processIds: Set<string> | undefined;
+      if (repo) {
+        const r = await requireRepo(repo);
+        const workspace = await opts.workspaces.ensure(r);
+        const cfg = loadContentConfig(workspace);
+        if (cfg) processIds = new Set((await discoverProcesses(workspace, cfg)).map((p) => p.id));
+      }
+      const { findings } = checkBpmnXml(xml, { file: path, processIds });
+      return ok({ ok: !findings.some((f) => f.severity === "ERROR"), findings });
+    }),
+  );
+
+  server.registerTool(
+    "list_changes",
+    {
+      description: "Files that differ from origin (the release selection pool) in a repository.",
+      inputSchema: { repo: repoArg },
+      annotations: READ,
+    },
+    safe(async ({ repo }: { repo: string }) => {
+      const r = await requireRepo(repo);
+      const workspace = await opts.workspaces.ensure(r);
+      return ok({ changes: await listChanges(opts, r, workspace) });
+    }),
+  );
+
+  if (!opts.mcpReadOnly) {
+    server.registerTool(
+      "create_process",
+      {
+        description:
+          "Create a new BPMN process from the validator-clean blank template. Returns its ProcessInfo " +
+          "incl. the bpmn path for get/save.",
+        inputSchema: {
+          repo: repoArg,
+          name: z.string().describe("human title; the file stem is its kebab-case slug"),
+          folder: z.string().optional().describe("target folder relative to the processes root"),
+        },
+        annotations: WRITE,
+      },
+      safe(async ({ repo, name, folder }: { repo: string; name: string; folder?: string }) => {
+        const r = await requireRepo(repo);
+        const workspace = await opts.workspaces.ensure(r);
+        return ok({ process: await createProcess(r, workspace, { name, folder }) });
+      }),
+    );
+
+    server.registerTool(
+      "save_bpmn_xml",
+      {
+        description:
+          "Validate and save complete BPMN XML into the LIVE document (co-editors see it immediately). " +
+          "baseVersion (from get_bpmn_xml) is REQUIRED; a stale one returns {conflict:true, currentXml} " +
+          "instead of overwriting — re-derive your edit against currentXml and retry.",
+        inputSchema: {
+          ...processRef,
+          xml: z.string().describe("the complete BPMN XML (must include a full BPMNDI section)"),
+          baseVersion: z.string().describe("the baseVersion from a prior get_bpmn_xml — call that first"),
+        },
+        annotations: WRITE,
+      },
+      safe(
+        async ({
+          repo,
+          id,
+          path,
+          xml,
+          baseVersion,
+        }: {
+          repo: string;
+          id?: string;
+          path?: string;
+          xml: string;
+          baseVersion: string;
+        }) => {
+          const r = await requireRepo(repo);
+          const bpmnPath = await resolveBpmnPath(r, id, path);
+          const out = await putContent(opts, r, bpmnPath, { xml, baseVersion });
+          if (!out.ok) {
+            const c = out.conflict;
+            return ok({
+              ok: false,
+              conflict: true,
+              path: c.path,
+              currentXml: c.currentXml,
+              baseVersion: c.baseVersion,
+              message: c.error,
+            });
+          }
+          return ok({ ok: true, ...out.result });
+        },
+      ),
+    );
+
+    server.registerTool(
+      "release_process",
+      {
+        description:
+          "Open a pull request releasing either one process (processId) or an explicit changed-file " +
+          "selection. Merge rights stay at the git provider.",
+        inputSchema: {
+          repo: repoArg,
+          processId: z.string().optional().describe("release exactly this process as one PR"),
+          files: z.array(z.string()).optional().describe("or: release exactly these repo-relative files as one PR"),
+          title: z.string().optional().describe("PR/commit title"),
+        },
+        annotations: WRITE,
+      },
+      safe(
+        async ({
+          repo,
+          processId,
+          files,
+          title,
+        }: {
+          repo: string;
+          processId?: string;
+          files?: string[];
+          title?: string;
+        }) => {
+          const r = await requireRepo(repo);
+          const provider = opts.providers.get(session.user.provider) ?? opts.github;
+          if (processId) return ok({ release: await release(opts, session, provider, r, processId) });
+          if (files && files.length > 0) {
+            return ok({ release: await releaseFiles(opts, session, provider, r, { files, title }) });
+          }
+          return fail("provide either `processId` or a non-empty `files` array.");
+        },
+      ),
+    );
+  }
+
+  return server;
+}
+
+/** Stateless Streamable HTTP mount: one fresh server + transport per request
+ *  (packages/mcp/http.ts pattern). api.ts has already authenticated `session`
+ *  and answered non-POST. */
+export async function handleMcp(
+  req: IncomingMessage,
+  res: ServerResponse,
+  opts: McpDeps,
+  session: Session,
+): Promise<void> {
+  const server = createLiveMcpServer(opts, session);
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  res.on("close", () => {
+    void transport.close();
+    void server.close();
+  });
+  try {
+    // save_bpmn_xml carries whole models — same body budget as the content PUT
+    const raw = (await readBody(req, { maxBytes: opts.maxDocBytes * 2 + 65_536 })).toString();
+    const body: unknown = raw ? JSON.parse(raw) : undefined;
+    await server.connect(transport);
+    await transport.handleRequest(req, res, body);
+  } catch (e) {
+    if (!res.headersSent) {
+      send(res, 400, { jsonrpc: "2.0", error: { code: -32700, message: (e as Error).message }, id: null });
+    } else {
+      res.end();
+    }
+  }
+}

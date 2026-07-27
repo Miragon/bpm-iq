@@ -8,6 +8,11 @@ steps, gateways, flow, and sub-process calls — is **derived from the BPMN** on
 `which_processes_use`. Read-only by construction: the tools only ever read files, and all of
 them carry `readOnlyHint`.
 
+This server runs against a **checkout** — the right tool for CI, offline use, and any agent
+with the repo on disk. For live, writable access to the collaboratively edited state of a
+running Live Host, use the Live Host's own `/mcp` endpoint instead — see
+[docs/mcp-integration.md](https://github.com/Miragon/bpm-iq/blob/main/docs/mcp-integration.md).
+
 ## Usage
 
 ```sh
