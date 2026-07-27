@@ -1,0 +1,20 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+file_include_globs = "**/.env\n"
+
+[scripts]
+setup = "pnpm install"
+run_mode = "nonconcurrent"
+
+[scripts.run.app]
+command = "pnpm --filter @bpmiq/web build && pnpm live-host"
+default = true
+icon = "rocket"
+
+[scripts.run.web]
+command = "pnpm web:dev"
+icon = "globe"
+
+[scripts.run.validate]
+command = "pnpm validate"
+icon = "test-tube"
