@@ -127,7 +127,8 @@ every open editor sees them instantly, exactly like a keystroke.
 `Authorization: Bearer <session-id>`, the dev token (`LIVE_DEV_TOKEN` — local only), or an
 **OIDC JWT** from your IdP (`LIVE_OIDC_ISSUER` + `LIVE_OIDC_JWKS_URL`; audience defaults
 to `LIVE_PUBLIC_URL`, and the login claim — default `github_login` — must carry the
-IdP-verified GitHub login; see [on-prem/configuration.md](on-prem/configuration.md)).
+IdP-verified GitHub login; see [on-prem/configuration.md](on-prem/configuration.md) and
+the verified IdP recipe in [extending/mcp-idp-setup.md](extending/mcp-idp-setup.md)).
 Per-repo authorization always runs app-side against real GitHub permissions.
 `LIVE_MCP_READONLY=1` registers **no** write tools — they are absent from `tools/list`,
 not erroring.

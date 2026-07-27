@@ -69,7 +69,8 @@ checked app-side against real GitHub permissions, which requires the GitHub-App 
 source (JWT sessions hold no user token). When configured, the server publishes RFC-9728
 protected-resource metadata at `/.well-known/oauth-protected-resource` and 401 responses
 carry `WWW-Authenticate: Bearer resource_metadata="…"`, so MCP clients discover your IdP
-automatically. Browser login is unaffected (stays GitHub OAuth). Decision record:
+automatically. A verified, click-by-click IdP setup (WorkOS AuthKit) lives in
+[extending/mcp-idp-setup.md](../extending/mcp-idp-setup.md). Browser login is unaffected (stays GitHub OAuth). Decision record:
 [ADR 0005](../adr/0005-in-process-mcp-and-oidc-resource-server.md).
 
 | Variable                | Default           | Meaning                                                                                                                                                                                             |
