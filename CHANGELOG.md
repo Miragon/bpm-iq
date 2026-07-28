@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.0.0](https://github.com/Miragon/bpm-iq/compare/v2.3.0...v3.0.0) (2026-07-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **live-host:** HANDOFF_SECRET and POST /auth/handoff no longer exist; cell deployments authenticate browsers via LIVE_OIDC_CLIENT_ID (browser SSO).
+
+### Features
+
+* **live-host:** browser SSO — interactive OIDC login on the resource-server contract ([#64](https://github.com/Miragon/bpm-iq/issues/64)) ([b88d48f](https://github.com/Miragon/bpm-iq/commit/b88d48f0289bb6989665113a3ac43e4491a8b08a))
+* **live-host:** enforce the tenant claim on OIDC tokens in cell mode ([#63](https://github.com/Miragon/bpm-iq/issues/63)) ([948e9d3](https://github.com/Miragon/bpm-iq/commit/948e9d352f04d2aa3c4ece2a45771a7ce831beb4))
+* **live-host:** in-process /mcp, REST content routes, OIDC resource-server auth ([#60](https://github.com/Miragon/bpm-iq/issues/60)) ([c4c91f4](https://github.com/Miragon/bpm-iq/commit/c4c91f4bcc8b7c23da2ce68c574f5d9a83d7c265))
+
+
+### Code Refactoring
+
+* **live-host:** remove the handoff login — cells authenticate browsers via OIDC ([#65](https://github.com/Miragon/bpm-iq/issues/65)) ([46bfdb5](https://github.com/Miragon/bpm-iq/commit/46bfdb5953bd0523988e57b3057e11106d75bc63))
+
 ## [2.3.0](https://github.com/Miragon/bpm-iq/compare/v2.2.0...v2.3.0) (2026-07-17)
 
 
