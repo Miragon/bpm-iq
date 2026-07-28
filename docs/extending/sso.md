@@ -40,8 +40,8 @@ Two production paths in `apps/live-host/src/http/api.ts` prove the independence:
 - The **OAuth callback** (`/auth/:provider/callback`) exchanges the code, fetches
   the user, then mints: `opts.sessions.create(user, grant)` — the session id (an
   httpOnly cookie / the websocket token) is the only credential clients ever hold.
-- The **cell handoff login** (`/auth/handoff`, ADR 0002) mints a session from a
-  signed identity token with **no grant at all**: `opts.sessions.create(identity)` —
+- The **OIDC browser login** (`/auth/oidc/callback`) mints a session from a
+  verified IdP access token with **no grant at all**: `opts.sessions.create(identity)` —
   zero stored user token; authorization then runs app-side via the connection
   source's `checkUserPermission` (installation token, ADR 0001), and releases are
   bot-authored with human attribution.
@@ -72,7 +72,7 @@ only place reading env and wiring the module in (ADR 0003, `pnpm arch`-enforced)
    interactive code+PKCE browser login whose access token lands in exactly that
    verifier (`/auth/oidc` + `/auth/oidc/callback` in `http/api.ts`).
 2. **Mint a session from the identity** — `sessions.create(identity)`, no grant;
-   the same identity-only shape the handoff login uses — and exactly the
+   the same identity-only shape the OIDC login uses — and exactly the
    identity-only principal a verified OIDC JWT yields today.
 3. **The session authenticates, nothing authorizes yet** — `/api/repos` shows no
    writable repo until a git-provider authorization can be resolved for this

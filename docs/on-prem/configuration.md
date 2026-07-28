@@ -128,8 +128,8 @@ and vice versa.
 
 ## Cell mode — leave unset on-prem
 
-`TENANT_INSTALLATION_ID`, `TOKEN_MINT_URL`, `CELL_SECRET`, `CELL_TOKEN_KEY`,
-`HANDOFF_SECRET` are used by Miragon's hosted multi-tenant operation, where a control plane
+`TENANT_INSTALLATION_ID`, `TOKEN_MINT_URL`, `CELL_SECRET`, `CELL_TOKEN_KEY`
+are used by Miragon's hosted multi-tenant operation, where a control plane
 holds the GitHub App key and each tenant gets its own cell
 ([ADR 0002](../adr/0002-multi-tenant-cell-architecture.md),
 [ADR 0004](../adr/0004-open-source-split.md)). Leave **all** of them unset — the server

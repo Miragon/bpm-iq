@@ -8,7 +8,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-import { verifyHandoff as verifyHandoffToken } from "@bpmiq/cell-protocol";
 // shared primitives — identical wire formats, so states/cookies minted before
 // this move keep verifying
 import { readCookie as readCookieKit, tag, timingSafeStr, untag } from "@bpmiq/http-kit";
@@ -60,8 +59,6 @@ export class SessionStore {
     );
     if (!cols.has("refresh_token")) db.exec("ALTER TABLE sessions ADD COLUMN refresh_token TEXT");
     if (!cols.has("token_expires_at")) db.exec("ALTER TABLE sessions ADD COLUMN token_expires_at INTEGER");
-    // redeemed handoff-token ids (single-use): a captured token can't be replayed
-    db.exec("CREATE TABLE IF NOT EXISTS consumed_handoffs (jti TEXT PRIMARY KEY, exp INTEGER NOT NULL)");
   }
 
   /** encrypt a provider token for storage (empty/null pass through — nothing to hide) */
@@ -77,10 +74,11 @@ export class SessionStore {
   }
 
   /**
-   * Create a session. `grant` is optional: a handoff login (ADR 0001/0002 cell
-   * mode) establishes identity WITHOUT a stored user token — authorization then
-   * runs entirely app-side (installation token). Such a session has an empty
-   * providerToken; the (Phase-3 bot-authored) release flow no longer needs it.
+   * Create a session. `grant` is optional: an OIDC browser login (or any other
+   * identity-only entrance) establishes identity WITHOUT a stored user token —
+   * authorization then runs entirely app-side (installation token). Such a
+   * session has an empty providerToken; releases are bot-authored with human
+   * attribution.
    */
   create(user: GitUser, grant?: TokenGrant): Session {
     const id = randomBytes(24).toString("base64url");
@@ -105,29 +103,6 @@ export class SessionStore {
       tokenExpiresAt: grant?.expiresAt,
       createdAt,
     };
-  }
-
-  /**
-   * Verify a control-plane handoff token (the shared @bpmiq/cell-protocol codec),
-   * returning its identity + single-use id + expiry, or undefined if invalid/expired.
-   * Single-use enforcement is `consumeHandoff` below (it needs storage).
-   */
-  verifyHandoff(token: string | null, secret: string): (GitUser & { jti?: string; handoffExp: number }) | undefined {
-    const claims = verifyHandoffToken(token, secret);
-    if (!claims) return undefined;
-    const { exp, jti, ...identity } = claims;
-    return { ...identity, jti, handoffExp: exp };
-  }
-
-  /**
-   * Redeem a handoff token's unique id — returns true only the FIRST time, so an
-   * intercepted token can't be replayed even inside its (60s) TTL. Expired ids are
-   * pruned opportunistically; the store is tiny and self-cleaning.
-   */
-  consumeHandoff(jti: string, expMs: number): boolean {
-    this.db.prepare("DELETE FROM consumed_handoffs WHERE exp < ?").run(Date.now());
-    const r = this.db.prepare("INSERT OR IGNORE INTO consumed_handoffs (jti, exp) VALUES (?, ?)").run(jti, expMs);
-    return r.changes > 0;
   }
 
   /** persist a refreshed grant (and update the caller's session object) */

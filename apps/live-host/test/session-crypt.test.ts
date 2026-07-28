@@ -44,7 +44,7 @@ test("no key (dev fallback): stored cleartext, still round-trips", () => {
   assert.equal(rawToken(db, s.id).provider_token, "gho_secret");
 });
 
-test("handoff/cell session (no grant) stores an empty token", () => {
+test("identity-only session (no grant) stores an empty token", () => {
   const store = new SessionStore(new DatabaseSync(":memory:"), "enc-key");
   const s = store.create(user);
   assert.equal(store.get(s.id)?.providerToken, "");

@@ -21,7 +21,7 @@
  * Bot-authored: push + PR run with the app INSTALLATION token, so the PR is opened
  * by the platform bot — which lets the releasing human approve their own release
  * (merge = approval). The commit carries the human as git author (+ Co-authored-by)
- * for attribution. No user token is needed, so a handoff/cell session (zero stored
+ * for attribution. No user token is needed, so an identity-only session (zero stored
  * user token) can release too; it falls back to the user token only in legacy
  * OAuth-only mode (no app installation token).
  *
