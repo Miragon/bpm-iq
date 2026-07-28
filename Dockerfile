@@ -7,7 +7,9 @@
 # Serves any content repo: set BPM_CONTENT_ROOT / mount your checkout (docs/on-prem).
 
 FROM node:26-slim AS build
-RUN corepack enable
+# Node 26 no longer bundles Corepack — install it explicitly (pnpm version stays
+# pinned by the root package.json "packageManager" field).
+RUN npm install -g corepack@latest && corepack enable
 WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
 COPY apps/live-host/package.json ./apps/live-host/
@@ -25,7 +27,8 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 FROM node:26-slim
-RUN corepack enable
+# Node 26 no longer bundles Corepack — install it explicitly.
+RUN npm install -g corepack@latest && corepack enable
 ENV NODE_ENV=production PORT=8080
 WORKDIR /app
 # Runtime needs: the MCP server + its deps and the content the tools read

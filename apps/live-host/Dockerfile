@@ -7,7 +7,9 @@
 # the same image serves on-prem installs and Miragon's hosted cells (ADR 0004).
 
 FROM node:26-slim AS build
-RUN corepack enable
+# Node 26 no longer bundles Corepack — install it explicitly (pnpm version stays
+# pinned by the root package.json "packageManager" field).
+RUN npm install -g corepack@latest && corepack enable
 WORKDIR /app
 # workspace manifests first (better layer caching for installs)
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
