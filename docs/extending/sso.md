@@ -1,7 +1,12 @@
 # Extending bpmiq: SSO / identity providers
 
-SSO is a roadmap item meant to be contributed against an existing seam
-([ADR 0004](../adr/0004-open-source-split.md)). This page describes that seam.
+**Browser SSO ships built-in**: any OIDC-conformant IdP (Keycloak, Entra ID,
+WorkOS, …) can BE the web login — set `LIVE_OIDC_CLIENT_ID` next to the
+resource-server config and the login button runs the IdP's hosted flow
+(authorization code + PKCE, `src/auth/oidc-login.ts`; see
+[on-prem/configuration.md](../on-prem/configuration.md)). This page describes
+the seam it was built against ([ADR 0004](../adr/0004-open-source-split.md)) —
+still the guide for anything beyond OIDC (SAML, a vendor-specific handshake).
 
 ## The principle: identity is not authorization
 
@@ -47,11 +52,12 @@ what an SSO login produces.
 ## Where an SSO contribution lands
 
 `apps/live-host/src/auth/` is the landing zone for identity-provider modules
-(OIDC/SAML/WorkOS) — and has its first resident: `oidc.ts`, bearer-JWT
-resource-server verification of audience-bound IdP tokens, used by `/mcp` and the
-REST content routes
-([ADR 0005](../adr/0005-in-process-mcp-and-oidc-resource-server.md)). Interactive
-authorize-redirect login flows land right beside it. Git-provider authorization
+(OIDC/SAML/WorkOS) — with two residents: `oidc.ts`, bearer-JWT resource-server
+verification of audience-bound IdP tokens, used by `/mcp` and the REST content
+routes ([ADR 0005](../adr/0005-in-process-mcp-and-oidc-resource-server.md)),
+and `oidc-login.ts`, the interactive authorize-redirect browser login (code +
+PKCE) whose access token is validated by exactly that verifier. Further flows
+(SAML, vendor handshakes) land right beside them. Git-provider authorization
 does NOT belong there; that lives in `ports/` + `adapters/<vendor>/`
 (see [connectors.md](connectors.md)). As everywhere else, `server.ts` stays the
 only place reading env and wiring the module in (ADR 0003, `pnpm arch`-enforced).
@@ -60,10 +66,11 @@ only place reading env and wiring the module in (ADR 0003, `pnpm arch`-enforced)
 
 1. **Authenticate the person first** — a new `src/auth/<idp>/` module implements
    the IdP handshake (authorize redirect + callback route, mirroring the
-   `/auth/:provider` pattern incl. the browser-bound state cookie). _Partially
-   real today:_ the token-**verification** half exists (`src/auth/oidc.ts`
-   verifies audience-bound bearer JWTs for `/mcp` and headless REST); the
-   interactive browser login via the IdP is the part still open.
+   `/auth/:provider` pattern incl. the browser-bound state cookie). _Real today
+   for OIDC:_ both halves exist — `src/auth/oidc.ts` verifies audience-bound
+   bearer JWTs (`/mcp`, headless REST), and `src/auth/oidc-login.ts` runs the
+   interactive code+PKCE browser login whose access token lands in exactly that
+   verifier (`/auth/oidc` + `/auth/oidc/callback` in `http/api.ts`).
 2. **Mint a session from the identity** — `sessions.create(identity)`, no grant;
    the same identity-only shape the handoff login uses — and exactly the
    identity-only principal a verified OIDC JWT yields today.

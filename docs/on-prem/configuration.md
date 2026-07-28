@@ -59,27 +59,47 @@ The **app private key** is resolved by the shared loader
 app manifest, defaulting to `$LIVE_PUBLIC_URL/webhook/github` when the public URL isn't
 localhost). The running server always receives webhooks at `/webhook/github`.
 
-## OIDC token auth (MCP & headless clients)
+## OIDC — token auth (MCP & headless) + browser SSO
 
-Lets MCP clients and other headless callers authenticate with an audience-bound JWT from
-your identity provider (Keycloak, WorkOS, Auth0, … — GitHub as a social connection behind
-it). The Live Host only **verifies** tokens (a resource server); it never runs its own
-authorization server. Identity is not authorization: per-repo write permission is still
-checked app-side against real GitHub permissions, which requires the GitHub-App connection
-source (JWT sessions hold no user token). When configured, the server publishes RFC-9728
+Connects the Live Host to your identity provider (Keycloak, Entra ID, WorkOS, Auth0, … —
+GitHub as a social connection behind it), for two things on ONE identity contract:
+
+1. **Token auth**: MCP clients and other headless callers authenticate with an
+   audience-bound JWT. The Live Host only **verifies** tokens (a resource server); it
+   never runs its own authorization server.
+2. **Browser SSO** (optional, `LIVE_OIDC_CLIENT_ID`): the web login redirects to the
+   IdP's hosted flow (authorization code + PKCE) instead of GitHub OAuth. The flow's
+   access token is validated by the **same verifier** as MCP bearers — same issuer,
+   audience and login claim, fail-closed. Without a client id, browser login stays
+   GitHub OAuth (zero extra prerequisites).
+
+Identity is not authorization: per-repo write permission is still checked app-side
+against real GitHub permissions, which requires the GitHub-App connection source
+(OIDC sessions hold no user token). When configured, the server publishes RFC-9728
 protected-resource metadata at `/.well-known/oauth-protected-resource` and 401 responses
 carry `WWW-Authenticate: Bearer resource_metadata="…"`, so MCP clients discover your IdP
 automatically. A verified, click-by-click IdP setup (WorkOS AuthKit) lives in
-[extending/mcp-idp-setup.md](../extending/mcp-idp-setup.md). Browser login is unaffected (stays GitHub OAuth). Decision record:
+[extending/mcp-idp-setup.md](../extending/mcp-idp-setup.md). Decision record:
 [ADR 0005](../adr/0005-in-process-mcp-and-oidc-resource-server.md).
 
-| Variable                | Default           | Meaning                                                                                                                                                                                             |
-| ----------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LIVE_OIDC_ISSUER`      | —                 | The IdP's issuer URL (expected `iss` claim). Must be set together with `LIVE_OIDC_JWKS_URL` — one without the other refuses startup.                                                                |
-| `LIVE_OIDC_JWKS_URL`    | —                 | The IdP's JWKS endpoint, used to verify token signatures.                                                                                                                                           |
-| `LIVE_OIDC_AUDIENCE`    | `LIVE_PUBLIC_URL` | The audience (`aud`) tokens must be bound to — this instance.                                                                                                                                       |
-| `LIVE_OIDC_LOGIN_CLAIM` | `github_login`    | The claim carrying the user's GitHub login. **Must be IdP-populated with the verified GitHub login — never user-editable.** A token without it is refused (no `preferred_username`/`sub` fallback). |
-| `LIVE_MCP_READONLY`     | —                 | `1` = the MCP endpoint registers **no** write tools (absent from `tools/list`, not erroring).                                                                                                       |
+| Variable                  | Default           | Meaning                                                                                                                                                                                             |
+| ------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LIVE_OIDC_ISSUER`        | —                 | The IdP's issuer URL (expected `iss` claim). Must be set together with `LIVE_OIDC_JWKS_URL` — one without the other refuses startup.                                                                |
+| `LIVE_OIDC_JWKS_URL`      | —                 | The IdP's JWKS endpoint, used to verify token signatures.                                                                                                                                           |
+| `LIVE_OIDC_AUDIENCE`      | `LIVE_PUBLIC_URL` | The audience (`aud`) tokens must be bound to — this instance.                                                                                                                                       |
+| `LIVE_OIDC_LOGIN_CLAIM`   | `github_login`    | The claim carrying the user's GitHub login. **Must be IdP-populated with the verified GitHub login — never user-editable.** A token without it is refused (no `preferred_username`/`sub` fallback). |
+| `LIVE_OIDC_CLIENT_ID`     | —                 | Enables **browser SSO**: the web login runs the IdP's code+PKCE flow. Requires the issuer/JWKS pair above (the flow's access token is verified by that config).                                     |
+| `LIVE_OIDC_CLIENT_SECRET` | —                 | Optional — set for a confidential client (Keycloak default); unset = public client, PKCE only.                                                                                                      |
+| `LIVE_OIDC_AUTHORIZE_URL` | discovery         | Explicit authorize endpoint. Default: resolved from `<issuer>/.well-known/openid-configuration` (lazily, cached). Set both URL overrides for air-gapped hosts.                                      |
+| `LIVE_OIDC_TOKEN_URL`     | discovery         | Explicit token endpoint (see above).                                                                                                                                                                |
+| `LIVE_OIDC_LOGIN_LABEL`   | `SSO`             | The web client's login-button label (e.g. "Acme SSO").                                                                                                                                              |
+| `LIVE_MCP_READONLY`       | —                 | `1` = the MCP endpoint registers **no** write tools (absent from `tools/list`, not erroring).                                                                                                       |
+
+The IdP-side requirement is identical for both entrances: access tokens must be JWTs
+carrying the audience and the login claim (Keycloak: an audience mapper + a
+user-attribute mapper on the client; Entra ID: an optional claim fed from a directory
+attribute; WorkOS: a JWT template). What works for `/mcp` works for the browser login
+and vice versa.
 
 ## GitHub Enterprise
 

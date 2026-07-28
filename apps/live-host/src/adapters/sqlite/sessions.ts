@@ -205,6 +205,17 @@ export function clearOauthCookie(secure: boolean): string {
   return `${OAUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
 }
 
+/** the PKCE code_verifier for the OIDC browser login — browser-bound (HttpOnly,
+ * one flow's lifetime) exactly like the state nonce; the callback needs it for
+ * the token exchange and clears it */
+export const PKCE_COOKIE = "bpm_live_pkce";
+export function pkceCookie(verifier: string, secure: boolean): string {
+  return `${PKCE_COOKIE}=${verifier}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? "; Secure" : ""}`;
+}
+export function clearPkceCookie(secure: boolean): string {
+  return `${PKCE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
+}
+
 export const readCookie = readCookieKit;
 
 export function sessionCookie(id: string, secure: boolean): string {
