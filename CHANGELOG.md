@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.1](https://github.com/Miragon/bpm-iq/compare/v3.0.0...v3.0.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **build:** install Corepack explicitly on Node 26 base image ([#66](https://github.com/Miragon/bpm-iq/issues/66)) ([553dab9](https://github.com/Miragon/bpm-iq/commit/553dab966a44e76dfe07bb1a6ee73ad37feccb4f))
+
 ## [3.0.0](https://github.com/Miragon/bpm-iq/compare/v2.3.0...v3.0.0) (2026-07-28)
 
 
