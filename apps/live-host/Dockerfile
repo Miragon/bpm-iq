@@ -6,7 +6,7 @@
 # Published as ghcr.io/miragon/bpmiq-live-host by .github/workflows/release.yml —
 # the same image serves on-prem installs and Miragon's hosted cells (ADR 0004).
 
-FROM node:24-slim AS build
+FROM node:26-slim AS build
 RUN corepack enable
 WORKDIR /app
 # workspace manifests first (better layer caching for installs)
@@ -30,7 +30,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter @bpmiq/web build
 
-FROM node:24-slim
+FROM node:26-slim
 LABEL org.opencontainers.image.title="bpmiq live-host" \
   org.opencontainers.image.description="Collaborative BPM platform server: live model sync + REST API + web app on one port; releases become pull requests" \
   org.opencontainers.image.source="https://github.com/Miragon/bpm-iq" \
