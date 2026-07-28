@@ -8,7 +8,7 @@
  * installations (RepoRegistry).
  *
  *   GET  /api/config                             → providers + app install URL
- *   GET  /auth/oidc(/callback)                   → browser OIDC login (code+PKCE; when configured)
+ *   GET  /auth/oidc(/callback)                   → browser OIDC login (code+PKCE; when configured — in cell mode THE login)
  *   GET  /auth/:provider(/callback)              → OAuth login (authentication only)
  *   GET  /api/me, POST /api/logout
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
@@ -128,10 +128,8 @@ export interface ApiOptions {
   /** issue-tracker seam (model-anchored todos) — absent when the platform has
    * no credentials to act on the tracker (the /todos routes then answer 501) */
   issues?: IssueTracker;
-  /** cell mode (ADR 0002): shared secret to verify control-plane handoff logins */
-  handoffSecret?: string;
-  /** control-plane origin (derived from TOKEN_MINT_URL) — for the handoff CSRF
-   * Origin check and for redirecting a failed handoff back to a fresh /workspaces */
+  /** cell mode (ADR 0002): the control-plane origin (derived from
+   * TOKEN_MINT_URL) — a cross-tenant OIDC login redirects there for re-routing */
   controlPlaneUrl?: string;
   /** deep liveness (ADR 0002): SQLite writable + disk free — 503 when degraded */
   deepHealth?: () => Promise<{ ok: boolean; checks: Record<string, unknown> }>;
@@ -335,60 +333,6 @@ export function startApi(port: number, opts: ApiOptions): Server {
             .catch((e) => console.log(`webhook sync failed: ${(e as Error).message}`));
         }
         return send(res, 202, { ok: true });
-      }
-
-      // ── cell handoff login (ADR 0002): the control plane authenticated the
-      // user and signed a short-lived token; the cell mints a LOCAL session from
-      // it. No GitHub OAuth callback in a cell, no user token stored — identity
-      // only; authorization runs app-side (installation token). Must precede the
-      // /auth/:provider matcher, which would otherwise swallow /auth/handoff.
-      if (url.pathname === "/auth/handoff" && opts.handoffSecret) {
-        // CSRF defense-in-depth: an attacker's auto-submitting form on a concrete
-        // OTHER web origin (which could log a victim into the attacker's identity)
-        // is refused. The handoff TOKEN is the primary defense — single-use (jti),
-        // HMAC-signed with the per-cell secret, 300 s TTL, POST-body-delivered.
-        //
-        // NB the chooser (control plane) and this cell live on distinct *.fly.dev
-        // subdomains, and *.fly.dev is on the Public Suffix List → the legit
-        // handoff is inherently CROSS-SITE. For cross-site top-level form POSTs
-        // several browsers (Safari, sometimes Chrome) send `Origin: null` for
-        // privacy — so `null` must be treated as "no trustworthy origin" (like a
-        // missing Origin from curl/legacy GET), NOT as a cross-origin attack, or
-        // real logins 403. Only a present, concrete, DIFFERENT origin is blocked.
-        const origin = req.headers.origin;
-        const hasConcreteOrigin = typeof origin === "string" && origin !== "null";
-        if (req.method === "POST" && hasConcreteOrigin && opts.controlPlaneUrl && origin !== opts.controlPlaneUrl) {
-          return send(res, 403, { error: "cross-origin handoff refused" });
-        }
-        // a failed handoff should return the user to a FRESH chooser, not a raw
-        // JSON 400 (long-lived /workspaces tabs carry tokens that expire after 5m)
-        const backToChooser = () =>
-          opts.controlPlaneUrl
-            ? redirect(res, `${opts.controlPlaneUrl}/workspaces`)
-            : send(res, 400, { error: "invalid or expired handoff token" });
-        // token arrives in the POST body (out of the URL — no log/Referer/history
-        // leak) or a legacy ?token=
-        let token = url.searchParams.get("token");
-        if (req.method === "POST") token = new URLSearchParams((await readBody(req)).toString()).get("token") ?? token;
-        const user = opts.sessions.verifyHandoff(token, opts.handoffSecret);
-        const existing = opts.sessions.get(readCookie(req.headers.cookie, COOKIE));
-        if (!user) {
-          // invalid/expired token: already signed in (browser back) → just enter;
-          // otherwise send them back for a freshly-signed handoff
-          return existing ? redirect(res, "/") : backToChooser();
-        }
-        // valid token for the SAME user already signed in → idempotent enter. A
-        // DIFFERENT login must NOT be ignored (account switch at the control plane)
-        // — fall through and mint a fresh session for the new identity.
-        if (existing && existing.user.login === user.login) return redirect(res, "/");
-        // single-use: a replayed (already-consumed) token can't mint a new session
-        if (user.jti && !opts.sessions.consumeHandoff(user.jti, user.handoffExp * 1000)) {
-          return existing ? redirect(res, "/") : backToChooser();
-        }
-        const { jti, handoffExp, ...identity } = user;
-        const session = opts.sessions.create(identity); // no grant — zero stored user token
-        console.log(`handoff login: @${identity.login}`);
-        return redirect(res, "/", { "set-cookie": sessionCookie(session.id, secure) });
       }
 
       // ── browser OIDC login (auth/oidc-login.ts): code + PKCE against the

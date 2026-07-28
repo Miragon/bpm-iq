@@ -334,8 +334,8 @@ const httpServer = startApi(PORT, {
   dropLineage: (room) => lineage.drop(room),
   connectionSource,
   issues,
-  handoffSecret: process.env.HANDOFF_SECRET,
-  // control-plane origin (from the mint URL) — handoff CSRF check + failure redirect
+  // control-plane origin (from the mint URL) — a cross-tenant OIDC login
+  // redirects there so the platform can re-route to the right cell
   controlPlaneUrl: MINT_URL ? new URL(MINT_URL).origin : undefined,
   deepHealth,
   // cell mode: gate the /healthz DETAIL behind the cell secret (the control-plane
