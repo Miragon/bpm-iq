@@ -34,6 +34,7 @@ import { LineageStore } from "./adapters/sqlite/lineage-store.ts";
 import { SessionStore } from "./adapters/sqlite/sessions.ts";
 import { makeCollabHooks } from "./application/collab.ts";
 import { makeOidcVerifier } from "./auth/oidc.ts";
+import { makeOidcLogin } from "./auth/oidc-login.ts";
 import { ConnectionLimiter } from "./domain/conn-limit.ts";
 import { DocSizeGuard } from "./domain/doc-size-guard.ts";
 import { startApi } from "./http/api.ts";
@@ -277,6 +278,26 @@ const oidc =
         }),
       }
     : undefined;
+// Interactive browser SSO on the same identity contract: LIVE_OIDC_CLIENT_ID
+// switches the web login to the IdP's hosted flow (code + PKCE; auth/oidc-login.ts).
+// No secret → public client. Needs the resource-server config above — the flow's
+// access token is verified by exactly that verifier (incl. the cell tenant gate).
+const OIDC_CLIENT_ID = process.env.LIVE_OIDC_CLIENT_ID;
+const oidcLogin = ((): ReturnType<typeof makeOidcLogin> | undefined => {
+  if (!OIDC_CLIENT_ID) return undefined;
+  if (!oidc) {
+    console.log("LIVE_OIDC_CLIENT_ID set but LIVE_OIDC_ISSUER/JWKS_URL missing — browser SSO DISABLED");
+    return undefined;
+  }
+  return makeOidcLogin({
+    issuer: OIDC_ISSUER!,
+    clientId: OIDC_CLIENT_ID,
+    clientSecret: process.env.LIVE_OIDC_CLIENT_SECRET,
+    authorizeUrl: process.env.LIVE_OIDC_AUTHORIZE_URL,
+    tokenUrl: process.env.LIVE_OIDC_TOKEN_URL,
+    label: process.env.LIVE_OIDC_LOGIN_LABEL,
+  });
+})();
 const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
 
 const server = new Server({
@@ -330,6 +351,7 @@ const httpServer = startApi(PORT, {
   openDoc: (room) => server.hocuspocus.openDirectConnection(room),
   maxDocBytes: MAX_DOC_BYTES,
   oidc,
+  oidcLogin,
   mcpReadOnly: MCP_READONLY,
 });
 
@@ -414,7 +436,7 @@ void (async () => {
     `minting   : ${MINT_URL ? `remote (control plane, tenant ${TENANT_INSTALLATION_ID})` : appCreds ? "local (app key)" : "none"}`,
   );
   console.log(
-    `auth      : ${providers.size > 0 ? `github login (app: ${appSlug ?? "oauth"})` : "no login configured (pnpm create-app)"}${devToken() ? ` (+ dev token '${devToken()}')` : ""}${oidc ? ` (+ oidc: ${oidc.issuer})` : ""}`,
+    `auth      : ${oidcLogin ? `browser SSO (${oidc?.issuer})` : providers.size > 0 ? `github login (app: ${appSlug ?? "oauth"})` : "no login configured (pnpm create-app)"}${oidcLogin && providers.size > 0 ? " + github login" : ""}${devToken() ? ` (+ dev token '${devToken()}')` : ""}${oidc ? ` (+ oidc bearer: ${oidc.issuer})` : ""}`,
   );
   console.log(`mcp       : POST /mcp${MCP_READONLY ? " (read-only — write tools not registered)" : ""}`);
   console.log(`room name = <owner>/<repo>/<path>, Y.Text field 'content'`);

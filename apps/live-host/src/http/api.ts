@@ -8,6 +8,7 @@
  * installations (RepoRegistry).
  *
  *   GET  /api/config                             → providers + app install URL
+ *   GET  /auth/oidc(/callback)                   → browser OIDC login (code+PKCE; when configured)
  *   GET  /auth/:provider(/callback)              → OAuth login (authentication only)
  *   GET  /api/me, POST /api/logout
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
@@ -37,6 +38,7 @@
  * Releases push with the USER's token and open the PR in their name — merge
  * rights stay at the provider (CODEOWNERS/branch protection).
  */
+import { createHash, randomBytes } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
@@ -64,14 +66,17 @@ import type {
   SyncResult,
   TodoWire,
 } from "@bpmiq/contracts/live-host";
-import { bearerAuth, errorBody, readBody, redirect, securityHeaders, send } from "@bpmiq/http-kit";
+import { AppError, bearerAuth, errorBody, readBody, redirect, securityHeaders, send } from "@bpmiq/http-kit";
 
 import {
   clearCookie,
   clearOauthCookie,
+  clearPkceCookie,
   COOKIE,
   OAUTH_COOKIE,
   oauthCookie,
+  PKCE_COOKIE,
+  pkceCookie,
   readCookie,
   type Session,
   sessionCookie,
@@ -146,6 +151,14 @@ export interface ApiOptions {
     verify: (token: string) => Promise<{ login: string; name: string; sub: string }>;
     /** advertised in the RFC-9728 protected-resource metadata */
     issuer: string;
+  };
+  /** interactive browser OIDC login (auth/oidc-login.ts) — code+PKCE flow whose
+   * access token is validated by `oidc.verify` (requires `oidc`). Present → the
+   * web client shows an SSO button ("/auth/oidc") next to the git providers. */
+  oidcLogin?: {
+    label: string;
+    authorizeUrl(redirectUri: string, state: string, codeChallenge: string): Promise<string>;
+    exchangeCode(code: string, redirectUri: string, codeVerifier: string): Promise<{ accessToken: string }>;
   };
   /** omit the write tools (create/save/release) from /mcp */
   mcpReadOnly?: boolean;
@@ -378,6 +391,69 @@ export function startApi(port: number, opts: ApiOptions): Server {
         return redirect(res, "/", { "set-cookie": sessionCookie(session.id, secure) });
       }
 
+      // ── browser OIDC login (auth/oidc-login.ts): code + PKCE against the
+      // configured IdP; the access token is verified by the SAME resource-server
+      // verifier as MCP bearers (issuer/audience/login claim/tenant gate — one
+      // identity contract, two entrances). The session is identity-only (no
+      // grant, ADR 0001); per-repo authorization runs app-side as everywhere.
+      // Must precede the /auth/:provider matchers ("oidc" is not a git provider).
+      if (opts.oidcLogin && url.pathname === "/auth/oidc") {
+        const redirectUri = `${opts.publicUrl}/auth/oidc/callback`;
+        // browser-bound state (login-CSRF/fixation) + PKCE verifier, both riding
+        // in short-lived HttpOnly cookies exactly like the git-provider flow
+        const { state, nonce } = opts.sessions.issueState("oidc");
+        const verifier = randomBytes(32).toString("base64url");
+        const challenge = createHash("sha256").update(verifier).digest("base64url");
+        return redirect(res, await opts.oidcLogin.authorizeUrl(redirectUri, state, challenge), {
+          "set-cookie": [oauthCookie(nonce, secure), pkceCookie(verifier, secure)],
+        });
+      }
+      if (opts.oidcLogin && url.pathname === "/auth/oidc/callback") {
+        const clearFlow = [clearOauthCookie(secure), clearPkceCookie(secure)];
+        if (
+          !opts.sessions.verifyState(
+            url.searchParams.get("state"),
+            "oidc",
+            readCookie(req.headers.cookie, OAUTH_COOKIE),
+          )
+        ) {
+          return send(res, 400, { error: "invalid OAuth state" }, { "set-cookie": clearFlow });
+        }
+        const denied = url.searchParams.get("error");
+        if (denied) {
+          return send(
+            res,
+            401,
+            { error: `sign-in refused by the identity provider: ${denied}` },
+            { "set-cookie": clearFlow },
+          );
+        }
+        const code = url.searchParams.get("code");
+        const verifier = readCookie(req.headers.cookie, PKCE_COOKIE);
+        if (!code || !verifier) return send(res, 400, { error: "missing code" }, { "set-cookie": clearFlow });
+        const { accessToken } = await opts.oidcLogin.exchangeCode(
+          code,
+          `${opts.publicUrl}/auth/oidc/callback`,
+          verifier,
+        );
+        // fail closed: signature, issuer, audience, login claim — and in cell
+        // mode the tenant gate. A token for ANOTHER tenant is not an error page
+        // but a routing problem: the platform's login re-routes to the right cell.
+        let id: { login: string; name: string; sub: string };
+        try {
+          if (!opts.oidc) return send(res, 503, { error: "OIDC login not configured" });
+          id = await opts.oidc.verify(accessToken);
+        } catch (e) {
+          if (e instanceof AppError && e.code === "auth/wrong-tenant" && opts.controlPlaneUrl) {
+            return redirect(res, `${opts.controlPlaneUrl}/login`, { "set-cookie": clearFlow });
+          }
+          throw e;
+        }
+        const session = opts.sessions.create({ login: id.login, name: id.name, avatarUrl: null, provider: "oidc" });
+        console.log(`oidc login: @${id.login}`);
+        return redirect(res, "/", { "set-cookie": [sessionCookie(session.id, secure), ...clearFlow] });
+      }
+
       // ── OAuth: LOGIN = AUTHENTICATION ONLY (repos authorize per request) ─
       const authStart = url.pathname.match(/^\/auth\/([a-z]+)$/);
       if (authStart) {
@@ -440,7 +516,12 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // ── session-facing API ───────────────────────────────────────────
       if (url.pathname === "/api/config") {
         return send(res, 200, {
-          providers: [...opts.providers.values()].map((p) => ({ id: p.id, label: p.label })),
+          providers: [
+            // the SSO login leads when configured — the web client renders these
+            // generically as "/auth/<id>" buttons, so no client change is needed
+            ...(opts.oidcLogin ? [{ id: "oidc", label: opts.oidcLogin.label }] : []),
+            ...[...opts.providers.values()].map((p) => ({ id: p.id, label: p.label })),
+          ],
           installUrl: opts.connectionSource?.connectUrl() ?? null,
         } satisfies AppConfig);
       }
