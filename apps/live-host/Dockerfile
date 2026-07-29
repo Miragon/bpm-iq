@@ -22,6 +22,7 @@ COPY packages/api-client/package.json ./packages/api-client/
 COPY packages/cell-protocol/package.json ./packages/cell-protocol/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/github-app/package.json ./packages/github-app/
+COPY packages/live-client/package.json ./packages/live-client/
 COPY packages/http-kit/package.json ./packages/http-kit/
 COPY packages/validator/package.json ./packages/validator/
 COPY packages/mcp/package.json ./packages/mcp/
