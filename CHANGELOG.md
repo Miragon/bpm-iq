@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.1.0](https://github.com/Miragon/bpm-iq/compare/v3.0.1...v3.1.0) (2026-07-29)
+
+
+### Features
+
+* **live-host:** cross-tenant OIDC login asks the platform to rescope to THIS tenant ([#71](https://github.com/Miragon/bpm-iq/issues/71)) ([3f7fa05](https://github.com/Miragon/bpm-iq/commit/3f7fa05fcabf362b6bb32d43841d9d3359d3148e))
+
+
+### Bug Fixes
+
+* **build:** copy live-client into the runtime stage too — the install-layer fix alone left a dangling symlink ([#70](https://github.com/Miragon/bpm-iq/issues/70)) ([a4c6564](https://github.com/Miragon/bpm-iq/commit/a4c65648535192dc3c94d3ad205a94921cddba3d))
+* **build:** live-client manifest missing from the image install layer ([#68](https://github.com/Miragon/bpm-iq/issues/68)) ([84ecac8](https://github.com/Miragon/bpm-iq/commit/84ecac87292426ea8f09eed90ca9fea249bcd72f))
+
 ## [3.0.1](https://github.com/Miragon/bpm-iq/compare/v3.0.0...v3.0.1) (2026-07-28)
 
 
