@@ -335,8 +335,9 @@ const httpServer = startApi(PORT, {
   connectionSource,
   issues,
   // control-plane origin (from the mint URL) — a cross-tenant OIDC login
-  // redirects there so the platform can re-route to the right cell
+  // redirects there so the platform can rescope the session to this tenant
   controlPlaneUrl: MINT_URL ? new URL(MINT_URL).origin : undefined,
+  tenantInstallationId: TENANT_INSTALLATION_ID,
   deepHealth,
   // cell mode: gate the /healthz DETAIL behind the cell secret (the control-plane
   // fleet poll presents it). Deliberate reuse of CELL_SECRET (not a dedicated health
