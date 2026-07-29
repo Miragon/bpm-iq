@@ -56,6 +56,7 @@ COPY --from=build /app/packages/notations ./packages/notations
 COPY --from=build /app/packages/cell-protocol ./packages/cell-protocol
 COPY --from=build /app/packages/contracts ./packages/contracts
 COPY --from=build /app/packages/github-app ./packages/github-app
+COPY --from=build /app/packages/live-client ./packages/live-client
 COPY --from=build /app/packages/http-kit ./packages/http-kit
 COPY --from=build /app/packages/validator ./packages/validator
 RUN mkdir -p /data
