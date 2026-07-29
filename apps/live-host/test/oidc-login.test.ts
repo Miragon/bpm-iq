@@ -107,6 +107,7 @@ function boot(cellMode: boolean): { base: string; sessions: SessionStore } {
     openDoc: () => Promise.reject(new Error("not used")),
     maxDocBytes: 8_000_000,
     controlPlaneUrl: cellMode ? CP_URL : undefined,
+    tenantInstallationId: cellMode ? 42 : undefined,
     oidc: {
       issuer: idpBase,
       verify: makeOidcVerifier({
@@ -250,7 +251,7 @@ test("cell mode: the tenant gate routes a cross-tenant login back to the platfor
     `bpm_live_oauth=${s1.nonce}; bpm_live_pkce=${s1.verifier}`,
   );
   assert.equal(wrong.status, 302, "not an error page — a routing problem");
-  assert.equal(wrong.headers.get("location"), `${CP_URL}/login`);
+  assert.equal(wrong.headers.get("location"), `${CP_URL}/login?org=42`, "asks the platform to rescope to THIS tenant");
 
   const s2 = await startLogin(base);
   const right = await callback(

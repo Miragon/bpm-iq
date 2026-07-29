@@ -131,6 +131,9 @@ export interface ApiOptions {
   /** cell mode (ADR 0002): the control-plane origin (derived from
    * TOKEN_MINT_URL) — a cross-tenant OIDC login redirects there for re-routing */
   controlPlaneUrl?: string;
+  /** cell mode: this cell's tenant — the cross-tenant redirect asks the
+   * platform to rescope the IdP session to exactly this org (?org=…) */
+  tenantInstallationId?: number;
   /** deep liveness (ADR 0002): SQLite writable + disk free — 503 when degraded */
   deepHealth?: () => Promise<{ ok: boolean; checks: Record<string, unknown> }>;
   /** cell mode: secret unlocking the /healthz DETAIL (the control-plane fleet poll
@@ -389,7 +392,11 @@ export function startApi(port: number, opts: ApiOptions): Server {
           id = await opts.oidc.verify(accessToken);
         } catch (e) {
           if (e instanceof AppError && e.code === "auth/wrong-tenant" && opts.controlPlaneUrl) {
-            return redirect(res, `${opts.controlPlaneUrl}/login`, { "set-cookie": clearFlow });
+            // the session is scoped to ANOTHER tenant's org — ask the platform
+            // to rescope it to THIS one (silent with a live IdP session), so a
+            // cross-workspace bookmark self-heals instead of dead-ending
+            const org = opts.tenantInstallationId !== undefined ? `?org=${opts.tenantInstallationId}` : "";
+            return redirect(res, `${opts.controlPlaneUrl}/login${org}`, { "set-cookie": clearFlow });
           }
           throw e;
         }
