@@ -20,6 +20,18 @@ updates:
       semver-major-days: 14
       semver-minor-days: 5
       semver-patch-days: 3
+    # held back until the ecosystem catches up — drop the entry, don't raise it
+    ignore:
+      # 0.56 added an `exports` map, so the deep paths y-monaco 0.1.6 imports
+      # ("monaco-editor/esm/vs/editor/editor.api.js") no longer resolve and the
+      # web build fails. Unblock: a y-monaco release that drops the deep import.
+      - dependency-name: "monaco-editor"
+        versions: [">=0.56"]
+      # typescript-eslint 8.x refuses to load against the TS 7 API, so `pnpm lint`
+      # dies before it lints anything. Unblock: typescript-eslint TS >=7 support
+      # (typescript-eslint/typescript-eslint#10940).
+      - dependency-name: "typescript"
+        versions: [">=7"]
     groups:
       npm-minor-patch:
         applies-to: version-updates
