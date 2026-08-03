@@ -30,7 +30,7 @@
  *   GET  /api/repos/:owner/:repo/content?path=   → current LIVE model content + baseVersion (repo write required)
  *   PUT  /api/repos/:owner/:repo/content?path=   → validate + CAS-save into the live doc (repo write required)
  *   POST /mcp                                    → MCP endpoint (stateless Streamable HTTP; session/dev token/OIDC JWT)
- *   GET  /.well-known/oauth-protected-resource   → RFC-9728 PRM (only when OIDC is configured)
+ *   GET  /.well-known/oauth-protected-resource(/mcp) → RFC-9728 PRM, per resource (only when OIDC is configured)
  *   POST /webhook/github                         → installation lifecycle (HMAC-verified)
  *   GET  /setup/installed                        → post-install sync + redirect
  *   GET  /healthz, /*                            → liveness, built web app (public)
@@ -152,6 +152,9 @@ export interface ApiOptions {
     verify: (token: string) => Promise<{ login: string; name: string; sub: string }>;
     /** advertised in the RFC-9728 protected-resource metadata */
     issuer: string;
+    /** OAuth scopes advertised in the PRM (scopes_supported) and the 401
+     * challenge (scope=…). Absent → neither is emitted. */
+    scopes?: string[];
   };
   /** interactive browser OIDC login (auth/oidc-login.ts) — code+PKCE flow whose
    * access token is validated by `oidc.verify` (requires `oidc`). Present → the
@@ -211,6 +214,13 @@ function serveStatic(dist: string, urlPath: string, res: ServerResponse): void {
   send(res, 404, "not found");
 }
 
+/** the browser-reachable auth surface that answers CORS (public metadata + /mcp) */
+const CORS_PATHS = new Set([
+  "/.well-known/oauth-protected-resource",
+  "/.well-known/oauth-protected-resource/mcp",
+  "/mcp",
+]);
+
 export function startApi(port: number, opts: ApiOptions): Server {
   const secure = opts.publicUrl.startsWith("https");
 
@@ -252,12 +262,33 @@ export function startApi(port: number, opts: ApiOptions): Server {
   };
 
   // RFC 9728: 401s advertise where the protected-resource metadata lives, so
-  // MCP clients can discover the IdP and run their OAuth flow unattended
-  const challenge = (): Record<string, string> =>
-    opts.oidc
-      ? { "www-authenticate": `Bearer resource_metadata="${opts.publicUrl}/.well-known/oauth-protected-resource"` }
-      : {};
-  const unauthorized = (res: ServerResponse, body: unknown): void => send(res, 401, body, challenge());
+  // MCP clients can discover the IdP and run their OAuth flow unattended. The
+  // metadata URL is resource-specific (§3.3): /mcp has its OWN document whose
+  // `resource` carries the /mcp path (claude.ai matches it exactly, incl. the
+  // path component), so a /mcp 401 must point there — not at the root document.
+  const prmPath = (pathname: string): string =>
+    pathname === "/mcp" || pathname.startsWith("/mcp/")
+      ? "/.well-known/oauth-protected-resource/mcp"
+      : "/.well-known/oauth-protected-resource";
+  const challenge = (pathname: string): Record<string, string> => {
+    if (!opts.oidc) return {};
+    let v = `Bearer resource_metadata="${opts.publicUrl}${prmPath(pathname)}"`;
+    // the challenge scope is authoritative for the client (SEP-835); emit it
+    // only when configured, else clients request an empty scope
+    if (opts.oidc.scopes?.length) v += `, scope="${opts.oidc.scopes.join(" ")}"`;
+    return { "www-authenticate": v };
+  };
+  const unauthorized = (res: ServerResponse, body: unknown, pathname: string): void =>
+    send(res, 401, body, challenge(pathname));
+
+  /** RFC 9728 metadata body for one resource identifier (guard `opts.oidc` at the call). */
+  const prm = (resource: string): Record<string, unknown> => ({
+    resource,
+    authorization_servers: [opts.oidc!.issuer],
+    bearer_methods_supported: ["header"],
+    resource_name: "bpmiq Live Host",
+    ...(opts.oidc!.scopes?.length ? { scopes_supported: opts.oidc!.scopes } : {}),
+  });
 
   /** resolve + authorize a repo route segment; sends the error response itself */
   const repoOf = async (
@@ -282,6 +313,28 @@ export function startApi(port: number, opts: ApiOptions): Server {
     try {
       // baseline security headers on EVERY response (API, redirects, static web app)
       securityHeaders(res, { secure });
+
+      // CORS for the browser-reachable auth surface: the public PRM documents and
+      // /mcp. Origin "*" but NEVER credentials — so a browser never sends cookies
+      // cross-origin (the cookie-session path stays same-origin only), and a
+      // cross-origin MCP client must authenticate with a Bearer token. setHeader
+      // (not writeHead) so the route's own writeHead merges on top.
+      if (CORS_PATHS.has(url.pathname)) {
+        res.setHeader("access-control-allow-origin", "*");
+        // without this the 401's challenge is invisible to a browser client —
+        // www-authenticate is not in the CORS-safelisted response headers
+        res.setHeader("access-control-expose-headers", "www-authenticate");
+        res.setHeader("vary", "origin");
+        if (req.method === "OPTIONS") {
+          res.writeHead(204, {
+            "access-control-allow-methods": "GET, POST, OPTIONS",
+            "access-control-allow-headers": "authorization, content-type, mcp-protocol-version, mcp-session-id",
+            "access-control-max-age": "600",
+          });
+          return res.end();
+        }
+      }
+
       if (url.pathname === "/healthz") {
         // static ok unless a deep check is wired; a degraded cell (SQLite
         // unwritable, disk full) must fail the Fly health check, not green-light
@@ -299,12 +352,13 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // IdP from here after a 401's WWW-Authenticate challenge. Only exists when
       // OIDC is configured; a session-only deployment has nothing to advertise.
       if (opts.oidc && url.pathname === "/.well-known/oauth-protected-resource") {
-        return send(res, 200, {
-          resource: opts.publicUrl,
-          authorization_servers: [opts.oidc.issuer],
-          bearer_methods_supported: ["header"],
-          resource_name: "bpmiq Live Host",
-        });
+        return send(res, 200, prm(opts.publicUrl));
+      }
+      // RFC 9728 §3.3: the /mcp resource has its OWN metadata, whose `resource`
+      // carries the /mcp path — clients that match the resource URL exactly
+      // (claude.ai) read this one, discovered from the /mcp 401 challenge.
+      if (opts.oidc && url.pathname === "/.well-known/oauth-protected-resource/mcp") {
+        return send(res, 200, prm(`${opts.publicUrl}/mcp`));
       }
 
       // ── installation lifecycle ───────────────────────────────────────
@@ -474,11 +528,15 @@ export function startApi(port: number, opts: ApiOptions): Server {
             ...[...opts.providers.values()].map((p) => ({ id: p.id, label: p.label })),
           ],
           installUrl: opts.connectionSource?.connectUrl() ?? null,
+          // publicUrl, not the request Host — the URL must work from OUTSIDE
+          // (an AI client on another machine), and behind a proxy the Host
+          // header is the internal address
+          mcpUrl: `${opts.publicUrl}/mcp`,
         } satisfies AppConfig);
       }
       if (url.pathname === "/api/me") {
         const session = await sessionOf(req);
-        if (!session) return unauthorized(res, { error: "not logged in" });
+        if (!session) return unauthorized(res, { error: "not logged in" }, url.pathname);
         // NB for an OIDC-JWT session wsToken is the synthetic id — NOT a usable
         // ws token (the ws join stays session-id-only for now)
         return send(res, 200, { user: session.user, wsToken: session.id } satisfies Me);
@@ -492,7 +550,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // repo OVERVIEW
       if (url.pathname === "/api/repos") {
         const session = await sessionOf(req);
-        if (!session) return unauthorized(res, { error: "not logged in" });
+        if (!session) return unauthorized(res, { error: "not logged in" }, url.pathname);
         if (url.searchParams.has("refresh")) {
           // session-gated explicit refresh → force a real sync (bypass the 10s
           // coalesce) so a repo just added on GitHub appears now
@@ -521,7 +579,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       );
       if (repoRoute) {
         const session = await sessionOf(req);
-        if (!session) return unauthorized(res, { error: "not logged in" });
+        if (!session) return unauthorized(res, { error: "not logged in" }, url.pathname);
         const repo = await repoOf(res, session, repoRoute[1] ?? "");
         if (!repo) return;
         if (repoRoute[2] === "processes") {
@@ -725,10 +783,14 @@ export function startApi(port: number, opts: ApiOptions): Server {
           );
         }
         const session = await sessionOf(req);
-        if (!session) return unauthorized(res, { error: "not logged in" });
+        if (!session) return unauthorized(res, { error: "not logged in" }, url.pathname);
         return handleMcp(req, res, opts, session);
       }
 
+      // never serve the SPA under /.well-known/* — OAuth clients probe these
+      // paths and parse the body as JSON; a 200 HTML fallback crashes them,
+      // while a clean 404 lets them conclude "no metadata here" and move on
+      if (url.pathname.startsWith("/.well-known/")) return send(res, 404, { error: "not found" });
       if (req.method === "GET" || req.method === "HEAD") return serveStatic(opts.webDist, url.pathname, res);
       return send(res, 405, { error: "method not allowed" });
     } catch (e) {
@@ -750,7 +812,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // their own status + machine code; plain Errors map to the 500 body.
       // 401s additionally carry the OIDC discovery challenge (RFC 9728).
       const { status, body } = errorBody(e, { authenticated: authed });
-      return send(res, status, body, status === 401 ? challenge() : {});
+      return send(res, status, body, status === 401 ? challenge(url.pathname) : {});
     }
   });
   httpServer.listen(port, () => {

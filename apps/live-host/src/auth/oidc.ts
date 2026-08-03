@@ -27,8 +27,13 @@ export interface OidcVerifierConfig {
   issuer: string;
   /** the IdP's JWKS endpoint (explicit — no boot-time discovery fetch) */
   jwksUrl: string;
-  /** expected `aud` claim — this Live Host's public URL (RFC 8707) */
-  audience: string;
+  /** accepted `aud` claim(s) — this Live Host's resource identifier(s) (RFC 8707).
+   * A list, because a deployment protects more than one resource URI (the origin
+   * for the REST routes, `${origin}/mcp` for the MCP endpoint) and an IdP may
+   * mint either the requested `resource` or a fixed dashboard audience. Matched
+   * as an exact-literal set (jose), tolerant of a trailing-slash twin — see
+   * expandAudienceTwins. */
+  audience: string | string[];
   /** JWT claim carrying the git-provider login (default `github_login`) */
   loginClaim: string;
   /** exact-match claims the token MUST carry (cell mode: installation_id ==
@@ -48,14 +53,31 @@ export interface VerifiedIdentity {
 
 export type OidcVerify = (token: string) => Promise<VerifiedIdentity>;
 
+/** Widen each configured audience with its trailing-slash twin. RFC 8707 clients
+ * derive the resource from a URL: the MCP SDK sends `new URL(resource).href`,
+ * which appends "/" to a bare origin ("https://h" → "https://h/") but leaves a
+ * path untouched ("https://h/mcp"). So a token's `aud` can differ from the
+ * configured value by exactly one trailing slash. This stays an EXACT-LITERAL
+ * set — never a prefix or normalising compare, which would reopen cross-resource
+ * token replay (the reason auth/wrong-audience exists). */
+export function expandAudienceTwins(audience: string | string[]): string[] {
+  const out = new Set<string>();
+  for (const a of Array.isArray(audience) ? audience : [audience]) {
+    out.add(a);
+    out.add(a.endsWith("/") ? a.slice(0, -1) : `${a}/`);
+  }
+  return [...out];
+}
+
 export function makeOidcVerifier(cfg: OidcVerifierConfig): OidcVerify {
   // created ONCE — jose caches the fetched keys (incl. kid rotation) internally,
   // so per-request verification costs one signature check, no network
   const jwks = createRemoteJWKSet(new URL(cfg.jwksUrl));
+  const audience = expandAudienceTwins(cfg.audience);
   return async (token) => {
     let payload: Record<string, unknown>;
     try {
-      ({ payload } = await jwtVerify(token, jwks, { issuer: cfg.issuer, audience: cfg.audience }));
+      ({ payload } = await jwtVerify(token, jwks, { issuer: cfg.issuer, audience }));
     } catch (e) {
       throw mapJoseError(e);
     }

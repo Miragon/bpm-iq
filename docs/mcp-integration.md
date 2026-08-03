@@ -107,14 +107,33 @@ call is gated by the caller's per-repo permission.
 | Tool              | Kind  | What it does                                                                      |
 | ----------------- | ----- | --------------------------------------------------------------------------------- |
 | `list_repos`      | read  | The connected repos the caller may work on.                                       |
-| `list_processes`  | read  | The processes of one repo (id, derived name, path).                               |
+| `list_processes`  | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).   |
 | `get_process`     | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.        |
 | `get_bpmn_xml`    | read  | The live BPMN XML plus the `baseVersion` for a later save.                        |
 | `validate_bpmn`   | read  | Dry-run the platform validator on submitted XML — check before saving.            |
 | `list_changes`    | read  | A repo's unreleased live changes.                                                 |
+| `open_modeler`    | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                      |
 | `create_process`  | write | Scaffold a new process `.bpmn` in the live workspace.                             |
 | `save_bpmn_xml`   | write | Validated, conflict-guarded save into the live document (requires `baseVersion`). |
 | `release_process` | write | Open the release PR — merge rights stay at the git provider.                      |
+
+### MCP App: the embedded modeler
+
+`open_modeler` is an [MCP App](https://modelcontextprotocol.io/specification/2026-01-26)
+(`io.modelcontextprotocol/ui`): in apps-capable clients (claude.ai, Claude Desktop) it
+renders an interactive bpmn-js modeler inline in the conversation — pan/zoom, edit, and
+save through the same validated, `baseVersion`-guarded path as `save_bpmn_xml` (a
+concurrent save shows a conflict banner: load theirs, overwrite, or keep editing; a
+save tells the model to re-read instead of trusting stale XML). The widget is the
+single-file bundle `apps/web/dist/mcp-app.html` (built by
+`vite.mcp-app.config.ts`), served as a `ui://` resource; its tool calls ride the
+host's authenticated connection, so per-repo authorization applies per call exactly
+like agent calls.
+
+Clients without apps support (Claude Code, the read-only `@bpmiq/mcp` package) see a
+plain tool that returns a short process summary — use `get_process`/`get_bpmn_xml`
+there. Under `LIVE_MCP_READONLY=1` the tool stays registered but the widget becomes a
+read-only viewer (no save button), matching the absent write tools.
 
 `save_bpmn_xml` is compare-and-set: the caller passes the `baseVersion` from a prior
 `get_bpmn_xml`, and if the live document moved in between, the save is refused with a
@@ -129,7 +148,10 @@ every open editor sees them instantly, exactly like a keystroke.
 to `LIVE_PUBLIC_URL`, and the login claim — default `github_login` — must carry the
 IdP-verified GitHub login; see [on-prem/configuration.md](on-prem/configuration.md) and
 the verified IdP recipe in [extending/mcp-idp-setup.md](extending/mcp-idp-setup.md)).
-Per-repo authorization always runs app-side against real GitHub permissions.
+Per-repo authorization runs app-side against real GitHub permissions on every tool
+call — with one deliberate exception: the dev token bypasses it entirely (that is its
+purpose; local spikes only, never set it in production — see
+[on-prem/configuration.md](on-prem/configuration.md)).
 `LIVE_MCP_READONLY=1` registers **no** write tools — they are absent from `tools/list`,
 not erroring.
 

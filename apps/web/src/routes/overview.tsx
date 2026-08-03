@@ -3,7 +3,7 @@ import { Button } from "@bpmiq/ui-kit/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@bpmiq/ui-kit/components/card";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Plus, RefreshCw } from "lucide-react";
+import { Copy, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -16,7 +16,18 @@ export function Overview() {
   const repos = useRepos();
   const cfg = useConfig();
   const installUrl = cfg.data?.installUrl ?? null;
+  const mcpUrl = cfg.data?.mcpUrl ?? null;
   const [refreshing, setRefreshing] = useState(false);
+
+  const copyMcpUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("MCP server URL copied", { description: url });
+    } catch {
+      // clipboard needs a secure context (https/localhost) — show the URL to copy by hand
+      toast.info("MCP server URL", { description: url, duration: 15_000 });
+    }
+  };
 
   // force a registry re-sync from the provider, then update the cache
   const refresh = async () => {
@@ -61,6 +72,16 @@ export function Overview() {
           <Button variant="outline" size="sm" disabled={refreshing} onClick={refresh} title="Reload from GitHub">
             <RefreshCw className={refreshing ? "animate-spin" : ""} /> Refresh
           </Button>
+          {mcpUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              title="Copy the MCP server URL — connect Claude or another AI client"
+              onClick={() => copyMcpUrl(mcpUrl)}
+            >
+              <Copy /> MCP
+            </Button>
+          )}
         </div>
       </div>
       <p className="text-muted-foreground mb-6 text-sm">

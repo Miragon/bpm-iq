@@ -156,8 +156,13 @@ const callback = (base: string, query: string, cookies: string): Promise<Respons
 
 test("/api/config advertises the SSO login ahead of the git providers", async () => {
   const { base } = boot(false);
-  const cfg = (await (await fetch(`${base}/api/config`)).json()) as { providers: Array<{ id: string; label: string }> };
+  const cfg = (await (await fetch(`${base}/api/config`)).json()) as {
+    providers: Array<{ id: string; label: string }>;
+    mcpUrl: string;
+  };
   assert.deepEqual(cfg.providers, [{ id: "oidc", label: "SSO" }]);
+  // the copy-to-clipboard URL in the web overview — publicUrl-based, not Host-based
+  assert.equal(cfg.mcpUrl, "http://live.test/mcp");
 });
 
 test("/auth/oidc: discovery-resolved authorize redirect with browser-bound state + S256 PKCE", async () => {

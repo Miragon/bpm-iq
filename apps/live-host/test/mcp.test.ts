@@ -63,11 +63,17 @@ after(async () => {
 
 /** tmpdir content repo + real direct-connection openDoc + inline fakes for
  *  every other injected surface (the house style) */
+// the widget stub every deps() writes — loadModeler memoises module-wide, so
+// the content must be identical across tests (as it is in a real deployment)
+const WIDGET_STUB = '<html><head><script>window.BPMIQ_BOOT = "__BPMIQ_BOOT__";</script></head><body>stub</body></html>';
+
 function deps(over: Partial<McpDeps> = {}): McpDeps {
   const ws = mkdtempSync(join(tmpdir(), "bpm-mcp-"));
   mkdirSync(join(ws, "processes"), { recursive: true });
   writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
   writeFileSync(join(ws, PATH), VALID);
+  const webDist = mkdtempSync(join(tmpdir(), "bpm-webdist-"));
+  writeFileSync(join(webDist, "mcp-app.html"), WIDGET_STUB);
   const registry = { get: (n: string) => (n.toLowerCase() === REPO.fullName ? REPO : undefined), list: () => [REPO] };
   const workspaces = {
     ensure: async () => ws,
@@ -99,6 +105,7 @@ function deps(over: Partial<McpDeps> = {}): McpDeps {
     maxDocBytes: 8_000_000,
     providers: new Map<string, GitProvider>(),
     github: {} as GitProvider,
+    webDist,
     ...over,
   };
 }
@@ -124,7 +131,7 @@ async function connect(d: McpDeps, s: Session = session()) {
 
 // ── (a) tool behaviour ──────────────────────────────────────────────────────
 
-test("registration: all nine tools; read-only mode drops exactly the write tools", async () => {
+test("registration: all ten tools; read-only mode drops exactly the write tools", async () => {
   const full = await connect(deps());
   assert.deepEqual((await full.client.listTools()).tools.map((t) => t.name).sort(), [
     "create_process",
@@ -133,10 +140,13 @@ test("registration: all nine tools; read-only mode drops exactly the write tools
     "list_changes",
     "list_processes",
     "list_repos",
+    "open_modeler",
     "release_process",
     "save_bpmn_xml",
     "validate_bpmn",
   ]);
+  // open_modeler stays in read-only mode (opening is a read; the widget's
+  // readonly marker turns it into a viewer)
   const ro = await connect(deps({ mcpReadOnly: true }));
   assert.deepEqual((await ro.client.listTools()).tools.map((t) => t.name).sort(), [
     "get_bpmn_xml",
@@ -144,8 +154,38 @@ test("registration: all nine tools; read-only mode drops exactly the write tools
     "list_changes",
     "list_processes",
     "list_repos",
+    "open_modeler",
     "validate_bpmn",
   ]);
+});
+
+test("MCP App: open_modeler carries the ui resource link; the resource serves the widget with the boot marker injected", async () => {
+  const { client, callJson } = await connect(deps());
+
+  // the tool advertises its UI template (nested + legacy flat key, per ext-apps)
+  const tool = (await client.listTools()).tools.find((t) => t.name === "open_modeler");
+  assert.ok(tool, "open_modeler registered");
+  const meta = tool._meta as { ui?: { resourceUri?: string }; "ui/resourceUri"?: string };
+  const uri = meta?.ui?.resourceUri;
+  assert.ok(uri?.startsWith("ui://bpmiq/modeler-"), `ui resourceUri: ${uri}`);
+  assert.equal(meta?.["ui/resourceUri"], uri);
+
+  // the resource serves the single-file widget with the boot marker replaced
+  const res = await client.readResource({ uri: uri! });
+  const doc = res.contents[0] as { mimeType?: string; text?: string };
+  assert.equal(doc.mimeType, "text/html;profile=mcp-app");
+  assert.ok(!doc.text!.includes("__BPMIQ_BOOT__"), "marker replaced");
+  assert.ok(doc.text!.includes('{\\"readonly\\":false}'), "boot config injected");
+
+  // the tool result stays lean: a summary, never the XML
+  const opened = await callJson("open_modeler", { repo: REPO.fullName, id: "order" });
+  assert.equal(opened.opened.path, PATH);
+  assert.ok(!JSON.stringify(opened).includes("<bpmn"), "no XML in the tool result");
+
+  // read-only mode flips the widget's boot flag
+  const ro = await connect(deps({ mcpReadOnly: true }));
+  const roRes = await ro.client.readResource({ uri: uri! });
+  assert.ok((roRes.contents[0] as { text?: string }).text!.includes('{\\"readonly\\":true}'));
 });
 
 test("get→save round-trip incl. the conflict retry loop (stale token never overwrites)", async () => {
@@ -274,10 +314,31 @@ test("/mcp over HTTP: stateless JSON, 405 on GET, 401 + RFC-9728 challenge, -327
 
   const anon = await fetch(`${base}/mcp`, { method: "POST", headers: { "content-type": "application/json" } });
   assert.equal(anon.status, 401);
+  // RFC 9728 §3.3: the /mcp 401 points at the /mcp-specific PRM (path included),
+  // not the root document — a resource-exact client (claude.ai) needs that.
   assert.match(
     anon.headers.get("www-authenticate") ?? "",
-    /resource_metadata="http:\/\/live\.test\/\.well-known\/oauth-protected-resource"/,
+    /resource_metadata="http:\/\/live\.test\/\.well-known\/oauth-protected-resource\/mcp"/,
   );
+  // …and a browser client may actually READ that challenge: www-authenticate is
+  // not CORS-safelisted, so without this header the pointer is invisible to it
+  assert.match(anon.headers.get("access-control-expose-headers") ?? "", /www-authenticate/i);
+
+  // that PRM exists and echoes the /mcp resource identifier verbatim
+  const prm = await fetch(`${base}/.well-known/oauth-protected-resource/mcp`);
+  assert.equal(prm.status, 200);
+  assert.equal(prm.headers.get("access-control-allow-origin"), "*");
+  const prmDoc = (await prm.json()) as { resource: string; authorization_servers: string[] };
+  assert.equal(prmDoc.resource, "http://live.test/mcp");
+  assert.deepEqual(prmDoc.authorization_servers, ["https://idp.example"]);
+
+  // browser MCP clients preflight /mcp (custom mcp-protocol-version header) — a
+  // 204 with permissive origin but no credentials keeps cookies same-origin only
+  const preflight = await fetch(`${base}/mcp`, { method: "OPTIONS" });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
+  assert.equal(preflight.headers.get("access-control-allow-credentials"), null);
+  assert.match(preflight.headers.get("access-control-allow-headers") ?? "", /mcp-protocol-version/);
 
   const garbage = await fetch(`${base}/mcp`, { method: "POST", headers, body: "{not json" });
   assert.equal(garbage.status, 400);
