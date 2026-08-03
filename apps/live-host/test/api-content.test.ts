@@ -182,6 +182,12 @@ test("RFC 9728: anonymous 401s carry the challenge; the PRM route advertises the
   const meta = (await prm.json()) as { resource: string; authorization_servers: string[] };
   assert.equal(meta.resource, "http://live.test");
   assert.deepEqual(meta.authorization_servers, ["https://idp.example"]);
+
+  // an UNSERVED well-known path must 404 as JSON, never fall through to the
+  // SPA — OAuth discovery clients JSON.parse these probes and crash on HTML
+  const probe = await get("/.well-known/oauth-authorization-server", {});
+  assert.equal(probe.status, 404);
+  assert.match(probe.headers.get("content-type") ?? "", /application\/json/);
 });
 
 test("sessionOf JWT branch: synthetic identity on /api/me, typed 401 for a bad JWT, cookie wins over a broken bearer", async () => {

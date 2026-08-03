@@ -261,14 +261,29 @@ const OIDC_JWKS_URL = process.env.LIVE_OIDC_JWKS_URL;
 if (Boolean(OIDC_ISSUER) !== Boolean(OIDC_JWKS_URL)) {
   throw new Error("LIVE_OIDC_ISSUER and LIVE_OIDC_JWKS_URL must be set together");
 }
+// scopes advertised in the PRM (scopes_supported) and the 401 challenge; the
+// challenge value is authoritative for the client (SEP-835). Default unset — a
+// non-empty default would make every IdP without that scope reject with
+// invalid_scope, including the one verified WorkOS install.
+const MCP_SCOPES = (process.env.LIVE_MCP_SCOPES ?? "").split(/[\s,]+/).filter(Boolean);
 const oidc =
   OIDC_ISSUER && OIDC_JWKS_URL
     ? {
         issuer: OIDC_ISSUER,
+        scopes: MCP_SCOPES.length ? MCP_SCOPES : undefined,
         verify: makeOidcVerifier({
           issuer: OIDC_ISSUER,
           jwksUrl: OIDC_JWKS_URL,
-          audience: process.env.LIVE_OIDC_AUDIENCE ?? PUBLIC_URL,
+          // accept the configured audience(s) AND `${PUBLIC_URL}/mcp` — the value
+          // the /mcp PRM tells clients to request as their resource. Comma-split
+          // so an operator can pin several fixed IdP audiences.
+          audience: [
+            ...(process.env.LIVE_OIDC_AUDIENCE ?? PUBLIC_URL)
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+            `${PUBLIC_URL}/mcp`,
+          ],
           loginClaim: process.env.LIVE_OIDC_LOGIN_CLAIM ?? "github_login",
           // cell mode: the SaaS audience is a shared fleet value, so THIS is the
           // tenant boundary — a token must carry our installation_id (IdP-injected

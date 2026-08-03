@@ -18,12 +18,16 @@
  * LIVE_MCP_READONLY=1 (opts.mcpReadOnly) registers no write tools at all —
  * absent from tools/list, not erroring (agents plan against reality).
  */
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { join } from "node:path";
 
 import { readBody, send } from "@bpmiq/http-kit";
 import { deriveProcess } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
 import { checkBpmnXml } from "@bpmiq/validator";
+import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
@@ -46,6 +50,8 @@ export type McpDeps = OverviewDeps &
     providers: Map<string, GitProvider>;
     github: GitProvider;
     mcpReadOnly?: boolean;
+    /** built web assets — the MCP-App widget (mcp-app.html) is read from here */
+    webDist: string;
   };
 
 // ── tool result helpers (packages/mcp/tools.ts house style) ──────────────────
@@ -68,6 +74,26 @@ const safe =
     };
 const READ = { readOnlyHint: true, openWorldHint: false };
 const WRITE = { readOnlyHint: false, openWorldHint: false };
+
+// ── MCP-App widget (the embedded modeler) ────────────────────────────────────
+// The single-file HTML built by apps/web (vite.mcp-app.config.ts). Read once
+// per process, memoised — a fresh McpServer per request must not mean a disk
+// read per POST. The hash rides in the ui:// URI so a redeploy busts whatever
+// cache the host keeps (its cadence is undocumented).
+let modelerCache: { html: string; uri: string } | undefined;
+function loadModeler(webDist: string): { html: string; uri: string } | undefined {
+  if (modelerCache) return modelerCache;
+  let html: string;
+  try {
+    html = readFileSync(join(webDist, "mcp-app.html"), "utf8");
+  } catch {
+    // web dist without the widget (older build) — /mcp works, just without the app
+    return undefined;
+  }
+  const hash = createHash("sha256").update(html).digest("hex").slice(0, 8);
+  modelerCache = { html, uri: `ui://bpmiq/modeler-${hash}.html` };
+  return modelerCache;
+}
 
 // ── input shapes (zod v4 raw shapes, ported from the retired apps/live-mcp) ──
 const repoArg = z.string().describe("repository full name, 'owner/repo'");
@@ -303,6 +329,52 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
           return fail("provide either `processId` or a non-empty `files` array.");
         },
       ),
+    );
+  }
+
+  // ── MCP App: the embedded modeler (registered in BOTH modes — opening is a
+  // read; the readonly marker switches the widget to a viewer) ───────────────
+  const modeler = loadModeler(opts.webDist);
+  if (modeler) {
+    // the boot marker sits inside a quoted JS string in the HTML head; a
+    // double stringify yields the correctly escaped string literal
+    const boot = JSON.stringify(JSON.stringify({ readonly: opts.mcpReadOnly === true }));
+    registerAppResource(server, modeler.uri, modeler.uri, { mimeType: RESOURCE_MIME_TYPE }, async (uri) => ({
+      contents: [
+        {
+          uri: uri.toString(),
+          mimeType: RESOURCE_MIME_TYPE,
+          text: modeler.html.replace('"__BPMIQ_BOOT__"', boot),
+        },
+      ],
+    }));
+    registerAppTool(
+      server,
+      "open_modeler",
+      {
+        description:
+          "Open the interactive BPMN modeler widget for a process. Renders an embedded diagram " +
+          "editor in MCP-Apps-capable clients (claude.ai, Claude Desktop); other clients get a " +
+          "text summary — use get_process/get_bpmn_xml there instead.",
+        inputSchema: processRef,
+        annotations: READ,
+        _meta: { ui: { resourceUri: modeler.uri } },
+      },
+      safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+        const r = await requireRepo(repo);
+        const bpmnPath = await resolveBpmnPath(r, id, path);
+        // lean result on purpose: hosts cap tool results (~150k chars) and the
+        // widget fetches the XML itself via get_bpmn_xml — never send it here
+        const content = await getContent(opts, r, bpmnPath);
+        const graph = extractModelGraph(content.path, content.xml);
+        const view = graph ? deriveProcess(graph) : undefined;
+        return ok({
+          opened: { repo: r.fullName, path: content.path },
+          summary: view
+            ? { name: view.name, roles: view.roles, steps: view.steps.length }
+            : "modeler opened (no derivable view)",
+        });
+      }),
     );
   }
 

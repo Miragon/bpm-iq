@@ -1,6 +1,6 @@
 # ADR 0005 — AI write access in-process: /mcp + content REST on the Live Host, OIDC resource server, no self-built AS
 
-- **Status:** accepted (2026-07-24)
+- **Status:** accepted (2026-07-24), amended (2026-08-03 — see below)
 - **Context:** adversarially reviewed against a fully built alternative (a
   separate broker-based MCP server); the review's confirmed findings drove this
   decision
@@ -103,3 +103,49 @@ anywhere**.
   class, and the mcp-use dependency tree incl. telemetry postinstalls);
   Live-Host-as-AS (violates the no-self-built-AS decision); GitHub-as-AS
   (opaque tokens, no audience binding, no DCR).
+
+## Amendment (2026-08-03): client registration without DCR; the no-AS rule becomes conditional
+
+Re-evaluated after two facts changed:
+
+1. **The MCP spec deprecated DCR.** Revision 2026-07-28 orders client
+   registration as: pre-registered client information first, Client ID
+   Metadata Documents second, DCR as a deprecated fallback — and states MCP
+   clients SHOULD accept static client credentials. Real customers run IdPs
+   without DCR; that is now the spec's normal case, not a gap.
+2. **mcp-use re-checked (2026-07-31)** against its shipped server SDK: its
+   OAuth presets exist but are reachable only through its Hono-based
+   `MCPServer` owning the HTTP lifecycle (incompatible with the one-port
+   `node:http` server and the three-credential `sessionOf` funnel), pin a
+   conflicting SDK version, and bring inspector/CLI/telemetry as runtime
+   dependencies. Rejection stands unchanged.
+
+**Decided:**
+
+- **Pre-registration is the supported registration path** for DCR-less IdPs: a
+  statically registered public client (PKCE, no secret) at the customer's IdP,
+  handed to clients out of band (`--client-id`, connector settings —
+  docs/extending/mcp-idp-setup.md). CIMD needs no Live Host work at any point:
+  it is purely AS-side; capable clients adopt it on their own when the IdP
+  does.
+- **Directories that cannot front MCP at all** (Entra ID rejects the
+  `resource` parameter; ADFS/SAML-only have no usable AS) get a topology
+  answer, not code: a broker IdP (WorkOS AuthKit, Keycloak with identity
+  brokering) in front of the corporate directory. This transfers operating
+  cost to the customer and must be stated as such.
+- **The resource-server surface was hardened for exact-match clients**
+  (per-resource RFC 9728 metadata for `/mcp`, audience literal-set with
+  trailing-slash twins, optional challenge scopes, CORS on the public auth
+  surface) — resource-server work, consistent with this ADR.
+- **"No self-built AS — anywhere" is narrowed from an absolute to a
+  conditional.** It holds because every known client×IdP combination is served
+  by pre-registration, CIMD, or a broker — and because a `/register`/token
+  endpoint would re-import the SSRF/confused-deputy attack class into the
+  single-writer multi-tenant process this ADR shrank. **Trigger to revisit:**
+  a named customer whose MCP client offers no static `client_id`, whose IdP
+  supports neither pre-registration usable by that client nor CIMD, and who
+  rejects the broker topology. Until all three hold at once, no AS is built.
+- The `github_login` account-linking gap (above, "Known cost") is untouched by
+  ALL of this: it is a token-issuance/identity-mapping problem, not a
+  registration problem. For corporate directories it remains the real blocker
+  and keeps its own seam (docs/extending/sso.md).

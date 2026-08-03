@@ -13,7 +13,7 @@ import { after, before, test } from "node:test";
 import { AppError } from "@bpmiq/http-kit";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
-import { makeOidcVerifier, type OidcVerify } from "../src/auth/oidc.ts";
+import { expandAudienceTwins, makeOidcVerifier, type OidcVerify } from "../src/auth/oidc.ts";
 
 const ISSUER = "https://idp.example";
 const AUDIENCE = "https://live.example";
@@ -83,6 +83,29 @@ test("expired / wrong audience / wrong issuer / bad signature → distinct 401 c
   assert.equal(await codeOf(verify(await token({ issuer: "https://rogue.example" }))), "auth/wrong-issuer");
   assert.equal(await codeOf(verify(await token({ key: rogueKey }))), "auth/invalid-token");
   assert.equal(await codeOf(verify("not-a-jwt")), "auth/invalid-token");
+});
+
+test("expandAudienceTwins: each audience gains its trailing-slash twin, exact literals only", () => {
+  assert.deepEqual(expandAudienceTwins("https://h").sort(), ["https://h", "https://h/"]);
+  assert.deepEqual(expandAudienceTwins("https://h/mcp").sort(), ["https://h/mcp", "https://h/mcp/"]);
+  // a list is de-duplicated; no prefix widening ("https://h" never admits "https://h/mcp")
+  assert.deepEqual(expandAudienceTwins(["https://h", "https://h/"]).sort(), ["https://h", "https://h/"]);
+});
+
+test("audience list + trailing-slash twin: the SDK's `${origin}/` aud matches a bare-origin config", async () => {
+  const port = (jwks.address() as { port: number }).port;
+  const multi = makeOidcVerifier({
+    issuer: ISSUER,
+    jwksUrl: `http://127.0.0.1:${port}/jwks`,
+    audience: [AUDIENCE, `${AUDIENCE}/mcp`],
+    loginClaim: "github_login",
+  });
+  // bare origin configured, token carries the SDK-normalised trailing slash → accepted
+  assert.equal((await multi(await token({ audience: `${AUDIENCE}/` }))).login, "petra");
+  // the second resource identifier is accepted too
+  assert.equal((await multi(await token({ audience: `${AUDIENCE}/mcp` }))).login, "petra");
+  // an unrelated audience is still rejected — no prefix/normalising escape
+  assert.equal(await codeOf(multi(await token({ audience: "https://evil.example" }))), "auth/wrong-audience");
 });
 
 test("FAIL CLOSED: preferred_username without the login claim is refused, never used", async () => {

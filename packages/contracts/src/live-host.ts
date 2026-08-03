@@ -121,6 +121,8 @@ export interface Me {
 export interface AppConfig {
   providers: { id: string; label: string }[];
   installUrl: string | null;
+  /** the MCP endpoint under the server's public URL — what an AI client connects to */
+  mcpUrl: string;
 }
 
 /** POST /api/repos/:fullName/release/:id and /release (file selection) */
