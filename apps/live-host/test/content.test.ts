@@ -241,3 +241,24 @@ test("putContent gates: baseVersion required, validation 422, size cap 413, .dmn
   assert.ok(saved.ok);
   assert.deepEqual(saved.result.warnings, []);
 });
+
+test("putContent lint:'warn' saves an invalid model and reports the errors instead of refusing", async () => {
+  const { ws, deps } = setup();
+  writeFileSync(join(ws, PATH), VALID);
+  const got = await getContent(deps, REPO, PATH);
+
+  // the same XML the strict gate refuses with 422 saves under lint:"warn" —
+  // the widget-autosave trust level equals the ws rooms, which never gated
+  const saved = await putContent(deps, REPO, PATH, {
+    xml: "<not-bpmn/>",
+    baseVersion: got.baseVersion,
+    lint: "warn",
+  });
+  assert.ok(saved.ok, "warn mode must not refuse");
+  assert.ok((saved.result.errors?.length ?? 0) > 0, "errors are reported on the result");
+
+  // the write really landed (and minted a new token)
+  const after = await getContent(deps, REPO, PATH);
+  assert.equal(after.xml, "<not-bpmn/>");
+  assert.notEqual(after.baseVersion, got.baseVersion);
+});

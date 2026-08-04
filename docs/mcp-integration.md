@@ -130,10 +130,28 @@ single-file bundle `apps/web/dist/mcp-app.html` (built by
 host's authenticated connection, so per-repo authorization applies per call exactly
 like agent calls.
 
+The widget edits **live**: it first tries the same Hocuspocus/Yjs session the web
+editor uses (a single-use, room-bound ws ticket from `mint_ws_ticket`, 60s TTL — see
+ADR 0005's 2026-08-04 amendment) — then edits sync instantly in both directions,
+co-editors included. If the host sandbox blocks the socket (claude.ai's
+`connectDomains` enforcement is partially buggy), it degrades to **autosave over the
+bridge**: a debounced `save_bpmn_xml` with `lint:"warn"`, where validator findings
+inform in the status line instead of blocking — the ws rooms' trust level, which never
+gated live edits. The status line shows which mode is active ("Live — co-editing
+enabled" vs "changes save automatically"). The hand-over is lossless in both
+directions: unsaved canvas edits are flushed through the CAS save before the first
+Yjs import may replace the canvas, and when an established live connection drops
+(any ws drop is final — the single-use ticket cannot re-authenticate the provider's
+auto-reconnect) the widget reconciles against a fresh bridge read: server unchanged
+since the last sync → a fresh ticket resumes live seamlessly; diverged (colleague
+edits during the outage, local edits that never reached the room, or both) → a
+banner hands the direction-blind choice to the user — never a silent overwrite of
+either side, and never a silent stop of persistence.
+
 Clients without apps support (Claude Code, the read-only `@bpmiq/mcp` package) see a
 plain tool that returns a short process summary — use `get_process`/`get_bpmn_xml`
 there. Under `LIVE_MCP_READONLY=1` the tool stays registered but the widget becomes a
-read-only viewer (no save button), matching the absent write tools.
+read-only viewer (no save button, no ws ticket), matching the absent write tools.
 
 `save_bpmn_xml` is compare-and-set: the caller passes the `baseVersion` from a prior
 `get_bpmn_xml`, and if the live document moved in between, the save is refused with a

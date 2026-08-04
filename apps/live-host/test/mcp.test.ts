@@ -23,6 +23,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { LineageStore } from "../src/adapters/sqlite/lineage-store.ts";
 import { type Session, SessionStore } from "../src/adapters/sqlite/sessions.ts";
 import { makeCollabHooks } from "../src/application/collab.ts";
+import { WsTicketStore } from "../src/application/ws-tickets.ts";
 import { newBpmnXml } from "../src/domain/bpmn-template.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
 import { type ApiOptions, startApi } from "../src/http/api.ts";
@@ -106,6 +107,8 @@ function deps(over: Partial<McpDeps> = {}): McpDeps {
     providers: new Map<string, GitProvider>(),
     github: {} as GitProvider,
     webDist,
+    publicUrl: "http://live.test",
+    wsTickets: new WsTicketStore(),
     ...over,
   };
 }
@@ -131,7 +134,7 @@ async function connect(d: McpDeps, s: Session = session()) {
 
 // ── (a) tool behaviour ──────────────────────────────────────────────────────
 
-test("registration: all ten tools; read-only mode drops exactly the write tools", async () => {
+test("registration: all eleven tools; read-only mode drops the write tools AND the ws ticket", async () => {
   const full = await connect(deps());
   assert.deepEqual((await full.client.listTools()).tools.map((t) => t.name).sort(), [
     "create_process",
@@ -140,6 +143,7 @@ test("registration: all ten tools; read-only mode drops exactly the write tools"
     "list_changes",
     "list_processes",
     "list_repos",
+    "mint_ws_ticket",
     "open_modeler",
     "release_process",
     "save_bpmn_xml",
@@ -220,6 +224,74 @@ test("get→save round-trip incl. the conflict retry loop (stale token never ove
   const derived = await callJson("get_process", { repo: REPO.fullName, id: "order" });
   assert.equal(derived.name, "Order v2");
   assert.equal(derived.baseVersion, saved.baseVersion);
+});
+
+test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, room-bound", async () => {
+  const wsTickets = new WsTicketStore();
+  const d = deps({ wsTickets });
+  const { callJson } = await connect(d);
+
+  const minted = await callJson("mint_ws_ticket", { repo: REPO.fullName, id: "order" });
+  assert.equal(minted.url, "ws://live.test");
+  assert.equal(minted.room, `${REPO.fullName}/${PATH}`);
+  assert.equal(minted.expiresInSeconds, 60);
+
+  // the ticket passes the REAL ws gate — makeCollabHooks with the same store
+  const hooks = makeCollabHooks({
+    lineage: { load: () => undefined, save: () => {}, drop: () => {} } as never,
+    docGuard: new DocSizeGuard(8_000_000),
+    maxDocBytes: 8_000_000,
+    sessions: { get: () => undefined },
+    access: { canWrite: async () => true },
+    registry: d.registry,
+    workspaces: d.workspaces,
+    contentConfig: loadContentConfig,
+    devToken: () => undefined,
+    liveDocs: new Set(),
+    wsTickets,
+  });
+  const auth = await hooks.onAuthenticate({ token: minted.ticket, documentName: minted.room });
+  assert.equal(auth.user.login, "petra");
+  // single-use: replaying the same ticket is refused
+  await assert.rejects(() => hooks.onAuthenticate({ token: minted.ticket, documentName: minted.room }), /invalid/);
+
+  // a ticket never opens a DIFFERENT room
+  const second = await callJson("mint_ws_ticket", { repo: REPO.fullName, id: "order" });
+  await assert.rejects(
+    () => hooks.onAuthenticate({ token: second.ticket, documentName: `${REPO.fullName}/processes/other.bpmn` }),
+    /invalid|no such|unknown/,
+  );
+
+  // read-only mode: the ticket tool is absent — the viewer stays on bridge reads
+  const ro = await connect(deps({ mcpReadOnly: true }));
+  const roTools = (await ro.client.listTools()).tools.map((t) => t.name);
+  assert.ok(!roTools.includes("mint_ws_ticket"));
+});
+
+test("save_bpmn_xml lint:'warn' (widget autosave) saves despite validation errors and reports them", async () => {
+  const { callJson } = await connect(deps());
+  const got = await callJson("get_bpmn_xml", { repo: REPO.fullName, id: "order" });
+
+  // strict default still refuses (the agent contract is untouched) …
+  const { call } = await connect(deps());
+  const strict = await call("save_bpmn_xml", {
+    repo: REPO.fullName,
+    id: "order",
+    xml: "<not-bpmn/>",
+    baseVersion: got.baseVersion,
+  });
+  assert.ok(strict.isError && /validation failed/.test(strict.text));
+
+  // … while lint:"warn" saves and reports
+  const warned = await callJson("save_bpmn_xml", {
+    repo: REPO.fullName,
+    id: "order",
+    xml: "<not-bpmn/>",
+    baseVersion: got.baseVersion,
+    lint: "warn",
+  });
+  assert.equal(warned.ok, true);
+  assert.ok(warned.errors.length > 0);
 });
 
 test("validate_bpmn dry-runs the platform validator without writing", async () => {

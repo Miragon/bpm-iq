@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 
+import { roomName } from "@bpmiq/contracts/live";
 import { readBody, send } from "@bpmiq/http-kit";
 import { deriveProcess } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
@@ -36,6 +37,7 @@ import type { Session } from "../adapters/sqlite/sessions.ts";
 import { type ContentDeps, getContent, putContent } from "../application/content.ts";
 import { listChanges, listProcesses, listRepos, type OverviewDeps } from "../application/overview.ts";
 import { createProcess } from "../application/scaffold.ts";
+import type { WsTicketStore } from "../application/ws-tickets.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import { release, type ReleaseDeps, releaseFiles } from "../release.ts";
 import { discoverProcesses, loadContentConfig } from "../repos/content.ts";
@@ -52,6 +54,10 @@ export type McpDeps = OverviewDeps &
     mcpReadOnly?: boolean;
     /** built web assets — the MCP-App widget (mcp-app.html) is read from here */
     webDist: string;
+    /** the host's public URL — the widget derives its ws endpoint from it */
+    publicUrl: string;
+    /** ws tickets for the widget's live Yjs connection — absent = no live mode */
+    wsTickets?: WsTicketStore;
   };
 
 // ── tool result helpers (packages/mcp/tools.ts house style) ──────────────────
@@ -258,6 +264,13 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
           ...processRef,
           xml: z.string().describe("the complete BPMN XML (must include a full BPMNDI section)"),
           baseVersion: z.string().describe("the baseVersion from a prior get_bpmn_xml — call that first"),
+          lint: z
+            .enum(["block", "warn"])
+            .optional()
+            .describe(
+              "default 'block': ERROR findings refuse the save — keep it for agent edits. " +
+                "'warn' saves anyway and returns findings (the modeler widget's autosave).",
+            ),
         },
         annotations: WRITE,
       },
@@ -268,16 +281,18 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
           path,
           xml,
           baseVersion,
+          lint,
         }: {
           repo: string;
           id?: string;
           path?: string;
           xml: string;
           baseVersion: string;
+          lint?: "block" | "warn";
         }) => {
           const r = await requireRepo(repo);
           const bpmnPath = await resolveBpmnPath(r, id, path);
-          const out = await putContent(opts, r, bpmnPath, { xml, baseVersion });
+          const out = await putContent(opts, r, bpmnPath, { xml, baseVersion, lint });
           if (!out.ok) {
             const c = out.conflict;
             return ok({
@@ -339,15 +354,27 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
     // the boot marker sits inside a quoted JS string in the HTML head; a
     // double stringify yields the correctly escaped string literal
     const boot = JSON.stringify(JSON.stringify({ readonly: opts.mcpReadOnly === true }));
-    registerAppResource(server, modeler.uri, modeler.uri, { mimeType: RESOURCE_MIME_TYPE }, async (uri) => ({
-      contents: [
-        {
-          uri: uri.toString(),
-          mimeType: RESOURCE_MIME_TYPE,
-          text: modeler.html.replace('"__BPMIQ_BOOT__"', boot),
-        },
-      ],
-    }));
+    // the live Yjs connection needs connect-src for our ws AND https origin —
+    // declared per spec (McpUiResourceCsp); hosts that ignore it leave the
+    // widget on its bridge-autosave fallback, never broken
+    const wsOrigin = opts.publicUrl.replace(/^http/, "ws");
+    const csp = { connectDomains: [wsOrigin, opts.publicUrl] };
+    registerAppResource(
+      server,
+      modeler.uri,
+      modeler.uri,
+      { mimeType: RESOURCE_MIME_TYPE, _meta: { ui: { csp } } },
+      async (uri) => ({
+        contents: [
+          {
+            uri: uri.toString(),
+            mimeType: RESOURCE_MIME_TYPE,
+            text: modeler.html.replace('"__BPMIQ_BOOT__"', boot),
+            _meta: { ui: { csp } },
+          },
+        ],
+      }),
+    );
     registerAppTool(
       server,
       "open_modeler",
@@ -376,6 +403,36 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
         });
       }),
     );
+
+    // live Yjs upgrade for the widget: a single-use, room-bound ws ticket.
+    // Write-gated like every repo tool (requireRepo) and absent in read-only
+    // mode — the viewer stays on bridge reads.
+    if (!opts.mcpReadOnly && opts.wsTickets) {
+      const wsTickets = opts.wsTickets;
+      registerAppTool(
+        server,
+        "mint_ws_ticket",
+        {
+          description:
+            "Mint a short-lived, single-use WebSocket ticket for the modeler widget's live " +
+            "co-editing connection (Hocuspocus/Yjs). Internal to the widget — agents edit via " +
+            "save_bpmn_xml instead.",
+          inputSchema: processRef,
+          annotations: READ,
+          _meta: { ui: { resourceUri: modeler.uri, visibility: ["app"] } },
+        },
+        safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+          const r = await requireRepo(repo);
+          const bpmnPath = await resolveBpmnPath(r, id, path);
+          const room = roomName(r.fullName, bpmnPath);
+          const ticket = wsTickets.issue(
+            { login: session.user.login, name: session.user.name, avatarUrl: null, provider: session.user.provider },
+            room,
+          );
+          return ok({ ticket, url: opts.publicUrl.replace(/^http/, "ws"), room, expiresInSeconds: 60 });
+        }),
+      );
+    }
   }
 
   return server;

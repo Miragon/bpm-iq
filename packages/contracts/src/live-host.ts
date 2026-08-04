@@ -250,6 +250,10 @@ export interface ContentWire {
 export interface PutContentBody {
   xml: string;
   baseVersion: string;
+  /** "block" (default): ERROR findings refuse the save (422). "warn": findings
+   * come back on the result instead — the modeler widget's autosave uses this,
+   * mirroring the ws path, which has never gated live edits. */
+  lint?: "block" | "warn";
 }
 
 /** PUT success response */
@@ -259,6 +263,9 @@ export interface PutContentResultWire {
   baseVersion: string;
   /** validator WARN findings (non-blocking; [] for non-.bpmn files) */
   warnings: string[];
+  /** validator ERROR findings — only present on lint:"warn" saves, where they
+   * inform instead of refusing */
+  errors?: string[];
 }
 
 /** PUT 409 — the document changed since the client's read */

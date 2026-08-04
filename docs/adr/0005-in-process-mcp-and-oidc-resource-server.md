@@ -1,6 +1,6 @@
 # ADR 0005 — AI write access in-process: /mcp + content REST on the Live Host, OIDC resource server, no self-built AS
 
-- **Status:** accepted (2026-07-24), amended (2026-08-03 — see below)
+- **Status:** accepted (2026-07-24), amended (2026-08-03 and 2026-08-04 — see below)
 - **Context:** adversarially reviewed against a fully built alternative (a
   separate broker-based MCP server); the review's confirmed findings drove this
   decision
@@ -149,3 +149,39 @@ Re-evaluated after two facts changed:
   ALL of this: it is a token-issuance/identity-mapping problem, not a
   registration problem. For corporate directories it remains the real blocker
   and keeps its own seam (docs/extending/sso.md).
+
+## Amendment (2026-08-04): single-use ws tickets for the MCP-App widget
+
+The embedded modeler (MCP App, `open_modeler`) gained a live Hocuspocus/Yjs
+mode. The iframe holds no credential — bridge tool calls ride the host's
+authenticated backend, the OAuth token never reaches it — so the ws
+`onAuthenticate` gate (session id / dev token) was unreachable. Decision: a
+`mint_ws_ticket` tool issues a **single-use, room-bound ticket with a 60s
+TTL** (`application/ws-tickets.ts`), redeemed once in `onAuthenticate`.
+
+This is a deliberate, narrow exception to "no session mint" — and NOT the
+broker mint this ADR rejected. The differences are the decision:
+
+| Rejected broker mint (`apps/live-mcp`) | ws ticket                                     |
+| -------------------------------------- | --------------------------------------------- |
+| static broker secret as the credential | derives from a live, authenticated session    |
+| identity ASSERTED by a second service  | identity checked by THIS host, seconds before |
+| minted long-lived downstream sessions  | 60s TTL, consumed on first use                |
+| all-repos authority                    | exactly one room (repo + file)                |
+| second credential system to operate    | in-memory map, gone on restart                |
+
+Authorization runs at mint time (`requireRepo` → `canWrite`); the redeem
+window is far shorter than the AccessCache TTL, so no re-check on redeem. The
+tool is app-visibility, absent under `LIVE_MCP_READONLY=1`. The widget treats
+the whole path as progressive enhancement: if the host CSP does not honour
+`connectDomains` (claude.ai's enforcement is partially buggy as of 2026-08),
+it stays on the bridge-autosave fallback (`lint:"warn"` saves — the ws rooms'
+trust level, which never gated live edits).
+
+Single-use stays single-use across reconnects: the provider's automatic
+reconnect re-sends the consumed ticket and can never re-authenticate, so the
+widget treats ANY post-upgrade ws drop as the death of the session. It then
+reconciles over the bridge — server still byte-equal to the session's last
+replica: re-mint (the mint tool re-runs the write check) and resume live;
+diverged: a banner hands the choice to the user. The server never widens a
+ticket's lifetime to accommodate reconnects.
