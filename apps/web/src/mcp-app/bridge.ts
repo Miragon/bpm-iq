@@ -39,6 +39,7 @@ export interface SaveConflict {
 }
 
 export type SaveResult = ({ ok: true } & PutContentResultWire) | SaveConflict;
+// PutContentResultWire.errors carries ERROR findings on lint:"warn" saves
 
 /** the host-injected marker (mcp.ts replaces it); a raw marker means the file
  *  is served outside the Live Host (dev preview) — default to editable */
@@ -72,16 +73,32 @@ export const getBpmnXml = (app: App, ref: ProcessRef): Promise<ContentWire> => c
 export const validateBpmn = (app: App, xml: string, ref: ProcessRef): Promise<ValidateResult> =>
   call(app, "validate_bpmn", { xml, repo: ref.repo, path: ref.path });
 
+/** lint:"warn" — the widget autosaves like the live rooms do: findings inform,
+ *  never block; the strict default stays for agent saves */
 export const saveBpmnXml = (app: App, ref: ProcessRef, xml: string, baseVersion: string): Promise<SaveResult> =>
-  call(app, "save_bpmn_xml", { repo: ref.repo, path: ref.path, xml, baseVersion });
+  call(app, "save_bpmn_xml", { repo: ref.repo, path: ref.path, xml, baseVersion, lint: "warn" });
+
+export interface WsTicket {
+  ticket: string;
+  url: string;
+  room: string;
+  expiresInSeconds: number;
+}
+
+/** single-use ticket for the live Yjs connection — write-gated at mint time */
+export const mintWsTicket = (app: App, ref: ProcessRef): Promise<WsTicket> =>
+  call(app, "mint_ws_ticket", { repo: ref.repo, path: ref.path });
 
 /** newest widget instance wins: every boot broadcasts; older instances for the
- *  same doc disable themselves (all app iframes of a connector share an origin) */
-export function claimDocument(key: string, onSuperseded: () => void): void {
+ *  same doc disable themselves (all app iframes of a connector share an origin).
+ *  Returns the release — a re-claiming widget MUST release its previous claim
+ *  first, or its own broadcast supersedes itself. */
+export function claimDocument(key: string, onSuperseded: () => void): () => void {
   const channel = new BroadcastChannel(`bpmiq-modeler:${key}`);
   const stamp = Date.now() + Math.random();
   channel.postMessage(stamp);
   channel.onmessage = (e: MessageEvent<number>) => {
     if (e.data !== stamp) onSuperseded();
   };
+  return () => channel.close();
 }

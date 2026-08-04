@@ -42,6 +42,13 @@ export interface LiveSession {
   readonly awareness: LiveAwareness;
   /** event form — fires on every (re)sync; returns the unsubscribe */
   onSynced(cb: () => void): () => void;
+  /** fires whenever the ws connection closes (the provider auto-reconnects
+   *  and re-authenticates on its own); returns the unsubscribe */
+  onDisconnect(cb: () => void): () => void;
+  /** fires when the server closes THIS document over a still-open socket
+   *  (doc-level CLOSE message, e.g. after rejecting an oversized update) —
+   *  the provider does NOT auto-reconnect after it; returns the unsubscribe */
+  onDocClose(cb: () => void): () => void;
   /** promise form — resolves on first sync, rejects on auth failure or timeout */
   whenSynced(timeoutMs?: number): Promise<void>;
   setUser(user: PresenceUser): void;
@@ -78,6 +85,16 @@ export function openLiveSession(opts: LiveSessionOptions): LiveSession {
     onSynced(cb: () => void): () => void {
       provider.on("synced", cb);
       return () => provider.off("synced", cb);
+    },
+
+    onDisconnect(cb: () => void): () => void {
+      provider.on("disconnect", cb);
+      return () => provider.off("disconnect", cb);
+    },
+
+    onDocClose(cb: () => void): () => void {
+      provider.on("close", cb);
+      return () => provider.off("close", cb);
     },
 
     whenSynced(timeoutMs = 10_000): Promise<void> {

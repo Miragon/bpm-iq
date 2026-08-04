@@ -12,6 +12,8 @@ export interface ModelerHandle {
   editable: boolean;
   onDirty(cb: () => void): void;
   destroy(): void;
+  /** the underlying bpmn-js instance — bindBpmn (live mode) needs it raw */
+  raw: Modeler | NavigatedViewer;
 }
 
 export function mountModeler(container: HTMLElement, readonly: boolean): ModelerHandle {
@@ -24,6 +26,7 @@ export function mountModeler(container: HTMLElement, readonly: boolean): Modeler
     });
   }
   return {
+    raw: instance,
     editable: !readonly,
     async importXml(xml: string): Promise<void> {
       await instance.importXML(xml);

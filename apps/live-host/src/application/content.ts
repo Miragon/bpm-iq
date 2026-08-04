@@ -111,14 +111,18 @@ export async function putContent(
   const workspace = await assertOnDisk(opts, repo, safePath);
 
   // full platform validation for BPMN (structure + BPMNDI coverage + callActivity
-  // links); other editable notations (.dmn) pass through unvalidated
+  // links); other editable notations (.dmn) pass through unvalidated.
+  // lint:"warn" reports ERRORs on the result instead of refusing — the modeler
+  // widget's autosave path; the ws rooms have never gated live edits, so this
+  // is the same trust level, not a new one. Default stays "block" (REST + agents).
   let warnings: string[] = [];
+  let lintErrors: string[] = [];
   if (safePath.endsWith(".bpmn")) {
     const cfg = loadContentConfig(workspace);
     const processIds = cfg ? new Set((await discoverProcesses(workspace, cfg)).map((p) => p.id)) : undefined;
     const { findings } = checkBpmnXml(body.xml, { file: safePath, processIds });
     const errors = findings.filter((f) => f.severity === "ERROR");
-    if (errors.length > 0) {
+    if (errors.length > 0 && body.lint !== "warn") {
       throw new AppError(
         "content/invalid-model",
         `validation failed:\n- ${errors.map((f) => f.message).join("\n- ")}`,
@@ -128,6 +132,7 @@ export async function putContent(
         },
       );
     }
+    lintErrors = errors.map((f) => f.message);
     warnings = findings.filter((f) => f.severity === "WARN").map((f) => f.message);
   }
 
@@ -157,7 +162,12 @@ export async function putContent(
       updateText(ytext, body.xml);
       outcome = {
         ok: true,
-        result: { path: safePath, baseVersion: baseVersionOf(body.xml), warnings },
+        result: {
+          path: safePath,
+          baseVersion: baseVersionOf(body.xml),
+          warnings,
+          ...(lintErrors.length > 0 ? { errors: lintErrors } : {}),
+        },
       };
     });
   });

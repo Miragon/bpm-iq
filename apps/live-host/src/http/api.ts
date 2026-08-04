@@ -87,6 +87,7 @@ import { fileAtCommit, fileHistory } from "../application/history.ts";
 import { listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
 import { createDecision, createFolder, createProcess, listFolders } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
+import type { WsTicketStore } from "../application/ws-tickets.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
@@ -166,6 +167,9 @@ export interface ApiOptions {
   };
   /** omit the write tools (create/save/release) from /mcp */
   mcpReadOnly?: boolean;
+  /** single-use ws tickets for the MCP-App widget's live Yjs connection
+   * (application/ws-tickets.ts) — absent = the widget stays on bridge autosave */
+  wsTickets?: WsTicketStore;
 }
 
 // send/redirect/readBody/securityHeaders/bearerAuth come from @bpmiq/http-kit —

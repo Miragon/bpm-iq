@@ -45,11 +45,25 @@ export interface CollabDeps {
   devToken: () => string | undefined;
   /** repo-qualified document names of live rooms (shared with reconcile + API) */
   liveDocs: Set<string>;
+  /** single-use ws tickets minted by the MCP-App widget's mint_ws_ticket tool
+   * (application/ws-tickets.ts) — absent = the ticket path is off */
+  wsTickets?: { redeem(ticket: string, room: string): { login: string; provider: string } | undefined };
 }
 
 export function makeCollabHooks(deps: CollabDeps) {
-  const { lineage, docGuard, maxDocBytes, sessions, access, registry, workspaces, contentConfig, devToken, liveDocs } =
-    deps;
+  const {
+    lineage,
+    docGuard,
+    maxDocBytes,
+    sessions,
+    access,
+    registry,
+    workspaces,
+    contentConfig,
+    devToken,
+    liveDocs,
+    wsTickets,
+  } = deps;
 
   /**
    * Resolve a room to disk AND reject symlink escapes. toDiskPath (pure domain)
@@ -81,11 +95,15 @@ export function makeCollabHooks(deps: CollabDeps) {
         }
         return { user: session.user, documentName };
       }
-      // … or the explicit dev token for headless clients (all-repos semantics).
+      // … or the explicit dev token for headless clients (all-repos semantics) …
       const dev = devToken();
       if (dev && token === dev) {
         return { user: { login: "dev-token", provider: "dev" }, documentName };
       }
+      // … or a single-use widget ticket (room-bound; write access was checked
+      // at mint time, seconds ago — see application/ws-tickets.ts)
+      const ticketUser = wsTickets?.redeem(token, documentName);
+      if (ticketUser) return { user: ticketUser, documentName };
       throw new Error("invalid session — log in via the web app (git provider OAuth)");
     },
 
