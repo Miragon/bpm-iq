@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.2.0](https://github.com/Miragon/bpm-iq/compare/v3.1.0...v3.2.0) (2026-08-05)
+
+
+### Features
+
+* **live-host:** embedded BPMN modeler as an MCP App, and a resource server exact-match clients can reach ([#76](https://github.com/Miragon/bpm-iq/issues/76)) ([a2f4877](https://github.com/Miragon/bpm-iq/commit/a2f487767a458bbea5952f2053f615a2552b7154))
+* **live-host:** live co-editing in the MCP-App modeler via single-use ws tickets ([#79](https://github.com/Miragon/bpm-iq/issues/79)) ([20fd8d5](https://github.com/Miragon/bpm-iq/commit/20fd8d53a1c4e26e36fe3344047e53399e2fbfff))
+* **live-host:** todos as MCP tools and a todo panel in the modeler widget ([#80](https://github.com/Miragon/bpm-iq/issues/80)) ([3e6054f](https://github.com/Miragon/bpm-iq/commit/3e6054f224484548935cc86cb10f07f3376f3605))
+
 ## [3.1.0](https://github.com/Miragon/bpm-iq/compare/v3.0.1...v3.1.0) (2026-07-29)
 
 
