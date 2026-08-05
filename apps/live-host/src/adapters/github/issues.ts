@@ -13,7 +13,7 @@
  * (remote mint). Nothing GitHub-specific leaks through the port — GitLab/Jira
  * implement the same contract against their own issue APIs.
  */
-import { encodeAnchor, parseAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
+import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 import { paginate } from "@bpmiq/github-app";
 import { AppError } from "@bpmiq/http-kit";
 
@@ -37,6 +37,22 @@ export const closeAttributionLine = (closedBy: string): string => `_Closed from 
 /** parse the platform author back out of an issue body (null: created by hand) */
 export function parseAuthor(body: string): string | null {
   return ATTRIBUTION_RE.exec(body)?.[1] ?? null;
+}
+
+/** one 📍 deep-link line as todoBody writes it (below) — greedy on purpose:
+ *  the link text carries the RAW element name (which may contain `]`) and
+ *  encodeURIComponent leaves parentheses in the URL unescaped */
+const DEEP_LINK_RE = /^📍 \[.*\]\(.*\)$/gm;
+
+/** the AUTHOR's text: the stored body minus everything todoBody added around it
+ *  (anchor block, element deep links, attribution). A hand-filed issue carries
+ *  none of that and comes back whole. */
+export function parseBody(body: string): string {
+  return stripAnchor(body)
+    .replace(DEEP_LINK_RE, "")
+    .replace(ATTRIBUTION_RE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 /** where a todo's deep links point: the web app served at the live host's public URL */
@@ -154,6 +170,7 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
       id: String(issue.number),
       url: issue.html_url,
       title: issue.title,
+      body: parseBody(body),
       state: issue.state === "closed" ? "done" : "open",
       anchor: parseAnchor(body),
       author: parseAuthor(body),

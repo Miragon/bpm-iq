@@ -80,8 +80,15 @@ body,
   border-bottom: 1px solid var(--border);
 }
 
+#main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
 #canvas {
   flex: 1;
+  min-width: 0;
   min-height: 320px;
 }
 
@@ -90,4 +97,219 @@ body,
   font-size: 12px;
   color: var(--muted);
   border-top: 1px solid var(--border);
+}
+
+/* ── todos: the side panel (mcp-app/todos.ts) ─────────────────────────────── */
+
+#todos:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  width: min(300px, 45%);
+  border-left: 1px solid var(--border);
+  font-size: 13px;
+}
+
+#todo-head,
+#todo-filter:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+#todos .spacer {
+  flex: 1;
+}
+
+#todos button {
+  font: inherit;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: inherit;
+  cursor: pointer;
+}
+
+#todos button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+#todos button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* element chips — a span in the anchor preview, a button in a todo row */
+.chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--bg);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+button.chip {
+  cursor: pointer;
+}
+
+#todo-error:not([hidden]) {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+#todo-form:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  background: #f6f8fa;
+}
+
+#todo-form input,
+#todo-form textarea {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+#todo-form input:focus,
+#todo-form textarea:focus {
+  outline: 1px solid var(--accent);
+}
+
+#todo-anchor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+#todo-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+#todo-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.todo {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.todo.busy {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.todo-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.todo-title {
+  flex: 1;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* the tracker link is a button (the sandbox blocks target="_blank") — strip the
+   panel's button chrome so it still reads as a link */
+#todos button.todo-link {
+  padding: 0 2px;
+  border: none;
+  color: var(--muted);
+  line-height: 1;
+}
+
+#todos button.todo-link:hover {
+  color: var(--accent);
+}
+
+.todo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.todo-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.todo-implement,
+.todo-done {
+  font-size: 11px !important;
+}
+
+/* #todos button sets `color: inherit` — an ID selector, so the accent needs the
+   same weight to win */
+#todos button.todo-implement {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.todo-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* count badge on an anchored element — the shared canvas controller
+   (lib/todo-canvas.ts) creates it, both surfaces style it themselves */
+.bpm-todo-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--bg);
+  border-radius: 9999px;
+  background: #bf8700;
+  color: var(--bg);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.bpm-todo-badge:hover {
+  transform: scale(1.15);
 }

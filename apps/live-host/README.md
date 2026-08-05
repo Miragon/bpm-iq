@@ -47,6 +47,10 @@ cross-repo bleed) and per-(user,repo) authorization.
 `GET/POST /api/repos/:fullName/todos` (+ `POST …/todos/:id/close`) stores todos as **GitHub
 Issues in the content repo** (label `todo` + `process:<id>`, the anchor block from
 `@bpmiq/contracts/todo-anchor` embedded in the issue body) — never in a platform database.
+The MCP twins are `list_todos` / `create_todo` / `close_todo` (below), so agents and the
+embedded modeler widget file and complete the same items humans see in the web app. Reads
+return the author's own text (`body`) with that platform markup stripped again — it is what
+the modeler widget's "Implement" prompt hands to the assistant.
 Issue bodies deep-link every anchored element straight into the web app's process editor
 (`📍 <PUBLIC_URL>/r/<owner>/<repo>/p/<process>?element=<id>`). Issues are created with the app
 installation token (bot-authored, the human is attributed in the body — same model as
@@ -59,10 +63,13 @@ then the API returns a clear 403 explaining exactly that.
 
 ## MCP endpoint + live content API
 
-`POST /mcp` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP) serves nine
+`POST /mcp` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP) serves the
 tools over the **live** models: `list_repos`, `list_processes`, `get_process`,
-`get_bpmn_xml`, `validate_bpmn`, `list_changes`, `create_process`, `save_bpmn_xml`,
-`release_process`. The repo is a **tool argument**, not a URL segment; every call runs
+`get_bpmn_xml`, `validate_bpmn`, `list_changes`, `open_modeler` (+ its internal
+`mint_ws_ticket`), `create_process`, `save_bpmn_xml`, `release_process` — plus
+`list_todos` / `create_todo` / `close_todo` **when a tracker is configured** (no
+credentials → absent from `tools/list`, never a call that fails). The repo is a **tool
+argument**, not a URL segment; every call runs
 through the same per-(user,repo) authorization as the rest of the API, and `save_bpmn_xml`
 is compare-and-set — it requires the `baseVersion` from a prior `get_bpmn_xml`, and a
 stale one returns a retryable `{conflict: true, currentXml}`. `LIVE_MCP_READONLY=1`

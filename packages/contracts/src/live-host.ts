@@ -214,6 +214,8 @@ export interface TodoWire {
   id: string;
   url: string;
   title: string;
+  /** the author's description with the platform markup stripped ("" when none) */
+  body: string;
   state: "open" | "done";
   /** null = no parseable anchor (e.g. created by hand in the tracker) */
   anchor: TodoAnchorWire | null;

@@ -1,7 +1,10 @@
 /**
  * Todo ↔ bpmn-js canvas integration — imperative, one controller per modeler,
  * same ownership rule as bindBpmn: created inside the live-editor attach effect,
- * torn down in its cleanup. Responsibilities:
+ * torn down in its cleanup. Framework-free on purpose — BOTH modeler surfaces
+ * use it: the React SPA (components/live-editor.tsx) and the vanilla MCP-App
+ * widget (mcp-app/todos.ts). Each styles `.bpm-todo-badge` in its own sheet.
+ * Responsibilities:
  *
  *  - count badges (overlays service) on every element with ≥1 open anchored
  *    todo. importXML wipes all overlays, so every `import.done` — the initial

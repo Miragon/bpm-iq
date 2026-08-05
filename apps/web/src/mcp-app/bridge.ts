@@ -1,14 +1,21 @@
 /**
  * The widget's MCP side: the ext-apps App handshake and typed wrappers around
- * the three Live-Host tools it calls through the host bridge. App-initiated
+ * the Live-Host tools it calls through the host bridge. App-initiated
  * tools/call rides the host's authenticated connection to POST /mcp — the same
  * per-call authorization as agent calls, no credential in the iframe.
  *
  * Tool results arrive as JSON in the first text content block (the `ok()`
  * helper in apps/live-host/src/http/mcp.ts) — parsed here, typed via the
  * shared wire contracts so server drift breaks the build, not the widget.
+ *
+ * Not every tool exists on every host: the todo tools are absent without a
+ * configured tracker (and the write ones in read-only mode), exactly like
+ * mint_ws_ticket. There is no tools/list over the app bridge, so absence is
+ * detected on the first call — `isMissingTool` separates "capability absent"
+ * (hide the UI) from a real tracker error (show it; those messages are
+ * actionable).
  */
-import type { ContentWire, PutContentResultWire } from "@bpmiq/contracts/live-host";
+import type { ContentWire, PutContentResultWire, TodoElementWire, TodoWire } from "@bpmiq/contracts/live-host";
 import { App } from "@modelcontextprotocol/ext-apps";
 
 export interface BootConfig {
@@ -88,6 +95,35 @@ export interface WsTicket {
 /** single-use ticket for the live Yjs connection — write-gated at mint time */
 export const mintWsTicket = (app: App, ref: ProcessRef): Promise<WsTicket> =>
   call(app, "mint_ws_ticket", { repo: ref.repo, path: ref.path });
+
+// ── todos (model-anchored work items in the repo's own tracker) ──────────────
+
+/** the SDK answers an unregistered tool with "Tool <name> not found" — that is
+ *  a MISSING CAPABILITY (no tracker configured, or the read-only surface), not
+ *  a failure to report. Both markers must match: a tool's own "… not found"
+ *  message (an unknown process, say) is a real error and must not silently
+ *  disable a feature. */
+export const isMissingTool = (err: unknown, tool: string): boolean => {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes(tool) && /not found/i.test(message);
+};
+
+/** OPEN todos of ONE process (the widget always scopes to the open document) */
+export const listTodos = (app: App, ref: ProcessRef): Promise<{ todos: TodoWire[] }> =>
+  call(app, "list_todos", { repo: ref.repo, path: ref.path });
+
+export interface CreateTodoInput {
+  title: string;
+  body?: string;
+  /** canvas selection at submit time — empty ⇒ a process-level todo */
+  elements: TodoElementWire[];
+}
+
+export const createTodo = (app: App, ref: ProcessRef, input: CreateTodoInput): Promise<{ todo: TodoWire }> =>
+  call(app, "create_todo", { repo: ref.repo, path: ref.path, ...input });
+
+export const closeTodo = (app: App, repo: string, todoId: string): Promise<{ ok: true }> =>
+  call(app, "close_todo", { repo, todoId });
 
 /** newest widget instance wins: every boot broadcasts; older instances for the
  *  same doc disable themselves (all app iframes of a connector share an origin).

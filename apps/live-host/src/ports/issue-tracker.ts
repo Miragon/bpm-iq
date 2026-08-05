@@ -28,6 +28,9 @@ export interface Todo {
   /** canonical human URL of the item in the tracker */
   url: string;
   title: string;
+  /** the AUTHOR's description, adapter markup stripped ("" when there is none) —
+   *  what a human reads, and what an agent needs to act on the item */
+  body: string;
   state: "open" | "done";
   /** null = item carries no parseable anchor (e.g. created by hand) — still a
    *  process-level todo when the tracker-side filter matched */
