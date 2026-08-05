@@ -19,6 +19,7 @@ import {
   attributionLine,
   closeAttributionLine,
   createGitHubIssueTracker,
+  parseBody,
   todoBody,
 } from "../src/adapters/github/issues.ts";
 
@@ -76,6 +77,11 @@ test("createTodo: bootstraps labels, creates the issue, returns the mapped Todo"
   assert.equal(todo.state, "open");
   assert.deepEqual(todo.anchor, anchorOf("order-to-cash"), "anchor round-trips through the issue body");
   assert.equal(todo.author, "petra", "author parsed back from the attribution line");
+  assert.equal(
+    todo.body,
+    "The threshold in the model looks outdated.",
+    "the author's text comes back WITHOUT the platform markup",
+  );
   assert.deepEqual(todo.assignees, []);
   assert.ok(!Number.isNaN(Date.parse(todo.createdAt)), "createdAt is a timestamp");
 
@@ -117,6 +123,7 @@ test("listTodos: a hand-written issue without an anchor still lists (anchor/auth
   assert.ok(hand);
   assert.equal(hand.anchor, null);
   assert.equal(hand.author, null);
+  assert.equal(hand.body, "no anchor block here", "a hand-filed body comes back whole");
 });
 
 test("listTodos: the process filter narrows via the process label", async () => {
@@ -208,4 +215,32 @@ test("todoBody: the repo splits at the FIRST slash (GitLab subgroups stay in the
 
 test("todoBody: without publicUrl there is no deep-link line", () => {
   assert.ok(!todoBody(deepLinkInput).includes("📍"));
+});
+
+test("parseBody: inverts todoBody — anchor block, deep links and attribution stripped", () => {
+  const stored = todoBody(deepLinkInput, { publicUrl: "https://bpm.example", repoFullName: "acme/bpm-processes" });
+  assert.equal(parseBody(stored), "The threshold looks stale.");
+  // an empty author text leaves nothing behind but the markup
+  assert.equal(parseBody(todoBody({ ...deepLinkInput, body: "" })), "");
+  // multi-paragraph text keeps its shape
+  const multi = todoBody({ ...deepLinkInput, body: "First paragraph.\n\nSecond paragraph." });
+  assert.equal(parseBody(multi), "First paragraph.\n\nSecond paragraph.");
+  // a body that never went through todoBody is returned untouched
+  assert.equal(parseBody("plain issue text"), "plain issue text");
+});
+
+test("parseBody: strips deep links with `]` in the element name and `)` in the URL", () => {
+  const input = {
+    ...deepLinkInput,
+    // brackets in the name land RAW in the link text; parens in the process id
+    // land in the URL — encodeURIComponent leaves them unescaped
+    anchor: {
+      ...deepLinkInput.anchor,
+      process: "order (v2)",
+      elements: [{ id: "Task_Check", name: "Prüfen [manuell]" }],
+    },
+  };
+  const stored = todoBody(input, { publicUrl: "https://bpm.example", repoFullName: "acme/bpm-processes" });
+  assert.ok(stored.includes("📍 [Prüfen [manuell]]"), `precondition — the raw name is in the link:\n${stored}`);
+  assert.equal(parseBody(stored), "The threshold looks stale.");
 });

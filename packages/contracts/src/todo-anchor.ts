@@ -52,6 +52,17 @@ export function encodeAnchor(anchor: TodoAnchor): string {
   return lines.join("\n");
 }
 
+/** the text WITHOUT the anchor block — the block is platform bookkeeping stored
+ *  inline in the tracker, so anything that shows a body to a human or an agent
+ *  drops it first. Text without a block comes back unchanged. */
+export function stripAnchor(text: string): string {
+  const start = text.indexOf(OPEN);
+  if (start === -1) return text;
+  const end = text.indexOf(CLOSE, start);
+  if (end === -1) return text;
+  return text.slice(0, start) + text.slice(end + CLOSE.length);
+}
+
 export function parseAnchor(text: string): TodoAnchor | null {
   const start = text.indexOf(OPEN);
   if (start === -1) return null;

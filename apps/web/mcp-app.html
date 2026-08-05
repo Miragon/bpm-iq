@@ -16,11 +16,43 @@
         <span id="title">Loading…</span>
         <span id="dirty" hidden>●</span>
         <span class="spacer"></span>
+        <button id="todo-toggle" hidden title="Open todos for this process">Todos</button>
         <button id="fullscreen" title="Open fullscreen">⛶</button>
         <button id="save" hidden title="Changes save automatically — this forces it now">Save now</button>
       </div>
       <div id="banner" hidden></div>
-      <div id="canvas"></div>
+      <!-- canvas + the todo side panel (mcp-app/todos.ts owns everything inside
+           #todos; only the list and the anchor chips are built imperatively) -->
+      <div id="main">
+        <div id="canvas"></div>
+        <aside id="todos" hidden>
+          <div id="todo-head">
+            <strong>Open todos</strong>
+            <span id="todo-count" class="muted"></span>
+            <span class="spacer"></span>
+            <button id="todo-new" hidden title="File a todo on the current selection">＋ New</button>
+            <button id="todo-refresh" title="Reload from the tracker">↻</button>
+            <button id="todo-hide" title="Close the panel">✕</button>
+          </div>
+          <div id="todo-filter" hidden>
+            <span class="muted">Element:</span>
+            <span id="todo-filter-name" class="chip"></span>
+            <span class="spacer"></span>
+            <button id="todo-filter-clear">Show all</button>
+          </div>
+          <div id="todo-error" hidden></div>
+          <form id="todo-form" hidden>
+            <div id="todo-anchor" class="muted"></div>
+            <input id="todo-title" placeholder="What needs to be done?" maxlength="200" required />
+            <textarea id="todo-body" rows="3" placeholder="Description (optional)"></textarea>
+            <div id="todo-form-actions">
+              <button type="button" id="todo-cancel">Cancel</button>
+              <button type="submit" id="todo-submit">Create todo</button>
+            </div>
+          </form>
+          <div id="todo-list"></div>
+        </aside>
+      </div>
       <div id="status"></div>
     </div>
     <script type="module" src="/src/mcp-app/main.ts"></script>

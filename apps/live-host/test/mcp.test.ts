@@ -4,7 +4,8 @@
  *  (a) TOOL behaviour — createLiveMcpServer driven over an in-memory
  *      Client↔Server pair (packages/mcp house pattern), with openDoc backed by
  *      a REAL Hocuspocus direct connection: get→save round-trip, the conflict
- *      retry loop, validate_bpmn, per-call authz, the read-only registration.
+ *      retry loop, validate_bpmn, the todo tools against a fake IssueTracker,
+ *      per-call authz, the read-only registration.
  *  (b) TRANSPORT behaviour — the /mcp branch of startApi over real HTTP:
  *      JSON responses (stateless), 405 on GET, 401 + RFC-9728 challenge
  *      without credentials, -32700 on garbage.
@@ -29,6 +30,7 @@ import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
 import { type ApiOptions, startApi } from "../src/http/api.ts";
 import { createLiveMcpServer, type McpDeps } from "../src/http/mcp.ts";
 import type { GitProvider } from "../src/ports/git-provider.ts";
+import type { IssueTracker, Todo, TodoInput } from "../src/ports/issue-tracker.ts";
 import { loadContentConfig } from "../src/repos/content.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
@@ -113,6 +115,44 @@ function deps(over: Partial<McpDeps> = {}): McpDeps {
   };
 }
 
+/** in-memory IssueTracker — the port is the seam, so the tools are testable
+ *  without GitHub (the REAL adapter has its own suite: todo-issues.test.ts) */
+function fakeIssues(): IssueTracker & { created: Array<{ repo: string; input: TodoInput }>; closed: string[] } {
+  const items: Todo[] = [];
+  const created: Array<{ repo: string; input: TodoInput }> = [];
+  const closed: string[] = [];
+  return {
+    id: "fake-tracker",
+    created,
+    closed,
+    async createTodo(repo, input) {
+      created.push({ repo, input });
+      const todo: Todo = {
+        id: String(items.length + 1),
+        url: `https://tracker.test/${repo}/issues/${items.length + 1}`,
+        title: input.title,
+        body: input.body,
+        state: "open",
+        anchor: input.anchor,
+        author: input.author,
+        assignees: [],
+        createdAt: new Date().toISOString(),
+      };
+      items.push(todo);
+      return todo;
+    },
+    async listTodos(_repo, processId) {
+      return items.filter((t) => t.state === "open" && (!processId || t.anchor?.process === processId));
+    },
+    async closeTodo(_repo, id) {
+      closed.push(id);
+      const hit = items.find((t) => t.id === id);
+      if (!hit) throw new Error(`no such todo: ${id}`);
+      hit.state = "done";
+    },
+  };
+}
+
 async function connect(d: McpDeps, s: Session = session()) {
   const server = createLiveMcpServer(d, s);
   const [ct, st] = InMemoryTransport.createLinkedPair();
@@ -161,6 +201,90 @@ test("registration: all eleven tools; read-only mode drops the write tools AND t
     "open_modeler",
     "validate_bpmn",
   ]);
+});
+
+test("registration: the todo tools appear only WITH a tracker; read-only keeps the listing one", async () => {
+  const withTracker = await connect(deps({ issues: fakeIssues() }));
+  const names = (await withTracker.client.listTools()).tools.map((t) => t.name);
+  assert.deepEqual(names.filter((n) => n.includes("todo")).sort(), ["close_todo", "create_todo", "list_todos"]);
+
+  // no tracker configured → absent from tools/list, never a call that fails
+  const none = await connect(deps());
+  assert.deepEqual(
+    (await none.client.listTools()).tools.map((t) => t.name).filter((n) => n.includes("todo")),
+    [],
+  );
+
+  // read-only: listing is a read and stays; filing/closing are writes and go
+  const ro = await connect(deps({ issues: fakeIssues(), mcpReadOnly: true }));
+  assert.deepEqual(
+    (await ro.client.listTools()).tools.map((t) => t.name).filter((n) => n.includes("todo")),
+    ["list_todos"],
+  );
+});
+
+test("todos: create anchors to the open process, list filters by it, close completes it", async () => {
+  const issues = fakeIssues();
+  const { call, callJson } = await connect(deps({ issues }));
+
+  const created = await callJson("create_todo", {
+    repo: REPO.fullName,
+    id: "order",
+    title: "  Check the credit limit  ",
+    body: "The threshold looks stale.",
+    elements: [{ id: "Task_CheckCredit", name: "Bonität prüfen" }],
+  });
+  assert.equal(created.todo.title, "Check the credit limit", "title is trimmed");
+  assert.equal(created.todo.author, "petra", "attribution is the CALLER's login, not an argument");
+  assert.deepEqual(created.todo.anchor, {
+    process: "order",
+    file: PATH,
+    elements: [{ id: "Task_CheckCredit", name: "Bonität prüfen" }],
+    processVersion: null,
+  });
+
+  // a `path`-addressed todo derives the process id from the file stem
+  await callJson("create_todo", { repo: REPO.fullName, path: PATH, title: "Process-level note" });
+  const viaPath = issues.created[1]?.input.anchor;
+  assert.equal(viaPath?.process, "order");
+  assert.deepEqual(viaPath?.elements, [], "no elements ⇒ a process-level todo");
+
+  // listing: whole repo vs. narrowed to one process
+  const all = await callJson("list_todos", { repo: REPO.fullName });
+  assert.equal(all.process, null);
+  assert.equal(all.todos.length, 2);
+  const narrowed = await callJson("list_todos", { repo: REPO.fullName, id: "order" });
+  assert.equal(narrowed.process, "order");
+  assert.equal(narrowed.todos.length, 2);
+  const other = await callJson("list_todos", { repo: REPO.fullName, id: "not-a-process" });
+  assert.deepEqual(other.todos, [], "an unknown process filter is an empty list, not an error");
+
+  // close takes the TRACKER id (never a process id) and drops it from the list
+  const closed = await callJson("close_todo", { repo: REPO.fullName, todoId: created.todo.id });
+  assert.equal(closed.ok, true);
+  assert.deepEqual(issues.closed, [created.todo.id]);
+  assert.equal((await callJson("list_todos", { repo: REPO.fullName })).todos.length, 1);
+
+  // an empty title is refused before the tracker is touched
+  const blank = await call("create_todo", { repo: REPO.fullName, id: "order", title: "   " });
+  assert.ok(blank.isError);
+  assert.match(blank.text, /must not be empty/);
+  assert.equal(issues.created.length, 2);
+});
+
+test("todos: per-call authz gates the tracker too — no write access, no todo access", async () => {
+  const issues = fakeIssues();
+  const { call } = await connect(deps({ issues, access: { canWrite: async () => false } }));
+  for (const [tool, args] of [
+    ["list_todos", { repo: REPO.fullName }],
+    ["create_todo", { repo: REPO.fullName, id: "order", title: "x" }],
+    ["close_todo", { repo: REPO.fullName, todoId: "1" }],
+  ] as const) {
+    const denied = await call(tool, args);
+    assert.ok(denied.isError, `${tool} must be denied`);
+    assert.match(denied.text, /no write access to acme\/models/);
+  }
+  assert.equal(issues.created.length, 0, "the tracker was never reached");
 });
 
 test("MCP App: open_modeler carries the ui resource link; the resource serves the widget with the boot marker injected", async () => {

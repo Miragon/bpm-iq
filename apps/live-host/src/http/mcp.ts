@@ -15,6 +15,11 @@
  * retry. All validation (BPMN structure, BPMNDI coverage, size cap) is
  * enforced server-side in the use-case, never only here.
  *
+ * Todos (list/create/close) ride the IssueTracker port — model-anchored work
+ * items live in the customer's OWN tracker, never in a platform database. The
+ * tools register only when the platform HAS tracker credentials, so an agent's
+ * tools/list tells it the truth instead of failing at call time.
+ *
  * LIVE_MCP_READONLY=1 (opts.mcpReadOnly) registers no write tools at all —
  * absent from tools/list, not erroring (agents plan against reality).
  */
@@ -24,6 +29,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 
 import { roomName } from "@bpmiq/contracts/live";
+import type { TodoWire } from "@bpmiq/contracts/live-host";
 import { readBody, send } from "@bpmiq/http-kit";
 import { deriveProcess } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
@@ -39,6 +45,7 @@ import { listChanges, listProcesses, listRepos, type OverviewDeps } from "../app
 import { createProcess } from "../application/scaffold.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
+import type { IssueTracker } from "../ports/issue-tracker.ts";
 import { release, type ReleaseDeps, releaseFiles } from "../release.ts";
 import { discoverProcesses, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
@@ -51,6 +58,9 @@ export type McpDeps = OverviewDeps &
   ReleaseDeps & {
     providers: Map<string, GitProvider>;
     github: GitProvider;
+    /** issue-tracker seam (model-anchored todos) — absent when the platform has
+     * no credentials to act on the tracker; the todo tools then do not register */
+    issues?: IssueTracker;
     mcpReadOnly?: boolean;
     /** built web assets — the MCP-App widget (mcp-app.html) is read from here */
     webDist: string;
@@ -109,6 +119,10 @@ const processRef = {
   path: z.string().optional().describe("repo-relative BPMN path (alternative to id; needed for sub-processes)"),
 };
 
+/** the process a model path belongs to — id IS the file stem (the content
+ *  contract, @bpmiq/notations/content), so a path always names its process */
+const processIdOf = (path: string): string => (path.split("/").pop() ?? path).replace(/\.bpmn$/i, "");
+
 export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer {
   const server = new McpServer({ name: "bpmiq-live", version: "1.0.0" });
 
@@ -131,6 +145,17 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
     const hit = procs.find((p) => p.id === id);
     if (!hit) throw new Error(`process '${id}' not found in ${repo.fullName} (use list_processes).`);
     return hit.bpmn;
+  };
+
+  /** processRef → the pair a todo anchor needs: the process id and the model
+   *  file it lives in (a `path` names its own process — see processIdOf) */
+  const resolveAnchorTarget = async (
+    repo: ConnectedRepo,
+    id?: string,
+    path?: string,
+  ): Promise<{ process: string; file: string }> => {
+    const file = await resolveBpmnPath(repo, id, path);
+    return { process: id ?? processIdOf(file), file };
   };
 
   server.registerTool(
@@ -347,6 +372,117 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
     );
   }
 
+  // ── Todos: model-anchored work items in the repo's OWN tracker (ports/
+  // issue-tracker.ts). Registered only WITH a tracker — an agent's tools/list
+  // then reflects reality instead of every call failing. Listing is a read and
+  // survives read-only mode; filing and closing are writes and do not. ───────
+  if (opts.issues) {
+    const issues = opts.issues;
+
+    server.registerTool(
+      "list_todos",
+      {
+        description:
+          "OPEN model-anchored todos of a repository — work items filed from the live model into the " +
+          "repo's issue tracker. Pass `id`/`path` to narrow to ONE process, omit both for the whole repo. " +
+          "Each row carries its tracker url, the anchored BPMN elements and the author.",
+        inputSchema: processRef,
+        annotations: READ,
+      },
+      safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+        const r = await requireRepo(repo);
+        // a filter needs no existence check — an unknown process is simply an
+        // empty list, never an error (the tracker-side label filter decides)
+        const process = id ?? (path ? processIdOf(path) : undefined);
+        const todos = await issues.listTodos(r.fullName, process);
+        return ok({ repo: r.fullName, process: process ?? null, todos: todos satisfies TodoWire[] });
+      }),
+    );
+
+    if (!opts.mcpReadOnly) {
+      server.registerTool(
+        "create_todo",
+        {
+          description:
+            "File a model-anchored todo into the repository's issue tracker. Anchor it to concrete BPMN " +
+            "elements via `elements` (ids from get_bpmn_xml/get_process) — the modeler then shows a badge " +
+            "on each one; omit them for a process-level todo. The item is bot-authored, you stay attributed.",
+          inputSchema: {
+            ...processRef,
+            title: z.string().describe("what needs to be done — the tracker item's title"),
+            body: z.string().optional().describe("free-text description (markdown)"),
+            elements: z
+              .array(
+                z.object({
+                  id: z.string().describe("BPMN element id — the anchor"),
+                  name: z.string().nullable().optional().describe("display name; snapshotted for readability"),
+                }),
+              )
+              .optional()
+              .describe("BPMN elements this todo is about; omit for a process-level todo"),
+          },
+          annotations: WRITE,
+        },
+        safe(
+          async ({
+            repo,
+            id,
+            path,
+            title,
+            body,
+            elements,
+          }: {
+            repo: string;
+            id?: string;
+            path?: string;
+            title: string;
+            body?: string;
+            elements?: Array<{ id: string; name?: string | null }>;
+          }) => {
+            const r = await requireRepo(repo);
+            if (title.trim().length === 0) return fail("`title` must not be empty.");
+            const target = await resolveAnchorTarget(r, id, path);
+            const todo = await issues.createTodo(r.fullName, {
+              title: title.trim(),
+              body: body ?? "",
+              anchor: {
+                process: target.process,
+                file: target.file,
+                elements: (elements ?? []).map((el) => ({ id: el.id, name: el.name ?? null })),
+                // the slim content contract carries no version metadata
+                processVersion: null,
+              },
+              // attribution is the CALLER's platform login, never a tool argument
+              author: session.user.login,
+            });
+            console.log(`todo created in ${r.fullName} by @${session.user.login} via mcp: #${todo.id} "${todo.title}"`);
+            return ok({ todo: todo satisfies TodoWire });
+          },
+        ),
+      );
+
+      server.registerTool(
+        "close_todo",
+        {
+          description:
+            "Close (complete) a todo in the repository's tracker. `todoId` is the tracker-native id from " +
+            "list_todos — NOT a process id. The close is bot-authored with an attribution comment naming you.",
+          inputSchema: {
+            repo: repoArg,
+            todoId: z.string().describe("tracker-native todo id from list_todos (GitHub: the issue number)"),
+          },
+          annotations: WRITE,
+        },
+        safe(async ({ repo, todoId }: { repo: string; todoId: string }) => {
+          const r = await requireRepo(repo);
+          await issues.closeTodo(r.fullName, todoId, session.user.login);
+          console.log(`todo closed in ${r.fullName} by @${session.user.login} via mcp: #${todoId}`);
+          return ok({ ok: true, repo: r.fullName, todoId });
+        }),
+      );
+    }
+  }
+
   // ── MCP App: the embedded modeler (registered in BOTH modes — opening is a
   // read; the readonly marker switches the widget to a viewer) ───────────────
   const modeler = loadModeler(opts.webDist);
@@ -381,7 +517,8 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
       {
         description:
           "Open the interactive BPMN modeler widget for a process. Renders an embedded diagram " +
-          "editor in MCP-Apps-capable clients (claude.ai, Claude Desktop); other clients get a " +
+          "editor in MCP-Apps-capable clients (claude.ai, Claude Desktop) — including the process's " +
+          "todos, with a badge on every anchored element; other clients get a " +
           "text summary — use get_process/get_bpmn_xml there instead.",
         inputSchema: processRef,
         annotations: READ,

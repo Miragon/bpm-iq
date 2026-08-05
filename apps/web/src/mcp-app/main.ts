@@ -21,6 +21,7 @@ import {
 import { loadBpmnFont } from "./font";
 import { type LiveHandle, tryLive, type TryLiveHooks } from "./live";
 import { type ModelerHandle, mountModeler } from "./modeler";
+import { mountTodos, type TodosHandle } from "./todos";
 
 // kick off immediately — palette icons need it, but nothing blocks on it
 loadBpmnFont().catch(() => {
@@ -38,6 +39,7 @@ const cfg = bootConfig();
 const app = makeApp();
 
 let modeler: ModelerHandle | undefined;
+let todos: TodosHandle | undefined; // model-anchored work items — absent without a tracker
 let ref: ProcessRef | undefined;
 let baseVersion = "";
 let inactive = false; // superseded by a newer widget — stop all saving
@@ -130,15 +132,22 @@ async function load(processRef: ProcessRef): Promise<void> {
       scheduleAutosave();
     });
     saveBtn.hidden = !modeler.editable;
+    // bound BEFORE the first import: the canvas controller re-renders its
+    // badges on every `import.done` (incl. the live re-imports)
+    todos = mountTodos(app, modeler, { readonly: cfg.readonly });
   }
   await modeler.importXml(content.xml);
   if (epoch !== liveEpoch || inactive) return; // a newer load owns the widget
   setDirty(false);
+  // the todos of THIS document — a failing/absent tracker never blocks the model
+  todos?.load({ repo: processRef.repo, path: content.path });
   releaseClaim = claimDocument(`${processRef.repo}/${content.path}`, () => {
     inactive = true;
     clearTimeout(autosaveTimer);
     live?.destroy();
     live = undefined;
+    todos?.destroy();
+    todos = undefined;
     showBanner("This document was opened in a newer widget — this instance is now inactive.", []);
     saveBtn.disabled = true;
   });

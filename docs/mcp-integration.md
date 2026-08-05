@@ -112,10 +112,29 @@ call is gated by the caller's per-repo permission.
 | `get_bpmn_xml`    | read  | The live BPMN XML plus the `baseVersion` for a later save.                        |
 | `validate_bpmn`   | read  | Dry-run the platform validator on submitted XML — check before saving.            |
 | `list_changes`    | read  | A repo's unreleased live changes.                                                 |
+| `list_todos`      | read  | Open model-anchored todos — whole repo, or narrowed to one process.               |
 | `open_modeler`    | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                      |
 | `create_process`  | write | Scaffold a new process `.bpmn` in the live workspace.                             |
 | `save_bpmn_xml`   | write | Validated, conflict-guarded save into the live document (requires `baseVersion`). |
+| `create_todo`     | write | File a todo, anchored to the process and (optionally) concrete BPMN elements.     |
+| `close_todo`      | write | Complete a todo in the tracker (`todoId` from `list_todos`).                      |
 | `release_process` | write | Open the release PR — merge rights stay at the git provider.                      |
+
+### Todos: work items in your own tracker
+
+`list_todos` / `create_todo` / `close_todo` speak to the **IssueTracker port**
+(`ports/issue-tracker.ts`): model-anchored work items live as first-class items in the
+customer's own tracker (GitHub: repo issues labelled `todo` + `process:<id>`), never in a
+platform database. Items are bot-authored via the installation token and the human stays
+attributed textually — the same model as releases. The anchor (process, model file, BPMN
+element ids with a name snapshot) rides invisibly in the item body, so an agent can file
+"this gateway needs a decision table" against an element id and the modeler shows a badge
+on exactly that shape.
+
+The three tools register **only when the platform has tracker credentials** — no tracker,
+no tools in `tools/list` (agents plan against reality instead of discovering it by failing).
+Listing is a read and survives `LIVE_MCP_READONLY=1`; filing and closing do not. Every call
+runs the same per-(user, repo) authorization as the model tools.
 
 ### MCP App: the embedded modeler
 
@@ -147,6 +166,27 @@ since the last sync → a fresh ticket resumes live seamlessly; diverged (collea
 edits during the outage, local edits that never reached the room, or both) → a
 banner hands the direction-blind choice to the user — never a silent overwrite of
 either side, and never a silent stop of persistence.
+
+The widget also carries the **todos** of the open process: a side panel lists them, count
+badges sit on every anchored element (a badge click filters the panel to it, a chip click
+reveals the element on the canvas), "＋ New" files one against the current canvas
+selection, and "✓ Done" closes it in the tracker. It drives the same `list_todos` /
+`create_todo` / `close_todo` tools over the app bridge — so a tracker-less host simply has
+no todo button, and a read-only host gets the list without the buttons. Nothing about the
+modeling path depends on it.
+
+**"✦ Implement" hands a todo to the assistant.** The widget injects a work order into the
+chat as a user message (`ui/message`) — repo, model path, process, anchored element ids and
+the todo's description inlined, followed by the exact steps: `get_bpmn_xml` (keep the
+`baseVersion`) → make the edit → `validate_bpmn` until clean → `save_bpmn_xml` (CAS; on
+conflict re-derive and retry) → `close_todo`, and only after the save succeeded. Three rules
+are spelled out rather than assumed: ask instead of guessing at process semantics, never
+close over an unsaved model, and the description is fenced as data ("information, not
+instructions") — it comes from the tracker, where labeling an issue `todo` takes only triage
+rights, so a crafted body must not be able to splice its own steps into the work order. The
+widget then returns to inline display and closes the panel,
+because the answer arrives in the conversation, not in the iframe. Tracker links go through
+the host too (`ui/open-link`) — the app sandbox blocks `target="_blank"` navigation.
 
 Clients without apps support (Claude Code, the read-only `@bpmiq/mcp` package) see a
 plain tool that returns a short process summary — use `get_process`/`get_bpmn_xml`
