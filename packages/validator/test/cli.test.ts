@@ -21,8 +21,8 @@ test("bin run through a symlink validates for real (exit 0 AND real output)", ()
   const r = spawnSync(process.execPath, [link, "--root", FIXTURE], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   // the actual regression guard: the old bug exited 0 with EMPTY output
-  assert.match(r.stdout, /process\(es\) checked/);
-  assert.doesNotMatch(r.stdout, /0 process\(es\) checked/);
+  assert.match(r.stdout, /\d+ process\(es\)/);
+  assert.doesNotMatch(r.stdout, /0 process\(es\)/);
 });
 
 test("bin fails loudly on a non-content root", () => {

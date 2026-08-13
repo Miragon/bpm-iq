@@ -85,6 +85,65 @@ export const validateBpmn = (app: App, xml: string, ref: ProcessRef): Promise<Va
 export const saveBpmnXml = (app: App, ref: ProcessRef, xml: string, baseVersion: string): Promise<SaveResult> =>
   call(app, "save_bpmn_xml", { repo: ref.repo, path: ref.path, xml, baseVersion, lint: "warn" });
 
+// ── DMN decisions (the decision widget) ─────────────────────────────────────
+// The shapes below mirror the Live Host's decision tools. They are declared
+// here rather than imported from @bpmiq/decisions on purpose: that package is
+// Node-side (it carries the evaluation engine), and the widget evaluates in
+// dmn-js. Drift shows up as a failing widget test, not as a silent any.
+
+export const getDmnXml = (app: App, ref: ProcessRef): Promise<ContentWire> => call(app, "get_dmn_xml", { ...ref });
+
+/** lint:"warn" — same autosave trust level as the BPMN widget */
+export const saveDmnXml = (app: App, ref: ProcessRef, xml: string, baseVersion: string): Promise<SaveResult> =>
+  call(app, "save_dmn_xml", { repo: ref.repo, path: ref.path, xml, baseVersion, lint: "warn" });
+
+/** one case of `<decision>.tests.yaml` */
+export interface DecisionTestCase {
+  name: string;
+  given: Record<string, string | number | boolean | null>;
+  expect?: { value?: unknown; rules?: string[] };
+}
+
+export interface CaseOutcomeWire {
+  name: string;
+  status: "pass" | "fail" | "pending";
+  given: Record<string, string | number | boolean | null>;
+  actual: { value: unknown; rules: string[] };
+  failures: string[];
+}
+
+export interface SuiteRunWire {
+  cases: CaseOutcomeWire[];
+  passed: number;
+  failed: number;
+  pending: number;
+  uncoveredRules: string[];
+  ok: boolean;
+}
+
+export interface StoredTestsWire {
+  exists: boolean;
+  path: string;
+  baseVersion?: string;
+  suite?: { decision?: string; cases: DecisionTestCase[] };
+}
+
+export const runDecisionTests = (app: App, ref: ProcessRef): Promise<SuiteRunWire> =>
+  call(app, "run_decision_tests", { repo: ref.repo, path: ref.path });
+
+export const getDecisionTests = (app: App, ref: ProcessRef): Promise<StoredTestsWire> =>
+  call(app, "get_decision_tests", { repo: ref.repo, path: ref.path });
+
+/** write the suite; `record` freezes the current behaviour of cases without an
+ *  expectation — how "capture this scenario as a test" is implemented */
+export const saveDecisionTests = (
+  app: App,
+  ref: ProcessRef,
+  cases: DecisionTestCase[],
+  opts: { baseVersion?: string; record?: boolean } = {},
+): Promise<{ ok?: boolean; conflict?: true; path: string; baseVersion: string }> =>
+  call(app, "save_decision_tests", { repo: ref.repo, path: ref.path, cases, ...opts });
+
 export interface WsTicket {
   ticket: string;
   url: string;

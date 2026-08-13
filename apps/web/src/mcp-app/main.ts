@@ -18,13 +18,13 @@ import {
   saveBpmnXml,
   type SaveConflict,
 } from "./bridge";
-import { loadBpmnFont } from "./font";
+import { loadIconFont } from "./font";
 import { type LiveHandle, tryLive, type TryLiveHooks } from "./live";
 import { type ModelerHandle, mountModeler } from "./modeler";
 import { mountTodos, type TodosHandle } from "./todos";
 
 // kick off immediately — palette icons need it, but nothing blocks on it
-loadBpmnFont().catch(() => {
+loadIconFont("bpmn").catch(() => {
   /* icons degrade to tofu; the modeler itself is unaffected */
 });
 

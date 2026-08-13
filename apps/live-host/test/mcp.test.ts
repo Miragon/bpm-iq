@@ -46,6 +46,47 @@ const PATH = "processes/order.bpmn";
 const VALID = newBpmnXml("order", "Order");
 const VALID_V2 = newBpmnXml("order", "Order v2");
 
+/** the decision fixture — a real table (rules, hit policy, DMNDI), because the
+ *  blank template has no rules to derive anything interesting from */
+const DMN_PATH = "processes/rabatt.dmn";
+const DMN = `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" id="Definitions_rabatt" name="Rabatt" namespace="http://bpmiq.dev/dmn/rabatt">
+  <decision id="rabatt" name="Rabatt">
+    <decisionTable id="DT_rabatt" hitPolicy="FIRST">
+      <input id="Input_1" label="Kundentyp">
+        <inputExpression id="IE_1" typeRef="string"><text>kundentyp</text></inputExpression>
+      </input>
+      <output id="Output_1" name="rabatt" typeRef="number" />
+      <rule id="Rule_stamm">
+        <inputEntry id="e1"><text>"stamm"</text></inputEntry>
+        <outputEntry id="e2"><text>10</text></outputEntry>
+      </rule>
+      <rule id="Rule_neu">
+        <inputEntry id="e3"><text>"neu"</text></inputEntry>
+        <outputEntry id="e4"><text>0</text></outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram id="DMNDiagram_rabatt">
+      <dmndi:DMNShape id="DMNShape_rabatt" dmnElementRef="rabatt">
+        <dc:Bounds height="80" width="180" x="160" y="100" />
+      </dmndi:DMNShape>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>
+`;
+
+/** a process that delegates to the decision above — the impact link */
+const USER_PATH = "processes/uses-rabatt.bpmn";
+const USER_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <bpmn:process id="uses-rabatt" name="Uses rabatt">
+    <bpmn:businessRuleTask id="Task_rabatt" name="Rabatt ermitteln" calledDecision="rabatt" />
+  </bpmn:process>
+</bpmn:definitions>
+`;
+
 const session = (login = "petra"): Session => ({
   id: `sess-${login}`,
   user: { login, name: login, avatarUrl: null, provider: "github" },
@@ -69,14 +110,19 @@ after(async () => {
 // the widget stub every deps() writes — loadModeler memoises module-wide, so
 // the content must be identical across tests (as it is in a real deployment)
 const WIDGET_STUB = '<html><head><script>window.BPMIQ_BOOT = "__BPMIQ_BOOT__";</script></head><body>stub</body></html>';
+const DMN_WIDGET_STUB =
+  '<html><head><script>window.BPMIQ_BOOT = "__BPMIQ_BOOT__";</script></head><body>dmn</body></html>';
 
 function deps(over: Partial<McpDeps> = {}): McpDeps {
   const ws = mkdtempSync(join(tmpdir(), "bpm-mcp-"));
   mkdirSync(join(ws, "processes"), { recursive: true });
   writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
   writeFileSync(join(ws, PATH), VALID);
+  writeFileSync(join(ws, DMN_PATH), DMN);
+  writeFileSync(join(ws, USER_PATH), USER_BPMN);
   const webDist = mkdtempSync(join(tmpdir(), "bpm-webdist-"));
   writeFileSync(join(webDist, "mcp-app.html"), WIDGET_STUB);
+  writeFileSync(join(webDist, "mcp-app-dmn.html"), DMN_WIDGET_STUB);
   const registry = { get: (n: string) => (n.toLowerCase() === REPO.fullName ? REPO : undefined), list: () => [REPO] };
   const workspaces = {
     ensure: async () => ws,
@@ -174,31 +220,50 @@ async function connect(d: McpDeps, s: Session = session()) {
 
 // ── (a) tool behaviour ──────────────────────────────────────────────────────
 
-test("registration: all eleven tools; read-only mode drops the write tools AND the ws ticket", async () => {
+test("registration: every tool; read-only mode drops the write tools AND the ws ticket", async () => {
   const full = await connect(deps());
   assert.deepEqual((await full.client.listTools()).tools.map((t) => t.name).sort(), [
+    "analyze_decision",
+    "create_decision",
     "create_process",
     "get_bpmn_xml",
+    "get_decision",
+    "get_decision_tests",
+    "get_dmn_xml",
     "get_process",
     "list_changes",
+    "list_decisions",
     "list_processes",
     "list_repos",
     "mint_ws_ticket",
+    "open_decision_modeler",
     "open_modeler",
     "release_process",
+    "run_decision_tests",
     "save_bpmn_xml",
+    "save_decision_tests",
+    "save_dmn_xml",
+    "simulate_decision",
     "validate_bpmn",
   ]);
   // open_modeler stays in read-only mode (opening is a read; the widget's
   // readonly marker turns it into a viewer)
   const ro = await connect(deps({ mcpReadOnly: true }));
   assert.deepEqual((await ro.client.listTools()).tools.map((t) => t.name).sort(), [
+    "analyze_decision",
     "get_bpmn_xml",
+    "get_decision",
+    "get_decision_tests",
+    "get_dmn_xml",
     "get_process",
     "list_changes",
+    "list_decisions",
     "list_processes",
     "list_repos",
+    "open_decision_modeler",
     "open_modeler",
+    "run_decision_tests",
+    "simulate_decision",
     "validate_bpmn",
   ]);
 });
@@ -316,6 +381,33 @@ test("MCP App: open_modeler carries the ui resource link; the resource serves th
   assert.ok((roRes.contents[0] as { text?: string }).text!.includes('{\\"readonly\\":true}'));
 });
 
+test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario", async () => {
+  const { client, callJson } = await connect(deps());
+
+  const tool = (await client.listTools()).tools.find((t) => t.name === "open_decision_modeler");
+  assert.ok(tool, "open_decision_modeler registered");
+  const uri = (tool._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri;
+  assert.ok(uri?.startsWith("ui://bpmiq/decision-modeler-"), `ui resourceUri: ${uri}`);
+  // its own resource — never the BPMN widget's
+  const other = (await client.listTools()).tools.find((t) => t.name === "open_modeler");
+  assert.notEqual(uri, (other?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri);
+
+  const doc = (await client.readResource({ uri: uri! })).contents[0] as { text?: string };
+  assert.match(doc.text ?? "", /<body>dmn<\/body>/);
+  assert.ok(doc.text!.includes('{\\"readonly\\":false}'), "boot config injected");
+
+  // the scenario rides in the tool ARGUMENTS (the widget reads ontoolinput);
+  // the result stays a lean summary, never the XML
+  const opened = await callJson("open_decision_modeler", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    scenario: { kundentyp: "stamm" },
+  });
+  assert.equal(opened.opened.path, DMN_PATH);
+  assert.deepEqual(opened.summary.decisions, [{ id: "rabatt", hitPolicy: "FIRST", rules: 2 }]);
+  assert.ok(!JSON.stringify(opened).includes("<decision"), "no XML in the tool result");
+});
+
 test("get→save round-trip incl. the conflict retry loop (stale token never overwrites)", async () => {
   const { callJson } = await connect(deps());
   const procs = await callJson("list_processes", { repo: REPO.fullName });
@@ -348,6 +440,188 @@ test("get→save round-trip incl. the conflict retry loop (stale token never ove
   const derived = await callJson("get_process", { repo: REPO.fullName, id: "order" });
   assert.equal(derived.name, "Order v2");
   assert.equal(derived.baseVersion, saved.baseVersion);
+});
+
+test("decisions: list → get_decision (derived table) → save_dmn_xml round-trip", async () => {
+  const { call, callJson } = await connect(deps());
+
+  const list = await callJson("list_decisions", { repo: REPO.fullName });
+  assert.deepEqual(
+    list.decisions.map((d: { id: string; path: string }) => [d.id, d.path]),
+    [["rabatt", DMN_PATH]],
+  );
+
+  // the derived view carries the table, not just the node list
+  const view = await callJson("get_decision", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(view.path, DMN_PATH);
+  // …and the impact side: which processes delegate to this decision
+  assert.deepEqual(view.usedBy, [
+    { process: "uses-rabatt", path: USER_PATH, element: "Task_rabatt", elementName: "Rabatt ermitteln" },
+  ]);
+  assert.equal(view.name, "Rabatt");
+  assert.equal(view.decisions[0].hitPolicy, "FIRST");
+  assert.deepEqual(view.decisions[0].inputs[0], {
+    id: "Input_1",
+    label: "Kundentyp",
+    expression: "kundentyp",
+    typeRef: "string",
+    inputValues: [],
+  });
+  assert.deepEqual(
+    view.decisions[0].rules.map((r: { id: string; when: string[]; then: string[] }) => [r.id, r.when, r.then]),
+    [
+      ["Rule_stamm", ['"stamm"'], ["10"]],
+      ["Rule_neu", ['"neu"'], ["0"]],
+    ],
+  );
+
+  // save with the token from the XML read; a stale one conflicts instead of overwriting
+  const got = await callJson("get_dmn_xml", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(got.xml, DMN);
+  const stale = await callJson("save_dmn_xml", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    xml: DMN.replace('name="Rabatt"', 'name="Rabatt v2"'),
+    baseVersion: "bogus.token",
+  });
+  assert.equal(stale.conflict, true);
+  const saved = await callJson("save_dmn_xml", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    xml: DMN.replace('name="Rabatt"', 'name="Rabatt v2"'),
+    baseVersion: stale.baseVersion,
+  });
+  assert.equal(saved.ok, true);
+  assert.equal((await callJson("get_decision", { repo: REPO.fullName, id: "rabatt" })).name, "Rabatt v2");
+
+  // an unknown id names the tool that lists the real ones
+  const unknown = await call("get_decision", { repo: REPO.fullName, id: "nope" });
+  assert.ok(unknown.isError);
+  assert.match(unknown.text, /decision 'nope' not found .*use list_decisions/);
+
+  // a BPMN path through the decision tools is a clear error, not a crash
+  const wrong = await call("get_decision", { repo: REPO.fullName, path: PATH });
+  assert.ok(wrong.isError);
+  assert.match(wrong.text, /not a DMN model/);
+});
+
+test("simulate_decision + analyze_decision: live model, and a dry run on unsaved XML", async () => {
+  const { call, callJson } = await connect(deps());
+
+  const hit = await callJson("simulate_decision", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    given: { kundentyp: "stamm" },
+  });
+  assert.equal(hit.path, DMN_PATH);
+  assert.deepEqual(hit.decisions[0].reportedRules, ["Rule_stamm"]);
+  assert.equal(hit.decisions[0].value, 10);
+
+  // a typo comes back as a named problem, not as "nothing matched"
+  const typo = await callJson("simulate_decision", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    given: { Kundentyp: "stamm" },
+  });
+  assert.deepEqual(typo.unknownInputs, ["Kundentyp"]);
+  assert.deepEqual(typo.missingInputs, ["kundentyp"]);
+
+  // the live model is sound; its variable profile carries the test material
+  const analysis = await callJson("analyze_decision", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(analysis.ok, true);
+  assert.deepEqual(analysis.findings, []);
+  assert.deepEqual(analysis.variables[0], {
+    name: "kundentyp",
+    typeRef: "string",
+    source: "free",
+    literals: ["stamm", "neu"],
+    boundaries: [],
+  });
+
+  // dry run: broken FEEL in an UNSAVED edit, without touching the repo at all
+  const dry = await callJson("analyze_decision", { xml: DMN.replace("<text>10</text>", "<text>10 +</text>") });
+  assert.equal(dry.ok, false);
+  assert.equal(dry.findings[0].code, "feel-syntax");
+  assert.equal(dry.findings[0].rule, "Rule_stamm");
+
+  // …and the stored model is untouched by it
+  assert.equal((await callJson("get_dmn_xml", { repo: REPO.fullName, id: "rabatt" })).xml, DMN);
+
+  // neither repo nor xml → an actionable message
+  const nothing = await call("analyze_decision", {});
+  assert.ok(nothing.isError);
+  assert.match(nothing.text, /provide `repo`.*or an explicit `xml`/);
+});
+
+test("decision tests: none → first save creates the sidecar → run → golden master → conflict guard", async () => {
+  const { call, callJson } = await connect(deps());
+
+  // a decision without a suite: empty, passing, and every rule uncovered
+  const before = await callJson("get_decision_tests", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(before.exists, false);
+  assert.equal(before.path, "processes/rabatt.tests.yaml");
+  const empty = await callJson("run_decision_tests", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(empty.ok, true);
+  assert.deepEqual(empty.cases, []);
+  assert.deepEqual(empty.uncoveredRules, ["rabatt/Rule_stamm", "rabatt/Rule_neu"]);
+
+  // trial run: cases passed inline are never stored
+  const trial = await callJson("run_decision_tests", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    cases: [{ name: "Stammkunde", given: { kundentyp: "stamm" }, expect: { value: 10 } }],
+  });
+  assert.equal(trial.passed, 1);
+  assert.equal(trial.testsPath, null);
+  assert.equal((await callJson("get_decision_tests", { repo: REPO.fullName, id: "rabatt" })).exists, false);
+
+  // first save: no baseVersion needed, the file is created next to the model
+  const created = await callJson("save_decision_tests", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    cases: [
+      { name: "Stammkunde", given: { kundentyp: "stamm" }, expect: { value: 10, rules: ["Rule_stamm"] } },
+      { name: "Neukunde", given: { kundentyp: "neu" } }, // no expect → golden master
+    ],
+    record: true,
+  });
+  assert.equal(created.ok, true);
+  assert.equal(created.created, true);
+  assert.equal(created.path, "processes/rabatt.tests.yaml");
+  assert.equal(created.outcome.passed, 2, "record:true froze the pending case, so both pass");
+
+  // the stored suite is real YAML with the recorded expectation in it
+  const stored = await callJson("get_decision_tests", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(stored.exists, true);
+  assert.match(stored.raw, /name: Neukunde/);
+  assert.deepEqual(stored.suite.cases[1].expect, { value: 0, rules: ["Rule_neu"] });
+
+  // running the stored suite now reports full coverage
+  const run = await callJson("run_decision_tests", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(run.passed, 2);
+  assert.deepEqual(run.uncoveredRules, []);
+  assert.equal(run.testsPath, "processes/rabatt.tests.yaml");
+
+  // a second save without baseVersion is refused, a stale one conflicts
+  const noToken = await call("save_decision_tests", { repo: REPO.fullName, id: "rabatt", cases: [] });
+  assert.ok(noToken.isError);
+  assert.match(noToken.text, /already exists — read it first/);
+  const stale = await callJson("save_decision_tests", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    cases: [],
+    baseVersion: "bogus.token",
+  });
+  assert.equal(stale.conflict, true);
+
+  // …and the model itself is now covered by a failing case if we break it
+  const broken = await callJson("run_decision_tests", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    xml: DMN.replace("<text>10</text>", "<text>20</text>"),
+  });
+  assert.equal(broken.failed, 1);
+  assert.match(broken.cases[0].failures[0], /expected 10, got 20/);
 });
 
 test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, room-bound", async () => {

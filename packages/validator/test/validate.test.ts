@@ -36,7 +36,18 @@ test("fixture repo validates green (a process per .bpmn, artifacts + collaborati
   assert.equal(status, 0, out);
   assert.match(out, /0 error\(s\)/);
   // three .bpmn files: order-to-cash, its invoice-handling sub-process, two-pool
-  assert.match(out, /3 process\(es\) checked/);
+  // plus the credit-check.dmn — decisions are validated in the same pass
+  assert.match(out, /3 process\(es\), 1 decision\(s\) checked/);
+});
+
+test("a broken .dmn fails the same run as the processes", () => {
+  const dir = mutableFixture();
+  const dmn = join(dir, "processes", "order-to-cash", "decisions", "credit-check.dmn");
+  // drop one input entry: the rule no longer lines up with its columns
+  writeFileSync(dmn, readFileSync(dmn, "utf8").replace(/<inputEntry[\s\S]*?<\/inputEntry>/, ""));
+  const { status, out } = run(["--root", dir]);
+  assert.equal(status, 1);
+  assert.match(out, /input entries, expected/);
 });
 
 test("two-pool collaboration is parsed per pool, not flagged bogus", () => {
@@ -56,7 +67,7 @@ test("a callActivity that resolves to a real process raises no link warning", ()
 test("unknown process id fails instead of reporting OK", () => {
   const { status, out } = run(["--root", FIXTURE, "no-such-process"]);
   assert.equal(status, 1);
-  assert.match(out, /unknown process 'no-such-process'/);
+  assert.match(out, /unknown process\/decision 'no-such-process'/);
 });
 
 test("--root without a bpmiq.yml fails gracefully (no stacktrace)", () => {

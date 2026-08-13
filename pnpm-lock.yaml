@@ -56,6 +56,9 @@ importers:
       '@bpmiq/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@bpmiq/decisions':
+        specifier: workspace:*
+        version: link:../../packages/decisions
       '@bpmiq/github-app':
         specifier: workspace:*
         version: link:../../packages/github-app
@@ -151,6 +154,9 @@ importers:
       '@bpmiq/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
+      '@emaarco/dmn-js-simulation':
+        specifier: 0.2.0
+        version: 0.2.0(diagram-js@15.23.2)(dmn-js@17.10.1(@bpmn-io/cm-theme@0.2.2(@codemirror/state@6.7.1)(@codemirror/view@6.43.7)))(inferno@5.6.3)
       '@modelcontextprotocol/ext-apps':
         specifier: 1.7.5
         version: 1.7.5(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)
@@ -228,6 +234,28 @@ importers:
   packages/cell-protocol: {}
 
   packages/contracts: {}
+
+  packages/decisions:
+    dependencies:
+      '@bpmiq/notations':
+        specifier: workspace:*
+        version: link:../notations
+      '@emaarco/dmn-js-simulation':
+        specifier: 0.2.0
+        version: 0.2.0(diagram-js@15.23.2)(dmn-js@17.10.1(@bpmn-io/cm-theme@0.2.2(@codemirror/state@6.7.1)(@codemirror/view@6.43.7)))(inferno@5.6.3)
+      feelin:
+        specifier: 7.0.1
+        version: 7.0.1
+      inferno:
+        specifier: 5.6.3
+        version: 5.6.3
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.2
+        version: 26.1.2
 
   packages/github-app: {}
 
@@ -482,6 +510,21 @@ packages:
 
   '@codemirror/view@6.43.7':
     resolution: {integrity: sha512-FZsExxkoxnAN+d9TgqXLg5g4A1oQwzX9WlkOT5i2PKkcW7xx3Bmu0vs90g6fo9Mpdsb/l96dnAraQ8932aO4/g==}
+
+  '@emaarco/dmn-js-simulation@0.2.0':
+    resolution: {integrity: sha512-EETA8uKisU8/hefLScgViOw5MFpYt3+ET9j1/GW4vDSqX48GWKD3jHGfv1Itp5Txde/n5ndH/zkm5Dt38AvJRA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      diagram-js: '>=15'
+      dmn-js: '>=17'
+      inferno: '>=5.6 <6'
+    peerDependenciesMeta:
+      diagram-js:
+        optional: true
+      dmn-js:
+        optional: true
+      inferno:
+        optional: true
 
   '@emnapi/core@1.11.1':
     resolution: {integrity: sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ==}
@@ -2142,6 +2185,10 @@ packages:
       picomatch:
         optional: true
 
+  feelin@7.0.1:
+    resolution: {integrity: sha512-P7jSNHxMfDMW7zojApEUClEOugv/J7UZEVvSG4Cuyzwxh1QiB1XXgBREkEEamdy3igHHzm+20lv0Mt3pws3teA==}
+    engines: {node: '>= 20.12.0'}
+
   file-entry-cache@8.0.0:
     resolution: {integrity: sha512-XXTUwCvisa5oacNGRP9SfNtYBNAMi+RPwBFmblZEF7N7swHYQS6/Zfk7SRwx4D5j3CH211YNRco1DEMNVfZCnQ==}
     engines: {node: '>=16.0.0'}
@@ -2435,6 +2482,10 @@ packages:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
 
+  lezer-feel@3.0.1:
+    resolution: {integrity: sha512-tTOBq2ZOwfekNXg7eflg9WK/jl4LW4pryR3wiGRp1/ODXBG3ngo2mqXcriULylTjdxCnz42ByMMFEgbOK0L7kg==}
+    engines: {node: '>= 20.12.0'}
+
   lib0@0.2.117:
     resolution: {integrity: sha512-DeXj9X5xDCjgKLU/7RR+/HQEVzuuEUiwldwOGsHK/sfAfELGWEyTcf0x+uOvCvK3O2zPmZePXWL85vtia6GyZw==}
     engines: {node: '>=16'}
@@ -2611,6 +2662,10 @@ packages:
     resolution: {integrity: sha512-rJicGl/3Fly/E0rOH1YmPZ6e49JCnKknh1ox1vpHnkfjujAkKA6sqUZvH3MTAaXXjgexyUwgNwTJzTtYuAFYJw==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  luxon@3.7.2:
+    resolution: {integrity: sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew==}
+    engines: {node: '>=12'}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -3586,6 +3641,14 @@ snapshots:
       crelt: 1.0.7
       style-mod: 4.1.3
       w3c-keyname: 2.2.8
+
+  '@emaarco/dmn-js-simulation@0.2.0(diagram-js@15.23.2)(dmn-js@17.10.1(@bpmn-io/cm-theme@0.2.2(@codemirror/state@6.7.1)(@codemirror/view@6.43.7)))(inferno@5.6.3)':
+    dependencies:
+      feelin: 7.0.1
+    optionalDependencies:
+      diagram-js: 15.23.2
+      dmn-js: 17.10.1(@bpmn-io/cm-theme@0.2.2(@codemirror/state@6.7.1)(@codemirror/view@6.43.7))
+      inferno: 5.6.3
 
   '@emnapi/core@1.11.1':
     dependencies:
@@ -5148,6 +5211,13 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.5
 
+  feelin@7.0.1:
+    dependencies:
+      '@lezer/common': 1.5.2
+      lezer-feel: 3.0.1
+      luxon: 3.7.2
+      min-dash: 5.1.0
+
   file-entry-cache@8.0.0:
     dependencies:
       flat-cache: 4.0.1
@@ -5389,6 +5459,12 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
 
+  lezer-feel@3.0.1:
+    dependencies:
+      '@lezer/highlight': 1.2.3
+      '@lezer/lr': 1.4.10
+      min-dash: 5.1.0
+
   lib0@0.2.117:
     dependencies:
       isomorphic.js: 0.2.5
@@ -5519,6 +5595,8 @@ snapshots:
   lucide-react@1.27.0(react@19.2.8):
     dependencies:
       react: 19.2.8
+
+  luxon@3.7.2: {}
 
   magic-string@0.30.21:
     dependencies:

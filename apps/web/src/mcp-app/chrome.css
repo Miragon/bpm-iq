@@ -1,0 +1,127 @@
+/* The widget chrome shared by the model widgets (mcp-app.html and
+ * mcp-app-dmn.html): layout, toolbar, banner, status line and the small
+ * primitives their side panels use. Notation-specific stylesheets (bpmn-js /
+ * dmn-js) are imported by each widget's own entry stylesheet.
+ *
+ * Both widgets build to ONE self-contained HTML file, so everything here is
+ * inlined twice — keep it small. */
+
+:root {
+  --fg: #1f2328;
+  --bg: #ffffff;
+  --muted: #656d76;
+  --border: #d1d9e0;
+  --accent: #0969da;
+  --danger: #cf222e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+#toolbar .spacer {
+  flex: 1;
+}
+
+#dirty {
+  color: var(--accent);
+}
+
+#toolbar button,
+#banner button {
+  font: inherit;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+#toolbar button:hover,
+#banner button:hover {
+  border-color: var(--accent);
+}
+
+#banner button.danger {
+  color: var(--danger);
+}
+
+/* :not([hidden]) is load-bearing — a bare `display: flex` here is an author rule
+ * and would beat the UA stylesheet's [hidden] { display: none } */
+#banner:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: #fff8c5;
+  border-bottom: 1px solid var(--border);
+}
+
+#main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+#canvas {
+  flex: 1;
+  min-width: 0;
+  min-height: 320px;
+}
+
+#status {
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* element chips — a span in the anchor preview, a button in a todo row */
+.chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--bg);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+button.chip {
+  cursor: pointer;
+}

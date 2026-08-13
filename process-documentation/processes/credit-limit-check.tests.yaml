@@ -1,0 +1,50 @@
+# Test cases for credit-limit-check.dmn — the sidecar convention of the
+# platform: <decision>.tests.yaml next to the model, versioned and reviewed
+# with it. Run them with:  pnpm validate  (or node packages/decisions/cli.ts)
+#
+# `given` is keyed by VARIABLE name (the columns' input expressions).
+# `expect.value` is the decision's result; `expect.rules` pins WHICH rule
+# produced it — so a right answer for the wrong reason still fails.
+decision: credit-limit-check
+cases:
+  - name: A blocked customer is rejected even for a tiny, clean order
+    given: { customerSegment: blocked, orderValue: 50, overdueInvoices: 0 }
+    expect:
+      value: reject
+      rules: [Rule_blocked_customer]
+
+  - name: Three overdue invoices reject a key account too
+    given: { customerSegment: key-account, orderValue: 5000, overdueInvoices: 3 }
+    expect:
+      value: reject
+      rules: [Rule_too_many_overdue]
+
+  - name: Two overdue invoices are still tolerated (boundary below the limit)
+    given: { customerSegment: key-account, orderValue: 5000, overdueInvoices: 2 }
+    expect:
+      value: approve
+      rules: [Rule_key_account]
+
+  - name: Key account exactly at the 50,000 EUR ceiling is approved
+    given: { customerSegment: key-account, orderValue: 50000, overdueInvoices: 0 }
+    expect:
+      value: approve
+      rules: [Rule_key_account]
+
+  - name: Key account above the ceiling goes to a human
+    given: { customerSegment: key-account, orderValue: 50001, overdueInvoices: 0 }
+    expect:
+      value: manual-review
+      rules: [Rule_manual_review]
+
+  - name: Small order from a standard customer who pays on time is approved
+    given: { customerSegment: standard, orderValue: 1000, overdueInvoices: 0 }
+    expect:
+      value: approve
+      rules: [Rule_small_order]
+
+  - name: The same small order with one overdue invoice needs a human
+    given: { customerSegment: standard, orderValue: 1000, overdueInvoices: 1 }
+    expect:
+      value: manual-review
+      rules: [Rule_manual_review]

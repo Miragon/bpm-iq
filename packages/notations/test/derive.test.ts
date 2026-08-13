@@ -30,6 +30,10 @@ const BPMN = `<?xml version="1.0" encoding="UTF-8"?>
     <bpmn:userTask id="Task_Check" name="Check order"><bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing></bpmn:userTask>
     <bpmn:exclusiveGateway id="Gw" name="Approved?"><bpmn:incoming>f2</bpmn:incoming><bpmn:outgoing>f3</bpmn:outgoing></bpmn:exclusiveGateway>
     <bpmn:callActivity id="Call_Invoice" name="Handle invoice" calledElement="invoice-handling"><bpmn:incoming>f3</bpmn:incoming><bpmn:outgoing>f4</bpmn:outgoing></bpmn:callActivity>
+    <bpmn:businessRuleTask id="Rule_Credit" name="Check credit limit" camunda:decisionRef="credit-limit-check" />
+    <bpmn:businessRuleTask id="Rule_Discount" name="Determine discount">
+      <bpmn:extensionElements><zeebe:calledDecision decisionId="discount" /></bpmn:extensionElements>
+    </bpmn:businessRuleTask>
     <bpmn:endEvent id="End" name="Cash collected"><bpmn:incoming>f4</bpmn:incoming></bpmn:endEvent>
     <bpmn:sequenceFlow id="f1" sourceRef="Start" targetRef="Task_Check" />
     <bpmn:sequenceFlow id="f2" sourceRef="Task_Check" targetRef="Gw" />
@@ -46,8 +50,8 @@ test("deriveProcess: name from the single pool; steps/events/gateways split by t
   assert.equal(p.name, "Sales"); // single pool name is the most process-like label
   assert.deepEqual(
     p.steps.map((s) => s.id).sort(),
-    ["Call_Invoice", "Task_Check"],
-    "activities: the user task + the call activity",
+    ["Call_Invoice", "Rule_Credit", "Rule_Discount", "Task_Check"],
+    "activities: the user task, the call activity and the two business rule tasks",
   );
   assert.deepEqual(p.events.map((e) => e.id).sort(), ["End", "Start"]);
   assert.deepEqual(
@@ -117,4 +121,26 @@ test("deriveProcess: a plain process with no pool/lanes derives with name=null, 
   assert.deepEqual(p.roles, []);
   assert.equal(p.steps.length, 1);
   assert.equal(p.steps[0]?.role, undefined);
+});
+
+test("deriveProcess: a businessRuleTask surfaces the decision it delegates to", () => {
+  const graph = extractModelGraph(".bpmn", BPMN);
+  assert.ok(graph);
+  const p = deriveProcess(graph);
+
+  // BPMN has no standard attribute for this — Camunda 7's `decisionRef` and
+  // Camunda 8's `<zeebe:calledDecision decisionId>` must both be understood
+  assert.deepEqual(
+    p.decisions,
+    [
+      { id: "Rule_Credit", name: "Check credit limit", decisionRef: "credit-limit-check" },
+      { id: "Rule_Discount", name: "Determine discount", decisionRef: "discount" },
+    ],
+    "the value names the .dmn file stem, like calledElement names a .bpmn stem",
+  );
+  assert.equal(
+    p.steps.find((s) => s.id === "Rule_Credit")?.decides,
+    "credit-limit-check",
+    "and it rides on the step itself, next to callActivity's `calls`",
+  );
 });

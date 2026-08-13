@@ -1,0 +1,29 @@
+{
+  "name": "@bpmiq/decisions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DMN decision simulation, analysis and test running — the server-side half of the dmn-js simulation add-on: same FEEL engine, no browser.",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./tests": "./tests.ts"
+  },
+  "scripts": {
+    "check": "node cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@bpmiq/notations": "workspace:*",
+    "@emaarco/dmn-js-simulation": "0.2.0",
+    "feelin": "7.0.1",
+    "inferno": "5.6.3",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.2"
+  }
+}

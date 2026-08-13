@@ -1,0 +1,107 @@
+cases:
+  - name: Kind bekommt Kindermenü
+    given:
+      alter: 8
+      ernaehrung: omnivor
+      allergie: keine
+    expect:
+      value: "Kindermenü: Penne mit Tomatensauce"
+      rules:
+        - Rule_kind
+  - name: Veganes Kind bekommt trotzdem das Kindermenü
+    given:
+      alter: 8
+      ernaehrung: vegan
+      allergie: keine
+    expect:
+      value: "Kindermenü: Penne mit Tomatensauce"
+      rules:
+        - Rule_kind
+  - name: "Grenzfall: mit genau 12 kein Kindermenü mehr"
+    given:
+      alter: 12
+      ernaehrung: omnivor
+      allergie: keine
+    expect:
+      value: Kalbsrücken mit Serviettenknödel
+      rules:
+        - Rule_omnivor
+  - name: Veganer mit Nussallergie bekommt Curry ohne Cashews
+    given:
+      alter: 34
+      ernaehrung: vegan
+      allergie: nuss
+    expect:
+      value: Gemüsecurry mit Reis
+      rules:
+        - Rule_vegan_nuss
+  - name: Veganer ohne Allergie
+    given:
+      alter: 34
+      ernaehrung: vegan
+      allergie: keine
+    expect:
+      value: Gemüsecurry mit Reis und Cashewkernen
+      rules:
+        - Rule_vegan
+  - name: "Veganer mit Glutenallergie: Curry ist ohnehin glutenfrei"
+    given:
+      alter: 34
+      ernaehrung: vegan
+      allergie: gluten
+    expect:
+      value: Gemüsecurry mit Reis und Cashewkernen
+      rules:
+        - Rule_vegan
+  - name: Vegetarier mit Glutenallergie
+    given:
+      alter: 45
+      ernaehrung: vegetarisch
+      allergie: gluten
+    expect:
+      value: Steinpilzrisotto
+      rules:
+        - Rule_vegetarisch_gluten
+  - name: Vegetarier ohne Allergie
+    given:
+      alter: 45
+      ernaehrung: vegetarisch
+      allergie: keine
+    expect:
+      value: Spinatknödel mit Salbeibutter
+      rules:
+        - Rule_vegetarisch
+  - name: Omnivor mit Glutenallergie bekommt Gratin statt Knödel
+    given:
+      alter: 50
+      ernaehrung: omnivor
+      allergie: gluten
+    expect:
+      value: Rinderfilet mit Kartoffelgratin
+      rules:
+        - Rule_omnivor_gluten
+  - name: Omnivor ohne Allergie
+    given:
+      alter: 50
+      ernaehrung: omnivor
+      allergie: keine
+    expect:
+      value: Kalbsrücken mit Serviettenknödel
+      rules:
+        - Rule_omnivor
+  - name: Unbekannte Ernährungsform fällt durch alle Regeln
+    given:
+      alter: 30
+      ernaehrung: pescetarisch
+      allergie: keine
+    expect:
+      value: null
+  - name: Test
+    given:
+      alter: 45
+      ernaehrung: vegetarisch
+      allergie: keine
+    expect:
+      value: Spinatknödel mit Salbeibutter
+      rules:
+        - Rule_vegetarisch
