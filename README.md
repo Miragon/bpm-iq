@@ -48,8 +48,35 @@ More entry points: `pnpm web:dev` (web client with hot reload, proxies to the Li
 `pnpm validate` (content validation of the example repo, runs in CI on every PR).
 
 **Talk to the processes**: open [Claude Code](https://claude.com/claude-code) in the repo —
-`.mcp.json` auto-connects the MCP server (`packages/mcp`) — and ask _"Walk me through
-order-to-cash"_ or _"What should we automate first?"_.
+`.mcp.json` auto-connects the read-only MCP server (`packages/mcp`) — and ask _"Walk me
+through order-to-cash"_ or _"What should we automate first?"_.
+
+To reach the **live, write-capable** endpoint of the running host instead, point a client at
+`/mcp` with the dev token as bearer:
+
+```bash
+claude mcp add --transport http bpm-live http://localhost:8301/mcp \
+  --header "Authorization: Bearer demo"
+```
+
+Claude Desktop's custom-connector dialog carries no static headers (it expects OAuth), so
+bridge it in `claude_desktop_config.json` — the `${AUTH}` indirection is deliberate, Desktop
+splits args on whitespace:
+
+```json
+{
+  "mcpServers": {
+    "bpm-live": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:8301/mcp", "--header", "Authorization:${AUTH}"],
+      "env": { "AUTH": "Bearer demo" }
+    }
+  }
+}
+```
+
+Restart Desktop fully (Cmd+Q) afterwards. In production the bearer is an OIDC access token
+the client fetches itself — see [docs/mcp-integration.md](docs/mcp-integration.md).
 
 ## What's in this repo
 

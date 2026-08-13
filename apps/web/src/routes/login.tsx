@@ -16,8 +16,18 @@ export function Login() {
         <CardContent className="flex flex-col gap-3">
           {providers.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              This instance is not connected to GitHub yet (one-time provider step):{" "}
-              <code className="bg-muted rounded px-1">npm run create-app</code> — the login appears here afterwards.
+              This instance is not connected to GitHub yet (one-time provider step): from a source checkout run{" "}
+              <code className="bg-muted rounded px-1">pnpm --filter @bpmiq/live-host create-app</code>, in a container
+              pass your GitHub App credentials as environment variables (
+              <a
+                className="underline"
+                href="https://github.com/Miragon/bpm-iq/blob/main/docs/on-prem/github-app-setup.md"
+                target="_blank"
+                rel="noreferrer"
+              >
+                setup guide
+              </a>
+              ) — the login appears here afterwards.
             </p>
           ) : (
             providers.map((p) => (
