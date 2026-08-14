@@ -1,15 +1,21 @@
 /**
- * Side panel for a live .dmn: what is wrong with the decision, and what it
- * would decide — both computed IN THE BROWSER by @bpmiq/decisions, the very
- * module the Live Host answers `analyze_decision` / `simulate_decision` with.
+ * Side panel for a live .dmn — three things, all computed IN THE BROWSER by
+ * @bpmiq/decisions, the very module the Live Host answers `analyze_decision` /
+ * `simulate_decision` / `run_decision_tests` with:
  *
- * That shared library is the whole point of this panel. A DMN's real problems
+ *   findings   what is wrong with the decision without any test data
+ *   scenario   what it would decide for values you type
+ *   tests      the stored `<stem>.tests.yaml` cases, run against the LIVE model
+ *
+ * That shared library is the whole point of the panel. A DMN's real problems
  * are invisible in the editor: every FEEL engine treats a broken expression as
  * "did not match", so a typo looks exactly like a rule that legitimately did
- * not apply. The findings below name it while the model is still being edited,
- * without a round-trip and without waiting for CI — and a scenario tried here
- * gives the same answer as the same scenario through the MCP endpoint or the
- * `pnpm validate` gate, because it is one implementation, not three.
+ * not apply. And the test cases are the team's own answers — being able to see
+ * them go red WHILE editing, rather than in CI after the release PR, is the
+ * difference between a guard rail and a post-mortem.
+ *
+ * Everything here is one implementation, not three: the same run through MCP,
+ * through `pnpm validate` and through this panel cannot disagree.
  */
 import {
   analyzeDecision,
@@ -20,12 +26,22 @@ import {
   type SimulationResult,
   type VariableProfile,
 } from "@bpmiq/decisions";
+import {
+  type CaseOutcome,
+  parseTestSuite,
+  runDecisionTests,
+  type SuiteOutcome,
+  testsPathFor,
+} from "@bpmiq/decisions/tests";
 import { deriveDecision } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Info, Play, ShieldCheck, X, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
+
+import { ApiError, fetchContent } from "@/lib/api";
 
 /** the derived view + its findings, or the reason there are none */
 function useDecision(xml: string, docPath: string) {
@@ -141,11 +157,45 @@ function Outcome({ result }: { result: SimulationResult }) {
   );
 }
 
+function CaseRow({ result }: { result: CaseOutcome }) {
+  const mark = { pass: "✓", fail: "✗", pending: "?" }[result.status];
+  return (
+    <li className="border-b px-3 py-2 text-xs last:border-b-0">
+      <div className="flex gap-2">
+        <span
+          className={
+            result.status === "fail"
+              ? "text-destructive"
+              : result.status === "pass"
+                ? "text-emerald-600"
+                : "text-muted-foreground"
+          }
+        >
+          {mark}
+        </span>
+        <span className="min-w-0 break-words">{result.name}</span>
+      </div>
+      {result.failures.map((f, i) => (
+        <p key={i} className="text-destructive mt-1 pl-4">
+          {f}
+        </p>
+      ))}
+      {result.status === "pending" && (
+        <p className="text-muted-foreground mt-1 pl-4">
+          no expectation — currently produces {JSON.stringify(result.actual.value)}
+        </p>
+      )}
+    </li>
+  );
+}
+
 export function DecisionChecksPanel({
+  repo,
   xml,
   docPath,
   onClose,
 }: {
+  repo: string;
   /** the LIVE document's current content */
   xml: string;
   docPath: string;
@@ -157,6 +207,33 @@ export function DecisionChecksPanel({
 
   const analysis = decision.unparsable ? undefined : decision.analysis;
   const errors = analysis?.findings.filter((f) => f.severity === "ERROR").length ?? 0;
+
+  // The stored suite is an ordinary live document next to the model, so the
+  // panel simply READS it — no dedicated endpoint, no server-side runner. A
+  // decision without cases 404s, which is a normal state, not an error.
+  const testsPath = testsPathFor(docPath);
+  const suiteQuery = useQuery({
+    queryKey: ["decision-tests", repo, testsPath],
+    queryFn: async () => {
+      try {
+        return parseTestSuite((await fetchContent(repo, testsPath)).xml, testsPath);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null; // no suite yet
+        throw e;
+      }
+    },
+  });
+
+  // …and runs it against the LIVE model, so an edit turns a case red HERE,
+  // with the same engine CI will use on the release PR
+  const suiteRun: SuiteOutcome | undefined = useMemo(() => {
+    if (decision.unparsable || !suiteQuery.data) return undefined;
+    try {
+      return runDecisionTests(decision.view, suiteQuery.data);
+    } catch {
+      return undefined;
+    }
+  }, [decision, suiteQuery.data]);
 
   const run = () => {
     if (decision.unparsable) return;
@@ -240,6 +317,43 @@ export function DecisionChecksPanel({
                 <p className="text-muted-foreground px-3 py-1.5 text-xs">
                   Left unset: {result.missingInputs.join(", ")}
                 </p>
+              )}
+            </div>
+
+            <div className="border-t">
+              <div className="flex items-center gap-2 px-3 py-2">
+                <span className="text-sm font-medium">Test cases</span>
+                {suiteRun && (
+                  <Badge variant={suiteRun.failed > 0 ? "destructive" : "success"}>
+                    {suiteRun.failed > 0
+                      ? `${suiteRun.failed} failing`
+                      : `${suiteRun.passed}/${suiteRun.cases.length} pass`}
+                  </Badge>
+                )}
+              </div>
+              {suiteQuery.isLoading && <p className="text-muted-foreground px-3 pb-2 text-xs">Loading…</p>}
+              {suiteQuery.error && (
+                <p className="text-destructive px-3 pb-2 text-xs">{(suiteQuery.error as Error).message}</p>
+              )}
+              {suiteQuery.isSuccess && !suiteQuery.data && (
+                <p className="text-muted-foreground px-3 pb-2 text-xs">
+                  No <code className="font-mono">{testsPath.split("/").pop()}</code> yet — nothing pins this decision's
+                  behaviour.
+                </p>
+              )}
+              {suiteRun && (
+                <>
+                  <ul>
+                    {suiteRun.cases.map((c, i) => (
+                      <CaseRow key={i} result={c} />
+                    ))}
+                  </ul>
+                  {suiteRun.uncoveredRules.length > 0 && (
+                    <p className="text-muted-foreground px-3 py-1.5 text-xs">
+                      No case decides: {suiteRun.uncoveredRules.map((r) => r.split("/").pop()).join(", ")}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </>

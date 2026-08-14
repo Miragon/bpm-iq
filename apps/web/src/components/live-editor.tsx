@@ -459,7 +459,7 @@ export function LiveEditor({
         />
         {isDmn && checksOpen && (
           <Suspense fallback={null}>
-            <DecisionChecksPanel xml={dmnXml} docPath={docPath} onClose={() => setChecksOpen(false)} />
+            <DecisionChecksPanel repo={repo} xml={dmnXml} docPath={docPath} onClose={() => setChecksOpen(false)} />
           </Suspense>
         )}
         {historyOpen && (
