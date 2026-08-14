@@ -542,7 +542,9 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
       safe(async ({ repo, name, folder }: { repo: string; name: string; folder?: string }) => {
         const r = await requireRepo(repo);
         const workspace = await opts.workspaces.ensure(r);
-        return ok({ process: await createProcess(r, workspace, { name, folder }) });
+        const created = await createProcess(r, workspace, { name, folder });
+        console.log(`process created in ${r.fullName} by @${session.user.login} via mcp: ${created.bpmn}`);
+        return ok({ process: created });
       }),
     );
 
@@ -597,6 +599,7 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
               message: c.error,
             });
           }
+          console.log(`content saved: ${r.fullName}/${out.result.path} by @${session.user.login} via mcp`);
           return ok({ ok: true, ...out.result });
         },
       ),
@@ -618,7 +621,9 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
       safe(async ({ repo, name, folder }: { repo: string; name: string; folder?: string }) => {
         const r = await requireRepo(repo);
         const workspace = await opts.workspaces.ensure(r);
-        return ok({ decision: await createDecision(r, workspace, { name, folder }) });
+        const created = await createDecision(r, workspace, { name, folder });
+        console.log(`decision created in ${r.fullName} by @${session.user.login} via mcp: ${created.path}`);
+        return ok({ decision: created });
       }),
     );
 
@@ -675,6 +680,7 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
               message: c.error,
             });
           }
+          console.log(`content saved: ${r.fullName}/${out.result.path} by @${session.user.login} via mcp`);
           return ok({ ok: true, ...out.result });
         },
       ),
@@ -735,6 +741,7 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
               message: out.conflict.error,
             });
           }
+          console.log(`decision tests saved: ${r.fullName}/${out.path} by @${session.user.login} via mcp`);
           return ok({ ok: true, ...out });
         },
       ),
@@ -768,9 +775,17 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
         }) => {
           const r = await requireRepo(repo);
           const provider = opts.providers.get(session.user.provider) ?? opts.github;
-          if (processId) return ok({ release: await release(opts, session, provider, r, processId) });
+          if (processId) {
+            const result = await release(opts, session, provider, r, processId);
+            console.log(`released ${r.fullName}#${processId} by @${result.by} via mcp → ${result.pr}`);
+            return ok({ release: result });
+          }
           if (files && files.length > 0) {
-            return ok({ release: await releaseFiles(opts, session, provider, r, { files, title }) });
+            const result = await releaseFiles(opts, session, provider, r, { files, title });
+            console.log(
+              `released ${r.fullName} (${result.files.length} file(s)) by @${result.by} via mcp → ${result.pr}`,
+            );
+            return ok({ release: result });
           }
           return fail("provide either `processId` or a non-empty `files` array.");
         },
