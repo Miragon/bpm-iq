@@ -85,6 +85,30 @@ export default {
       },
     },
     {
+      name: "mcp-servers-use-the-kit",
+      severity: "error",
+      comment:
+        "The stateless Streamable-HTTP transport is constructed ONCE, in " +
+        "@bpmiq/mcp-kit/mount. A second copy is how packages/mcp and the Live " +
+        "Host's /mcp drifted (one lost the else-res.end(); ADR 0005).",
+      from: { path: "^(apps|packages)/", pathNot: ["^packages/mcp-kit/"] },
+      // the SERVER transport only — client-side streamableHttp (smoke scripts,
+      // future in-repo MCP clients) is not this rule's concern
+      to: { path: "node_modules/@modelcontextprotocol/sdk/.*/server/streamableHttp" },
+    },
+    {
+      name: "mcp-kit-index-stays-browser-safe",
+      severity: "error",
+      comment:
+        "@bpmiq/mcp-kit's '.' entry is imported by the widget bundles — no Node " +
+        "builtins, no SDK there; the transport lives behind ./mount.",
+      from: { path: "^packages/mcp-kit/index\\.ts$" },
+      to: {
+        dependencyTypesNot: ["type-only"],
+        path: ["^(node:)?(fs|fs/promises|http|https|net|tls|path|crypto)$", "node_modules/@modelcontextprotocol/"],
+      },
+    },
+    {
       name: "notations-index-and-derive-stay-browser-safe",
       severity: "error",
       comment:

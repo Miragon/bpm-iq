@@ -17,6 +17,7 @@ COPY apps/web/package.json ./apps/web/
 COPY apps/vscode/package.json ./apps/vscode/
 COPY packages/notations/package.json ./packages/notations/
 COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/mcp-kit/package.json ./packages/mcp-kit/
 COPY packages/cell-protocol/package.json ./packages/cell-protocol/
 COPY packages/github-app/package.json ./packages/github-app/
 COPY packages/http-kit/package.json ./packages/http-kit/
@@ -40,9 +41,10 @@ COPY --from=build /app/packages/notations ./packages/notations
 # tools.ts imports @bpmiq/contracts/todo-anchor (list_todos) — the workspace
 # symlink in node_modules dangles without the real package source
 COPY --from=build /app/packages/contracts ./packages/contracts
-# http.ts imports @bpmiq/http-kit — the workspace symlink in node_modules
-# dangles without the real package source
+# http.ts imports @bpmiq/http-kit and @bpmiq/mcp-kit — the workspace symlinks
+# in node_modules dangle without the real package sources
 COPY --from=build /app/packages/http-kit ./packages/http-kit
+COPY --from=build /app/packages/mcp-kit ./packages/mcp-kit
 COPY --from=build /app/packages/mcp ./packages/mcp
 COPY --from=build /app/process-documentation ./process-documentation
 EXPOSE 8080

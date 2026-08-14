@@ -68,6 +68,9 @@ importers:
       '@bpmiq/live-client':
         specifier: workspace:*
         version: link:../../packages/live-client
+      '@bpmiq/mcp-kit':
+        specifier: workspace:*
+        version: link:../../packages/mcp-kit
       '@bpmiq/notations':
         specifier: workspace:*
         version: link:../../packages/notations
@@ -151,6 +154,9 @@ importers:
       '@bpmiq/live-client':
         specifier: workspace:*
         version: link:../../packages/live-client
+      '@bpmiq/mcp-kit':
+        specifier: workspace:*
+        version: link:../../packages/mcp-kit
       '@bpmiq/notations':
         specifier: workspace:*
         version: link:../../packages/notations
@@ -311,12 +317,31 @@ importers:
       '@bpmiq/http-kit':
         specifier: workspace:*
         version: link:../http-kit
+      '@bpmiq/mcp-kit':
+        specifier: workspace:*
+        version: link:../mcp-kit
       '@bpmiq/notations':
         specifier: workspace:*
         version: link:../notations
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@6.0.3)
+
+  packages/mcp-kit:
+    dependencies:
+      '@bpmiq/http-kit':
+        specifier: workspace:*
+        version: link:../http-kit
+      '@modelcontextprotocol/sdk':
+        specifier: 1.30.0
+        version: 1.30.0(zod@4.4.3)
+    devDependencies:
+      '@types/node':
+        specifier: 26.2.0
+        version: 26.2.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
 
   packages/notations:
     dependencies:

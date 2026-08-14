@@ -24,6 +24,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseAnchor } from "@bpmiq/contracts/todo-anchor";
+import { fail, ok, READ, safe as kitSafe, type ToolResult } from "@bpmiq/mcp-kit";
 import {
   type ContentConfig,
   type DiscoveredProcess,
@@ -48,28 +49,11 @@ const readText = (path: string): string | null => {
   }
 };
 
-// ── Tool result helpers ───────────────────────────────────────────────────────
-const ok = (value: unknown) => ({
-  content: [
-    {
-      type: "text" as const,
-      text: typeof value === "string" ? value : JSON.stringify(value, null, 2),
-    },
-  ],
-});
-const fail = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true });
-type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
-const safe =
-  (fn: (args: any) => unknown) =>
-  async (args: unknown): Promise<ToolResult> => {
-    try {
-      return (await fn(args ?? {})) as ToolResult;
-    } catch (err) {
-      return fail(`Unexpected error: ${(err as Error).message}`);
-    }
-  };
+// ── Tool result codec: @bpmiq/mcp-kit — this zero-auth server prefixes every
+// unexpected throw, unlike the Live Host whose AppErrors speak for themselves
+const safe = (fn: Parameters<typeof kitSafe>[0]) => kitSafe(fn, { prefix: "Unexpected error: " });
 /** every tool here is read-only and repo-local */
-const READ_ONLY = { readOnlyHint: true, openWorldHint: false };
+const READ_ONLY = READ;
 
 // ── Graph analyses (notation-agnostic where possible) ────────────────────────
 

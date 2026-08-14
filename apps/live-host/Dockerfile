@@ -25,6 +25,7 @@ COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/github-app/package.json ./packages/github-app/
 COPY packages/live-client/package.json ./packages/live-client/
 COPY packages/http-kit/package.json ./packages/http-kit/
+COPY packages/mcp-kit/package.json ./packages/mcp-kit/
 COPY packages/validator/package.json ./packages/validator/
 COPY packages/mcp/package.json ./packages/mcp/
 # --frozen-lockfile: install the EXACT versions CI validated (reproducible + closes
@@ -60,6 +61,7 @@ COPY --from=build /app/packages/contracts ./packages/contracts
 COPY --from=build /app/packages/github-app ./packages/github-app
 COPY --from=build /app/packages/live-client ./packages/live-client
 COPY --from=build /app/packages/http-kit ./packages/http-kit
+COPY --from=build /app/packages/mcp-kit ./packages/mcp-kit
 COPY --from=build /app/packages/validator ./packages/validator
 RUN mkdir -p /data
 EXPOSE 8080

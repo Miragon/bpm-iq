@@ -32,13 +32,13 @@ import { roomName } from "@bpmiq/contracts/live";
 import type { TodoWire } from "@bpmiq/contracts/live-host";
 import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
 import { parseTestSuite, type TestCase, testsPathFor } from "@bpmiq/decisions/tests";
-import { readBody, send } from "@bpmiq/http-kit";
+import { fail, ok, READ, safe, WRITE } from "@bpmiq/mcp-kit";
+import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
 import { deriveDecision, deriveProcess } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
 import { checkBpmnXml } from "@bpmiq/validator";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
@@ -83,26 +83,9 @@ export type McpDeps = OverviewDeps &
     wsTickets?: WsTicketStore;
   };
 
-// ── tool result helpers (packages/mcp/tools.ts house style) ──────────────────
-const ok = (value: unknown) => ({
-  content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
-});
-const fail = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true });
-type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
-const safe =
-  // biome/eslint-safe any: the SDK validates args against the zod shape before the handler runs
-  (fn: (args: any) => unknown) =>
-    async (args: unknown): Promise<ToolResult> => {
-      try {
-        return (await fn(args ?? {})) as ToolResult;
-      } catch (err) {
-        // AppErrors from the use-cases carry actionable, English, agent-readable
-        // messages (validation findings, conflict guidance, authz denials)
-        return fail((err as Error).message);
-      }
-    };
-const READ = { readOnlyHint: true, openWorldHint: false };
-const WRITE = { readOnlyHint: false, openWorldHint: false };
+// tool result codec: @bpmiq/mcp-kit — safe() runs WITHOUT a prefix here, the
+// AppErrors from the use-cases carry actionable, agent-readable messages
+// (validation findings, conflict guidance, authz denials)
 
 // ── MCP-App widgets (the embedded modelers) ──────────────────────────────────
 // The single-file HTML files built by apps/web (vite.mcp-app*.config.ts): the
@@ -1043,32 +1026,11 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
   return server;
 }
 
-/** Stateless Streamable HTTP mount: one fresh server + transport per request
- *  (packages/mcp/http.ts pattern). api.ts has already authenticated `session`
- *  and answered non-POST. */
-export async function handleMcp(
-  req: IncomingMessage,
-  res: ServerResponse,
-  opts: McpDeps,
-  session: Session,
-): Promise<void> {
-  const server = createLiveMcpServer(opts, session);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-  res.on("close", () => {
-    void transport.close();
-    void server.close();
+/** Stateless Streamable HTTP mount (@bpmiq/mcp-kit). api.ts has already
+ *  authenticated `session` and answered non-POST. */
+export function handleMcp(req: IncomingMessage, res: ServerResponse, opts: McpDeps, session: Session): Promise<void> {
+  // save_bpmn_xml carries whole models — same body budget as the content PUT
+  return mountStatelessMcp(req, res, createLiveMcpServer(opts, session), {
+    maxBytes: opts.maxDocBytes * 2 + 65_536,
   });
-  try {
-    // save_bpmn_xml carries whole models — same body budget as the content PUT
-    const raw = (await readBody(req, { maxBytes: opts.maxDocBytes * 2 + 65_536 })).toString();
-    const body: unknown = raw ? JSON.parse(raw) : undefined;
-    await server.connect(transport);
-    await transport.handleRequest(req, res, body);
-  } catch (e) {
-    if (!res.headersSent) {
-      send(res, 400, { jsonrpc: "2.0", error: { code: -32700, message: (e as Error).message }, id: null });
-    } else {
-      res.end();
-    }
-  }
 }

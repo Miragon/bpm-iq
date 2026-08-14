@@ -13,6 +13,7 @@
     "@bpmiq/contracts": "workspace:*",
     "@bpmiq/decisions": "workspace:*",
     "@bpmiq/live-client": "workspace:*",
+    "@bpmiq/mcp-kit": "workspace:*",
     "@bpmiq/notations": "workspace:*",
     "@bpmiq/ui-kit": "workspace:*",
     "@emaarco/dmn-js-simulation": "0.2.0",

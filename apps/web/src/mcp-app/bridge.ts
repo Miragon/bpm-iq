@@ -17,6 +17,7 @@
  */
 import type { ContentWire, PutContentResultWire, TodoElementWire, TodoWire } from "@bpmiq/contracts/live-host";
 import type { CaseOutcome, SuiteOutcome, TestCase, TestSuite } from "@bpmiq/decisions/tests";
+import { unwrapToolResult } from "@bpmiq/mcp-kit";
 import { App } from "@modelcontextprotocol/ext-apps";
 
 export interface BootConfig {
@@ -68,12 +69,10 @@ export function makeApp(): App {
 }
 
 /** one tool call → parsed JSON payload; tool `isError` becomes a throw with
- *  the server's agent-readable message (the widget shows it verbatim) */
+ *  the server's agent-readable message (the widget shows it verbatim) —
+ *  decoding is the shared @bpmiq/mcp-kit codec, the inverse of the server's ok() */
 async function call<T>(app: App, name: string, args: Record<string, unknown>): Promise<T> {
-  const result = await app.callServerTool({ name, arguments: args });
-  const text = result.content?.find((c): c is { type: "text"; text: string } => c.type === "text")?.text ?? "";
-  if (result.isError) throw new Error(text || `${name} failed`);
-  return JSON.parse(text) as T;
+  return unwrapToolResult<T>(await app.callServerTool({ name, arguments: args }), name);
 }
 
 export const getBpmnXml = (app: App, ref: ProcessRef): Promise<ContentWire> => call(app, "get_bpmn_xml", { ...ref });
@@ -141,13 +140,8 @@ export const mintWsTicket = (app: App, ref: ProcessRef): Promise<WsTicket> =>
 
 /** the SDK answers an unregistered tool with "Tool <name> not found" — that is
  *  a MISSING CAPABILITY (no tracker configured, or the read-only surface), not
- *  a failure to report. Both markers must match: a tool's own "… not found"
- *  message (an unknown process, say) is a real error and must not silently
- *  disable a feature. */
-export const isMissingTool = (err: unknown, tool: string): boolean => {
-  const message = err instanceof Error ? err.message : String(err);
-  return message.includes(tool) && /not found/i.test(message);
-};
+ *  a failure to report. The predicate is the shared @bpmiq/mcp-kit one. */
+export { isMissingTool } from "@bpmiq/mcp-kit";
 
 /** OPEN todos of ONE process (the widget always scopes to the open document) */
 export const listTodos = (app: App, ref: ProcessRef): Promise<{ todos: TodoWire[] }> =>
