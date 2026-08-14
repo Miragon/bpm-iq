@@ -9,7 +9,7 @@
  * Zero third-party deps (global fetch only). Base URLs are parameters so the
  * same code serves github.com, GitHub Enterprise, and the offline test stub.
  */
-import type { GitHubApi } from "./index.ts";
+import { type GitHubApi, tokenRest } from "./index.ts";
 
 /** OAuth client credentials + the WEB base URL (authorize/token endpoints). */
 export interface OAuthApp {
@@ -95,13 +95,7 @@ export async function refreshGrant(app: OAuthApp, refreshToken: string): Promise
 
 /** Fetch the authenticated user's identity with their token (GET /user). */
 export async function fetchUser(api: GitHubApi, token: string): Promise<OAuthUser> {
-  const res = await fetch(`${api.apiUrl}/user`, {
-    headers: {
-      accept: "application/vnd.github+json",
-      authorization: `Bearer ${token}`,
-      "user-agent": api.userAgent,
-    },
-  });
+  const res = await tokenRest(token, api, "/user");
   if (!res.ok) throw new Error(`GitHub /user failed: ${res.status}`);
   const u = (await res.json()) as { login: string; name?: string; avatar_url?: string };
   return { login: u.login, name: u.name ?? u.login, avatarUrl: u.avatar_url ?? null, provider: "github" };

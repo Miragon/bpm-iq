@@ -14,7 +14,7 @@
  * implement the same contract against their own issue APIs.
  */
 import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
-import { GitHubHttpError, paginate } from "@bpmiq/github-app";
+import { GitHubHttpError, paginate, tokenRest } from "@bpmiq/github-app";
 import { AppError } from "@bpmiq/http-kit";
 
 import type { IssueTracker, Todo, TodoInput } from "../../ports/issue-tracker.ts";
@@ -131,17 +131,10 @@ function issuesPermissionError(repoFullName: string): AppError {
 
 export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
   const api = deps.apiUrl.replace(/\/$/, "");
+  const ghApi = githubApi(api);
 
-  const rest = async (token: string, path: string, init: RequestInit = {}): Promise<Response> =>
-    fetch(`${api}${path}`, {
-      ...init,
-      headers: {
-        accept: "application/vnd.github+json",
-        authorization: `Bearer ${token}`,
-        "user-agent": "bpm-live-host",
-        ...(init.headers ?? {}),
-      },
-    });
+  const rest = (token: string, path: string, init: RequestInit = {}): Promise<Response> =>
+    tokenRest(token, ghApi, path, init);
 
   /** read the error body and throw — mapping the missing-permission 403 to an AppError */
   async function raise(res: Response, repoFullName: string, what: string): Promise<never> {
@@ -212,7 +205,7 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
       const path = `/repos/${repoFullName}/issues?state=open&labels=${encodeURIComponent(labels)}&per_page=100`;
       let issues: GitHubIssue[];
       try {
-        issues = (await paginate(githubApi(api), path, { token })) as GitHubIssue[];
+        issues = (await paginate(ghApi, path, { token })) as GitHubIssue[];
       } catch (e) {
         // paginate throws GitHubHttpError with the response status/body attached
         if (e instanceof GitHubHttpError && e.status === 403 && e.body.includes("Resource not accessible")) {
