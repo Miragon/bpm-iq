@@ -37,9 +37,10 @@ import { updateText } from "@bpmiq/live-client/text";
 import { checkBpmnXml, checkDmnXml, type Finding } from "@bpmiq/validator";
 import type * as Y from "yjs";
 
-import { type RegistryLookup, splitRoom, toDiskPath, type WorkspaceEnsure } from "../domain/rooms.ts";
+import { type RegistryLookup, toDiskPath, type WorkspaceEnsure } from "../domain/rooms.ts";
 import { discoverDecisions, discoverProcesses, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
+import { modelPath } from "./model-path.ts";
 
 /** the minimal direct-connection surface (structural — no @hocuspocus import) */
 export interface DirectDoc {
@@ -69,7 +70,7 @@ export function baseVersionOf(content: string): string {
 
 /** the live content of one model file + its concurrency token */
 export async function getContent(opts: ContentDeps, repo: ConnectedRepo, path: string): Promise<ContentWire> {
-  const safePath = modelPath(opts, repo, path);
+  const safePath = modelPath(opts.registry, repo, path, "content/invalid-path");
   await assertOnDisk(opts, repo, safePath);
   let out: ContentWire | undefined;
   await withDoc(opts, repo, safePath, async (conn) => {
@@ -89,7 +90,7 @@ export async function putContent(
   path: string,
   body: PutContentBody,
 ): Promise<PutOutcome> {
-  const safePath = modelPath(opts, repo, path);
+  const safePath = modelPath(opts.registry, repo, path, "content/invalid-path");
   if (typeof body?.xml !== "string") {
     throw new AppError("content/xml-required", "body.xml must be a string", { status: 400, expose: true });
   }
@@ -186,24 +187,6 @@ async function lintModel(workspace: string, safePath: string, xml: string): Prom
   }
   if (safePath.endsWith(".dmn")) return checkDmnXml(xml, { file: safePath }).findings;
   return undefined;
-}
-
-/** validate `path` through the live-room gate (splitRoom) against the ALREADY
- *  authorized repo — same pattern as history.ts modelPath */
-function modelPath(opts: ContentDeps, repo: ConnectedRepo, path: string): string {
-  let split: { repo: ConnectedRepo; path: string };
-  try {
-    split = splitRoom(roomName(repo.fullName, path), opts.registry);
-  } catch (e) {
-    throw new AppError("content/invalid-path", (e as Error).message, { status: 400, expose: true });
-  }
-  if (split.repo.fullName !== repo.fullName) {
-    throw new AppError("content/invalid-path", `path resolves outside ${repo.fullName}: ${path}`, {
-      status: 400,
-      expose: true,
-    });
-  }
-  return split.path;
 }
 
 /** pre-flight: content repo + file exists (typed errors BEFORE any doc work).

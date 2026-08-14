@@ -14,9 +14,9 @@
  * therefore created scaffold-style (a guarded direct write into the workspace
  * tree), after which every further save is a normal compare-and-set.
  */
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import {
   parseTestSuite,
@@ -32,6 +32,7 @@ import type { DerivedDecision } from "@bpmiq/notations/derive";
 
 import type { ConnectedRepo } from "../repos/registry.ts";
 import { baseVersionOf, type ContentDeps, getContent, putContent, type PutOutcome } from "./content.ts";
+import { assertRealInsideWorkspace } from "./workspace-paths.ts";
 
 export type DecisionTestsDeps = ContentDeps;
 
@@ -122,8 +123,8 @@ export async function saveTestsFor(
 
   if (!exists) {
     // first write: create it in the workspace tree (a live doc must exist on
-    // disk before it can be opened), with the same symlink guard as scaffolding
-    assertInsideWorkspace(file, workspace, path);
+    // disk before it can be opened), through the shared scaffolding symlink guard
+    assertRealInsideWorkspace(file, workspace, path, "decision-tests/outside-workspace");
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, yaml, "utf8");
     // the token the caller needs for its NEXT save — the file is not open as a
@@ -156,18 +157,5 @@ async function storedDecision(
     return decision ? { decision } : {};
   } catch {
     return {};
-  }
-}
-
-function assertInsideWorkspace(target: string, workspace: string, what: string): void {
-  let probe = target;
-  while (!existsSync(probe)) probe = dirname(probe);
-  const real = realpathSync(probe);
-  const realWorkspace = realpathSync(workspace);
-  if (real !== realWorkspace && !real.startsWith(realWorkspace + sep)) {
-    throw new AppError("decision-tests/outside-workspace", `${what} escapes the workspace (symlink)`, {
-      status: 400,
-      expose: true,
-    });
   }
 }

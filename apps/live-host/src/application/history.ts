@@ -6,13 +6,13 @@
  * splitRoom — the SAME gate the live rooms use, so history serves exactly the
  * shareable model files and nothing else (.git, dotfiles, escapes).
  */
-import { roomName } from "@bpmiq/contracts/live";
 import type { FileAtCommitWire, FileCommitWire } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 
 import { isCommitSha } from "../domain/file-history.ts";
-import { type RegistryLookup, splitRoom } from "../domain/rooms.ts";
+import type { RegistryLookup } from "../domain/rooms.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
+import { modelPath } from "./model-path.ts";
 
 export interface HistoryDeps {
   registry: RegistryLookup;
@@ -32,7 +32,7 @@ export async function fileHistory(
   path: string,
   limitRaw: string | null,
 ): Promise<FileCommitWire[]> {
-  const safePath = modelPath(opts, repo, path);
+  const safePath = modelPath(opts.registry, repo, path, "history/invalid-path");
   const limit = Math.min(200, Math.max(1, Math.floor(Number(limitRaw ?? "")) || 50));
   await opts.workspaces.ensure(repo);
   return opts.workspaces.fileHistory(repo, safePath, limit);
@@ -45,7 +45,7 @@ export async function fileAtCommit(
   path: string,
   sha: string,
 ): Promise<FileAtCommitWire> {
-  const safePath = modelPath(opts, repo, path);
+  const safePath = modelPath(opts.registry, repo, path, "history/invalid-path");
   if (!isCommitSha(sha)) {
     throw new AppError("history/invalid-sha", `not a commit sha: ${sha}`, { status: 400, expose: true });
   }
@@ -58,23 +58,4 @@ export async function fileAtCommit(
     });
   }
   return { sha, path: safePath, content };
-}
-
-/** validate `path` through the live-room gate (splitRoom) against the ALREADY
- *  authorized repo — a path that resolves to a different registry entry (GitLab
- *  subgroup prefix collisions) is rejected, not silently re-scoped */
-function modelPath(opts: HistoryDeps, repo: ConnectedRepo, path: string): string {
-  let split: { repo: ConnectedRepo; path: string };
-  try {
-    split = splitRoom(roomName(repo.fullName, path), opts.registry);
-  } catch (e) {
-    throw new AppError("history/invalid-path", (e as Error).message, { status: 400, expose: true });
-  }
-  if (split.repo.fullName !== repo.fullName) {
-    throw new AppError("history/invalid-path", `path resolves outside ${repo.fullName}: ${path}`, {
-      status: 400,
-      expose: true,
-    });
-  }
-  return split.path;
 }
