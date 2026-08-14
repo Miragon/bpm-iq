@@ -82,6 +82,7 @@ import {
   sessionCookie,
   type SessionStore,
 } from "../adapters/sqlite/sessions.ts";
+import { authorizeRepo } from "../application/authz.ts";
 import { type DirectDoc, getContent, putContent } from "../application/content.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
 import { listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
@@ -294,22 +295,21 @@ export function startApi(port: number, opts: ApiOptions): Server {
     ...(opts.oidc!.scopes?.length ? { scopes_supported: opts.oidc!.scopes } : {}),
   });
 
-  /** resolve + authorize a repo route segment; sends the error response itself */
+  /** resolve + authorize a repo route segment (the shared application-layer
+   *  gate); sends the error response itself — NOT via the catch-all, which
+   *  would log every ordinary 403 as a 500 and re-run sessionOf */
   const repoOf = async (
     res: ServerResponse,
     session: Session,
     fullName: string,
   ): Promise<ConnectedRepo | undefined> => {
-    const repo = opts.registry.get(fullName);
-    if (!repo) {
-      send(res, 404, { error: `not a connected repository: ${fullName}` });
+    try {
+      return await authorizeRepo(opts, session, fullName);
+    } catch (e) {
+      const err = e as AppError;
+      send(res, err.status ?? 500, { error: err.message });
       return undefined;
     }
-    if (session.id !== "dev" && !(await opts.access.canWrite(session, repo))) {
-      send(res, 403, { error: `@${session.user.login}: no write access to ${repo.fullName}` });
-      return undefined;
-    }
-    return repo;
   };
 
   const httpServer = createServer(async (req, res) => {

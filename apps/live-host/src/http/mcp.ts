@@ -42,6 +42,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
+import { authorizeRepo } from "../application/authz.ts";
 import { type ContentDeps, getContent, putContent } from "../application/content.ts";
 import { readDecisionTests, runTestsFor, saveTestsFor } from "../application/decision-tests.ts";
 import {
@@ -179,16 +180,9 @@ const PROVIDED = "<provided xml>";
 export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer {
   const server = new McpServer({ name: "bpmiq-live", version: "1.0.0" });
 
-  /** registry 404 + per-repo write authz — the tool-level mirror of api.ts
-   *  repoOf (throws instead of sending; same dev bypass) */
-  const requireRepo = async (fullName: string): Promise<ConnectedRepo> => {
-    const repo = opts.registry.get(fullName);
-    if (!repo) throw new Error(`not a connected repository: ${fullName}`);
-    if (session.id !== "dev" && !(await opts.access.canWrite(session, repo))) {
-      throw new Error(`@${session.user.login}: no write access to ${repo.fullName}`);
-    }
-    return repo;
-  };
+  /** registry 404 + per-repo write authz — the shared application-layer gate;
+   *  safe() surfaces the AppError message to the agent verbatim */
+  const requireRepo = (fullName: string): Promise<ConnectedRepo> => authorizeRepo(opts, session, fullName);
 
   const resolveBpmnPath = async (repo: ConnectedRepo, id?: string, path?: string): Promise<string> => {
     if (path) return path;
