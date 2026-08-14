@@ -45,6 +45,7 @@ import type { Session } from "../adapters/sqlite/sessions.ts";
 import { authorizeRepo } from "../application/authz.ts";
 import { type ContentDeps, getContent, putContent } from "../application/content.ts";
 import { readDecisionTests, runTestsFor, saveTestsFor } from "../application/decision-tests.ts";
+import { findDecisionPath, findProcessPath } from "../application/find-model.ts";
 import {
   decisionUsers,
   listChanges,
@@ -187,21 +188,14 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
   const resolveBpmnPath = async (repo: ConnectedRepo, id?: string, path?: string): Promise<string> => {
     if (path) return path;
     if (!id) throw new Error("provide either `id` or `path`.");
-    const workspace = await opts.workspaces.ensure(repo);
-    const procs = await listProcesses(opts, repo, workspace);
-    const hit = procs.find((p) => p.id === id);
-    if (!hit) throw new Error(`process '${id}' not found in ${repo.fullName} (use list_processes).`);
-    return hit.bpmn;
+    return findProcessPath(opts, repo, id);
   };
 
   /** the .dmn sibling of resolveBpmnPath (id = decision file stem) */
   const resolveDmnPath = async (repo: ConnectedRepo, id?: string, path?: string): Promise<string> => {
     if (path) return path;
     if (!id) throw new Error("provide either `id` or `path`.");
-    const workspace = await opts.workspaces.ensure(repo);
-    const hit = (await listDecisions(opts, repo, workspace)).find((d) => d.id === id);
-    if (!hit) throw new Error(`decision '${id}' not found in ${repo.fullName} (use list_decisions).`);
-    return hit.path;
+    return findDecisionPath(opts, repo, id);
   };
 
   /** parse a .dmn into the decision view — one message for every "not DMN" case.
