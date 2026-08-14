@@ -1,107 +1,169 @@
 cases:
-  - name: Kind bekommt Kindermenü
+  - name: "Winter: Omnivor bekommt Käsefondue"
     given:
+      allergie: keine
+      alter: 50
+      ernaehrung: omnivor
+      jahreszeit: winter
+    expect:
+      value: Käsefondue
+      rules:
+        - Rule_winter
+  - name: "Winter schlägt die Veganregel: auch Veganer bekommen Käsefondue"
+    given:
+      allergie: keine
+      alter: 34
+      ernaehrung: vegan
+      jahreszeit: winter
+    expect:
+      value: Käsefondue
+      rules:
+        - Rule_winter
+  - name: Winter schlägt das Kindermenü
+    given:
+      allergie: keine
       alter: 8
       ernaehrung: omnivor
+      jahreszeit: winter
+    expect:
+      value: Käsefondue
+      rules:
+        - Rule_winter
+  - name: Winter schlägt die Glutenregel
+    given:
+      allergie: gluten
+      alter: 45
+      ernaehrung: vegetarisch
+      jahreszeit: winter
+    expect:
+      value: Käsefondue
+      rules:
+        - Rule_winter
+  - name: Kind bekommt Kindermenü
+    given:
       allergie: keine
+      alter: 8
+      ernaehrung: omnivor
+      jahreszeit: sommer
     expect:
       value: "Kindermenü: Penne mit Tomatensauce"
       rules:
         - Rule_kind
   - name: Veganes Kind bekommt trotzdem das Kindermenü
     given:
+      allergie: keine
       alter: 8
       ernaehrung: vegan
-      allergie: keine
+      jahreszeit: sommer
     expect:
       value: "Kindermenü: Penne mit Tomatensauce"
       rules:
         - Rule_kind
   - name: "Grenzfall: mit genau 12 kein Kindermenü mehr"
     given:
+      allergie: keine
       alter: 12
       ernaehrung: omnivor
-      allergie: keine
+      jahreszeit: sommer
     expect:
       value: Kalbsrücken mit Serviettenknödel
       rules:
         - Rule_omnivor
   - name: Veganer mit Nussallergie bekommt Curry ohne Cashews
     given:
+      allergie: nuss
       alter: 34
       ernaehrung: vegan
-      allergie: nuss
+      jahreszeit: sommer
     expect:
       value: Gemüsecurry mit Reis
       rules:
         - Rule_vegan_nuss
   - name: Veganer ohne Allergie
     given:
+      allergie: keine
       alter: 34
       ernaehrung: vegan
-      allergie: keine
+      jahreszeit: sommer
     expect:
       value: Gemüsecurry mit Reis und Cashewkernen
       rules:
         - Rule_vegan
   - name: "Veganer mit Glutenallergie: Curry ist ohnehin glutenfrei"
     given:
+      allergie: gluten
       alter: 34
       ernaehrung: vegan
-      allergie: gluten
+      jahreszeit: sommer
     expect:
       value: Gemüsecurry mit Reis und Cashewkernen
       rules:
         - Rule_vegan
   - name: Vegetarier mit Glutenallergie
     given:
+      allergie: gluten
       alter: 45
       ernaehrung: vegetarisch
-      allergie: gluten
+      jahreszeit: herbst
     expect:
       value: Steinpilzrisotto
       rules:
         - Rule_vegetarisch_gluten
   - name: Vegetarier ohne Allergie
     given:
+      allergie: keine
       alter: 45
       ernaehrung: vegetarisch
-      allergie: keine
+      jahreszeit: herbst
     expect:
       value: Spinatknödel mit Salbeibutter
       rules:
         - Rule_vegetarisch
   - name: Omnivor mit Glutenallergie bekommt Gratin statt Knödel
     given:
+      allergie: gluten
       alter: 50
       ernaehrung: omnivor
-      allergie: gluten
+      jahreszeit: fruehling
     expect:
       value: Rinderfilet mit Kartoffelgratin
       rules:
         - Rule_omnivor_gluten
   - name: Omnivor ohne Allergie
     given:
+      allergie: keine
       alter: 50
       ernaehrung: omnivor
-      allergie: keine
+      jahreszeit: fruehling
     expect:
       value: Kalbsrücken mit Serviettenknödel
       rules:
         - Rule_omnivor
   - name: Unbekannte Ernährungsform fällt durch alle Regeln
     given:
+      allergie: keine
       alter: 30
       ernaehrung: pescetarisch
-      allergie: keine
+      jahreszeit: sommer
     expect:
       value: null
   - name: Test
     given:
+      allergie: keine
       alter: 45
       ernaehrung: vegetarisch
-      allergie: keine
+      jahreszeit: sommer
     expect:
       value: Spinatknödel mit Salbeibutter
       rules:
         - Rule_vegetarisch
+  - name: Omnivor Test
+    given:
+      allergie: gluten
+      alter: "38"
+      ernaehrung: omnivor
+      jahreszeit: sommer
+    expect:
+      value: Rinderfilet mit Kartoffelgratin
+      rules:
+        - Rule_omnivor_gluten

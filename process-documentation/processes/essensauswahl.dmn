@@ -2,6 +2,14 @@
 <definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" id="Definitions_essensauswahl" name="Essensauswahl" namespace="http://bpmiq.dev/dmn/essensauswahl">
   <decision id="essensauswahl" name="Essensauswahl">
     <decisionTable id="DecisionTable_essensauswahl" hitPolicy="FIRST">
+      <input id="Input_jahreszeit" label="Jahreszeit">
+        <inputExpression id="InputExpression_jahreszeit" typeRef="string">
+          <text>jahreszeit</text>
+        </inputExpression>
+        <inputValues id="InputValues_jahreszeit">
+          <text>"fruehling","sommer","herbst","winter"</text>
+        </inputValues>
+      </input>
       <input id="Input_alter" label="Alter">
         <inputExpression id="InputExpression_alter" typeRef="number">
           <text>alter</text>
@@ -24,7 +32,27 @@
         </inputValues>
       </input>
       <output id="Output_gericht" label="Gericht" name="gericht" typeRef="string" />
+      <rule id="Rule_winter">
+        <inputEntry id="IE_winter_jahreszeit">
+          <text>"winter"</text>
+        </inputEntry>
+        <inputEntry id="IE_winter_alter">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_winter_ernaehrung">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_winter_allergie">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="OE_winter_gericht">
+          <text>"Käsefondue"</text>
+        </outputEntry>
+      </rule>
       <rule id="Rule_kind">
+        <inputEntry id="IE_kind_jahreszeit">
+          <text></text>
+        </inputEntry>
         <inputEntry id="IE_kind_alter">
           <text>&lt; 12</text>
         </inputEntry>
@@ -39,6 +67,9 @@
         </outputEntry>
       </rule>
       <rule id="Rule_vegan_nuss">
+        <inputEntry id="IE_vegan_nuss_jahreszeit">
+          <text></text>
+        </inputEntry>
         <inputEntry id="IE_vegan_nuss_alter">
           <text></text>
         </inputEntry>
@@ -53,6 +84,9 @@
         </outputEntry>
       </rule>
       <rule id="Rule_vegan">
+        <inputEntry id="IE_vegan_jahreszeit">
+          <text></text>
+        </inputEntry>
         <inputEntry id="IE_vegan_alter">
           <text></text>
         </inputEntry>
@@ -67,6 +101,9 @@
         </outputEntry>
       </rule>
       <rule id="Rule_vegetarisch_gluten">
+        <inputEntry id="IE_veg_gluten_jahreszeit">
+          <text></text>
+        </inputEntry>
         <inputEntry id="IE_veg_gluten_alter">
           <text></text>
         </inputEntry>
@@ -81,6 +118,9 @@
         </outputEntry>
       </rule>
       <rule id="Rule_vegetarisch">
+        <inputEntry id="IE_veg_jahreszeit">
+          <text></text>
+        </inputEntry>
         <inputEntry id="IE_veg_alter">
           <text></text>
         </inputEntry>
@@ -95,6 +135,9 @@
         </outputEntry>
       </rule>
       <rule id="Rule_omnivor_gluten">
+        <inputEntry id="IE_omni_gluten_jahreszeit">
+          <text></text>
+        </inputEntry>
         <inputEntry id="IE_omni_gluten_alter">
           <text></text>
         </inputEntry>
@@ -109,6 +152,9 @@
         </outputEntry>
       </rule>
       <rule id="Rule_omnivor">
+        <inputEntry id="IE_omni_jahreszeit">
+          <text></text>
+        </inputEntry>
         <inputEntry id="IE_omni_alter">
           <text></text>
         </inputEntry>
