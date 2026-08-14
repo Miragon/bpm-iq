@@ -16,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
+import { decisionRefOf } from "@bpmiq/notations/extract";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 export type Severity = "ERROR" | "WARN";
@@ -127,13 +128,11 @@ function collectContainers(
         if (tag === "boundaryEvent") out.boundaries.set(id, rec["@_attachedToRef"] ?? "");
         if (tag === "callActivity" && rec["@_calledElement"]) out.called.push(rec["@_calledElement"]);
         if (tag === "businessRuleTask") {
-          // no standard BPMN attribute for this — read every engine's spelling
-          // (prefixes are stripped by the parser), same shape as extract.ts
-          const extension = asArray(
-            (node as Record<string, any>).extensionElements?.calledDecision as Record<string, string>[],
-          )[0]?.["@_decisionId"];
-          const ref = rec["@_decisionRef"] ?? extension ?? rec["@_calledDecision"];
-          if (ref) out.decides.push({ id, ref: String(ref) });
+          // no standard BPMN attribute for this — the spelling list is owned by
+          // @bpmiq/notations/extract, so this check reads exactly the links the
+          // platform follows (a private re-list drifted once: calledElement)
+          const ref = decisionRefOf(node as Record<string, unknown>);
+          if (ref) out.decides.push({ id, ref });
         }
         // an event sub-process is triggered by its own start event, never by a
         // sequence flow from the parent — exempt it from parent reachability

@@ -208,8 +208,9 @@ failing case.
 
 A `businessRuleTask` names the decision it delegates to — the platform reads
 `decisionRef` (Camunda 7), `<zeebe:calledDecision decisionId>` (Camunda 8) and a plain
-`calledDecision`, and in every spelling the value is the **`.dmn` file stem**, exactly
-like `callActivity`'s `calledElement` is a `.bpmn` file stem. From that one link:
+`calledDecision` or `calledElement` (hand-written models), and in every spelling the
+value is the **`.dmn` file stem**, exactly like `callActivity`'s `calledElement` is a
+`.bpmn` file stem. From that one link:
 
 - `get_process` lists the decisions a process delegates to (and each step carries its
   `decides`),

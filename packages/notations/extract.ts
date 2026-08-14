@@ -76,8 +76,12 @@ const BPMN_FLOW_NODE_TAGS = new Set([
  *
  * The platform contract is the same as for callActivity: the value names the
  * DECISION FILE STEM, so the link resolves against the repo's .dmn files.
+ *
+ * Exported as THE spelling list: the validator's link-integrity check must
+ * read exactly what the platform follows, or a spelling becomes a link that
+ * get_process reports and no check ever verifies (that drift shipped once).
  */
-function decisionRefOf(task: Record<string, any>): string | undefined {
+export function decisionRefOf(task: Record<string, any>): string | undefined {
   const called = task.extensionElements?.calledDecision;
   const fromExtension = asArray(called as Record<string, string>[])[0]?.["@_decisionId"];
   const ref =
