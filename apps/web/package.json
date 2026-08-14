@@ -19,26 +19,26 @@
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/react-query": "5.101.4",
-    "@tanstack/react-router": "1.170.18",
+    "@tanstack/react-router": "1.170.25",
     "@tanstack/react-table": "8.21.3",
     "bpmn-js": "18.22.1",
     "bpmn-js-differ": "3.2.0",
     "dmn-js": "17.10.1",
-    "lucide-react": "1.27.0",
+    "lucide-react": "1.30.0",
     "monaco-editor": "0.55.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "sonner": "2.0.7",
+    "sonner": "2.0.8",
     "tailwindcss": "4.3.3",
     "y-monaco": "0.1.6",
-    "yjs": "13.6.31",
+    "yjs": "13.6.32",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "6.0.5",
-    "vite": "8.1.5",
+    "vite": "8.2.1",
     "vite-plugin-singlefile": "2.3.3"
   }
 }
