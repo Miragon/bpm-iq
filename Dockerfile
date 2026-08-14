@@ -16,6 +16,7 @@ COPY apps/live-host/package.json ./apps/live-host/
 COPY apps/web/package.json ./apps/web/
 COPY apps/vscode/package.json ./apps/vscode/
 COPY packages/notations/package.json ./packages/notations/
+COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/cell-protocol/package.json ./packages/cell-protocol/
 COPY packages/github-app/package.json ./packages/github-app/
 COPY packages/http-kit/package.json ./packages/http-kit/

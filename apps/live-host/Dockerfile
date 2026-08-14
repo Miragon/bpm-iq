@@ -17,6 +17,7 @@ COPY apps/live-host/package.json ./apps/live-host/
 COPY apps/web/package.json ./apps/web/
 COPY apps/vscode/package.json ./apps/vscode/
 COPY packages/notations/package.json ./packages/notations/
+COPY packages/decisions/package.json ./packages/decisions/
 COPY packages/ui-kit/package.json ./packages/ui-kit/
 COPY packages/api-client/package.json ./packages/api-client/
 COPY packages/cell-protocol/package.json ./packages/cell-protocol/
@@ -53,6 +54,7 @@ COPY --from=build /app/pnpm-workspace.yaml /app/.npmrc /app/package.json ./
 COPY --from=build /app/apps/live-host ./apps/live-host
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=build /app/packages/notations ./packages/notations
+COPY --from=build /app/packages/decisions ./packages/decisions
 COPY --from=build /app/packages/cell-protocol ./packages/cell-protocol
 COPY --from=build /app/packages/contracts ./packages/contracts
 COPY --from=build /app/packages/github-app ./packages/github-app
