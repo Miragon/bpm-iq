@@ -3,6 +3,7 @@ import { api } from "@bpmiq/api-client";
 import type {
   AppConfig,
   ChangedFileWire,
+  ContentWire,
   CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
@@ -28,6 +29,7 @@ export { ApiError } from "@bpmiq/api-client";
 export type {
   AppConfig,
   ChangedFileWire,
+  ContentWire,
   CreateDecisionBody,
   CreateFolderBody,
   CreateProcessBody,
@@ -104,6 +106,12 @@ export const releaseFiles = (repo: string, body: ReleaseFilesBody): Promise<Rele
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+/** the LIVE content of any editable document in the repo, plus its baseVersion.
+ *  Used for SIBLING files the editor does not itself have open — a decision's
+ *  `<stem>.tests.yaml`, say. Throws ApiError 404 when the file does not exist. */
+export const fetchContent = (repo: string, path: string): Promise<ContentWire> =>
+  api(`/api/repos/${repo}/content?path=${encodeURIComponent(path)}`);
+
 /** the backend's hard cap on history length — a full response means truncation */
 export const HISTORY_LIMIT = 200;
 /** default-branch commits touching one model file, newest first */

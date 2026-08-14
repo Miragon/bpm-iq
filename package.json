@@ -12,7 +12,7 @@
     "preinstall": "npx only-allow pnpm",
     "live-host": "pnpm --filter @bpmiq/live-host start",
     "web:dev": "pnpm --filter @bpmiq/web dev",
-    "validate": "node packages/validator/src/cli.ts --root .",
+    "validate": "node packages/validator/src/cli.ts --root . && node packages/decisions/cli.ts --root .",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",

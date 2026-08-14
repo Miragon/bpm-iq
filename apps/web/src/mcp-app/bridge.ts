@@ -16,6 +16,7 @@
  * actionable).
  */
 import type { ContentWire, PutContentResultWire, TodoElementWire, TodoWire } from "@bpmiq/contracts/live-host";
+import type { CaseOutcome, SuiteOutcome, TestCase, TestSuite } from "@bpmiq/decisions/tests";
 import { App } from "@modelcontextprotocol/ext-apps";
 
 export interface BootConfig {
@@ -84,6 +85,46 @@ export const validateBpmn = (app: App, xml: string, ref: ProcessRef): Promise<Va
  *  never block; the strict default stays for agent saves */
 export const saveBpmnXml = (app: App, ref: ProcessRef, xml: string, baseVersion: string): Promise<SaveResult> =>
   call(app, "save_bpmn_xml", { repo: ref.repo, path: ref.path, xml, baseVersion, lint: "warn" });
+
+// ── DMN decisions (the decision widget) ─────────────────────────────────────
+// The wire shapes below are the LIB's own types (@bpmiq/decisions, isomorphic —
+// the widget runs the very same module the Live Host answers with), so a server
+// change breaks the build here instead of drifting silently. Only the tool
+// envelope (`exists`, `path`) is local: it belongs to mcp.ts, not to the suite.
+
+export const getDmnXml = (app: App, ref: ProcessRef): Promise<ContentWire> => call(app, "get_dmn_xml", { ...ref });
+
+/** lint:"warn" — same autosave trust level as the BPMN widget */
+export const saveDmnXml = (app: App, ref: ProcessRef, xml: string, baseVersion: string): Promise<SaveResult> =>
+  call(app, "save_dmn_xml", { repo: ref.repo, path: ref.path, xml, baseVersion, lint: "warn" });
+
+/** one case of `<decision>.tests.yaml` */
+export type DecisionTestCase = TestCase;
+export type CaseOutcomeWire = CaseOutcome;
+export type SuiteRunWire = SuiteOutcome;
+
+export interface StoredTestsWire {
+  exists: boolean;
+  path: string;
+  baseVersion?: string;
+  suite?: TestSuite;
+}
+
+export const runDecisionTests = (app: App, ref: ProcessRef): Promise<SuiteRunWire> =>
+  call(app, "run_decision_tests", { repo: ref.repo, path: ref.path });
+
+export const getDecisionTests = (app: App, ref: ProcessRef): Promise<StoredTestsWire> =>
+  call(app, "get_decision_tests", { repo: ref.repo, path: ref.path });
+
+/** write the suite; `record` freezes the current behaviour of cases without an
+ *  expectation — how "capture this scenario as a test" is implemented */
+export const saveDecisionTests = (
+  app: App,
+  ref: ProcessRef,
+  cases: DecisionTestCase[],
+  opts: { baseVersion?: string; record?: boolean } = {},
+): Promise<{ ok?: boolean; conflict?: true; path: string; baseVersion: string }> =>
+  call(app, "save_decision_tests", { repo: ref.repo, path: ref.path, cases, ...opts });
 
 export interface WsTicket {
   ticket: string;

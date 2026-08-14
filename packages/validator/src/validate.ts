@@ -93,6 +93,8 @@ function collectContainers(
     diRequired: Set<string>;
     boundaries: Map<string, string>;
     called: string[];
+    /** businessRuleTask → the decision it delegates to, per engine spelling */
+    decides: Array<{ id: string; ref: string }>;
     /** event sub-processes: intentionally NOT wired into the parent's flow */
     eventSubProcesses: Set<string>;
   },
@@ -124,6 +126,15 @@ function collectContainers(
         out.diRequired.add(id);
         if (tag === "boundaryEvent") out.boundaries.set(id, rec["@_attachedToRef"] ?? "");
         if (tag === "callActivity" && rec["@_calledElement"]) out.called.push(rec["@_calledElement"]);
+        if (tag === "businessRuleTask") {
+          // no standard BPMN attribute for this — read every engine's spelling
+          // (prefixes are stripped by the parser), same shape as extract.ts
+          const extension = asArray(
+            (node as Record<string, any>).extensionElements?.calledDecision as Record<string, string>[],
+          )[0]?.["@_decisionId"];
+          const ref = rec["@_decisionRef"] ?? extension ?? rec["@_calledDecision"];
+          if (ref) out.decides.push({ id, ref: String(ref) });
+        }
         // an event sub-process is triggered by its own start event, never by a
         // sequence flow from the parent — exempt it from parent reachability
         if (SUB_CONTAINER_TAGS.has(tag) && String(rec["@_triggeredByEvent"]) === "true") out.eventSubProcesses.add(id);
@@ -160,15 +171,17 @@ function checkXmlNamespaces(raw: string, err: (message: string) => void): void {
 /**
  * Validate one .bpmn file's XML string (structure + BPMNDI coverage). Pure: no
  * filesystem, no process.exit. When `opts.processIds` is given, also warns on a
- * callActivity whose calledElement is not a process in the repo. Returns the
- * findings and the calledElement ids the model references.
+ * callActivity whose calledElement is not a process in the repo; `decisionIds`
+ * does the same for a businessRuleTask and the repo's .dmn files. Returns the
+ * findings and the ids the model references.
  */
 export function checkBpmnXml(
   raw: string,
-  opts: { file?: string; processIds?: Set<string> } = {},
+  opts: { file?: string; processIds?: Set<string>; decisionIds?: Set<string> } = {},
 ): {
   findings: Finding[];
   called: string[];
+  decides: string[];
 } {
   const file = opts.file ?? "<bpmn>";
   const findings: Finding[] = [];
@@ -182,7 +195,7 @@ export function checkBpmnXml(
   const wf = XMLValidator.validate(raw);
   if (wf !== true) {
     err(`not well-formed XML: ${wf.err.msg}`);
-    return { findings, called: [] };
+    return { findings, called: [], decides: [] };
   }
   checkXmlNamespaces(raw, err);
 
@@ -191,7 +204,7 @@ export function checkBpmnXml(
   const processes = asArray(defs?.process as Record<string, unknown>[]);
   if (processes.length === 0) {
     err("no <bpmn:process> element");
-    return { findings, called: [] };
+    return { findings, called: [], decides: [] };
   }
 
   const collected = {
@@ -199,6 +212,7 @@ export function checkBpmnXml(
     diRequired: new Set<string>(),
     boundaries: new Map<string, string>(),
     called: [] as string[],
+    decides: [] as Array<{ id: string; ref: string }>,
     eventSubProcesses: new Set<string>(),
   };
   const topContainers: FlowContainer[] = [];
@@ -315,8 +329,123 @@ export function checkBpmnXml(
       }
     }
   }
+  // …and the same for a business rule task and the repo's decisions
+  if (opts.decisionIds) {
+    for (const { id, ref } of collected.decides) {
+      if (!opts.decisionIds.has(ref)) {
+        warn(`businessRuleTask ${id} decides '${ref}', which is not a decision in this repo (external or dangling?)`);
+      }
+    }
+  }
 
-  return { findings, called: collected.called };
+  return { findings, called: collected.called, decides: collected.decides.map((d) => d.ref) };
+}
+
+/**
+ * Validate one .dmn file's XML string — the MECHANICAL invariants, the same
+ * class this module checks for BPMN: well-formed XML, declared namespaces, a
+ * decision to speak of, rule rows that line up with the columns, complete
+ * DMNDI (Hard Rule 2: no shape, no visual editor) and information
+ * requirements that point at elements which exist.
+ *
+ * Deliberately NOT here: FEEL semantics, hit-policy reachability, dead wiring.
+ * Those need the FEEL engine and live in @bpmiq/decisions (`analyze_decision`),
+ * which would drag a browser-side dependency into this zero-dep CLI.
+ */
+export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findings: Finding[] } {
+  const file = opts.file ?? "<dmn>";
+  const findings: Finding[] = [];
+  const err = (message: string): void => {
+    findings.push({ severity: "ERROR", file, message });
+  };
+  const warn = (message: string): void => {
+    findings.push({ severity: "WARN", file, message });
+  };
+
+  const wf = XMLValidator.validate(raw);
+  if (wf !== true) {
+    err(`not well-formed XML: ${wf.err.msg}`);
+    return { findings };
+  }
+  checkXmlNamespaces(raw, err);
+
+  const defs = xml.parse(raw).definitions;
+  const decisions = asArray(defs?.decision as Record<string, any>[]);
+  const inputData = asArray(defs?.inputData as Record<string, any>[]);
+  if (decisions.length === 0) {
+    err("no <decision> element");
+    return { findings };
+  }
+
+  // every id an information requirement may point at
+  const known = new Set<string>();
+  for (const el of [...decisions, ...inputData]) if (el["@_id"]) known.add(String(el["@_id"]));
+
+  const diRequired = new Set<string>();
+  for (const decision of decisions) {
+    const id = decision["@_id"] ? String(decision["@_id"]) : "(anonymous)";
+    if (!decision["@_id"]) err("a <decision> has no id");
+    else diRequired.add(id);
+
+    const table = decision.decisionTable;
+    if (!table && !decision.literalExpression) {
+      warn(`decision ${id} has neither a decisionTable nor a literalExpression — it cannot produce a result`);
+    }
+    if (table) {
+      const inputs = asArray(table.input as Record<string, unknown>[]).length;
+      const outputs = asArray(table.output as Record<string, unknown>[]).length;
+      if (outputs === 0) err(`decision ${id} has no output column`);
+      for (const rule of asArray(table.rule as Record<string, any>[])) {
+        const ruleId = rule["@_id"] ? String(rule["@_id"]) : "(anonymous rule)";
+        const given = asArray(rule.inputEntry as unknown[]).length;
+        const produced = asArray(rule.outputEntry as unknown[]).length;
+        if (given !== inputs) err(`rule ${ruleId} of decision ${id} has ${given} input entries, expected ${inputs}`);
+        if (produced !== outputs) {
+          err(`rule ${ruleId} of decision ${id} has ${produced} output entries, expected ${outputs}`);
+        }
+      }
+    }
+
+    for (const req of asArray(decision.informationRequirement as Record<string, any>[])) {
+      const href: string | undefined = req.requiredInput?.["@_href"] ?? req.requiredDecision?.["@_href"];
+      if (href === undefined) continue;
+      const target = href.replace(/^#/, "");
+      // an href into another file (namespace-qualified) is out of scope here
+      if (href.startsWith("#") && !known.has(target)) {
+        err(`decision ${id} requires '${target}', which does not exist in this file`);
+      }
+    }
+  }
+  for (const input of inputData) if (input["@_id"]) diRequired.add(String(input["@_id"]));
+
+  // DMNDI coverage — collect dmnElementRef from every DMNShape/DMNEdge
+  const di = new Set<string>();
+  (function collect(v: unknown): void {
+    if (Array.isArray(v)) {
+      v.forEach(collect);
+      return;
+    }
+    if (v === null || typeof v !== "object") return;
+    for (const [k, child] of Object.entries(v as Record<string, unknown>)) {
+      if (k === "DMNShape" || k === "DMNEdge") {
+        for (const s of asArray(child as Record<string, string> | Record<string, string>[])) {
+          if (s["@_dmnElementRef"]) di.add(s["@_dmnElementRef"]);
+        }
+      }
+      collect(child);
+    }
+  })(defs);
+  // a DMN with no DMNDI at all is a decision table authored outside a modeler —
+  // legal and common, so report it ONCE instead of per element
+  if (di.size === 0) {
+    warn("no DMNDI section — the DRD opens empty in the visual editor");
+  } else {
+    for (const id of diRequired) {
+      if (!di.has(id)) err(`${id} has no DMNDI shape (breaks the visual editor)`);
+    }
+  }
+
+  return { findings };
 }
 
 // ── CLI (invoked by src/cli.ts — the dedicated bin entry) ───────────────────────
@@ -332,31 +461,40 @@ export async function runCli(): Promise<void> {
   /** content root: the checkout being validated (defaults to the cwd) */
   const ROOT = rootArg ? resolve(rootArg) : resolve(".");
   if (rootFlag >= 0) argv.splice(rootFlag, 2);
-  /** optional single-process filter (a .bpmn file stem) */
+  /** optional single-model filter (a .bpmn or .dmn file stem) */
   const only = argv[0];
 
   const rel = (p: string): string => (p.startsWith("/") ? relative(ROOT, p) : p);
 
-  const { discoverProcesses, loadContentConfig } = await import("@bpmiq/notations/content");
+  const { discoverDecisions, discoverProcesses, loadContentConfig } = await import("@bpmiq/notations/content");
   const cfg = loadContentConfig(ROOT);
   if (!cfg) {
     console.error(`[ERROR] ${ROOT}: no bpmiq.yml at the root — not a BPM content repo (or wrong --root)`);
-    console.error("\n1 error(s), 0 warning(s) — FAIL (0 process(es) checked)");
+    console.error("\n1 error(s), 0 warning(s) — FAIL (0 model(s) checked)");
     process.exit(1);
   }
 
   const all = await discoverProcesses(ROOT, cfg);
+  const allDecisions = await discoverDecisions(ROOT, cfg);
   const processes = only ? all.filter((p) => p.id === only) : all;
-  if (only && processes.length === 0) {
-    console.error(`[ERROR] unknown process '${only}'. Available: ${all.map((p) => p.id).join(", ") || "(none)"}`);
+  const decisions = only ? allDecisions.filter((d) => d.id === only) : allDecisions;
+  if (only && processes.length === 0 && decisions.length === 0) {
+    const available = [...all.map((p) => p.id), ...allDecisions.map((d) => d.id)].join(", ") || "(none)";
+    console.error(`[ERROR] unknown process/decision '${only}'. Available: ${available}`);
     process.exit(1);
   }
 
   const processIds = new Set(all.map((p) => p.id));
+  const decisionIds = new Set(allDecisions.map((d) => d.id));
   const findings: Finding[] = [];
   for (const proc of processes) {
     const abs = resolve(ROOT, proc.path);
-    const { findings: fs } = checkBpmnXml(readFileSync(abs, "utf8"), { file: rel(abs), processIds });
+    const { findings: fs } = checkBpmnXml(readFileSync(abs, "utf8"), { file: rel(abs), processIds, decisionIds });
+    findings.push(...fs);
+  }
+  for (const decision of decisions) {
+    const abs = resolve(ROOT, decision.path);
+    const { findings: fs } = checkDmnXml(readFileSync(abs, "utf8"), { file: rel(abs) });
     findings.push(...fs);
   }
 
@@ -366,8 +504,10 @@ export async function runCli(): Promise<void> {
   const errorCount = findings.filter((f) => f.severity === "ERROR").length;
   const warnCount = findings.length - errorCount;
   const verdict = errorCount === 0 ? "OK" : "FAIL";
-  console.log(
-    `\n${errorCount} error(s), ${warnCount} warning(s) — ${verdict} (${processes.length} process(es) checked)`,
-  );
+  const checked = [
+    `${processes.length} process(es)`,
+    ...(decisions.length > 0 ? [`${decisions.length} decision(s)`] : []),
+  ].join(", ");
+  console.log(`\n${errorCount} error(s), ${warnCount} warning(s) — ${verdict} (${checked} checked)`);
   process.exit(errorCount === 0 ? 0 : 1);
 }

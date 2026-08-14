@@ -104,21 +104,130 @@ accessed server-side via a Hocuspocus direct connection. `repo` is a **tool argu
 (`owner/name`), not a URL segment — one endpoint serves every connected repo, and every
 call is gated by the caller's per-repo permission.
 
-| Tool              | Kind  | What it does                                                                      |
-| ----------------- | ----- | --------------------------------------------------------------------------------- |
-| `list_repos`      | read  | The connected repos the caller may work on.                                       |
-| `list_processes`  | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).   |
-| `get_process`     | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.        |
-| `get_bpmn_xml`    | read  | The live BPMN XML plus the `baseVersion` for a later save.                        |
-| `validate_bpmn`   | read  | Dry-run the platform validator on submitted XML — check before saving.            |
-| `list_changes`    | read  | A repo's unreleased live changes.                                                 |
-| `list_todos`      | read  | Open model-anchored todos — whole repo, or narrowed to one process.               |
-| `open_modeler`    | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                      |
-| `create_process`  | write | Scaffold a new process `.bpmn` in the live workspace.                             |
-| `save_bpmn_xml`   | write | Validated, conflict-guarded save into the live document (requires `baseVersion`). |
-| `create_todo`     | write | File a todo, anchored to the process and (optionally) concrete BPMN elements.     |
-| `close_todo`      | write | Complete a todo in the tracker (`todoId` from `list_todos`).                      |
-| `release_process` | write | Open the release PR — merge rights stay at the git provider.                      |
+| Tool                    | Kind  | What it does                                                                          |
+| ----------------------- | ----- | ------------------------------------------------------------------------------------- |
+| `list_repos`            | read  | The connected repos the caller may work on.                                           |
+| `list_processes`        | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).       |
+| `get_process`           | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.            |
+| `get_bpmn_xml`          | read  | The live BPMN XML plus the `baseVersion` for a later save.                            |
+| `validate_bpmn`         | read  | Dry-run the platform validator on submitted XML — check before saving.                |
+| `list_decisions`        | read  | The DMN decisions of one repo (id = `.dmn` file stem, path, dirty, live sessions).    |
+| `get_decision`          | read  | The derived decision view (hit policy, columns, rules, DRD wiring) — see below.       |
+| `get_dmn_xml`           | read  | The live DMN XML plus the `baseVersion` for a later save.                             |
+| `simulate_decision`     | read  | Run one scenario and see which rules fired — live model or unsaved `xml`.             |
+| `analyze_decision`      | read  | Static checks (broken FEEL, dead rules, dead wiring) + test-value candidates.         |
+| `run_decision_tests`    | read  | Run the stored test suite (or cases passed inline) with rule coverage.                |
+| `get_decision_tests`    | read  | The stored suite + the `baseVersion` a save needs.                                    |
+| `list_changes`          | read  | A repo's unreleased live changes.                                                     |
+| `list_todos`            | read  | Open model-anchored todos — whole repo, or narrowed to one process.                   |
+| `open_modeler`          | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                          |
+| `open_decision_modeler` | read  | Open the embedded DMN modeler + simulator, optionally with a scenario applied.        |
+| `create_process`        | write | Scaffold a new process `.bpmn` in the live workspace.                                 |
+| `save_bpmn_xml`         | write | Validated, conflict-guarded save into the live document (requires `baseVersion`).     |
+| `create_decision`       | write | Scaffold a new decision `.dmn` from the blank template.                               |
+| `save_dmn_xml`          | write | Conflict-guarded save of DMN XML into the live document (requires `baseVersion`).     |
+| `save_decision_tests`   | write | Write `<decision>.tests.yaml` next to the model (`record` freezes today's behaviour). |
+| `create_todo`           | write | File a todo, anchored to the process and (optionally) concrete BPMN elements.         |
+| `close_todo`            | write | Complete a todo in the tracker (`todoId` from `list_todos`).                          |
+| `release_process`       | write | Open the release PR — merge rights stay at the git provider.                          |
+
+### Decisions: DMN as a first-class model
+
+A decision **is** a `.dmn` file under the same `bpmiq.yml` folder (id = file stem), so the
+decision tools mirror the process tools one-to-one: `list_decisions` → `get_decision` →
+`save_dmn_xml`, all addressed by `id` or `path`, all conflict-guarded the same way.
+
+`get_decision` returns the **derived view**, not the XML: every decision with its hit
+policy, aggregation, input/output columns and rule rows (`when`/`then` hold the raw FEEL
+source text, aligned to the columns), plus the DRD wiring — which InputData and which
+upstream decisions each one requires. That is the shape to reason about the logic in; read
+the XML only when you intend to write it back.
+
+### Simulating and analysing a decision
+
+`simulate_decision` runs one scenario through the decision and reports **which rules
+fired**, by rule id. `given` is keyed by variable name — the columns' input expressions,
+not their labels; a table written without modelled InputData works exactly the same
+(`analyze_decision` lists the variables it needs). The whole DRD is evaluated in
+dependency order, so a chain comes back decision by decision, each with its matched and
+reported rules, outputs, aggregation and any hit-policy violation. Keys that match no
+variable, and variables the scenario left unset, are reported rather than quietly
+behaving like a rule that did not match.
+
+`analyze_decision` is the pass that needs **no** test data. It exists because every FEEL
+engine treats a broken expression as "did not match" — a typo in a rule is otherwise
+indistinguishable from a rule that legitimately did not apply. It reports FEEL that does
+not parse, rules that can never fire (or that guarantee a UNIQUE violation), requirements
+whose result variable nothing reads, cycles — and returns, per variable, the literals and
+numeric boundaries the rules use: the raw material for writing test cases.
+
+Both take either a stored decision (`repo` + `id`/`path`) or an explicit `xml` — the
+same dry-run shape as `validate_bpmn`, so an edit can be checked before it is saved.
+
+Evaluation runs on `@bpmiq/decisions`, and MCP is only one of its callers: the package is
+**isomorphic**, so the very same module also runs in the browser — in the web client's
+live DMN editor (the **Checks** panel: findings and "try a scenario" without a
+round-trip) and in the MCP-App widget. Together with the engine it drives
+(`@emaarco/dmn-js-simulation`, FEEL via `feelin`, the add-on dmn-js mounts), that means a
+scenario an agent simulates, one a human clicks and one CI runs are the same computation
+rather than three implementations that agree until they don't.
+
+### Decision tests: the sidecar
+
+A decision's test cases live in **`<decision>.tests.yaml` next to the model** — an
+ordinary repo file that diffs, reviews and ships in the same release PR:
+
+```yaml
+decision: credit-limit-check
+cases:
+  - name: A blocked customer is rejected even for a tiny, clean order
+    given: { customerSegment: blocked, orderValue: 50, overdueInvoices: 0 }
+    expect:
+      value: reject
+      rules: [Rule_blocked_customer] # WHICH rule produced it
+```
+
+`expect.rules` is what makes a case more than an output check: a right answer produced by
+the wrong rule still fails. A case with **no** `expect` is legal — it comes back as
+`pending` together with the value it currently produces, and `save_decision_tests` with
+`record: true` freezes exactly that (golden master). That is the one honest way for a
+machine to author expectations: it states what the model does today, which makes the next
+change visible. Expectations about what the model _should_ do belong to the business.
+
+`run_decision_tests` also reports **rule coverage** — `uncoveredRules` lists every rule
+whose result no case ever observed. Note the distinction it draws: under `FIRST` a
+shadowed rule can match in every case without ever deciding anything, so "matched" would
+overstate coverage; the metric counts rules the hit policy actually _reported_.
+
+The same suites run headless in CI: `pnpm validate` invokes the platform validator
+(structure, DMNDI, requirement integrity) and then `packages/decisions/cli.ts`, which
+analyses every `.dmn` in the checkout and runs its cases. Exit code 1 on an error or a
+failing case.
+
+### Which process uses which decision
+
+A `businessRuleTask` names the decision it delegates to — the platform reads
+`decisionRef` (Camunda 7), `<zeebe:calledDecision decisionId>` (Camunda 8) and a plain
+`calledDecision`, and in every spelling the value is the **`.dmn` file stem**, exactly
+like `callActivity`'s `calledElement` is a `.bpmn` file stem. From that one link:
+
+- `get_process` lists the decisions a process delegates to (and each step carries its
+  `decides`),
+- `get_decision` returns `usedBy` — the processes and the concrete task ids that call it,
+  which is the impact answer before changing a table,
+- the validator warns when a `businessRuleTask` points at a decision the repo does not
+  contain (a warning, not an error: the decision may live in another system).
+
+### The release PR explains what the decision now decides
+
+When a release ships a `.dmn` (or only its `.tests.yaml`), the PR body gains a **Decision
+impact** section: the suite is run against both the workspace version and
+`origin/<default>`, and every case whose answer moved is listed with before and after.
+A DMN diff is unreadable — reordered rules, renamed ids, a `>=` that became a `>`; a
+table of changed answers is a review a business reader can actually do. The section also
+carries the static findings and, when a decision has no cases at all, says so plainly.
+It degrades quietly (new decision, no suite, no git access) — a release never fails
+because its commentary could not be produced.
 
 ### Todos: work items in your own tracker
 
@@ -192,6 +301,33 @@ Clients without apps support (Claude Code, the read-only `@bpmiq/mcp` package) s
 plain tool that returns a short process summary — use `get_process`/`get_bpmn_xml`
 there. Under `LIVE_MCP_READONLY=1` the tool stays registered but the widget becomes a
 read-only viewer (no save button, no ws ticket), matching the absent write tools.
+
+### MCP App: the decision modeler and its simulator
+
+`open_decision_modeler` is the DMN sibling (`apps/web/dist/mcp-app-dmn.html`, its own
+`ui://` resource): dmn-js — DRD, decision table, literal expression — with the
+[dmn-js-simulation](https://github.com/emaarco/dmn-js-simulation) add-on mounted into
+both views. Type values into the table and the matching rows light up; the rule the hit
+policy actually reports is marked differently from the ones that merely matched.
+
+Two things make it more than a viewer:
+
+- **The agent can hand over a scenario.** `open_decision_modeler` takes an optional
+  `scenario` (the same variable → value map as `simulate_decision`), which the widget
+  plays straight into the simulator. "This case returns `manual-review` instead of
+  `approve`" stops being a sentence and becomes a highlighted row.
+- **A run can be captured as a test.** "＋ Capture current run" takes the values
+  currently entered, asks for a name, and writes them into `<decision>.tests.yaml` via
+  `save_decision_tests` with `record: true` — the server evaluates and freezes what the
+  decision produces. The panel lists the stored cases with their pass/fail state
+  (`run_decision_tests`), and clicking one replays it on the table, so a failing case is
+  visible _on the model_.
+
+Both sides run the same engine, so a run clicked here and one simulated by an agent
+cannot disagree. Saving works like the BPMN widget (autosave, `lint:"warn"`,
+`baseVersion` CAS with a conflict banner); it deliberately does **not** take the Yjs
+live upgrade — decision tables are edited cell by cell by one person at a time, and the
+conflict flow covers the rare collision honestly.
 
 `save_bpmn_xml` is compare-and-set: the caller passes the `baseVersion` from a prior
 `get_bpmn_xml`, and if the live document moved in between, the save is refused with a

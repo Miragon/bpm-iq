@@ -34,11 +34,11 @@ import type {
 } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 import { updateText } from "@bpmiq/live-client/text";
-import { checkBpmnXml } from "@bpmiq/validator";
+import { checkBpmnXml, checkDmnXml, type Finding } from "@bpmiq/validator";
 import type * as Y from "yjs";
 
 import { type RegistryLookup, splitRoom, toDiskPath, type WorkspaceEnsure } from "../domain/rooms.ts";
-import { discoverProcesses, loadContentConfig } from "../repos/content.ts";
+import { discoverDecisions, discoverProcesses, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 
 /** the minimal direct-connection surface (structural — no @hocuspocus import) */
@@ -110,17 +110,17 @@ export async function putContent(
   }
   const workspace = await assertOnDisk(opts, repo, safePath);
 
-  // full platform validation for BPMN (structure + BPMNDI coverage + callActivity
-  // links); other editable notations (.dmn) pass through unvalidated.
+  // full platform validation per notation: BPMN (structure + BPMNDI coverage +
+  // callActivity links) and DMN (table/DMNDI/requirement integrity — the FEEL
+  // semantics live in the analyze_decision tool, not on the write path).
+  // Everything else passes through unvalidated.
   // lint:"warn" reports ERRORs on the result instead of refusing — the modeler
   // widget's autosave path; the ws rooms have never gated live edits, so this
   // is the same trust level, not a new one. Default stays "block" (REST + agents).
   let warnings: string[] = [];
   let lintErrors: string[] = [];
-  if (safePath.endsWith(".bpmn")) {
-    const cfg = loadContentConfig(workspace);
-    const processIds = cfg ? new Set((await discoverProcesses(workspace, cfg)).map((p) => p.id)) : undefined;
-    const { findings } = checkBpmnXml(body.xml, { file: safePath, processIds });
+  const findings = await lintModel(workspace, safePath, body.xml);
+  if (findings) {
     const errors = findings.filter((f) => f.severity === "ERROR");
     if (errors.length > 0 && body.lint !== "warn") {
       throw new AppError(
@@ -173,6 +173,19 @@ export async function putContent(
   });
   if (!outcome) throw new Error(`write produced no outcome: ${safePath}`); // unreachable
   return outcome;
+}
+
+/** the platform validator for whatever notation this path is — `undefined`
+ *  when the notation has no checker (the file still saves) */
+async function lintModel(workspace: string, safePath: string, xml: string): Promise<Finding[] | undefined> {
+  if (safePath.endsWith(".bpmn")) {
+    const cfg = loadContentConfig(workspace);
+    const processIds = cfg ? new Set((await discoverProcesses(workspace, cfg)).map((p) => p.id)) : undefined;
+    const decisionIds = cfg ? new Set((await discoverDecisions(workspace, cfg)).map((d) => d.id)) : undefined;
+    return checkBpmnXml(xml, { file: safePath, processIds, decisionIds }).findings;
+  }
+  if (safePath.endsWith(".dmn")) return checkDmnXml(xml, { file: safePath }).findings;
+  return undefined;
 }
 
 /** validate `path` through the live-room gate (splitRoom) against the ALREADY

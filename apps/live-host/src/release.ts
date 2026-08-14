@@ -40,6 +40,7 @@ import { processIdFromName } from "@bpmiq/notations";
 
 import { gitEnv, runGit } from "./adapters/git/run.ts";
 import type { Session } from "./adapters/sqlite/sessions.ts";
+import { decisionImpact } from "./application/decision-impact.ts";
 import type { RepoConnectionSource } from "./ports/connection-source.ts";
 import type { GitProvider } from "./ports/git-provider.ts";
 import { CONTENT_CONFIG_FILE, type ContentConfig, discoverProcesses, loadContentConfig } from "./repos/content.ts";
@@ -150,7 +151,10 @@ export function releaseFilesPrBody(
 
 /** the subset of ApiOptions release() needs — keeps the dep one-way (api → release) */
 export interface ReleaseDeps {
-  workspaces: Pick<WorkspaceManager, "ensure" | "changedFiles">;
+  workspaces: Pick<WorkspaceManager, "ensure" | "changedFiles"> &
+    // optional: without it a release simply ships without its decision-impact
+    // section (tests and the in-process fakes do not implement it)
+    Partial<Pick<WorkspaceManager, "fileAtCommit">>;
   /** REST backend for the app installation clone token (bot-authored release) */
   connectionSource?: Pick<RepoConnectionSource, "cloneToken">;
 }
@@ -169,7 +173,7 @@ interface PublishArgs {
   subject: string;
   prTitle: string;
   /** rendered AFTER staging — `staged` is what the commit actually ships */
-  prBody: (botAuthored: boolean, staged: string[]) => string;
+  prBody: (botAuthored: boolean, staged: string[]) => string | Promise<string>;
 }
 
 /**
@@ -286,7 +290,7 @@ async function publish(
       branch: args.branch,
       base: repo.defaultBranch,
       title: args.prTitle,
-      body: args.prBody(botAuthored, stagedFiles),
+      body: await args.prBody(botAuthored, stagedFiles),
     });
     return {
       pr: pr.url,
@@ -339,7 +343,9 @@ export async function release(
     files: [{ path: proc.path, deleted: false }],
     subject: `release(${id}): publish live model state`,
     prTitle: `release(${id}): publish live model state`,
-    prBody: (botAuthored) => releasePrBody(id, repo.fullName, session.user.login, botAuthored),
+    prBody: async (botAuthored, staged) =>
+      releasePrBody(id, repo.fullName, session.user.login, botAuthored) +
+      (await decisionImpact(opts, repo, workspace, staged)),
   });
 }
 
@@ -393,12 +399,12 @@ export async function releaseFiles(
     prTitle: releaseFilesSubject(body.title),
     // list what the commit actually ships — a file that healed to the origin
     // state between the gate and the staging must not be advertised
-    prBody: (botAuthored, staged) =>
+    prBody: async (botAuthored, staged) =>
       releaseFilesPrBody(
         files.filter((f) => staged.includes(f.path)),
         repo.fullName,
         session.user.login,
         botAuthored,
-      ),
+      ) + (await decisionImpact(opts, repo, workspace, staged)),
   });
 }

@@ -26,6 +26,7 @@ import { LineageStore } from "../src/adapters/sqlite/lineage-store.ts";
 import { makeCollabHooks } from "../src/application/collab.ts";
 import { type ContentDeps, getContent, putContent } from "../src/application/content.ts";
 import { newBpmnXml } from "../src/domain/bpmn-template.ts";
+import { newDmnXml } from "../src/domain/dmn-template.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
 import { loadContentConfig } from "../src/repos/content.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
@@ -87,6 +88,8 @@ function setup(over: { contentRepo?: boolean; maxDocBytes?: number } = {}) {
 
 const VALID = newBpmnXml("order", "Order");
 const VALID_V2 = newBpmnXml("order", "Order v2");
+/** the blank-decision template — validator-clean, like its BPMN sibling */
+const VALID_DMN = newDmnXml("price", "Price");
 
 /** peer-open with the same open-during-unload retry the use-case applies —
  *  Hocuspocus can hand out a doc whose async unload is still in flight */
@@ -210,7 +213,7 @@ test("putContent broadcasts into a shared live doc and keeps a co-holder's room 
 
 // ── PUT: gates ──────────────────────────────────────────────────────────────
 
-test("putContent gates: baseVersion required, validation 422, size cap 413, .dmn passes through", async () => {
+test("putContent gates: baseVersion required, validation 422 (BPMN and DMN), size cap 413", async () => {
   const { ws, deps } = setup();
   writeFileSync(join(ws, PATH), VALID);
   const got = await getContent(deps, REPO, PATH);
@@ -231,15 +234,25 @@ test("putContent gates: baseVersion required, validation 422, size cap 413, .dmn
     (e: AppError) => e.code === "content/too-large" && e.status === 413,
   );
 
-  // .dmn is an editable notation without a validator — passes through unvalidated
-  writeFileSync(join(ws, "processes", "price.dmn"), "<definitions/>");
+  // .dmn goes through the DMN validator on the same write path as BPMN
+  writeFileSync(join(ws, "processes", "price.dmn"), VALID_DMN);
   const dmn = await getContent(deps, REPO, "processes/price.dmn");
+  await assert.rejects(
+    () => putContent(deps, REPO, "processes/price.dmn", { xml: "<definitions/>", baseVersion: dmn.baseVersion }),
+    (e: AppError) => e.code === "content/invalid-model" && /no <decision> element/.test(e.message),
+  );
   const saved = await putContent(deps, REPO, "processes/price.dmn", {
-    xml: "<definitions revised='1'/>",
+    xml: VALID_DMN.replace('name="Price"', 'name="Price v2"'),
     baseVersion: dmn.baseVersion,
   });
   assert.ok(saved.ok);
   assert.deepEqual(saved.result.warnings, []);
+
+  // a notation without a checker (.md) still passes through untouched
+  writeFileSync(join(ws, "processes", "notes.md"), "# notes");
+  const md = await getContent(deps, REPO, "processes/notes.md");
+  const note = await putContent(deps, REPO, "processes/notes.md", { xml: "# more", baseVersion: md.baseVersion });
+  assert.ok(note.ok);
 });
 
 test("putContent lint:'warn' saves an invalid model and reports the errors instead of refusing", async () => {

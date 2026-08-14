@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" id="Definitions_essensauswahl" name="Essensauswahl" namespace="http://bpmiq.dev/dmn/essensauswahl">
+  <decision id="essensauswahl" name="Essensauswahl">
+    <decisionTable id="DecisionTable_essensauswahl" hitPolicy="FIRST">
+      <input id="Input_jahreszeit" label="Jahreszeit">
+        <inputExpression id="InputExpression_jahreszeit" typeRef="string">
+          <text>jahreszeit</text>
+        </inputExpression>
+        <inputValues id="InputValues_jahreszeit">
+          <text>"fruehling","sommer","herbst","winter"</text>
+        </inputValues>
+      </input>
+      <input id="Input_alter" label="Alter">
+        <inputExpression id="InputExpression_alter" typeRef="number">
+          <text>alter</text>
+        </inputExpression>
+      </input>
+      <input id="Input_ernaehrung" label="Ernährung">
+        <inputExpression id="InputExpression_ernaehrung" typeRef="string">
+          <text>ernaehrung</text>
+        </inputExpression>
+        <inputValues id="InputValues_ernaehrung">
+          <text>"vegan","vegetarisch","omnivor"</text>
+        </inputValues>
+      </input>
+      <input id="Input_allergie" label="Allergie">
+        <inputExpression id="InputExpression_allergie" typeRef="string">
+          <text>allergie</text>
+        </inputExpression>
+        <inputValues id="InputValues_allergie">
+          <text>"keine","nuss","gluten"</text>
+        </inputValues>
+      </input>
+      <output id="Output_gericht" label="Gericht" name="gericht" typeRef="string" />
+      <rule id="Rule_winter">
+        <inputEntry id="IE_winter_jahreszeit">
+          <text>"winter"</text>
+        </inputEntry>
+        <inputEntry id="IE_winter_alter">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_winter_ernaehrung">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_winter_allergie">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="OE_winter_gericht">
+          <text>"Käsefondue"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_kind">
+        <inputEntry id="IE_kind_jahreszeit">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_kind_alter">
+          <text>&lt; 12</text>
+        </inputEntry>
+        <inputEntry id="IE_kind_ernaehrung">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_kind_allergie">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="OE_kind_gericht">
+          <text>"Kindermenü: Penne mit Tomatensauce"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_vegan_nuss">
+        <inputEntry id="IE_vegan_nuss_jahreszeit">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_vegan_nuss_alter">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_vegan_nuss_ernaehrung">
+          <text>"vegan"</text>
+        </inputEntry>
+        <inputEntry id="IE_vegan_nuss_allergie">
+          <text>"nuss"</text>
+        </inputEntry>
+        <outputEntry id="OE_vegan_nuss_gericht">
+          <text>"Gemüsecurry mit Reis"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_vegan">
+        <inputEntry id="IE_vegan_jahreszeit">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_vegan_alter">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_vegan_ernaehrung">
+          <text>"vegan"</text>
+        </inputEntry>
+        <inputEntry id="IE_vegan_allergie">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="OE_vegan_gericht">
+          <text>"Gemüsecurry mit Reis und Cashewkernen"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_vegetarisch_gluten">
+        <inputEntry id="IE_veg_gluten_jahreszeit">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_veg_gluten_alter">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_veg_gluten_ernaehrung">
+          <text>"vegetarisch"</text>
+        </inputEntry>
+        <inputEntry id="IE_veg_gluten_allergie">
+          <text>"gluten"</text>
+        </inputEntry>
+        <outputEntry id="OE_veg_gluten_gericht">
+          <text>"Steinpilzrisotto"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_vegetarisch">
+        <inputEntry id="IE_veg_jahreszeit">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_veg_alter">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_veg_ernaehrung">
+          <text>"vegetarisch"</text>
+        </inputEntry>
+        <inputEntry id="IE_veg_allergie">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="OE_veg_gericht">
+          <text>"Spinatknödel mit Salbeibutter"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_omnivor_gluten">
+        <inputEntry id="IE_omni_gluten_jahreszeit">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_omni_gluten_alter">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_omni_gluten_ernaehrung">
+          <text>"omnivor"</text>
+        </inputEntry>
+        <inputEntry id="IE_omni_gluten_allergie">
+          <text>"gluten"</text>
+        </inputEntry>
+        <outputEntry id="OE_omni_gluten_gericht">
+          <text>"Rinderfilet mit Kartoffelgratin"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_omnivor">
+        <inputEntry id="IE_omni_jahreszeit">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_omni_alter">
+          <text></text>
+        </inputEntry>
+        <inputEntry id="IE_omni_ernaehrung">
+          <text>"omnivor"</text>
+        </inputEntry>
+        <inputEntry id="IE_omni_allergie">
+          <text></text>
+        </inputEntry>
+        <outputEntry id="OE_omni_gericht">
+          <text>"Kalbsrücken mit Serviettenknödel"</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram id="DMNDiagram_essensauswahl">
+      <dmndi:DMNShape id="DMNShape_essensauswahl" dmnElementRef="essensauswahl">
+        <dc:Bounds height="80" width="180" x="160" y="100" />
+      </dmndi:DMNShape>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>

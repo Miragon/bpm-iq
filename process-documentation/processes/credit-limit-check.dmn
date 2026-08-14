@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" xmlns:di="http://www.omg.org/spec/DMN/20180521/DI/" id="Definitions_credit_limit_check" name="Credit limit check" namespace="http://bpmiq.dev/dmn/credit-limit-check">
+  <inputData id="InputData_segment" name="Customer segment">
+    <variable id="Variable_segment" name="customerSegment" typeRef="string" />
+  </inputData>
+  <inputData id="InputData_order_value" name="Order value (EUR)">
+    <variable id="Variable_order_value" name="orderValue" typeRef="number" />
+  </inputData>
+  <inputData id="InputData_overdue" name="Overdue invoices">
+    <variable id="Variable_overdue" name="overdueInvoices" typeRef="number" />
+  </inputData>
+  <decision id="credit-limit-check" name="Credit limit check">
+    <variable id="Variable_credit_decision" name="creditDecision" typeRef="string" />
+    <informationRequirement id="InformationRequirement_segment">
+      <requiredInput href="#InputData_segment" />
+    </informationRequirement>
+    <informationRequirement id="InformationRequirement_order_value">
+      <requiredInput href="#InputData_order_value" />
+    </informationRequirement>
+    <informationRequirement id="InformationRequirement_overdue">
+      <requiredInput href="#InputData_overdue" />
+    </informationRequirement>
+    <decisionTable id="DecisionTable_credit_limit_check" hitPolicy="FIRST">
+      <input id="Input_segment" label="Customer segment">
+        <inputExpression id="InputExpression_segment" typeRef="string">
+          <text>customerSegment</text>
+        </inputExpression>
+        <inputValues id="InputValues_segment">
+          <text>"blocked","key-account","standard"</text>
+        </inputValues>
+      </input>
+      <input id="Input_order_value" label="Order value (EUR)">
+        <inputExpression id="InputExpression_order_value" typeRef="number">
+          <text>orderValue</text>
+        </inputExpression>
+      </input>
+      <input id="Input_overdue" label="Overdue invoices">
+        <inputExpression id="InputExpression_overdue" typeRef="number">
+          <text>overdueInvoices</text>
+        </inputExpression>
+      </input>
+      <output id="Output_credit_decision" name="creditDecision" label="Credit decision" typeRef="string">
+        <outputValues id="OutputValues_credit_decision">
+          <text>"reject","manual-review","approve"</text>
+        </outputValues>
+      </output>
+      <rule id="Rule_blocked_customer">
+        <description>A blocked customer is never served, whatever the order looks like.</description>
+        <inputEntry id="UnaryTests_blocked_segment"><text>"blocked"</text></inputEntry>
+        <inputEntry id="UnaryTests_blocked_value"><text>-</text></inputEntry>
+        <inputEntry id="UnaryTests_blocked_overdue"><text>-</text></inputEntry>
+        <outputEntry id="LiteralExpression_blocked"><text>"reject"</text></outputEntry>
+      </rule>
+      <rule id="Rule_too_many_overdue">
+        <description>Three or more overdue invoices stop any new order.</description>
+        <inputEntry id="UnaryTests_overdue_segment"><text>-</text></inputEntry>
+        <inputEntry id="UnaryTests_overdue_value"><text>-</text></inputEntry>
+        <inputEntry id="UnaryTests_overdue_overdue"><text>&gt;= 3</text></inputEntry>
+        <outputEntry id="LiteralExpression_overdue"><text>"reject"</text></outputEntry>
+      </rule>
+      <rule id="Rule_key_account">
+        <description>Key accounts are approved up to 50,000 EUR without a human look.</description>
+        <inputEntry id="UnaryTests_key_segment"><text>"key-account"</text></inputEntry>
+        <inputEntry id="UnaryTests_key_value"><text>&lt;= 50000</text></inputEntry>
+        <inputEntry id="UnaryTests_key_overdue"><text>-</text></inputEntry>
+        <outputEntry id="LiteralExpression_key"><text>"approve"</text></outputEntry>
+      </rule>
+      <rule id="Rule_small_order">
+        <description>Small orders from customers who pay on time are approved automatically.</description>
+        <inputEntry id="UnaryTests_small_segment"><text>-</text></inputEntry>
+        <inputEntry id="UnaryTests_small_value"><text>&lt;= 1000</text></inputEntry>
+        <inputEntry id="UnaryTests_small_overdue"><text>0</text></inputEntry>
+        <outputEntry id="LiteralExpression_small"><text>"approve"</text></outputEntry>
+      </rule>
+      <rule id="Rule_manual_review">
+        <description>Everything else goes to a human.</description>
+        <inputEntry id="UnaryTests_manual_segment"><text>-</text></inputEntry>
+        <inputEntry id="UnaryTests_manual_value"><text>-</text></inputEntry>
+        <inputEntry id="UnaryTests_manual_overdue"><text>-</text></inputEntry>
+        <outputEntry id="LiteralExpression_manual"><text>"manual-review"</text></outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram id="DMNDiagram_credit_limit_check">
+      <dmndi:DMNShape id="DMNShape_credit_limit_check" dmnElementRef="credit-limit-check">
+        <dc:Bounds height="80" width="180" x="270" y="80" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="DMNShape_segment" dmnElementRef="InputData_segment">
+        <dc:Bounds height="45" width="125" x="157" y="247" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="DMNShape_order_value" dmnElementRef="InputData_order_value">
+        <dc:Bounds height="45" width="125" x="297" y="247" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="DMNShape_overdue" dmnElementRef="InputData_overdue">
+        <dc:Bounds height="45" width="125" x="437" y="247" />
+      </dmndi:DMNShape>
+      <dmndi:DMNEdge id="DMNEdge_segment" dmnElementRef="InformationRequirement_segment">
+        <di:waypoint x="219" y="247" />
+        <di:waypoint x="315" y="180" />
+        <di:waypoint x="315" y="160" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="DMNEdge_order_value" dmnElementRef="InformationRequirement_order_value">
+        <di:waypoint x="359" y="247" />
+        <di:waypoint x="360" y="180" />
+        <di:waypoint x="360" y="160" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="DMNEdge_overdue" dmnElementRef="InformationRequirement_overdue">
+        <di:waypoint x="499" y="247" />
+        <di:waypoint x="405" y="180" />
+        <di:waypoint x="405" y="160" />
+      </dmndi:DMNEdge>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>

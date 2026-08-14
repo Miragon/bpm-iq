@@ -15,8 +15,13 @@
  * never here). The returned object shapes ARE the wire format
  * (@bpmiq/contracts/live-host — shape drift is a tsc error).
  */
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import type { ChangedFileWire, DecisionInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { byExtension } from "@bpmiq/notations";
+import { deriveProcess } from "@bpmiq/notations/derive";
+import { extractModelGraph } from "@bpmiq/notations/extract";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import { discoverDecisions, discoverProcesses, loadContentConfig } from "../repos/content.ts";
@@ -96,6 +101,40 @@ export async function listDecisions(
     });
   }
   return decisions;
+}
+
+/** one businessRuleTask that delegates to a decision */
+export interface DecisionUsage {
+  /** the process id (= .bpmn file stem) */
+  process: string;
+  path: string;
+  /** the businessRuleTask's element id and name */
+  element: string;
+  elementName: string | null;
+}
+
+/**
+ * Which processes delegate to a decision — the impact question ("what breaks
+ * if I change this table?"). Reads the workspace tree rather than the live
+ * documents on purpose: opening a live room per process would be a Hocuspocus
+ * connection per file, and the released truth is what the link check and the
+ * release PR reason about anyway.
+ */
+export async function decisionUsers(workspace: string, decisionId: string): Promise<DecisionUsage[]> {
+  const cfg = loadContentConfig(workspace);
+  if (!cfg) return [];
+  const out: DecisionUsage[] = [];
+  for (const proc of await discoverProcesses(workspace, cfg)) {
+    const xml = await readFile(join(workspace, proc.path), "utf8").catch(() => undefined);
+    if (xml === undefined) continue;
+    const graph = extractModelGraph(proc.path, xml);
+    if (!graph) continue;
+    for (const decision of deriveProcess(graph).decisions) {
+      if (decision.decisionRef !== decisionId) continue;
+      out.push({ process: proc.id, path: proc.path, element: decision.id, elementName: decision.name });
+    }
+  }
+  return out;
 }
 
 /**

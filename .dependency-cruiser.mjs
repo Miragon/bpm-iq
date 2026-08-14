@@ -71,6 +71,20 @@ export default {
       to: { dependencyTypes: ["core"], dependencyTypesNot: ["type-only"], path: "^(node:)?sqlite$" },
     },
     {
+      name: "decisions-lib-stays-isomorphic",
+      severity: "error",
+      comment:
+        "@bpmiq/decisions runs in the BROWSER too (the SPA's DMN editor and the " +
+        "MCP-App widget import it, see packages/decisions/README.md). Its cli.ts " +
+        "is the only Node entry — nothing the package EXPORTS may touch an I/O " +
+        "builtin, or the bundlers break and server and browser drift apart again.",
+      from: { path: "^packages/decisions/", pathNot: ["^packages/decisions/cli\\.ts$", "(^|/)test/"] },
+      to: {
+        dependencyTypesNot: ["type-only"],
+        path: "^(node:)?(child_process|fs|fs/promises|http|https|http2|net|tls|dns|sqlite|worker_threads|os|path)$",
+      },
+    },
+    {
       name: "pure-modules-stay-pure",
       severity: "error",
       comment:

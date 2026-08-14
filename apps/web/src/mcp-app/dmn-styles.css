@@ -1,0 +1,164 @@
+/* The decision widget's stylesheet: the shared chrome, the dmn-js views and
+ * the simulation add-on, plus the test panel (mcp-app/dmn-tests.ts).
+ * Everything inlines into mcp-app-dmn.html (vite-plugin-singlefile). */
+@import "dmn-js/dist/assets/diagram-js.css";
+@import "dmn-js/dist/assets/dmn-js-shared.css";
+@import "dmn-js/dist/assets/dmn-js-drd.css";
+@import "dmn-js/dist/assets/dmn-js-decision-table.css";
+@import "dmn-js/dist/assets/dmn-js-decision-table-controls.css";
+@import "dmn-js/dist/assets/dmn-js-literal-expression.css";
+@import "dmn-js/dist/assets/dmn-font/css/dmn.css";
+@import "@emaarco/dmn-js-simulation/assets/dmn-js-simulation.css";
+@import "./chrome.css";
+
+/* the dmn-js decision-table view scrolls internally; give it the whole pane */
+#canvas .dmn-decision-table-container,
+#canvas .dmn-literal-expression-container,
+#canvas .dmn-drd-container {
+  height: 100%;
+}
+
+/* ── tests: the side panel (mcp-app/dmn-tests.ts) ─────────────────────────── */
+
+#tests:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  width: min(340px, 48%);
+  border-left: 1px solid var(--border);
+  font-size: 13px;
+}
+
+#test-head,
+#test-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+#test-foot {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
+
+#tests .spacer {
+  flex: 1;
+}
+
+#tests button {
+  font: inherit;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: inherit;
+  cursor: pointer;
+}
+
+#tests button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+#tests button:disabled {
+  cursor: default;
+  color: var(--muted);
+}
+
+#test-error:not([hidden]) {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+#test-form:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  background: #f6f8fa;
+}
+
+#test-form input {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+#test-form input:focus {
+  outline: 1px solid var(--accent);
+}
+
+#test-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+#test-list {
+  flex: 1;
+  overflow: auto;
+}
+
+.case {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.case:hover {
+  background: #f6f8fa;
+}
+
+.case-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.case-status {
+  flex: none;
+  width: 1em;
+  font-weight: 600;
+}
+
+.case-status.pass {
+  color: #1a7f37;
+}
+
+.case-status.fail {
+  color: var(--danger);
+}
+
+.case-status.pending {
+  color: var(--muted);
+}
+
+.case-failure {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+#test-empty {
+  padding: 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#coverage:not([hidden]) {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
