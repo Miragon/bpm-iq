@@ -2,8 +2,10 @@
  * The collaborative editor — chosen per notation (@bpmiq/notations):
  *   bpmn        → bpmn-js canvas (primary) + Monaco XML toggle, both bound to the
  *                 same shared Y.Text
- *   dmn         → dmn-js (DRD + decision table + literal expression) + the same
- *                 Monaco XML toggle, same shared Y.Text
+ *   dmn         → dmn-js (DRD + decision table + literal expression) with the
+ *                 simulation add-on + the same Monaco XML toggle, same shared
+ *                 Y.Text; the Checks panel analyses and simulates it in-browser
+ *                 through @bpmiq/decisions (the module the Live Host uses too)
  *   everything  → Monaco text editor on the shared Y.Text, language from the
  *   else          registry (OWM/TT/VC live-edit as text)
  *
@@ -20,13 +22,14 @@ import { byExtension } from "@bpmiq/notations";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
+import DmnSimulationModule from "@emaarco/dmn-js-simulation";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import BpmnModeler from "bpmn-js/lib/Modeler";
 import DmnModeler from "dmn-js/lib/Modeler";
-import { ArrowLeft, History, ListTodo, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, History, ListTodo, Loader2, Plus, ShieldCheck } from "lucide-react";
 import * as monaco from "monaco-editor";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MonacoBinding } from "y-monaco";
 import type * as Y from "yjs";
@@ -51,6 +54,13 @@ interface Presence {
   name: string;
   color: string;
 }
+
+// The decision checks pull in the FEEL engine and the DMN parser
+// (@bpmiq/decisions + @bpmiq/notations). Split them off: only a .dmn author who
+// opens the panel pays for them, and a BPMN session never loads them at all.
+const DecisionChecksPanel = lazy(() =>
+  import("@/components/decision-checks-panel").then((m) => ({ default: m.DecisionChecksPanel })),
+);
 
 function monacoLanguage(docPath: string): string {
   const notation = byExtension(docPath);
@@ -102,6 +112,11 @@ export function LiveEditor({
   // data flows in through these refs (and the effect below) in either order
   const todoCanvasRef = useRef<TodoCanvas | null>(null);
   const todosRef = useRef<TodoWire[]>([]);
+
+  // decision checks (.dmn only) — analysis + simulation, computed in-browser
+  // from the live document by @bpmiq/decisions
+  const [checksOpen, setChecksOpen] = useState(false);
+  const [dmnXml, setDmnXml] = useState("");
 
   // default-branch commit history of THIS file — fetched while the panel is open
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -184,7 +199,15 @@ export function LiveEditor({
           }
         }
       } else if (isDmn && canvasRef.current) {
-        dmnModeler = new DmnModeler({ container: canvasRef.current });
+        dmnModeler = new DmnModeler({
+          container: canvasRef.current,
+          // the SAME simulation add-on the MCP-App decision widget mounts:
+          // enter values in a decision table and the matching rows light up.
+          // It evaluates with `feelin`, as does @bpmiq/decisions in the Checks
+          // panel and on the server — one semantics, three places.
+          drd: { additionalModules: [DmnSimulationModule.decisionRequirementsDiagram] },
+          decisionTable: { additionalModules: [DmnSimulationModule.decisionTable] },
+        });
         unbindCanvas = bindDmn(
           dmnModeler as never,
           ytext,
@@ -237,6 +260,26 @@ export function LiveEditor({
       session.destroy(); // provider AND socket
     };
   }, [repo, docPath, me.wsToken]);
+
+  // Feed the Checks panel from the shared Y.Text — only while it is OPEN, and
+  // debounced: re-analysing on every keystroke of a co-editor would be pure
+  // waste (`status` re-runs this once the session attached contentRef).
+  useEffect(() => {
+    const ytext = checksOpen && isDmn ? contentRef.current : null;
+    if (!ytext) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const sync = () => setDmnXml(ytext.toString());
+    sync();
+    const onChange = () => {
+      clearTimeout(timer);
+      timer = setTimeout(sync, 300);
+    };
+    ytext.observe(onChange);
+    return () => {
+      clearTimeout(timer);
+      ytext.unobserve(onChange);
+    };
+  }, [checksOpen, isDmn, status]);
 
   // release = pick files in the ReleaseDialog, THIS document preselected
   const [releaseOpen, setReleaseOpen] = useState(false);
@@ -335,11 +378,28 @@ export function LiveEditor({
             XML
           </Button>
         )}
+        {isDmn && (
+          <Button
+            variant="outline"
+            size="sm"
+            title="Analyse this decision and try a scenario — runs in the browser"
+            onClick={() => {
+              setHistoryOpen(false);
+              setTodosOpen(false);
+              setTodoFilter(null);
+              setChecksOpen((v) => !v);
+            }}
+          >
+            <ShieldCheck />
+            Checks
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
           title="History of this file on the default branch"
           onClick={() => {
+            setChecksOpen(false);
             setTodosOpen(false);
             setTodoFilter(null);
             setHistoryOpen((v) => !v);
@@ -356,6 +416,7 @@ export function LiveEditor({
               title="Open todos for this process"
               onClick={() => {
                 setHistoryOpen(false);
+                setChecksOpen(false);
                 setTodoFilter(null);
                 setTodosOpen((v) => !v);
               }}
@@ -396,6 +457,11 @@ export function LiveEditor({
           ref={xmlRef}
           className={cn("monaco-host absolute inset-0", !xmlActive && "pointer-events-none opacity-0")}
         />
+        {isDmn && checksOpen && (
+          <Suspense fallback={null}>
+            <DecisionChecksPanel xml={dmnXml} docPath={docPath} onClose={() => setChecksOpen(false)} />
+          </Suspense>
+        )}
         {historyOpen && (
           <HistoryPanel
             commits={historyQuery.data}

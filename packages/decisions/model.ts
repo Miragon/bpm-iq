@@ -41,6 +41,22 @@ export interface DecisionVariable {
 const SIMPLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
+ * The variable a column reads DIRECTLY — `kundentyp` → "kundentyp", but
+ * `upper case(kundentyp)` → undefined.
+ *
+ * The distinction matters wherever a dmn-js decision-table simulator meets a
+ * scenario: the simulator holds the value of the EXPRESSION (what the column
+ * computed), a scenario holds the value of the VARIABLE (what the model reads).
+ * For a plain read they are the same thing; for anything compound they are not,
+ * so capture/replay skip such a column instead of inventing a key that binds
+ * nothing.
+ */
+export function variableOf(expression: string): string | undefined {
+  const text = expression.trim();
+  return SIMPLE_NAME.test(text) ? text : undefined;
+}
+
+/**
  * The variables a FEEL expression reads, via the engine itself: evaluating
  * against an EMPTY context makes feelin report every unresolved name as a
  * NO_VARIABLE_FOUND warning. More faithful than a regex — it knows literals,
@@ -109,7 +125,7 @@ export function decisionVariables(view: DerivedDecision): DecisionVariable[] {
         if (!existing.usedBy.includes(decision.id)) existing.usedBy.push(decision.id);
         continue;
       }
-      const column = decision.inputs.find((i) => i.expression.trim() === name);
+      const column = decision.inputs.find((i) => variableOf(i.expression) === name);
       free.set(name, {
         name,
         id: `${FREE_INPUT_PREFIX}${name}`,

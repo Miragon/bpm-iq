@@ -163,9 +163,14 @@ numeric boundaries the rules use: the raw material for writing test cases.
 
 Both take either a stored decision (`repo` + `id`/`path`) or an explicit `xml` — the
 same dry-run shape as `validate_bpmn`, so an edit can be checked before it is saved.
-Evaluation runs on `@bpmiq/decisions`, which drives the same engine
-(`@emaarco/dmn-js-simulation`, FEEL via `feelin`) that the dmn-js modeler runs in the
-browser: a scenario an agent simulates and one a human clicks cannot drift apart.
+
+Evaluation runs on `@bpmiq/decisions`, and MCP is only one of its callers: the package is
+**isomorphic**, so the very same module also runs in the browser — in the web client's
+live DMN editor (the **Checks** panel: findings and "try a scenario" without a
+round-trip) and in the MCP-App widget. Together with the engine it drives
+(`@emaarco/dmn-js-simulation`, FEEL via `feelin`, the add-on dmn-js mounts), that means a
+scenario an agent simulates, one a human clicks and one CI runs are the same computation
+rather than three implementations that agree until they don't.
 
 ### Decision tests: the sidecar
 

@@ -1,17 +1,37 @@
 # @bpmiq/decisions
 
-Simulation, analysis and tests for DMN decisions — the server-side half of the dmn-js
-simulation add-on the modeler widget runs in the browser.
-
-Same engine on both sides ([`@emaarco/dmn-js-simulation`](https://github.com/emaarco/dmn-js-simulation),
-FEEL via [`feelin`](https://github.com/nikku/feelin)), so a scenario a human clicks in the
-modeler and one an agent simulates through the MCP endpoint cannot drift apart. The DMN
-itself is parsed exactly once, by the notation registry (`@bpmiq/notations`), never here.
+Simulation, analysis and tests for DMN decisions — **one implementation, every side**.
 
 ```ts
 import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
 import { runDecisionTests, parseTestSuite } from "@bpmiq/decisions/tests";
 ```
+
+## Isomorphic on purpose
+
+This package runs unchanged in Node **and** in the browser. Its engine is
+[`@emaarco/dmn-js-simulation`](https://github.com/emaarco/dmn-js-simulation) (FEEL via
+[`feelin`](https://github.com/nikku/feelin)) — the add-on the dmn-js modeler mounts in the
+browser — driven through the platform's own DMN parse (`@bpmiq/notations`, itself pure).
+Nothing it exports touches a Node builtin.
+
+| Where                                  | What it does                                                     |
+| -------------------------------------- | ---------------------------------------------------------------- |
+| `apps/live-host` (Node)                | the `/mcp` decision tools; the release PR's **Decision impact**  |
+| `packages/decisions/cli.ts` (Node)     | the `pnpm validate` gate — analyses every `.dmn`, runs its cases |
+| `apps/web` — live DMN editor (browser) | the **Checks** panel: findings + "try a scenario", no round-trip |
+| `apps/web` — MCP-App widget (browser)  | maps the dmn-js simulator's columns onto scenario variables      |
+
+So a scenario a human clicks, one an agent simulates through MCP and one CI runs are the
+**same computation** — not three implementations that agree until they don't. `cli.ts` is
+the only Node-only module and is deliberately not exported; `pnpm arch` fails the build if
+an exported module ever imports `node:fs` & co. (rule `decisions-lib-stays-isomorphic`).
+
+One caveat worth knowing when crossing into a dmn-js simulator: it holds a **column's**
+value (what the input expression computed), a scenario holds a **variable's** value (what
+the model reads). Those coincide only for a plain read — `variableOf()` is the shared
+answer to "can this column be stated as a scenario key?", so both browser consumers skip
+a computed column instead of inventing a key nothing binds.
 
 | Function             | What it answers                                                                            |
 | -------------------- | ------------------------------------------------------------------------------------------ |

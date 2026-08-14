@@ -17,7 +17,7 @@
 import type { DecisionView, DerivedDecision } from "@bpmiq/notations/derive";
 import { parseExpression, parseUnaryTests } from "feelin";
 
-import { decisionVariables } from "./model.ts";
+import { decisionVariables, variableOf } from "./model.ts";
 
 export type Severity = "ERROR" | "WARN" | "INFO";
 
@@ -101,6 +101,13 @@ function subsumes(general: string[], specific: string[]): boolean {
     const other = specific[n] ?? "";
     return isAny(entry) || entry.trim() === other.trim();
   });
+}
+
+/** two rows that produce literally the same result — ANY's legality condition
+ *  (unlike an input test, an output entry has no "any", so compare verbatim) */
+function sameOutputs(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((entry, n) => entry.trim() === (b[n] ?? "").trim());
 }
 
 /** hit policies where an earlier rule makes a subsumed later one unreachable */
@@ -234,6 +241,7 @@ function analyzeTable(view: DecisionView, findings: DecisionFinding[]): void {
   }
 
   // shadowing / duplicates — only where subsumption is certain
+  const policy = view.hitPolicy ?? "UNIQUE";
   for (let later = 0; later < view.rules.length; later++) {
     const rule = view.rules[later];
     if (!rule) continue;
@@ -248,13 +256,17 @@ function analyzeTable(view: DecisionView, findings: DecisionFinding[]): void {
           message: `rule '${rule.id}' tests exactly the same inputs as '${before.id}'`,
           ...at(rule.id),
         });
-      } else if (FIRST_WINS.has(view.hitPolicy ?? "UNIQUE")) {
+      } else if (FIRST_WINS.has(policy)) {
+        // ANY is the one policy that EXISTS to allow overlapping rules: it is
+        // violated only when the overlapping rules disagree on the result. An
+        // agreeing overlap is well-formed DMN — keep scanning for a real one.
+        if (policy === "ANY" && sameOutputs(before.then, rule.then)) continue;
         findings.push({
           severity: "WARN",
           code: "rule-shadowed",
           message:
-            view.hitPolicy === "UNIQUE" || view.hitPolicy === "ANY"
-              ? `rule '${rule.id}' can only fire together with the more general '${before.id}' — a ${view.hitPolicy ?? "UNIQUE"} violation whenever it matches`
+            policy === "UNIQUE" || policy === "ANY"
+              ? `rule '${rule.id}' can only fire together with the more general '${before.id}' — every match violates ${policy}`
               : `rule '${rule.id}' is unreachable: the earlier '${before.id}' matches whenever it does`,
           ...at(rule.id),
         });
@@ -268,13 +280,12 @@ function analyzeTable(view: DecisionView, findings: DecisionFinding[]): void {
 function analyzeWiring(view: DerivedDecision, findings: DecisionFinding[]): void {
   const byId = new Map(view.decisions.map((d) => [d.id, d]));
   const inputById = new Map(view.inputData.map((i) => [i.id, i]));
+  // ONCE, not per decision: every call evaluates FEEL for every column of
+  // every decision, and `usedBy` already carries the per-decision answer
+  const variables = decisionVariables(view);
 
   for (const decision of view.decisions) {
-    const reads = new Set(
-      decisionVariables(view)
-        .filter((v) => v.usedBy.includes(decision.id))
-        .map((v) => v.name),
-    );
+    const reads = new Set(variables.filter((v) => v.usedBy.includes(decision.id)).map((v) => v.name));
     // a decision's expressions also read upstream decision variables
     const expressions = [...decision.inputs.map((i) => i.expression), decision.expression ?? ""].join(" ");
     for (const required of decision.requires.decisions) {
@@ -349,7 +360,7 @@ function profileVariables(view: DerivedDecision): VariableProfile[] {
     for (const decision of view.decisions) {
       const columns = decision.inputs
         .map((input, n) => ({ input, n }))
-        .filter(({ input }) => input.expression.trim() === variable.name);
+        .filter(({ input }) => variableOf(input.expression) === variable.name);
       for (const { input, n } of columns) {
         for (const value of input.inputValues) for (const l of literalsOf(value)) literals.add(l);
         for (const rule of decision.rules) {

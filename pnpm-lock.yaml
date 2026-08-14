@@ -145,6 +145,9 @@ importers:
       '@bpmiq/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@bpmiq/decisions':
+        specifier: workspace:*
+        version: link:../../packages/decisions
       '@bpmiq/live-client':
         specifier: workspace:*
         version: link:../../packages/live-client

@@ -12,7 +12,14 @@
  * The wrapper exposes the two things the widget needs on top of editing: read
  * the values currently entered in the table simulator (to turn them into a
  * test case), and write values into it (to replay a stored case on the canvas).
+ *
+ * Both crossings go through `variableOf` from the shared library rather than a
+ * local guess, because the two sides do NOT hold the same thing: the simulator
+ * holds a column's value (what the input expression computed), a scenario holds
+ * a variable's value (what the model reads). They coincide for a plain read and
+ * for nothing else — see the note on variableOf in @bpmiq/decisions.
  */
+import { type Scenario, variableOf } from "@bpmiq/decisions";
 import DmnSimulationModule from "@emaarco/dmn-js-simulation";
 import DmnModeler from "dmn-js/lib/Modeler";
 import DmnViewer from "dmn-js/lib/Viewer";
@@ -26,21 +33,27 @@ interface SimulationStoreLike {
   setValue(index: number, value: string | number | boolean | null | undefined): void;
   run(): unknown;
   reset(): void;
-  subscribe(listener: () => void): () => void;
 }
 
-/** a scenario as the platform speaks it: variable name → value */
-export type Scenario = Record<string, string | number | boolean | null>;
+/** a scenario as the platform speaks it: variable name → value. THE library's
+ *  type — the widget and the Live Host mean the same thing by it. */
+export type { Scenario };
+
+/** what the table simulator currently holds, in scenario terms */
+export interface CapturedScenario {
+  scenario: Scenario;
+  /** labels of columns whose expression is not a plain variable read, so their
+   *  value cannot be stated as a scenario — reported, never silently dropped */
+  unmappable: string[];
+}
 
 export interface DmnModelerHandle {
   importXml(xml: string): Promise<void>;
   saveXml(): Promise<string>;
   editable: boolean;
   onDirty(cb: () => void): void;
-  /** fires whenever the active view or its simulation state changes */
-  onSimulationChange(cb: () => void): void;
   /** the values currently entered in the table simulator, keyed by variable */
-  currentScenario(): Scenario | undefined;
+  currentScenario(): CapturedScenario | undefined;
   /** load a scenario into the table simulator and evaluate it */
   applyScenario(scenario: Scenario): boolean;
   /** true while a decision table (and with it the simulator) is on screen */
@@ -63,10 +76,10 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
   const instance = readonly ? new DmnViewer(options) : new DmnModeler(options);
 
   const dirtyCbs: Array<() => void> = [];
-  const simCbs: Array<() => void> = [];
-  let unsubscribeStore: (() => void) | undefined;
 
-  /** the active view's simulation store, when the active view is a table */
+  /** the active view's simulation store, when the active view is a table.
+   *  Read on demand rather than cached — each view is its own injector, so the
+   *  store is a different object after every view switch. */
   const store = (): SimulationStoreLike | undefined => {
     try {
       // strict:false — the DRD and literal-expression views have no store
@@ -75,19 +88,6 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
       return undefined;
     }
   };
-
-  /** re-subscribe to the simulation store whenever the active view changes —
-   *  each view is its own injector, so the store is a different object */
-  const rebind = (): void => {
-    unsubscribeStore?.();
-    unsubscribeStore = store()?.subscribe(() => {
-      for (const cb of simCbs) cb();
-    });
-    for (const cb of simCbs) cb();
-  };
-
-  instance.on("views.changed", rebind);
-  instance.on("import.done", rebind);
 
   // Edit tracking: dmn-js does NOT re-emit editing events on the manager —
   // every view is its own viewer with its own command stack, and an inactive
@@ -123,22 +123,25 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
     onDirty(cb) {
       dirtyCbs.push(cb);
     },
-    onSimulationChange(cb) {
-      simCbs.push(cb);
-    },
-    currentScenario(): Scenario | undefined {
+    currentScenario(): CapturedScenario | undefined {
       const active = store();
       const model = active?.getModel();
       if (!active || !model) return undefined;
       const values = active.getValues();
       const scenario: Scenario = {};
+      const unmappable: string[] = [];
       model.inputs.forEach((input, n) => {
         const value = values[n];
         // an unset column is left out — a partial scenario is still a scenario
         if (value === undefined || value === "") return;
-        scenario[input.expression.trim() || input.label] = value;
+        const variable = variableOf(input.expression);
+        // a computed column (`upper case(kundentyp)`) holds a RESULT, not a
+        // variable's value: writing it into a case would key the scenario on
+        // something the model never reads, and the case would fail on save
+        if (!variable) return void unmappable.push(input.label || input.expression);
+        scenario[variable] = value;
       });
-      return scenario;
+      return { scenario, unmappable };
     },
     simulatorReady(): boolean {
       return store()?.getModel() != null;
@@ -157,16 +160,15 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
       active.reset();
       let applied = false;
       model.inputs.forEach((input, n) => {
-        const key = input.expression.trim() || input.label;
-        if (!(key in scenario)) return;
-        active.setValue(n, scenario[key] ?? null);
+        const variable = variableOf(input.expression);
+        if (!variable || !(variable in scenario)) return;
+        active.setValue(n, scenario[variable] ?? null);
         applied = true;
       });
       if (applied) active.run();
       return applied;
     },
     destroy(): void {
-      unsubscribeStore?.();
       for (const viewer of subscribed) viewer.off("commandStack.changed", onChanged);
       subscribed.clear();
       instance.destroy();

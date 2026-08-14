@@ -291,18 +291,22 @@ export function runDecisionTests(view: DerivedDecision, suite: TestSuite): Suite
  * Fill every `pending` case with the value it actually produced — the
  * golden-master step. Returns a NEW suite; the caller decides whether to save
  * it (and a human still reviews the diff).
+ *
+ * Matched BY POSITION, never by name: `outcome.cases` is a straight map over
+ * `suite.cases`, while names are free text (the widget's capture form asks the
+ * user for one) — two cases called the same would otherwise both be frozen to
+ * the last one's result.
  */
 export function recordExpectations(suite: TestSuite, outcome: SuiteOutcome): TestSuite {
-  const byName = new Map(outcome.cases.map((c) => [c.name, c]));
   return {
     ...suite,
-    cases: suite.cases.map((testCase) => {
+    cases: suite.cases.map((testCase, n) => {
       if (testCase.expect) return testCase;
-      const result = byName.get(testCase.name);
+      const result = outcome.cases[n];
       if (!result) return testCase;
       return {
         ...testCase,
-        expect: { value: result.actual.value, rules: result.actual.rules },
+        expect: { value: result.actual.value, rules: [...result.actual.rules] },
       };
     }),
   };

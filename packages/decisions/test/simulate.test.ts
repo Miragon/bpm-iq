@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { decisionVariables, freeVariablesOf } from "../model.ts";
+import { decisionVariables, freeVariablesOf, variableOf } from "../model.ts";
 import { simulateDecision } from "../simulate.ts";
 import { RABATT, VERSAND, view } from "./fixtures.ts";
 
@@ -39,6 +39,20 @@ test("freeVariablesOf reads compound expressions through the FEEL engine", () =>
   assert.deepEqual(freeVariablesOf('"literal"'), []);
   assert.deepEqual(freeVariablesOf("sum([1,2])"), []);
   assert.deepEqual(freeVariablesOf("1 +"), [], "a syntax error yields no variables (analyze reports it)");
+});
+
+test("variableOf: only a PLAIN read is a variable a scenario can key on", () => {
+  // the browser side (dmn-js simulator ↔ test case) crosses exactly here: the
+  // simulator holds a column's computed value, a scenario holds a variable's
+  assert.equal(variableOf("kundentyp"), "kundentyp");
+  assert.equal(variableOf("  bestellwert  "), "bestellwert");
+  assert.equal(variableOf("upper case(kundentyp)"), undefined, "a computed column is not a variable");
+  assert.equal(variableOf("bestellwert > 500"), undefined);
+  assert.equal(variableOf(""), undefined);
+  // …and it agrees with what decisionVariables actually binds
+  const names = decisionVariables(view(RABATT)).map((v) => v.name);
+  assert.deepEqual(names, ["kundentyp", "bestellwert"]);
+  assert.ok(names.every((n) => variableOf(n) === n));
 });
 
 test("simulate: FIRST picks the first match; rules are reported by id", () => {

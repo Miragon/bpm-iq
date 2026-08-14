@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "DMN decision simulation, analysis and test running — the server-side half of the dmn-js simulation add-on: same FEEL engine, no browser.",
+  "description": "DMN decision simulation, analysis and test running — ISOMORPHIC: the same FEEL engine and the same answers in Node (MCP, CI) and in the browser (the SPA's DMN editor, the MCP-App widget).",
   "engines": {
     "node": ">=23.6"
   },
+  "//": "The exported entries are browser-safe (CI-enforced: `pnpm arch`, rule decisions-lib-stays-isomorphic). ./cli is the ONLY Node entry and is deliberately not exported.",
   "exports": {
     ".": "./index.ts",
     "./tests": "./tests.ts"

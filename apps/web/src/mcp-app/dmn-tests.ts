@@ -131,7 +131,7 @@ export function mountTests(
 
     item.onclick = () => {
       // replay ON the canvas: the decision table is the better error message
-      if (modeler.applyScenario(testCase.given as Scenario)) {
+      if (modeler.applyScenario(testCase.given)) {
         opts.onStatus(`Replaying "${testCase.name}" on the decision table`);
       } else {
         opts.onStatus("Open the decision table view to replay a case");
@@ -215,15 +215,22 @@ export function mountTests(
         return;
       }
     }
-    const scenario = modeler.currentScenario();
-    if (!scenario || Object.keys(scenario).length === 0) {
-      showError("Enter values in the decision table first — the captured case records what they produce.");
+    const captured = modeler.currentScenario();
+    if (!captured || Object.keys(captured.scenario).length === 0) {
+      showError(
+        captured && captured.unmappable.length > 0
+          ? `Only computed columns are filled in (${captured.unmappable.join(", ")}). A test case states VARIABLE values, so enter a value in a column that reads one directly.`
+          : "Enter values in the decision table first — the captured case records what they produce.",
+      );
       return;
     }
-    pending = scenario;
-    formGiven.textContent = Object.entries(scenario)
-      .map(([k, v]) => `${k}: ${v ?? "null"}`)
-      .join(" · ");
+    pending = captured.scenario;
+    formGiven.textContent =
+      Object.entries(captured.scenario)
+        .map(([k, v]) => `${k}: ${v ?? "null"}`)
+        .join(" · ") +
+      // a silently dropped column would make the case look complete when it is not
+      (captured.unmappable.length > 0 ? ` — without the computed column(s) ${captured.unmappable.join(", ")}` : "");
     nameInput.value = "";
     form.hidden = false;
     nameInput.focus();

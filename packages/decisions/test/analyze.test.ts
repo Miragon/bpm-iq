@@ -48,7 +48,7 @@ test("an unreachable rule under FIRST, and the same overlap as a UNIQUE violatio
 
   // the SAME table under UNIQUE is a guaranteed hit-policy violation instead
   const unique = analyzeDecision(view(shadowed.replace('hitPolicy="FIRST"', 'hitPolicy="UNIQUE"')));
-  assert.match(unique.findings.find((f) => f.code === "rule-shadowed")?.message ?? "", /UNIQUE violation/);
+  assert.match(unique.findings.find((f) => f.code === "rule-shadowed")?.message ?? "", /violates UNIQUE/);
 
   // two literally identical rows are a duplicate, whatever the policy
   const duplicate = RABATT.replace(
@@ -57,6 +57,26 @@ test("an unreachable rule under FIRST, and the same overlap as a UNIQUE violatio
      <rule id="Rule_neu">`,
   );
   assert.ok(codes(duplicate).includes("WARN:duplicate-rule"));
+});
+
+test("ANY allows an overlap — it is only a violation when the results disagree", () => {
+  // ANY exists for exactly this: a catch-all and a specific row that AGREE.
+  // "stamm" above "stamm/>= 500", both returning 10 → well-formed, no finding.
+  const agreeing = RABATT.replace('hitPolicy="FIRST"', 'hitPolicy="ANY"').replace(
+    /<rule id="Rule_stamm_gross">[\s\S]*?<\/rule>\s*<rule id="Rule_stamm">[\s\S]*?<\/rule>/,
+    `<rule id="Rule_stamm"><inputEntry id="e4"><text>"stamm"</text></inputEntry><inputEntry id="e5"><text>-</text></inputEntry><outputEntry id="e6"><text>10</text></outputEntry></rule>
+     <rule id="Rule_stamm_gross"><inputEntry id="e1"><text>"stamm"</text></inputEntry><inputEntry id="e2"><text>&gt;= 500</text></inputEntry><outputEntry id="e3"><text>10</text></outputEntry></rule>`,
+  );
+  assert.deepEqual(
+    analyzeDecision(view(agreeing)).findings.filter((f) => f.code === "rule-shadowed"),
+    [],
+  );
+
+  // …and the same table with a differing result IS a violation
+  const disagreeing = agreeing.replace('<outputEntry id="e3"><text>10</text>', '<outputEntry id="e3"><text>20</text>');
+  const finding = analyzeDecision(view(disagreeing)).findings.find((f) => f.code === "rule-shadowed");
+  assert.equal(finding?.rule, "Rule_stamm_gross");
+  assert.match(finding?.message ?? "", /violates ANY/);
 });
 
 test("a requirement whose variable nobody reads is reported (the classic silent chain break)", () => {

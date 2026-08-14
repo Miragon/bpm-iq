@@ -100,6 +100,22 @@ test("golden master: a case without `expect` is pending, and can be frozen", () 
   assert.match(serializeTestSuite(recorded), /name: Neukunde/);
 });
 
+test("golden master: two cases named the same are frozen to THEIR OWN result", () => {
+  // the widget's capture form takes a free-text name — nothing stops a repeat,
+  // and matching by name would give both cases the last one's expectation
+  const suite = parseTestSuite(
+    `cases:\n` +
+      `  - name: Fall\n    given: { kundentyp: neu, bestellwert: 20 }\n` +
+      `  - name: Fall\n    given: { kundentyp: stamm, bestellwert: 900 }\n`,
+  );
+  const recorded = recordExpectations(suite, runDecisionTests(view(RABATT), suite));
+  assert.deepEqual(recorded.cases[0]?.expect, { value: 0, rules: ["Rule_neu"] });
+  assert.deepEqual(recorded.cases[1]?.expect, { value: 10, rules: ["Rule_stamm_gross"] });
+  assert.equal(runDecisionTests(view(RABATT), recorded).failed, 0);
+  // …and no case borrows another's array, which YAML would emit as an anchor
+  assert.doesNotMatch(serializeTestSuite(recorded), /[&*]a\d/);
+});
+
 test("DRD: expectations per decision, and the main decision is the leaf", () => {
   const decision = view(VERSAND);
   assert.equal(mainDecisionOf(decision), "porto");

@@ -624,6 +624,36 @@ test("decision tests: none → first save creates the sidecar → run → golden
   assert.match(broken.cases[0].failures[0], /expected 10, got 20/);
 });
 
+test("save_decision_tests keeps the suite's own `decision:` key — callers only send cases", async () => {
+  const d = deps();
+  const { callJson } = await connect(d);
+  const ws = await d.workspaces.ensure(REPO);
+  // a hand-authored sidecar that PINS which decision the top-level
+  // expectations are about — in a chained DRD that is not the leaf
+  // mainDecisionOf() would fall back to
+  writeFileSync(
+    join(ws, "processes/rabatt.tests.yaml"),
+    "decision: rabatt\ncases:\n  - name: Stammkunde\n    given: { kundentyp: stamm }\n    expect: { value: 10 }\n",
+  );
+  const before = await callJson("get_decision_tests", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(before.suite.decision, "rabatt");
+
+  // the tool has no field for it, so the write must carry it over itself
+  const saved = await callJson("save_decision_tests", {
+    repo: REPO.fullName,
+    id: "rabatt",
+    cases: [...before.suite.cases, { name: "Neukunde", given: { kundentyp: "neu" } }],
+    baseVersion: before.baseVersion,
+    record: true,
+  });
+  assert.equal(saved.ok, true);
+
+  const after = await callJson("get_decision_tests", { repo: REPO.fullName, id: "rabatt" });
+  assert.equal(after.suite.decision, "rabatt");
+  assert.match(after.raw, /^decision: rabatt$/m);
+  assert.equal(after.suite.cases.length, 2);
+});
+
 test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, room-bound", async () => {
   const wsTickets = new WsTicketStore();
   const d = deps({ wsTickets });

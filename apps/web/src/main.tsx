@@ -11,6 +11,9 @@ import "dmn-js/dist/assets/dmn-js-literal-expression.css";
 import "dmn-js/dist/assets/dmn-js-boxed-expression.css";
 import "dmn-js/dist/assets/dmn-js-boxed-expression-controls.css";
 import "dmn-js/dist/assets/dmn-font/css/dmn.css";
+// the simulation add-on's own styles (matched/reported row highlighting) — the
+// live DMN editor mounts it, exactly like the MCP-App decision widget does
+import "@emaarco/dmn-js-simulation/assets/dmn-js-simulation.css";
 import "./index.css";
 
 import { QueryClientProvider } from "@tanstack/react-query";

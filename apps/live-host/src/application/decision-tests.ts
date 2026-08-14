@@ -106,12 +106,21 @@ export async function saveTestsFor(
 ): Promise<SaveTestsResult | { conflict: NonNullable<Extract<PutOutcome, { ok: false }>["conflict"]> }> {
   const path = testsPathFor(dmnPath);
   const workspace = await opts.workspaces.ensure(repo);
-  const final = opt.record ? recordExpectations(suite, runDecisionTests(view, suite)) : suite;
+  const file = resolve(workspace, path);
+  const exists = existsSync(file);
+
+  // Callers write CASES — neither the MCP tool nor the widget has a field for
+  // the suite's own `decision:` key. Carry the stored one over, or a save
+  // would silently retarget the top-level expectations to mainDecisionOf(),
+  // which is a DIFFERENT decision in a chained DRD.
+  const kept: TestSuite = suite.decision
+    ? suite
+    : { ...suite, ...(exists ? await storedDecision(opts, repo, dmnPath) : {}) };
+  const final = opt.record ? recordExpectations(kept, runDecisionTests(view, kept)) : kept;
   const yaml = serializeTestSuite(final);
   const outcome = runDecisionTests(view, final);
 
-  const file = resolve(workspace, path);
-  if (!existsSync(file)) {
+  if (!exists) {
     // first write: create it in the workspace tree (a live doc must exist on
     // disk before it can be opened), with the same symlink guard as scaffolding
     assertInsideWorkspace(file, workspace, path);
@@ -132,6 +141,22 @@ export async function saveTestsFor(
   const out = await putContent(opts, repo, path, { xml: yaml, baseVersion: opt.baseVersion });
   if (!out.ok) return { conflict: out.conflict };
   return { path, baseVersion: out.result.baseVersion, created: false, outcome };
+}
+
+/** the `decision:` key of the stored sidecar, or `{}` — a file that no longer
+ *  parses has none to carry over, and the save replacing it is the fix */
+async function storedDecision(
+  opts: DecisionTestsDeps,
+  repo: ConnectedRepo,
+  dmnPath: string,
+): Promise<{ decision?: string }> {
+  try {
+    const stored = await readDecisionTests(opts, repo, dmnPath);
+    const decision = stored ? parseTestSuite(stored.raw, stored.path).decision : undefined;
+    return decision ? { decision } : {};
+  } catch {
+    return {};
+  }
 }
 
 function assertInsideWorkspace(target: string, workspace: string, what: string): void {
