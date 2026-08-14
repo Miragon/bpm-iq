@@ -12,9 +12,10 @@ export default defineConfig({
   fixedExtension: false,
   // no consumers import types from the server — ship runtime JS only
   dts: false,
-  // @bpmiq/notations and @bpmiq/contracts are workspace-only (never published) —
-  // inline them into the bundle; every other dependency stays external and
-  // installs from npm (fast-xml-parser is declared as a dependency here because
-  // the inlined notations/extract imports it at runtime; contracts is zero-dep).
-  deps: { alwaysBundle: [/^@bpmiq\/(notations|contracts)/] },
+  // @bpmiq/notations, @bpmiq/contracts and @bpmiq/http-kit are workspace-only
+  // (never published) — inline them into the bundle; every other dependency
+  // stays external and installs from npm (fast-xml-parser is declared as a
+  // dependency here because the inlined notations/extract imports it at
+  // runtime; contracts and http-kit are dependency-free).
+  deps: { alwaysBundle: [/^@bpmiq\/(notations|contracts|http-kit)/] },
 });

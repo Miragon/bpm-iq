@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@bpmiq/contracts": "workspace:*",
+    "@bpmiq/http-kit": "workspace:*",
     "@bpmiq/notations": "workspace:*",
     "tsdown": "0.22.14"
   }

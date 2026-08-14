@@ -40,6 +40,9 @@ COPY --from=build /app/packages/notations ./packages/notations
 # tools.ts imports @bpmiq/contracts/todo-anchor (list_todos) — the workspace
 # symlink in node_modules dangles without the real package source
 COPY --from=build /app/packages/contracts ./packages/contracts
+# http.ts imports @bpmiq/http-kit — the workspace symlink in node_modules
+# dangles without the real package source
+COPY --from=build /app/packages/http-kit ./packages/http-kit
 COPY --from=build /app/packages/mcp ./packages/mcp
 COPY --from=build /app/process-documentation ./process-documentation
 EXPOSE 8080
