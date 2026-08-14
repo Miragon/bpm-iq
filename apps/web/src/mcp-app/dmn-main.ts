@@ -18,6 +18,8 @@
  */
 import "./dmn-styles.css";
 
+import { roomName } from "@bpmiq/contracts/live";
+
 import {
   bootConfig,
   claimDocument,
@@ -138,7 +140,7 @@ async function load(decisionRef: ProcessRef, scenario?: Scenario): Promise<void>
   if (epoch !== loadEpoch || inactive) return;
   setDirty(false);
   tests?.load(ref);
-  releaseClaim = claimDocument(`${decisionRef.repo}/${content.path}`, () => {
+  releaseClaim = claimDocument(roomName(decisionRef.repo, content.path), () => {
     inactive = true;
     clearTimeout(autosaveTimer);
     tests?.destroy();
