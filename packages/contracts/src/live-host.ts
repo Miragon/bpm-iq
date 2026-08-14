@@ -6,6 +6,7 @@
  * lib/api.ts. Changing a field here changes the LIVE wire format — don't.
  */
 import type { GitUserWire } from "./common.ts";
+import type { TodoAnchor, TodoElement } from "./todo-anchor.ts";
 
 /** one model file of a process — each opens as its own live document */
 export interface ModelRef {
@@ -194,19 +195,14 @@ export interface FileAtCommitWire {
   content: string;
 }
 
-/** one BPMN element a todo is anchored to (id = anchor, name = creation-time snapshot) */
-export interface TodoElementWire {
-  id: string;
-  name: string | null;
-}
+/** one BPMN element a todo is anchored to (id = anchor, name = creation-time
+ *  snapshot) — the wire shape IS the codec's TodoElement (./todo-anchor.ts);
+ *  changing that type changes the LIVE wire format */
+export type TodoElementWire = TodoElement;
 
-/** platform anchor of a todo — which process/file/elements it belongs to */
-export interface TodoAnchorWire {
-  process: string;
-  file: string | null;
-  elements: TodoElementWire[];
-  processVersion: string | null;
-}
+/** platform anchor of a todo — which process/file/elements it belongs to;
+ *  the wire shape IS the codec's TodoAnchor (./todo-anchor.ts) */
+export type TodoAnchorWire = TodoAnchor;
 
 /** GET /api/repos/:fullName/todos[?process=<id>] — one row per OPEN tracker item */
 export interface TodoWire {

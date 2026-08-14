@@ -9,7 +9,14 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { after, before, beforeEach, test } from "node:test";
 
-import { type AppKey, appRest, type GitHubApi, mintInstallationToken, paginate } from "../src/index.ts";
+import {
+  type AppKey,
+  appRest,
+  type GitHubApi,
+  GitHubHttpError,
+  mintInstallationToken,
+  paginate,
+} from "../src/index.ts";
 import { StubServer } from "./stub-server.ts";
 
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -113,7 +120,17 @@ test("paginate: app-JWT auth signs as the app (key mode, /app/installations)", a
   assert.equal(req.headers["user-agent"], "bpm-live-host");
 });
 
-test("paginate: non-ok → throws with the first path + status + body", async () => {
+test("paginate: non-ok → throws GitHubHttpError with the first path + status + body", async () => {
   stub.reply({ status: 500, body: "nope" });
-  await assert.rejects(() => paginate(api(), "/things", { token: "t" }), /\/things → 500 nope/);
+  await assert.rejects(
+    () => paginate(api(), "/things", { token: "t" }),
+    (e: unknown) =>
+      e instanceof GitHubHttpError &&
+      e.status === 500 &&
+      e.body === "nope" &&
+      e.path === "/things" &&
+      // the message keeps the historical plain-Error shape — consumers that
+      // still read it (logs) see no change
+      /\/things → 500 nope/.test(e.message),
+  );
 });
