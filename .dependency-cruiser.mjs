@@ -85,6 +85,20 @@ export default {
       },
     },
     {
+      name: "notations-index-and-derive-stay-browser-safe",
+      severity: "error",
+      comment:
+        "@bpmiq/notations' index.ts and derive.ts are imported by apps/web (the " +
+        "SPA value-imports processIdFromName and derive types) — no fs, no yaml, " +
+        "no fast-xml-parser there; those live behind ./content and ./extract. " +
+        "This was an unenforced header comment in both files until it mattered.",
+      from: { path: "^packages/notations/(index|derive)\\.ts$" },
+      to: {
+        dependencyTypesNot: ["type-only"],
+        path: ["^(node:)?(fs|fs/promises|path|child_process)$", "(^|/)node_modules/(yaml|fast-xml-parser)/"],
+      },
+    },
+    {
       name: "pure-modules-stay-pure",
       severity: "error",
       comment:

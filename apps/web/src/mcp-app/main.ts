@@ -9,6 +9,8 @@
  */
 import "./styles.css";
 
+import { roomName } from "@bpmiq/contracts/live";
+
 import {
   bootConfig,
   claimDocument,
@@ -141,7 +143,7 @@ async function load(processRef: ProcessRef): Promise<void> {
   setDirty(false);
   // the todos of THIS document — a failing/absent tracker never blocks the model
   todos?.load({ repo: processRef.repo, path: content.path });
-  releaseClaim = claimDocument(`${processRef.repo}/${content.path}`, () => {
+  releaseClaim = claimDocument(roomName(processRef.repo, content.path), () => {
     inactive = true;
     clearTimeout(autosaveTimer);
     live?.destroy();

@@ -14,7 +14,7 @@
  * implement the same contract against their own issue APIs.
  */
 import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
-import { paginate } from "@bpmiq/github-app";
+import { GitHubHttpError, paginate } from "@bpmiq/github-app";
 import { AppError } from "@bpmiq/http-kit";
 
 import type { IssueTracker, Todo, TodoInput } from "../../ports/issue-tracker.ts";
@@ -214,9 +214,8 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
       try {
         issues = (await paginate(githubApi(api), path, { token })) as GitHubIssue[];
       } catch (e) {
-        // paginate throws plain Errors carrying "<path> → <status> <body>"
-        const message = (e as Error).message;
-        if (message.includes("→ 403") && message.includes("Resource not accessible")) {
+        // paginate throws GitHubHttpError with the response status/body attached
+        if (e instanceof GitHubHttpError && e.status === 403 && e.body.includes("Resource not accessible")) {
           throw issuesPermissionError(repoFullName);
         }
         throw e;

@@ -16,7 +16,7 @@
  * WorkspaceManager, lineage behind dropLineage). ApiOptions structurally
  * satisfies SyncDeps — the returned shape IS the wire format (SyncResult).
  */
-import { roomName } from "@bpmiq/contracts/live";
+import { roomName, roomPrefix } from "@bpmiq/contracts/live";
 import type { SyncResult } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 
@@ -45,7 +45,7 @@ export async function syncRepo(opts: SyncDeps, repo: ConnectedRepo): Promise<Syn
       { status: 422, expose: true },
     );
   }
-  if (opts.liveDocs().some((d) => d.startsWith(`${repo.fullName}/`))) {
+  if (opts.liveDocs().some((d) => d.startsWith(roomPrefix(repo.fullName)))) {
     throw new AppError(
       "sync/live-sessions",
       `${repo.fullName} has open editing sessions — close them before loading the latest state`,

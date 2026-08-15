@@ -113,6 +113,24 @@ export async function mintInstallationToken(key: AppKey, api: GitHubApi, install
 /** How paginate authenticates: a (user/installation) token OR the app JWT. */
 export type PaginateAuth = { token: string } | { key: AppKey };
 
+/** A non-2xx GitHub REST response with status/body machine-readable —
+ *  consumers match on the fields instead of substring-parsing the message
+ *  (one caller recovered the status from "→ 403" before this existed).
+ *  Message shape is unchanged from the historical plain Error. */
+export class GitHubHttpError extends Error {
+  readonly status: number;
+  readonly body: string;
+  /** the request path the walk started from (paginate reports firstPath, not the page URL) */
+  readonly path: string;
+  constructor(path: string, status: number, body: string) {
+    super(`${path} → ${status} ${body}`);
+    this.name = "GitHubHttpError";
+    this.status = status;
+    this.body = body;
+    this.path = path;
+  }
+}
+
 /**
  * Follow GitHub's Link: rel="next" pagination from `firstPath`, concatenating
  * the pages. Unwraps envelope responses ({repositories: […]}, e.g.
@@ -130,7 +148,7 @@ export async function paginate(api: GitHubApi, firstPath: string, auth: Paginate
         "user-agent": api.userAgent,
       },
     });
-    if (!res.ok) throw new Error(`${firstPath} → ${res.status} ${await res.text()}`);
+    if (!res.ok) throw new GitHubHttpError(firstPath, res.status, await res.text());
     const body = await res.json();
     // e.g. /installation/repositories wraps the array; /app/installations is bare
     out.push(...(Array.isArray(body) ? body : (body as { repositories: unknown[] }).repositories));

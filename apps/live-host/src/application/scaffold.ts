@@ -16,7 +16,7 @@
  * AppErrors — the http catch-all maps them to 400/409/422 with the message
  * exposed to the authenticated caller.
  */
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
@@ -34,6 +34,7 @@ import {
   loadContentConfig,
 } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
+import { assertRealInsideWorkspace } from "./workspace-paths.ts";
 
 /** one path segment of a folder: no leading dot (discovery hides dotfiles),
  * no separators/traversal (the leading alnum rules out "." and "..") */
@@ -78,26 +79,6 @@ function processesRoot(workspace: string, cfg: ContentConfig): string {
 function assertInsideRoot(target: string, root: string, what: string): void {
   if (target !== root && !target.startsWith(root + sep)) {
     throw new AppError("scaffold/outside-processes-root", `${what} escapes the processes folder`, {
-      status: 400,
-      expose: true,
-    });
-  }
-}
-
-/**
- * The lexical check above is blind to SYMLINKS — a checkout may contain a
- * symlinked folder pointing outside the workspace (repos can commit symlinks),
- * and a create would then write through it. Canonicalize the nearest EXISTING
- * ancestor (that is where the write physically lands) and require it to stay
- * inside the canonical workspace — the same guard collab.ts applies to rooms.
- */
-function assertRealInsideWorkspace(target: string, workspace: string, what: string): void {
-  let probe = target;
-  while (!existsSync(probe)) probe = dirname(probe);
-  const real = realpathSync(probe);
-  const realWorkspace = realpathSync(workspace);
-  if (real !== realWorkspace && !real.startsWith(realWorkspace + sep)) {
-    throw new AppError("scaffold/outside-processes-root", `${what} escapes the workspace (symlink)`, {
       status: 400,
       expose: true,
     });
@@ -160,7 +141,7 @@ export async function createFolder(repo: ConnectedRepo, workspace: string, path:
   const root = processesRoot(workspace, cfg);
   const target = resolve(root, ...segments);
   assertInsideRoot(target, root, `folder '${path}'`);
-  assertRealInsideWorkspace(target, workspace, `folder '${path}'`);
+  assertRealInsideWorkspace(target, workspace, `folder '${path}'`, "scaffold/outside-processes-root");
   if (existsSync(target)) {
     throw new AppError("scaffold/folder-exists", `'${segments.join("/")}' already exists`, {
       status: 409,
@@ -205,7 +186,7 @@ export async function createProcess(
   const root = processesRoot(workspace, cfg);
   const file = resolve(root, ...segments, `${id}.bpmn`);
   assertInsideRoot(file, root, `process '${id}'`);
-  assertRealInsideWorkspace(file, workspace, `process '${id}'`);
+  assertRealInsideWorkspace(file, workspace, `process '${id}'`, "scaffold/outside-processes-root");
   if (existsSync(file)) {
     // not discovered (e.g. under a dot-folder clash) but present on disk
     throw new AppError("scaffold/process-exists", `'${relative(workspace, file)}' already exists`, {
@@ -263,7 +244,7 @@ export async function createDecision(
   const root = processesRoot(workspace, cfg);
   const file = resolve(root, ...segments, `${id}.dmn`);
   assertInsideRoot(file, root, `decision '${id}'`);
-  assertRealInsideWorkspace(file, workspace, `decision '${id}'`);
+  assertRealInsideWorkspace(file, workspace, `decision '${id}'`, "scaffold/outside-processes-root");
   if (existsSync(file)) {
     // not discovered (e.g. under a dot-folder clash) but present on disk
     throw new AppError("scaffold/decision-exists", `'${relative(workspace, file)}' already exists`, {

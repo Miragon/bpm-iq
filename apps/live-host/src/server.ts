@@ -23,6 +23,7 @@ import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
+import { roomName, roomPrefix } from "@bpmiq/contracts/live";
 import { loadPrivateKey } from "@bpmiq/github-app";
 import { Server } from "@hocuspocus/server";
 
@@ -193,10 +194,10 @@ const workspaces = new WorkspaceManager({
 // reconcile safety: never fast-forward under live sessions; after a fast-forward,
 // drop the Yjs lineage of changed files so the next open reseeds from the new tree
 workspaces.hooks = {
-  hasLiveDocs: (repo) => [...liveDocs].some((d) => d.startsWith(`${repo.fullName}/`)),
+  hasLiveDocs: (repo) => [...liveDocs].some((d) => d.startsWith(roomPrefix(repo.fullName))),
   onReconciled: (repo, changedPaths) => {
     for (const path of changedPaths) {
-      lineage.drop(`${repo.fullName}/${path}`);
+      lineage.drop(roomName(repo.fullName, path));
     }
     console.log(`lineages invalidated for ${repo.fullName}: ${changedPaths.join(", ")}`);
   },

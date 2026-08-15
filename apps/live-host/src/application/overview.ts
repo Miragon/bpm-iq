@@ -18,6 +18,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { roomName, roomPrefix } from "@bpmiq/contracts/live";
 import type { ChangedFileWire, DecisionInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { byExtension } from "@bpmiq/notations";
 import { deriveProcess } from "@bpmiq/notations/derive";
@@ -70,7 +71,7 @@ export async function listProcesses(
       folder: rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "",
       dirty,
       // a process is exactly one file — its room is the exact match
-      liveSessions: live.filter((d) => d === `${repo.fullName}/${proc.path}`).length,
+      liveSessions: live.filter((d) => d === roomName(repo.fullName, proc.path)).length,
     });
   }
   return processes;
@@ -97,7 +98,7 @@ export async function listDecisions(
       path: decision.path,
       folder: rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "",
       dirty,
-      liveSessions: live.filter((d) => d === `${repo.fullName}/${decision.path}`).length,
+      liveSessions: live.filter((d) => d === roomName(repo.fullName, decision.path)).length,
     });
   }
   return decisions;
@@ -155,7 +156,7 @@ export async function listChanges(
   const live = opts.liveDocs();
   return (await opts.workspaces.changedFiles(repo, cfg.processes)).map((c) => ({
     ...c,
-    liveSessions: live.filter((d) => d === `${repo.fullName}/${c.path}`).length,
+    liveSessions: live.filter((d) => d === roomName(repo.fullName, c.path)).length,
   }));
 }
 
@@ -200,7 +201,7 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
       permission: writable ? "write" : "none",
       processCount,
       dirtyCount,
-      liveSessions: live.filter((d) => d.startsWith(`${repo.fullName}/`)).length,
+      liveSessions: live.filter((d) => d.startsWith(roomPrefix(repo.fullName))).length,
     });
   }
   return out;

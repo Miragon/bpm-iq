@@ -13,6 +13,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
+import { bearerAuth, readBody, send } from "@bpmiq/http-kit";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
@@ -23,42 +24,22 @@ const TOKEN = process.env.MCP_TOKEN;
 // both env vars the tool does not exist and the server stays zero-auth
 const TODOS = todosConfigFromEnv(process.env);
 
-function send(res: ServerResponse, status: number, body: string, type = "text/plain; charset=utf-8"): void {
-  res.writeHead(status, { "content-type": type });
-  res.end(body);
-}
-
-function readBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (chunk) => {
-      data += chunk;
-    });
-    req.on("end", () => {
-      try {
-        resolve(data ? JSON.parse(data) : undefined);
-      } catch (e) {
-        reject(e);
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
 /** Stateless Streamable HTTP: one fresh server + transport per request (read-only tools, no session state). */
 async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (TOKEN && req.headers.authorization !== `Bearer ${TOKEN}`) {
-    send(res, 401, JSON.stringify({ error: "unauthorized" }), "application/json");
+  if (TOKEN && !bearerAuth(req, TOKEN)) {
+    send(res, 401, { error: "unauthorized" });
     return;
   }
   if (req.method !== "POST") {
-    res.writeHead(405, { allow: "POST", "content-type": "application/json" });
-    res.end(
-      JSON.stringify({
+    send(
+      res,
+      405,
+      {
         jsonrpc: "2.0",
         error: { code: -32000, message: "Stateless server: POST JSON-RPC messages to this endpoint." },
         id: null,
-      }),
+      },
+      { allow: "POST" },
     );
     return;
   }
@@ -69,17 +50,16 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
     void server.close();
   });
   try {
-    const body = await readBody(req);
+    // tool args are id-sized — the kit's default 1 MB cap is generous here
+    const raw = (await readBody(req, { maxBytes: 1_000_000 })).toString();
+    const body: unknown = raw ? JSON.parse(raw) : undefined;
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
   } catch (e) {
     if (!res.headersSent) {
-      send(
-        res,
-        400,
-        JSON.stringify({ jsonrpc: "2.0", error: { code: -32700, message: (e as Error).message }, id: null }),
-        "application/json",
-      );
+      send(res, 400, { jsonrpc: "2.0", error: { code: -32700, message: (e as Error).message }, id: null });
+    } else {
+      res.end();
     }
   }
 }

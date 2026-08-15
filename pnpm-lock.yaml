@@ -308,6 +308,9 @@ importers:
       '@bpmiq/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@bpmiq/http-kit':
+        specifier: workspace:*
+        version: link:../http-kit
       '@bpmiq/notations':
         specifier: workspace:*
         version: link:../notations

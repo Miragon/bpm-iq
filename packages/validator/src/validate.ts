@@ -16,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
+import { decisionRefOf } from "@bpmiq/notations/extract";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 export type Severity = "ERROR" | "WARN";
@@ -27,6 +28,30 @@ export interface Finding {
 }
 
 const asArray = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
+
+/** collect DI element refs from every <keys> element anywhere under root —
+ *  recursive, so drilldown planes of collapsed sub-processes are included; the
+ *  descent is deliberately unconditional (it also enters matched shape records).
+ *  One walk for BPMNDI and DMNDI (they differ only in key pair and attribute). */
+function collectDiRefs(root: unknown, keys: readonly string[], attr: string): Set<string> {
+  const di = new Set<string>();
+  (function collect(v: unknown): void {
+    if (Array.isArray(v)) {
+      v.forEach(collect);
+      return;
+    }
+    if (v === null || typeof v !== "object") return;
+    for (const [k, child] of Object.entries(v as Record<string, unknown>)) {
+      if (keys.includes(k)) {
+        for (const s of asArray(child as Record<string, string> | Record<string, string>[])) {
+          if (s[attr]) di.add(s[attr]);
+        }
+      }
+      collect(child);
+    }
+  })(root);
+  return di;
+}
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true });
 
@@ -127,13 +152,11 @@ function collectContainers(
         if (tag === "boundaryEvent") out.boundaries.set(id, rec["@_attachedToRef"] ?? "");
         if (tag === "callActivity" && rec["@_calledElement"]) out.called.push(rec["@_calledElement"]);
         if (tag === "businessRuleTask") {
-          // no standard BPMN attribute for this — read every engine's spelling
-          // (prefixes are stripped by the parser), same shape as extract.ts
-          const extension = asArray(
-            (node as Record<string, any>).extensionElements?.calledDecision as Record<string, string>[],
-          )[0]?.["@_decisionId"];
-          const ref = rec["@_decisionRef"] ?? extension ?? rec["@_calledDecision"];
-          if (ref) out.decides.push({ id, ref: String(ref) });
+          // no standard BPMN attribute for this — the spelling list is owned by
+          // @bpmiq/notations/extract, so this check reads exactly the links the
+          // platform follows (a private re-list drifted once: calledElement)
+          const ref = decisionRefOf(node as Record<string, unknown>);
+          if (ref) out.decides.push({ id, ref });
         }
         // an event sub-process is triggered by its own start event, never by a
         // sequence flow from the parent — exempt it from parent reachability
@@ -276,21 +299,7 @@ export function checkBpmnXml(
 
   // DI coverage — collect bpmnElement refs from all BPMNShape/BPMNEdge anywhere
   // (drilldown planes of collapsed sub-processes included: the walk is recursive)
-  const di = new Set<string>();
-  (function collect(v: unknown): void {
-    if (Array.isArray(v)) {
-      v.forEach(collect);
-      return;
-    }
-    if (v === null || typeof v !== "object") return;
-    for (const [k, child] of Object.entries(v as Record<string, unknown>)) {
-      if (k === "BPMNShape" || k === "BPMNEdge") {
-        for (const s of asArray(child as Record<string, string> | Record<string, string>[]))
-          if (s["@_bpmnElement"]) di.add(s["@_bpmnElement"]);
-      }
-      collect(child);
-    }
-  })(defs);
+  const di = collectDiRefs(defs, ["BPMNShape", "BPMNEdge"], "@_bpmnElement");
   for (const id of collected.diRequired) {
     if (!di.has(id)) err(`${id} has no BPMNDI shape/edge (breaks the visual editor)`);
   }
@@ -419,22 +428,7 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
   for (const input of inputData) if (input["@_id"]) diRequired.add(String(input["@_id"]));
 
   // DMNDI coverage — collect dmnElementRef from every DMNShape/DMNEdge
-  const di = new Set<string>();
-  (function collect(v: unknown): void {
-    if (Array.isArray(v)) {
-      v.forEach(collect);
-      return;
-    }
-    if (v === null || typeof v !== "object") return;
-    for (const [k, child] of Object.entries(v as Record<string, unknown>)) {
-      if (k === "DMNShape" || k === "DMNEdge") {
-        for (const s of asArray(child as Record<string, string> | Record<string, string>[])) {
-          if (s["@_dmnElementRef"]) di.add(s["@_dmnElementRef"]);
-        }
-      }
-      collect(child);
-    }
-  })(defs);
+  const di = collectDiRefs(defs, ["DMNShape", "DMNEdge"], "@_dmnElementRef");
   // a DMN with no DMNDI at all is a decision table authored outside a modeler —
   // legal and common, so report it ONCE instead of per element
   if (di.size === 0) {

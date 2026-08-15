@@ -38,6 +38,8 @@ jobs:
         run: pnpm test
       - name: Build (web app — a Vite break must not first surface in the Fly image)
         run: pnpm build
+      - name: Docker workspace coverage (a missing COPY builds green and dies at boot — #87)
+        run: node scripts/check-docker-workspace-coverage.mjs
       - name: No stale pre-monorepo paths in docs or code
         # The b190944 restructure (collab/ → apps/, integrations/ → packages/) left
         # docs pointing at dead paths once — this keeps that class of drift out for good.

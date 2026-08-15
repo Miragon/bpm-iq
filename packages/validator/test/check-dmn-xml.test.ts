@@ -120,3 +120,36 @@ test("checkBpmnXml: a businessRuleTask pointing at no decision in the repo is a 
     [],
   );
 });
+
+test("checkBpmnXml: the link check reads every spelling the platform follows — incl. calledElement", () => {
+  // hand-written models spell the link calledElement (extract.ts follows it, so
+  // get_process reports the decision) — a spelling the check misses is a link
+  // the platform displays and never verifies (that drift shipped once)
+  const bpmn = `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC">
+  <process id="p" isExecutable="false">
+    <startEvent id="Start"><outgoing>f1</outgoing></startEvent>
+    <businessRuleTask id="Rule_Credit" name="Check credit" calledElement="credit-limit-check">
+      <incoming>f1</incoming><outgoing>f2</outgoing>
+    </businessRuleTask>
+    <endEvent id="End"><incoming>f2</incoming></endEvent>
+    <sequenceFlow id="f1" sourceRef="Start" targetRef="Rule_Credit" />
+    <sequenceFlow id="f2" sourceRef="Rule_Credit" targetRef="End" />
+  </process>
+  <bpmndi:BPMNDiagram id="D"><bpmndi:BPMNPlane id="P" bpmnElement="p">
+    <bpmndi:BPMNShape id="S1" bpmnElement="Start"><dc:Bounds x="0" y="0" width="36" height="36" /></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="S2" bpmnElement="Rule_Credit"><dc:Bounds x="100" y="0" width="100" height="80" /></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="S3" bpmnElement="End"><dc:Bounds x="300" y="0" width="36" height="36" /></bpmndi:BPMNShape>
+    <bpmndi:BPMNEdge id="E1" bpmnElement="f1"><di:waypoint x="36" y="18" /></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="E2" bpmnElement="f2"><di:waypoint x="200" y="18" /></bpmndi:BPMNEdge>
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</definitions>`;
+
+  const known = checkBpmnXml(bpmn, { file: "p.bpmn", decisionIds: new Set(["credit-limit-check"]) });
+  assert.deepEqual(known.decides, ["credit-limit-check"]);
+
+  const dangling = checkBpmnXml(bpmn, { file: "p.bpmn", decisionIds: new Set(["something-else"]) });
+  const finding = dangling.findings.find((f) => /businessRuleTask/.test(f.message));
+  assert.equal(finding?.severity, "WARN");
+  assert.match(finding?.message ?? "", /decides 'credit-limit-check', which is not a decision in this repo/);
+});
