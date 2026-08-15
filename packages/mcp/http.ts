@@ -13,8 +13,8 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { bearerAuth, readBody, send } from "@bpmiq/http-kit";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { bearerAuth, send } from "@bpmiq/http-kit";
+import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
 
@@ -43,25 +43,8 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
     );
     return;
   }
-  const server = createMcpServer(DEFAULT_ROOT, TODOS);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-  res.on("close", () => {
-    void transport.close();
-    void server.close();
-  });
-  try {
-    // tool args are id-sized — the kit's default 1 MB cap is generous here
-    const raw = (await readBody(req, { maxBytes: 1_000_000 })).toString();
-    const body: unknown = raw ? JSON.parse(raw) : undefined;
-    await server.connect(transport);
-    await transport.handleRequest(req, res, body);
-  } catch (e) {
-    if (!res.headersSent) {
-      send(res, 400, { jsonrpc: "2.0", error: { code: -32700, message: (e as Error).message }, id: null });
-    } else {
-      res.end();
-    }
-  }
+  // tool args are id-sized — 1 MB is a generous body cap for a read-only server
+  await mountStatelessMcp(req, res, createMcpServer(DEFAULT_ROOT, TODOS), { maxBytes: 1_000_000 });
 }
 
 createServer(async (req, res) => {

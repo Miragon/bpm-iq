@@ -21,6 +21,7 @@
     "@bpmiq/github-app": "workspace:*",
     "@bpmiq/http-kit": "workspace:*",
     "@bpmiq/live-client": "workspace:*",
+    "@bpmiq/mcp-kit": "workspace:*",
     "@bpmiq/notations": "workspace:*",
     "@bpmiq/validator": "workspace:*",
     "@hocuspocus/server": "4.5.0",

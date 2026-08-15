@@ -9,9 +9,10 @@
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
-import { ChevronDown, ChevronRight, GitCompare, History, Loader2, RotateCcw, X } from "lucide-react";
+import { ChevronDown, ChevronRight, GitCompare, History, Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { SidePanel } from "@/components/side-panel";
 import { type FileCommitWire, HISTORY_LIMIT } from "@/lib/api";
 
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
@@ -143,16 +144,12 @@ export function HistoryPanel({
   const list = commits ?? [];
 
   return (
-    <aside className="bg-background absolute inset-y-0 right-0 z-10 flex w-80 flex-col border-l shadow-lg">
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <History className="text-muted-foreground size-4 shrink-0" />
-        <span className="text-sm font-medium">History</span>
-        {!isLoading && !error && <Badge variant="secondary">{list.length}</Badge>}
-        <div className="flex-1" />
-        <Button variant="ghost" size="icon" className="size-7" title="Close" onClick={onClose}>
-          <X />
-        </Button>
-      </div>
+    <SidePanel
+      icon={History}
+      title="History"
+      badge={!isLoading && !error && <Badge variant="secondary">{list.length}</Badge>}
+      onClose={onClose}
+    >
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
         {error ? (
           <p className="text-destructive text-sm">{error.message}</p>
@@ -184,6 +181,6 @@ export function HistoryPanel({
           </>
         )}
       </div>
-    </aside>
+    </SidePanel>
   );
 }

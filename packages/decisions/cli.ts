@@ -16,6 +16,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
+import { cliRoot, notContentRepoError } from "@bpmiq/notations/cli";
 import { discoverDecisions, loadContentConfig } from "@bpmiq/notations/content";
 import { deriveDecision } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
@@ -24,20 +25,13 @@ import { analyzeDecision } from "./analyze.ts";
 import { parseTestSuite, runDecisionTests, testsPathFor } from "./tests.ts";
 
 const argv = process.argv.slice(2);
-const rootFlag = argv.indexOf("--root");
-const rootArg = rootFlag >= 0 ? argv[rootFlag + 1] : undefined;
-if (rootFlag >= 0 && !rootArg) {
-  console.error("--root requires a directory argument");
-  process.exit(2);
-}
-const ROOT = rootArg ? resolve(rootArg) : resolve(".");
-if (rootFlag >= 0) argv.splice(rootFlag, 2);
+const ROOT = cliRoot(argv);
 /** optional single-decision filter (a .dmn file stem) */
 const only = argv[0];
 
 const cfg = loadContentConfig(ROOT);
 if (!cfg) {
-  console.error(`[ERROR] ${ROOT}: no bpmiq.yml at the root — not a BPM content repo (or wrong --root)`);
+  console.error(notContentRepoError(ROOT));
   process.exit(1);
 }
 

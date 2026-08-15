@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 
+import { toolText } from "@bpmiq/mcp-kit/testing";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
@@ -80,9 +81,7 @@ after(async () => {
 });
 
 async function call(name: string, args: Record<string, unknown> = {}): Promise<{ isError: boolean; text: string }> {
-  const r = await client.callTool({ name, arguments: args });
-  const content = r.content as Array<{ type: string; text?: string }>;
-  return { isError: Boolean(r.isError), text: content[0]?.text ?? "" };
+  return toolText(await client.callTool({ name, arguments: args }));
 }
 
 async function callJson(name: string, args: Record<string, unknown> = {}): Promise<any> {

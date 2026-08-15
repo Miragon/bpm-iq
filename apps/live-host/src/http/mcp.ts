@@ -32,19 +32,20 @@ import { roomName } from "@bpmiq/contracts/live";
 import type { TodoWire } from "@bpmiq/contracts/live-host";
 import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
 import { parseTestSuite, type TestCase, testsPathFor } from "@bpmiq/decisions/tests";
-import { readBody, send } from "@bpmiq/http-kit";
+import { fail, ok, READ, safe, WRITE } from "@bpmiq/mcp-kit";
+import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
 import { deriveDecision, deriveProcess } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
 import { checkBpmnXml } from "@bpmiq/validator";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import { authorizeRepo } from "../application/authz.ts";
 import { type ContentDeps, getContent, putContent } from "../application/content.ts";
 import { readDecisionTests, runTestsFor, saveTestsFor } from "../application/decision-tests.ts";
+import { findDecisionPath, findProcessPath } from "../application/find-model.ts";
 import {
   decisionUsers,
   listChanges,
@@ -82,26 +83,9 @@ export type McpDeps = OverviewDeps &
     wsTickets?: WsTicketStore;
   };
 
-// ── tool result helpers (packages/mcp/tools.ts house style) ──────────────────
-const ok = (value: unknown) => ({
-  content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
-});
-const fail = (message: string) => ({ content: [{ type: "text" as const, text: message }], isError: true });
-type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
-const safe =
-  // biome/eslint-safe any: the SDK validates args against the zod shape before the handler runs
-  (fn: (args: any) => unknown) =>
-    async (args: unknown): Promise<ToolResult> => {
-      try {
-        return (await fn(args ?? {})) as ToolResult;
-      } catch (err) {
-        // AppErrors from the use-cases carry actionable, English, agent-readable
-        // messages (validation findings, conflict guidance, authz denials)
-        return fail((err as Error).message);
-      }
-    };
-const READ = { readOnlyHint: true, openWorldHint: false };
-const WRITE = { readOnlyHint: false, openWorldHint: false };
+// tool result codec: @bpmiq/mcp-kit — safe() runs WITHOUT a prefix here, the
+// AppErrors from the use-cases carry actionable, agent-readable messages
+// (validation findings, conflict guidance, authz denials)
 
 // ── MCP-App widgets (the embedded modelers) ──────────────────────────────────
 // The single-file HTML files built by apps/web (vite.mcp-app*.config.ts): the
@@ -187,21 +171,14 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
   const resolveBpmnPath = async (repo: ConnectedRepo, id?: string, path?: string): Promise<string> => {
     if (path) return path;
     if (!id) throw new Error("provide either `id` or `path`.");
-    const workspace = await opts.workspaces.ensure(repo);
-    const procs = await listProcesses(opts, repo, workspace);
-    const hit = procs.find((p) => p.id === id);
-    if (!hit) throw new Error(`process '${id}' not found in ${repo.fullName} (use list_processes).`);
-    return hit.bpmn;
+    return findProcessPath(opts, repo, id);
   };
 
   /** the .dmn sibling of resolveBpmnPath (id = decision file stem) */
   const resolveDmnPath = async (repo: ConnectedRepo, id?: string, path?: string): Promise<string> => {
     if (path) return path;
     if (!id) throw new Error("provide either `id` or `path`.");
-    const workspace = await opts.workspaces.ensure(repo);
-    const hit = (await listDecisions(opts, repo, workspace)).find((d) => d.id === id);
-    if (!hit) throw new Error(`decision '${id}' not found in ${repo.fullName} (use list_decisions).`);
-    return hit.path;
+    return findDecisionPath(opts, repo, id);
   };
 
   /** parse a .dmn into the decision view — one message for every "not DMN" case.
@@ -233,6 +210,117 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
       view: decisionViewOf(content.path, content.xml),
       at: { path: content.path, baseVersion: content.baseVersion },
     };
+  };
+
+  // ── notation-twin tool factories: the BPMN and DMN tools differ only in the
+  // tool name, the description nouns, the resolver and the wire key — one
+  // factory per pair keeps the schemas (incl. describe() strings) from
+  // drifting (save_dmn_xml arrived as 46 byte-identical lines of its twin) ───
+  const lintArg = z
+    .enum(["block", "warn"])
+    .optional()
+    .describe(
+      "default 'block': ERROR findings refuse the save — keep it for agent edits. " +
+        "'warn' saves anyway and returns findings (the modeler widget's autosave).",
+    );
+
+  /** the stale-baseVersion result every save tool answers — retryable data,
+   *  not an error (the sidecar save renames the payload key: it carries YAML) */
+  const conflictResult = (
+    c: { path: string; currentXml: string; baseVersion: string; error: string },
+    key: "currentXml" | "currentYaml" = "currentXml",
+  ) =>
+    ok({ ok: false, conflict: true, path: c.path, [key]: c.currentXml, baseVersion: c.baseVersion, message: c.error });
+
+  const registerGetXmlTool = (cfg: {
+    name: string;
+    description: string;
+    ref: typeof processRef;
+    resolve: (r: ConnectedRepo, id?: string, path?: string) => Promise<string>;
+  }): void => {
+    server.registerTool(
+      cfg.name,
+      { description: cfg.description, inputSchema: cfg.ref, annotations: READ },
+      safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+        const r = await requireRepo(repo);
+        return ok(await getContent(opts, r, await cfg.resolve(r, id, path)));
+      }),
+    );
+  };
+
+  const registerCreateTool = <T>(cfg: {
+    name: string;
+    /** wire key of the created row AND the audit-log noun */
+    what: "process" | "decision";
+    description: string;
+    create: (r: ConnectedRepo, workspace: string, body: { name: string; folder?: string }) => Promise<T>;
+    pathOf: (created: T) => string;
+  }): void => {
+    server.registerTool(
+      cfg.name,
+      {
+        description: cfg.description,
+        inputSchema: {
+          repo: repoArg,
+          name: z.string().describe("human title; the file stem is its kebab-case slug"),
+          folder: z.string().optional().describe("target folder relative to the processes root"),
+        },
+        annotations: WRITE,
+      },
+      safe(async ({ repo, name, folder }: { repo: string; name: string; folder?: string }) => {
+        const r = await requireRepo(repo);
+        const workspace = await opts.workspaces.ensure(r);
+        const created = await cfg.create(r, workspace, { name, folder });
+        console.log(`${cfg.what} created in ${r.fullName} by @${session.user.login} via mcp: ${cfg.pathOf(created)}`);
+        return ok({ [cfg.what]: created });
+      }),
+    );
+  };
+
+  const registerSaveTool = (cfg: {
+    name: string;
+    description: string;
+    ref: typeof processRef;
+    xmlDoc: string;
+    baseVersionDoc: string;
+    resolve: (r: ConnectedRepo, id?: string, path?: string) => Promise<string>;
+  }): void => {
+    server.registerTool(
+      cfg.name,
+      {
+        description: cfg.description,
+        inputSchema: {
+          ...cfg.ref,
+          xml: z.string().describe(cfg.xmlDoc),
+          baseVersion: z.string().describe(cfg.baseVersionDoc),
+          lint: lintArg,
+        },
+        annotations: WRITE,
+      },
+      safe(
+        async ({
+          repo,
+          id,
+          path,
+          xml,
+          baseVersion,
+          lint,
+        }: {
+          repo: string;
+          id?: string;
+          path?: string;
+          xml: string;
+          baseVersion: string;
+          lint?: "block" | "warn";
+        }) => {
+          const r = await requireRepo(repo);
+          const out = await putContent(opts, r, await cfg.resolve(r, id, path), { xml, baseVersion, lint });
+          if (!out.ok) return conflictResult(out.conflict);
+          console.log(`content saved: ${r.fullName}/${out.result.path} by @${session.user.login} via mcp`);
+          return ok({ ok: true, ...out.result });
+        },
+      ),
+    );
   };
 
   /** processRef → the pair a todo anchor needs: the process id and the model
@@ -288,21 +376,14 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
     }),
   );
 
-  server.registerTool(
-    "get_bpmn_xml",
-    {
-      description:
-        "The current LIVE BPMN XML of a process plus the baseVersion token save_bpmn_xml requires " +
-        "for conflict-safe writes.",
-      inputSchema: processRef,
-      annotations: READ,
-    },
-    safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
-      const r = await requireRepo(repo);
-      const bpmnPath = await resolveBpmnPath(r, id, path);
-      return ok(await getContent(opts, r, bpmnPath));
-    }),
-  );
+  registerGetXmlTool({
+    name: "get_bpmn_xml",
+    description:
+      "The current LIVE BPMN XML of a process plus the baseVersion token save_bpmn_xml requires " +
+      "for conflict-safe writes.",
+    ref: processRef,
+    resolve: resolveBpmnPath,
+  });
 
   server.registerTool(
     "validate_bpmn",
@@ -379,20 +460,14 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
     }),
   );
 
-  server.registerTool(
-    "get_dmn_xml",
-    {
-      description:
-        "The current LIVE DMN XML of a decision plus the baseVersion token save_dmn_xml requires " +
-        "for conflict-safe writes.",
-      inputSchema: decisionRef,
-      annotations: READ,
-    },
-    safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
-      const r = await requireRepo(repo);
-      return ok(await getContent(opts, r, await resolveDmnPath(r, id, path)));
-    }),
-  );
+  registerGetXmlTool({
+    name: "get_dmn_xml",
+    description:
+      "The current LIVE DMN XML of a decision plus the baseVersion token save_dmn_xml requires " +
+      "for conflict-safe writes.",
+    ref: decisionRef,
+    resolve: resolveDmnPath,
+  });
 
   server.registerTool(
     "simulate_decision",
@@ -532,159 +607,51 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
   );
 
   if (!opts.mcpReadOnly) {
-    server.registerTool(
-      "create_process",
-      {
-        description:
-          "Create a new BPMN process from the validator-clean blank template. Returns its ProcessInfo " +
-          "incl. the bpmn path for get/save.",
-        inputSchema: {
-          repo: repoArg,
-          name: z.string().describe("human title; the file stem is its kebab-case slug"),
-          folder: z.string().optional().describe("target folder relative to the processes root"),
-        },
-        annotations: WRITE,
-      },
-      safe(async ({ repo, name, folder }: { repo: string; name: string; folder?: string }) => {
-        const r = await requireRepo(repo);
-        const workspace = await opts.workspaces.ensure(r);
-        return ok({ process: await createProcess(r, workspace, { name, folder }) });
-      }),
-    );
+    registerCreateTool({
+      name: "create_process",
+      what: "process",
+      description:
+        "Create a new BPMN process from the validator-clean blank template. Returns its ProcessInfo " +
+        "incl. the bpmn path for get/save.",
+      create: (r, workspace, body) => createProcess(r, workspace, body),
+      pathOf: (created) => created.bpmn,
+    });
 
-    server.registerTool(
-      "save_bpmn_xml",
-      {
-        description:
-          "Validate and save complete BPMN XML into the LIVE document (co-editors see it immediately). " +
-          "baseVersion (from get_bpmn_xml) is REQUIRED; a stale one returns {conflict:true, currentXml} " +
-          "instead of overwriting — re-derive your edit against currentXml and retry.",
-        inputSchema: {
-          ...processRef,
-          xml: z.string().describe("the complete BPMN XML (must include a full BPMNDI section)"),
-          baseVersion: z.string().describe("the baseVersion from a prior get_bpmn_xml — call that first"),
-          lint: z
-            .enum(["block", "warn"])
-            .optional()
-            .describe(
-              "default 'block': ERROR findings refuse the save — keep it for agent edits. " +
-                "'warn' saves anyway and returns findings (the modeler widget's autosave).",
-            ),
-        },
-        annotations: WRITE,
-      },
-      safe(
-        async ({
-          repo,
-          id,
-          path,
-          xml,
-          baseVersion,
-          lint,
-        }: {
-          repo: string;
-          id?: string;
-          path?: string;
-          xml: string;
-          baseVersion: string;
-          lint?: "block" | "warn";
-        }) => {
-          const r = await requireRepo(repo);
-          const bpmnPath = await resolveBpmnPath(r, id, path);
-          const out = await putContent(opts, r, bpmnPath, { xml, baseVersion, lint });
-          if (!out.ok) {
-            const c = out.conflict;
-            return ok({
-              ok: false,
-              conflict: true,
-              path: c.path,
-              currentXml: c.currentXml,
-              baseVersion: c.baseVersion,
-              message: c.error,
-            });
-          }
-          return ok({ ok: true, ...out.result });
-        },
-      ),
-    );
+    registerSaveTool({
+      name: "save_bpmn_xml",
+      description:
+        "Validate and save complete BPMN XML into the LIVE document (co-editors see it immediately). " +
+        "baseVersion (from get_bpmn_xml) is REQUIRED; a stale one returns {conflict:true, currentXml} " +
+        "instead of overwriting — re-derive your edit against currentXml and retry.",
+      ref: processRef,
+      xmlDoc: "the complete BPMN XML (must include a full BPMNDI section)",
+      baseVersionDoc: "the baseVersion from a prior get_bpmn_xml — call that first",
+      resolve: resolveBpmnPath,
+    });
 
-    server.registerTool(
-      "create_decision",
-      {
-        description:
-          "Create a new DMN decision from the blank template (one empty decision table). Returns its " +
-          "DecisionInfo incl. the path for get_dmn_xml/save_dmn_xml.",
-        inputSchema: {
-          repo: repoArg,
-          name: z.string().describe("human title; the file stem is its kebab-case slug"),
-          folder: z.string().optional().describe("target folder relative to the processes root"),
-        },
-        annotations: WRITE,
-      },
-      safe(async ({ repo, name, folder }: { repo: string; name: string; folder?: string }) => {
-        const r = await requireRepo(repo);
-        const workspace = await opts.workspaces.ensure(r);
-        return ok({ decision: await createDecision(r, workspace, { name, folder }) });
-      }),
-    );
+    registerCreateTool({
+      name: "create_decision",
+      what: "decision",
+      description:
+        "Create a new DMN decision from the blank template (one empty decision table). Returns its " +
+        "DecisionInfo incl. the path for get_dmn_xml/save_dmn_xml.",
+      create: (r, workspace, body) => createDecision(r, workspace, body),
+      pathOf: (created) => created.path,
+    });
 
-    server.registerTool(
-      "save_dmn_xml",
-      {
-        description:
-          "Validate and save complete DMN XML into the LIVE document (co-editors see it immediately). " +
-          "baseVersion (from get_dmn_xml) is REQUIRED; a stale one returns {conflict:true, currentXml} " +
-          "instead of overwriting — re-derive your edit against currentXml and retry. Keep the DMNDI " +
-          "section complete or the visual editor breaks. Structural validation runs here; for the " +
-          "logic run analyze_decision / run_decision_tests before saving.",
-        inputSchema: {
-          ...decisionRef,
-          xml: z.string().describe("the complete DMN XML (must include the DMNDI section)"),
-          baseVersion: z.string().describe("the baseVersion from a prior get_dmn_xml — call that first"),
-          lint: z
-            .enum(["block", "warn"])
-            .optional()
-            .describe(
-              "default 'block': ERROR findings refuse the save — keep it for agent edits. " +
-                "'warn' saves anyway and returns findings (the modeler widget's autosave).",
-            ),
-        },
-        annotations: WRITE,
-      },
-      safe(
-        async ({
-          repo,
-          id,
-          path,
-          xml,
-          baseVersion,
-          lint,
-        }: {
-          repo: string;
-          id?: string;
-          path?: string;
-          xml: string;
-          baseVersion: string;
-          lint?: "block" | "warn";
-        }) => {
-          const r = await requireRepo(repo);
-          const dmnPath = await resolveDmnPath(r, id, path);
-          const out = await putContent(opts, r, dmnPath, { xml, baseVersion, lint });
-          if (!out.ok) {
-            const c = out.conflict;
-            return ok({
-              ok: false,
-              conflict: true,
-              path: c.path,
-              currentXml: c.currentXml,
-              baseVersion: c.baseVersion,
-              message: c.error,
-            });
-          }
-          return ok({ ok: true, ...out.result });
-        },
-      ),
-    );
+    registerSaveTool({
+      name: "save_dmn_xml",
+      description:
+        "Validate and save complete DMN XML into the LIVE document (co-editors see it immediately). " +
+        "baseVersion (from get_dmn_xml) is REQUIRED; a stale one returns {conflict:true, currentXml} " +
+        "instead of overwriting — re-derive your edit against currentXml and retry. Keep the DMNDI " +
+        "section complete or the visual editor breaks. Structural validation runs here; for the " +
+        "logic run analyze_decision / run_decision_tests before saving.",
+      ref: decisionRef,
+      xmlDoc: "the complete DMN XML (must include the DMNDI section)",
+      baseVersionDoc: "the baseVersion from a prior get_dmn_xml — call that first",
+      resolve: resolveDmnPath,
+    });
 
     server.registerTool(
       "save_decision_tests",
@@ -731,16 +698,8 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
             { cases: cases as TestCase[] },
             { baseVersion, record },
           );
-          if ("conflict" in out) {
-            return ok({
-              ok: false,
-              conflict: true,
-              path: out.conflict.path,
-              currentYaml: out.conflict.currentXml,
-              baseVersion: out.conflict.baseVersion,
-              message: out.conflict.error,
-            });
-          }
+          if ("conflict" in out) return conflictResult(out.conflict, "currentYaml");
+          console.log(`decision tests saved: ${r.fullName}/${out.path} by @${session.user.login} via mcp`);
           return ok({ ok: true, ...out });
         },
       ),
@@ -774,9 +733,17 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
         }) => {
           const r = await requireRepo(repo);
           const provider = opts.providers.get(session.user.provider) ?? opts.github;
-          if (processId) return ok({ release: await release(opts, session, provider, r, processId) });
+          if (processId) {
+            const result = await release(opts, session, provider, r, processId);
+            console.log(`released ${r.fullName}#${processId} by @${result.by} via mcp → ${result.pr}`);
+            return ok({ release: result });
+          }
           if (files && files.length > 0) {
-            return ok({ release: await releaseFiles(opts, session, provider, r, { files, title }) });
+            const result = await releaseFiles(opts, session, provider, r, { files, title });
+            console.log(
+              `released ${r.fullName} (${result.files.length} file(s)) by @${result.by} via mcp → ${result.pr}`,
+            );
+            return ok({ release: result });
           }
           return fail("provide either `processId` or a non-empty `files` array.");
         },
@@ -1034,32 +1001,11 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
   return server;
 }
 
-/** Stateless Streamable HTTP mount: one fresh server + transport per request
- *  (packages/mcp/http.ts pattern). api.ts has already authenticated `session`
- *  and answered non-POST. */
-export async function handleMcp(
-  req: IncomingMessage,
-  res: ServerResponse,
-  opts: McpDeps,
-  session: Session,
-): Promise<void> {
-  const server = createLiveMcpServer(opts, session);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-  res.on("close", () => {
-    void transport.close();
-    void server.close();
+/** Stateless Streamable HTTP mount (@bpmiq/mcp-kit). api.ts has already
+ *  authenticated `session` and answered non-POST. */
+export function handleMcp(req: IncomingMessage, res: ServerResponse, opts: McpDeps, session: Session): Promise<void> {
+  // save_bpmn_xml carries whole models — same body budget as the content PUT
+  return mountStatelessMcp(req, res, createLiveMcpServer(opts, session), {
+    maxBytes: opts.maxDocBytes * 2 + 65_536,
   });
-  try {
-    // save_bpmn_xml carries whole models — same body budget as the content PUT
-    const raw = (await readBody(req, { maxBytes: opts.maxDocBytes * 2 + 65_536 })).toString();
-    const body: unknown = raw ? JSON.parse(raw) : undefined;
-    await server.connect(transport);
-    await transport.handleRequest(req, res, body);
-  } catch (e) {
-    if (!res.headersSent) {
-      send(res, 400, { jsonrpc: "2.0", error: { code: -32700, message: (e as Error).message }, id: null });
-    } else {
-      res.end();
-    }
-  }
 }

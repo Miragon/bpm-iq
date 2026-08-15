@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 
+import { toolText } from "@bpmiq/mcp-kit/testing";
 import { Server as HocuspocusServer } from "@hocuspocus/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -205,11 +206,8 @@ async function connect(d: McpDeps, s: Session = session()) {
   const client = new Client({ name: "mcp-test", version: "0" });
   await Promise.all([server.connect(st), client.connect(ct)]);
   cleanups.push(() => Promise.all([client.close(), server.close()]));
-  const call = async (name: string, args: Record<string, unknown> = {}) => {
-    const r = await client.callTool({ name, arguments: args });
-    const content = r.content as Array<{ type: string; text?: string }>;
-    return { isError: Boolean(r.isError), text: content[0]?.text ?? "" };
-  };
+  const call = async (name: string, args: Record<string, unknown> = {}) =>
+    toolText(await client.callTool({ name, arguments: args }));
   const callJson = async (name: string, args: Record<string, unknown> = {}) => {
     const { isError, text } = await call(name, args);
     assert.ok(!isError, `${name} unexpectedly errored: ${text}`);

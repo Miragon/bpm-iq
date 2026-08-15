@@ -1,0 +1,28 @@
+{
+  "name": "@bpmiq/mcp-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The MCP wire conventions both bpmiq MCP servers and the widget client speak — tool-result codec, stateless Streamable-HTTP mount, client/test unwrappers",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "//": "The '.' entry is browser-safe (the widget bundles import it; CI-enforced: pnpm arch, rule mcp-kit-index-stays-browser-safe). ./mount is the ONLY Node entry (SDK transport + http-kit); ./testing is for test files.",
+  "exports": {
+    ".": "./index.ts",
+    "./mount": "./mount.ts",
+    "./testing": "./testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@bpmiq/http-kit": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "typescript": "6.0.3"
+  }
+}

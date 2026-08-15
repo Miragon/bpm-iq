@@ -16,6 +16,7 @@ import {
   GitHubHttpError,
   mintInstallationToken,
   paginate,
+  tokenRest,
 } from "../src/index.ts";
 import { StubServer } from "./stub-server.ts";
 
@@ -65,6 +66,28 @@ test("appRest: init is honored — method passes through, caller headers win", a
   assert.equal(req.method, "POST");
   assert.equal(req.headers.accept, "application/vnd.github.raw", "init headers override the defaults");
   assert.equal(req.headers["user-agent"], "test-agent", "non-overridden defaults stay");
+});
+
+// ── tokenRest ───────────────────────────────────────────────────────────────
+
+test("tokenRest: GitHub media type + the raw Bearer token + the CALLER'S user-agent", async () => {
+  await tokenRest("inst-token", api("bpm-live-host"), "/repos/acme/processes/issues");
+  const req = stub.last();
+  assert.equal(req.method, "GET");
+  assert.equal(req.url, "/repos/acme/processes/issues");
+  assert.equal(req.headers.accept, "application/vnd.github+json");
+  assert.equal(req.headers.authorization, "Bearer inst-token");
+  assert.equal(req.headers["user-agent"], "bpm-live-host");
+});
+
+test("tokenRest: init is honored — method passes through, caller headers win", async () => {
+  await tokenRest("t", api(), "/repos/acme/processes/issues", {
+    method: "POST",
+    headers: { accept: "application/vnd.github.raw" },
+  });
+  const req = stub.last();
+  assert.equal(req.method, "POST");
+  assert.equal(req.headers.accept, "application/vnd.github.raw", "init headers override the defaults");
 });
 
 // ── mintInstallationToken ───────────────────────────────────────────────────

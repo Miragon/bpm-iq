@@ -11,19 +11,13 @@
  * One command, no build step: node server.ts (Node >= 23.6, built-in type stripping).
  */
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
 
+import { cliRoot } from "@bpmiq/notations/cli";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
 
-const rootFlag = process.argv.indexOf("--root");
-const rootArg = rootFlag >= 0 ? process.argv[rootFlag + 1] : undefined;
-if (rootFlag >= 0 && !rootArg) {
-  console.error("--root requires a directory argument");
-  process.exit(2);
-}
-const root = rootArg ? resolve(rootArg) : DEFAULT_ROOT;
+const root = cliRoot(process.argv.slice(2), { defaultRoot: DEFAULT_ROOT });
 if (!existsSync(root)) {
   // fail fast with usage instead of serving an empty repo — the bundled-example
   // fallback only exists inside the monorepo checkout, never in an npm install

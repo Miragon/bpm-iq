@@ -79,6 +79,17 @@ export interface GitHubApi {
   userAgent: string;
 }
 
+/** the GitHub REST preamble — ONE definition of the media type + bearer +
+ *  per-app user-agent trio (it was hand-written at seven call sites once;
+ *  adding e.g. x-github-api-version is now one edit) */
+function ghHeaders(bearer: string, api: GitHubApi): Record<string, string> {
+  return {
+    accept: "application/vnd.github+json",
+    authorization: `Bearer ${bearer}`,
+    "user-agent": api.userAgent,
+  };
+}
+
 /**
  * App-authenticated REST request: signs a FRESH app JWT per call and attaches
  * the standard GitHub media type + the caller's user-agent. Headers passed via
@@ -87,12 +98,20 @@ export interface GitHubApi {
 export async function appRest(key: AppKey, api: GitHubApi, path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(`${api.apiUrl}${path}`, {
     ...init,
-    headers: {
-      accept: "application/vnd.github+json",
-      authorization: `Bearer ${appJwt(key)}`,
-      "user-agent": api.userAgent,
-      ...(init.headers ?? {}),
-    },
+    headers: { ...ghHeaders(appJwt(key), api), ...(init.headers ?? {}) },
+  });
+}
+
+/** Token-authenticated REST request — the (user/installation)-token twin of appRest. */
+export async function tokenRest(
+  token: string,
+  api: GitHubApi,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  return fetch(`${api.apiUrl}${path}`, {
+    ...init,
+    headers: { ...ghHeaders(token, api), ...(init.headers ?? {}) },
   });
 }
 
@@ -142,11 +161,7 @@ export async function paginate(api: GitHubApi, firstPath: string, auth: Paginate
   let url: string | null = `${api.apiUrl}${firstPath}`;
   while (url) {
     const res: Response = await fetch(url, {
-      headers: {
-        accept: "application/vnd.github+json",
-        authorization: `Bearer ${"token" in auth ? auth.token : appJwt(auth.key)}`,
-        "user-agent": api.userAgent,
-      },
+      headers: ghHeaders("token" in auth ? auth.token : appJwt(auth.key), api),
     });
     if (!res.ok) throw new GitHubHttpError(firstPath, res.status, await res.text());
     const body = await res.json();
