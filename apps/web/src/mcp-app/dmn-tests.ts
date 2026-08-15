@@ -17,6 +17,8 @@
  */
 import type { App } from "@modelcontextprotocol/ext-apps";
 
+import { caseGlyph, pendingActualLine, uncoveredRulesLine } from "@/lib/decision-view";
+
 import {
   type CaseOutcomeWire,
   type DecisionTestCase,
@@ -87,8 +89,7 @@ export function mountTests(
         : "";
     const uncovered = outcome?.uncoveredRules ?? [];
     coverage.hidden = uncovered.length === 0;
-    coverage.textContent =
-      uncovered.length > 0 ? `No case decides: ${uncovered.map((r) => r.split("/").pop()).join(", ")}` : "";
+    coverage.textContent = uncovered.length > 0 ? uncoveredRulesLine(uncovered) : "";
     // stays enabled with zero cases: the run then reports which rules nothing
     // covers, which is exactly what a decision without tests needs to hear
     runBtn.disabled = busy;
@@ -104,7 +105,7 @@ export function mountTests(
     head.className = "case-head";
     const status = document.createElement("span");
     status.className = `case-status ${result?.status ?? ""}`;
-    status.textContent = result ? { pass: "✓", fail: "✗", pending: "?" }[result.status] : "·";
+    status.textContent = caseGlyph(result?.status);
     const name = document.createElement("span");
     name.textContent = testCase.name;
     head.append(status, name);
@@ -125,7 +126,7 @@ export function mountTests(
     if (result?.status === "pending") {
       const line = document.createElement("div");
       line.className = "muted";
-      line.textContent = `no expectation — currently produces ${JSON.stringify(result.actual.value)}`;
+      line.textContent = pendingActualLine(result.actual.value);
       item.append(line);
     }
 

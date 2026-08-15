@@ -4,6 +4,7 @@
 @import "bpmn-js/dist/assets/bpmn-js.css";
 @import "bpmn-js/dist/assets/bpmn-font/css/bpmn.css";
 @import "./chrome.css";
+@import "../lib/todo-canvas.css";
 
 /* ── todos: the side panel (mcp-app/todos.ts) ─────────────────────────────── */
 
@@ -173,24 +174,11 @@
 /* count badge on an anchored element — the shared canvas controller
    (lib/todo-canvas.ts) creates it, both surfaces style it themselves */
 .bpm-todo-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border: 1px solid var(--bg);
-  border-radius: 9999px;
-  background: #bf8700;
-  color: var(--bg);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 0.1s ease;
-}
-
-.bpm-todo-badge:hover {
-  transform: scale(1.15);
+  /* geometry/behaviour: ../lib/todo-canvas.css — the widget sheet has no
+     prefers-color-scheme block, hence the fixed #bf8700 instead of --warning */
+  --bpm-todo-badge-size: 18px;
+  --bpm-todo-badge-pad: 4px;
+  --bpm-todo-badge-font: 11px;
+  --bpm-todo-badge-bg: #bf8700;
+  --bpm-todo-badge-fg: var(--bg);
 }

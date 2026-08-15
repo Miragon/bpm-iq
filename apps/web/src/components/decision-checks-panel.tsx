@@ -38,10 +38,12 @@ import { extractModelGraph } from "@bpmiq/notations/extract";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Info, Play, ShieldCheck, X, XCircle } from "lucide-react";
+import { AlertTriangle, Info, Play, ShieldCheck, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { SidePanel } from "@/components/side-panel";
 import { ApiError, fetchContent } from "@/lib/api";
+import { caseGlyph, pendingActualLine, uncoveredRulesLine } from "@/lib/decision-view";
 
 /** the derived view + its findings, or the reason there are none */
 function useDecision(xml: string, docPath: string) {
@@ -158,7 +160,7 @@ function Outcome({ result }: { result: SimulationResult }) {
 }
 
 function CaseRow({ result }: { result: CaseOutcome }) {
-  const mark = { pass: "✓", fail: "✗", pending: "?" }[result.status];
+  const mark = caseGlyph(result.status);
   return (
     <li className="border-b px-3 py-2 text-xs last:border-b-0">
       <div className="flex gap-2">
@@ -181,9 +183,7 @@ function CaseRow({ result }: { result: CaseOutcome }) {
         </p>
       ))}
       {result.status === "pending" && (
-        <p className="text-muted-foreground mt-1 pl-4">
-          no expectation — currently produces {JSON.stringify(result.actual.value)}
-        </p>
+        <p className="text-muted-foreground mt-1 pl-4">{pendingActualLine(result.actual.value)}</p>
       )}
     </li>
   );
@@ -246,11 +246,11 @@ export function DecisionChecksPanel({
   };
 
   return (
-    <aside className="bg-background absolute inset-y-0 right-0 z-10 flex w-80 flex-col border-l shadow-lg">
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <ShieldCheck className="size-4" />
-        <span className="text-sm font-medium">Decision checks</span>
-        {analysis && (
+    <SidePanel
+      icon={ShieldCheck}
+      title="Decision checks"
+      badge={
+        analysis && (
           <Badge variant={errors > 0 ? "destructive" : analysis.findings.length > 0 ? "secondary" : "success"}>
             {errors > 0
               ? `${errors} error${errors > 1 ? "s" : ""}`
@@ -258,13 +258,10 @@ export function DecisionChecksPanel({
                 ? `${analysis.findings.length} warning${analysis.findings.length > 1 ? "s" : ""}`
                 : "sound"}
           </Badge>
-        )}
-        <span className="flex-1" />
-        <Button variant="ghost" size="icon" className="size-7" title="Close" onClick={onClose}>
-          <X />
-        </Button>
-      </div>
-
+        )
+      }
+      onClose={onClose}
+    >
       <div className="min-h-0 flex-1 overflow-auto">
         {decision.unparsable ? (
           <p className="text-muted-foreground px-3 py-4 text-xs">
@@ -350,7 +347,7 @@ export function DecisionChecksPanel({
                   </ul>
                   {suiteRun.uncoveredRules.length > 0 && (
                     <p className="text-muted-foreground px-3 py-1.5 text-xs">
-                      No case decides: {suiteRun.uncoveredRules.map((r) => r.split("/").pop()).join(", ")}
+                      {uncoveredRulesLine(suiteRun.uncoveredRules)}
                     </p>
                   )}
                 </>
@@ -359,6 +356,6 @@ export function DecisionChecksPanel({
           </>
         )}
       </div>
-    </aside>
+    </SidePanel>
   );
 }

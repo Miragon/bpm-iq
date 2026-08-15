@@ -1,0 +1,28 @@
+/* The todo-count badge lib/todo-canvas.ts pins onto canvas elements — ONE
+ * geometry/behaviour block for the SPA sheet (index.css) and the widget sheet
+ * (mcp-app/styles.css). The two sheets bridge different token systems
+ * (Tailwind theme + rem vs widget chrome tokens + px), so each importer sets
+ * the four variables next to its @import. `font: inherit` is load-bearing for
+ * the widget (it has no button reset; the SPA's Tailwind preflight makes it a
+ * no-op). */
+.bpm-todo-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--bpm-todo-badge-size);
+  height: var(--bpm-todo-badge-size);
+  padding: 0 var(--bpm-todo-badge-pad);
+  border: 1px solid var(--bpm-todo-badge-fg);
+  border-radius: 9999px;
+  background: var(--bpm-todo-badge-bg);
+  color: var(--bpm-todo-badge-fg);
+  font: inherit;
+  font-size: var(--bpm-todo-badge-font);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.bpm-todo-badge:hover {
+  transform: scale(1.15);
+}

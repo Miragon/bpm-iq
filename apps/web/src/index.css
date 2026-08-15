@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@bpmiq/ui-kit/theme.css";
+@import "./lib/todo-canvas.css";
 
 /* the kit's raw sources live under node_modules (not auto-scanned) — tell
    Tailwind to pick up the utility classes its components use */
@@ -21,24 +22,13 @@
 /* todo count badge on BPMN elements — created imperatively by lib/todo-canvas.ts
    (bpmn-js overlays get raw DOM, not React), so it is styled here, not via JSX */
 .bpm-todo-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.3rem;
-  border: 1px solid var(--background);
-  border-radius: 9999px;
-  background: var(--warning);
-  color: var(--background);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform 0.1s ease;
-}
-.bpm-todo-badge:hover {
-  transform: scale(1.15);
+  /* geometry/behaviour: lib/todo-canvas.css — these vars bind it to the theme
+     (--warning is theme-aware; the widget sheet binds its own tokens) */
+  --bpm-todo-badge-size: 1.25rem;
+  --bpm-todo-badge-pad: 0.3rem;
+  --bpm-todo-badge-font: 0.6875rem;
+  --bpm-todo-badge-bg: var(--warning);
+  --bpm-todo-badge-fg: var(--background);
 }
 
 /* semantic BPMN diff markers in the history compare dialog — set imperatively

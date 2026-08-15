@@ -21,6 +21,13 @@ import type { TodoElementWire, TodoWire } from "@bpmiq/contracts/live-host";
 import type { App } from "@modelcontextprotocol/ext-apps";
 
 import { attachTodoCanvas, type TodoCanvas } from "@/lib/todo-canvas";
+import {
+  closeInTrackerTitle,
+  elementLabel,
+  emptyTodoMessage,
+  openInTrackerTitle,
+  todosForElement,
+} from "@/lib/todo-view";
 
 import { closeTodo, createTodo, isMissingTool, listTodos } from "./bridge";
 import type { ModelerHandle } from "./modeler";
@@ -77,8 +84,7 @@ export function mountTodos(app: App, modeler: ModelerHandle, opts: { readonly: b
 
   // ── rendering ─────────────────────────────────────────────────────────────
 
-  const visible = (): TodoWire[] =>
-    filter ? todos.filter((t) => t.anchor?.elements.some((e) => e.id === filter)) : todos;
+  const visible = (): TodoWire[] => (filter ? todosForElement(todos, filter) : todos);
 
   function renderAnchor(): void {
     anchorEl.textContent = "";
@@ -115,7 +121,7 @@ export function mountTodos(app: App, modeler: ModelerHandle, opts: { readonly: b
     link.type = "button";
     link.className = "todo-link";
     link.textContent = "↗";
-    link.title = `Open #${todo.id} in the tracker`;
+    link.title = openInTrackerTitle(todo.id);
     link.onclick = () => void openTracker(todo.url);
     head.append(title, link);
     row.append(head);
@@ -158,7 +164,7 @@ export function mountTodos(app: App, modeler: ModelerHandle, opts: { readonly: b
       done.type = "button";
       done.className = "todo-done";
       done.textContent = closing.has(todo.id) ? "Closing…" : "✓ Done";
-      done.title = `Close #${todo.id} in the tracker`;
+      done.title = closeInTrackerTitle(todo.id);
       done.disabled = closing.has(todo.id);
       done.onclick = () => void complete(todo.id);
       meta.append(implement, done);
@@ -177,8 +183,7 @@ export function mountTodos(app: App, modeler: ModelerHandle, opts: { readonly: b
     filterBar.hidden = filter === null;
     if (filter) {
       // the creation-time name snapshot keeps the chip readable after a rename
-      const named = todos.flatMap((t) => t.anchor?.elements ?? []).find((e) => e.id === filter && e.name);
-      filterName.textContent = named?.name ?? filter;
+      filterName.textContent = elementLabel(todos, filter);
       filterName.title = filter;
     }
     listEl.textContent = "";
@@ -186,7 +191,7 @@ export function mountTodos(app: App, modeler: ModelerHandle, opts: { readonly: b
     if (loading && todos.length === 0) {
       listEl.append(empty("Loading…"));
     } else if (rows.length === 0) {
-      listEl.append(empty(filter ? "No open todos on this element." : "No open todos for this process."));
+      listEl.append(empty(emptyTodoMessage(filter !== null)));
     } else {
       for (const todo of rows) listEl.append(renderRow(todo));
     }

@@ -10,10 +10,18 @@
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
-import { Check, ExternalLink, ListTodo, X } from "lucide-react";
+import { Check, ExternalLink, ListTodo } from "lucide-react";
 
+import { SidePanel } from "@/components/side-panel";
 import type { TodoWire } from "@/lib/api";
 import { useCloseTodo } from "@/lib/queries";
+import {
+  closeInTrackerTitle,
+  elementLabel,
+  emptyTodoMessage,
+  openInTrackerTitle,
+  todosForElement,
+} from "@/lib/todo-view";
 
 function TodoItem({
   todo,
@@ -35,7 +43,7 @@ function TodoItem({
           href={todo.url}
           target="_blank"
           rel="noreferrer"
-          title={`Open #${todo.id} in the tracker`}
+          title={openInTrackerTitle(todo.id)}
           className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0"
         >
           <ExternalLink className="size-3.5" />
@@ -59,7 +67,7 @@ function TodoItem({
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:text-foreground ml-auto h-6 gap-1 px-1.5 text-xs font-normal"
-          title={`Close #${todo.id} in the tracker`}
+          title={closeInTrackerTitle(todo.id)}
           disabled={closing}
           onClick={onCloseTodo}
         >
@@ -93,24 +101,17 @@ export function TodoPanel({
 }) {
   const closeTodo = useCloseTodo(repo);
   const all = todos ?? [];
-  const list = filterElementId ? all.filter((t) => t.anchor?.elements.some((el) => el.id === filterElementId)) : all;
+  const list = filterElementId ? todosForElement(all, filterElementId) : all;
   // creation-time name snapshot of the filtered element, if any todo carries one
-  const filterName = filterElementId
-    ? (all.flatMap((t) => t.anchor?.elements ?? []).find((el) => el.id === filterElementId && el.name)?.name ??
-      filterElementId)
-    : null;
+  const filterName = filterElementId ? elementLabel(all, filterElementId) : null;
 
   return (
-    <aside className="bg-background absolute inset-y-0 right-0 z-10 flex w-80 flex-col border-l shadow-lg">
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <ListTodo className="text-muted-foreground size-4 shrink-0" />
-        <span className="text-sm font-medium">Open todos</span>
-        {!isLoading && !error && <Badge variant="secondary">{list.length}</Badge>}
-        <div className="flex-1" />
-        <Button variant="ghost" size="icon" className="size-7" title="Close" onClick={onClose}>
-          <X />
-        </Button>
-      </div>
+    <SidePanel
+      icon={ListTodo}
+      title="Open todos"
+      badge={!isLoading && !error && <Badge variant="secondary">{list.length}</Badge>}
+      onClose={onClose}
+    >
       {filterElementId && (
         <div className="flex items-center gap-2 border-b px-3 py-1.5">
           <span className="text-muted-foreground shrink-0 text-xs">Element:</span>
@@ -133,9 +134,7 @@ export function TodoPanel({
         ) : isLoading ? (
           <p className="text-muted-foreground text-sm">Loading…</p>
         ) : list.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {filterElementId ? "No open todos on this element." : "No open todos for this process."}
-          </p>
+          <p className="text-muted-foreground text-sm">{emptyTodoMessage(filterElementId !== null)}</p>
         ) : (
           list.map((t) => (
             <TodoItem
@@ -148,6 +147,6 @@ export function TodoPanel({
           ))
         )}
       </div>
-    </aside>
+    </SidePanel>
   );
 }
