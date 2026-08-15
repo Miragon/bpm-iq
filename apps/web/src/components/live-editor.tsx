@@ -105,7 +105,6 @@ export function LiveEditor({
   const hasTodos = processId.length > 0;
   const todosQuery = useTodos(repo, processId, hasTodos);
   const [selectedElements, setSelectedElements] = useState<TodoElementWire[]>([]);
-  const [todosOpen, setTodosOpen] = useState(false);
   const [todoFilter, setTodoFilter] = useState<string | null>(null);
   const [todoCreateOpen, setTodoCreateOpen] = useState(false);
   // the canvas controller lives inside the imperative session effect; the query
@@ -115,12 +114,22 @@ export function LiveEditor({
 
   // decision checks (.dmn only) — analysis + simulation, computed in-browser
   // from the live document by @bpmiq/decisions
-  const [checksOpen, setChecksOpen] = useState(false);
   const [dmnXml, setDmnXml] = useState("");
 
+  // the ONE open side panel — the panels are mutually exclusive, and the rule
+  // lives here instead of being hand-written into every toggle (one of the
+  // five copies had already gone stale)
+  const [panel, setPanel] = useState<"todos" | "history" | "checks" | null>(null);
+  const togglePanel = (name: "todos" | "history" | "checks"): void => {
+    setTodoFilter(null);
+    setPanel((current) => (current === name ? null : name));
+  };
+  const closePanel = (): void => {
+    setTodoFilter(null);
+    setPanel(null);
+  };
   // default-branch commit history of THIS file — fetched while the panel is open
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const historyQuery = useFileHistory(repo, docPath, historyOpen);
+  const historyQuery = useFileHistory(repo, docPath, panel === "history");
   // the shared Y.Text, exposed from the session effect for Compare/Restore
   const contentRef = useRef<Y.Text | null>(null);
   const [diff, setDiff] = useState<{ commit: FileCommitWire; historical: string; current: string } | null>(null);
@@ -184,9 +193,8 @@ export function LiveEditor({
           // changes); a badge click opens the panel filtered to its element
           todoCanvas = attachTodoCanvas(modeler as never, {
             onBadgeClick: (elementId) => {
-              setHistoryOpen(false); // the side panels are mutually exclusive
               setTodoFilter(elementId);
-              setTodosOpen(true);
+              setPanel("todos");
             },
             onSelectionChanged: setSelectedElements,
           });
@@ -265,7 +273,7 @@ export function LiveEditor({
   // debounced: re-analysing on every keystroke of a co-editor would be pure
   // waste (`status` re-runs this once the session attached contentRef).
   useEffect(() => {
-    const ytext = checksOpen && isDmn ? contentRef.current : null;
+    const ytext = panel === "checks" && isDmn ? contentRef.current : null;
     if (!ytext) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const sync = () => setDmnXml(ytext.toString());
@@ -279,7 +287,7 @@ export function LiveEditor({
       clearTimeout(timer);
       ytext.unobserve(onChange);
     };
-  }, [checksOpen, isDmn, status]);
+  }, [panel, isDmn, status]);
 
   // release = pick files in the ReleaseDialog, THIS document preselected
   const [releaseOpen, setReleaseOpen] = useState(false);
@@ -383,12 +391,7 @@ export function LiveEditor({
             variant="outline"
             size="sm"
             title="Analyse this decision and try a scenario — runs in the browser"
-            onClick={() => {
-              setHistoryOpen(false);
-              setTodosOpen(false);
-              setTodoFilter(null);
-              setChecksOpen((v) => !v);
-            }}
+            onClick={() => togglePanel("checks")}
           >
             <ShieldCheck />
             Checks
@@ -398,12 +401,7 @@ export function LiveEditor({
           variant="outline"
           size="sm"
           title="History of this file on the default branch"
-          onClick={() => {
-            setChecksOpen(false);
-            setTodosOpen(false);
-            setTodoFilter(null);
-            setHistoryOpen((v) => !v);
-          }}
+          onClick={() => togglePanel("history")}
         >
           <History />
           History
@@ -414,12 +412,7 @@ export function LiveEditor({
               variant="outline"
               size="sm"
               title="Open todos for this process"
-              onClick={() => {
-                setHistoryOpen(false);
-                setChecksOpen(false);
-                setTodoFilter(null);
-                setTodosOpen((v) => !v);
-              }}
+              onClick={() => togglePanel("todos")}
             >
               <ListTodo />
               Todos{todoList && todoList.length > 0 ? ` (${todoList.length})` : ""}
@@ -457,12 +450,12 @@ export function LiveEditor({
           ref={xmlRef}
           className={cn("monaco-host absolute inset-0", !xmlActive && "pointer-events-none opacity-0")}
         />
-        {isDmn && checksOpen && (
+        {isDmn && panel === "checks" && (
           <Suspense fallback={null}>
-            <DecisionChecksPanel repo={repo} xml={dmnXml} docPath={docPath} onClose={() => setChecksOpen(false)} />
+            <DecisionChecksPanel repo={repo} xml={dmnXml} docPath={docPath} onClose={closePanel} />
           </Suspense>
         )}
-        {historyOpen && (
+        {panel === "history" && (
           <HistoryPanel
             commits={historyQuery.data}
             isLoading={historyQuery.isLoading}
@@ -471,10 +464,10 @@ export function LiveEditor({
             actionsEnabled={status === "live"}
             onCompare={(c) => compare.mutate(c)}
             onRestore={(c) => restore.mutate(c)}
-            onClose={() => setHistoryOpen(false)}
+            onClose={closePanel}
           />
         )}
-        {hasTodos && todosOpen && (
+        {hasTodos && panel === "todos" && (
           <TodoPanel
             repo={repo}
             todos={todoList}
@@ -486,10 +479,7 @@ export function LiveEditor({
               if (!todoCanvasRef.current?.reveal(elementId))
                 toast(`Element '${elementId}' no longer exists in the diagram.`);
             }}
-            onClose={() => {
-              setTodosOpen(false);
-              setTodoFilter(null);
-            }}
+            onClose={closePanel}
           />
         )}
       </div>
