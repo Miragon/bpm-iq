@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.3.0](https://github.com/Miragon/bpm-iq/compare/v3.2.0...v3.3.0) (2026-08-15)
+
+
+### Features
+
+* dedup M-tier — mcp-kit, tool factories, discovery resolution, MCP audit trail, shared web view-models ([#89](https://github.com/Miragon/bpm-iq/issues/89)) ([93c0b49](https://github.com/Miragon/bpm-iq/commit/93c0b49a5ab8844657a8b8a2938815897d7db345))
+* simulate, analyse and test DMN decisions ([#83](https://github.com/Miragon/bpm-iq/issues/83)) ([2f2b825](https://github.com/Miragon/bpm-iq/commit/2f2b825ec56ee2e485dce82a378915a25d768ca7))
+
+
+### Bug Fixes
+
+* dedup S-tier — dead-on-arrival live-host image, MCP entry hardening, decision-link integrity ([#88](https://github.com/Miragon/bpm-iq/issues/88)) ([a69f13c](https://github.com/Miragon/bpm-iq/commit/a69f13cc46fb3b28373dd79401284322fd0a10ff))
+
 ## [3.2.0](https://github.com/Miragon/bpm-iq/compare/v3.1.0...v3.2.0) (2026-08-05)
 
 
