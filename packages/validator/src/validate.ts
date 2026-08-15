@@ -16,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
+import { cliRoot, notContentRepoError } from "@bpmiq/notations/cli";
 import { decisionRefOf } from "@bpmiq/notations/extract";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 
@@ -446,15 +447,8 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
 
 export async function runCli(): Promise<void> {
   const argv = process.argv.slice(2);
-  const rootFlag = argv.indexOf("--root");
-  const rootArg = rootFlag >= 0 ? argv[rootFlag + 1] : undefined;
-  if (rootFlag >= 0 && !rootArg) {
-    console.error("--root requires a directory argument");
-    process.exit(2);
-  }
   /** content root: the checkout being validated (defaults to the cwd) */
-  const ROOT = rootArg ? resolve(rootArg) : resolve(".");
-  if (rootFlag >= 0) argv.splice(rootFlag, 2);
+  const ROOT = cliRoot(argv);
   /** optional single-model filter (a .bpmn or .dmn file stem) */
   const only = argv[0];
 
@@ -463,7 +457,7 @@ export async function runCli(): Promise<void> {
   const { discoverDecisions, discoverProcesses, loadContentConfig } = await import("@bpmiq/notations/content");
   const cfg = loadContentConfig(ROOT);
   if (!cfg) {
-    console.error(`[ERROR] ${ROOT}: no bpmiq.yml at the root — not a BPM content repo (or wrong --root)`);
+    console.error(notContentRepoError(ROOT));
     console.error("\n1 error(s), 0 warning(s) — FAIL (0 model(s) checked)");
     process.exit(1);
   }

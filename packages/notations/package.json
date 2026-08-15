@@ -11,7 +11,8 @@
     ".": "./index.ts",
     "./extract": "./extract.ts",
     "./derive": "./derive.ts",
-    "./content": "./content.ts"
+    "./content": "./content.ts",
+    "./cli": "./cli.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
