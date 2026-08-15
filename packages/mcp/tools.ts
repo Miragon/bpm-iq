@@ -24,6 +24,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseAnchor } from "@bpmiq/contracts/todo-anchor";
+import { type GitHubIssueRow, isPullRequestRow, todoLabelQuery } from "@bpmiq/github-app/todos";
 import { fail, ok, READ, safe as kitSafe, type ToolResult } from "@bpmiq/mcp-kit";
 import {
   type ContentConfig,
@@ -371,9 +372,8 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
         annotations: { readOnlyHint: true, openWorldHint: true },
       },
       safe(async ({ process: processId }) => {
-        const labels = processId ? `todo,process:${processId}` : "todo";
         const res = await fetch(
-          `${api}/repos/${todosRepo}/issues?state=open&labels=${encodeURIComponent(labels)}&per_page=100`,
+          `${api}/repos/${todosRepo}/issues?state=open&labels=${encodeURIComponent(todoLabelQuery(processId))}&per_page=100`,
           {
             headers: {
               accept: "application/vnd.github+json",
@@ -383,18 +383,9 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
           },
         );
         if (!res.ok) return fail(`Tracker query on ${todosRepo} failed: ${res.status} ${await res.text()}`);
-        const rows = (await res.json()) as Array<{
-          number: number;
-          html_url: string;
-          title: string;
-          body: string | null;
-          assignees?: Array<{ login: string }>;
-          created_at: string;
-          /** present on PULL REQUESTS — GitHub returns them in the issues list */
-          pull_request?: unknown;
-        }>;
+        const rows = (await res.json()) as GitHubIssueRow[];
         const todos = rows
-          .filter((row) => row.pull_request === undefined)
+          .filter((row) => !isPullRequestRow(row))
           .map((row) => ({
             id: String(row.number),
             url: row.html_url,

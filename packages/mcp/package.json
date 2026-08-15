@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@bpmiq/contracts": "workspace:*",
+    "@bpmiq/github-app": "workspace:*",
     "@bpmiq/http-kit": "workspace:*",
     "@bpmiq/mcp-kit": "workspace:*",
     "@bpmiq/notations": "workspace:*",

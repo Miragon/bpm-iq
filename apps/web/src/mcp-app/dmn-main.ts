@@ -32,18 +32,14 @@ import {
 import { type DmnModelerHandle, mountDmnModeler, type Scenario } from "./dmn-modeler";
 import { mountTests, type TestsHandle } from "./dmn-tests";
 import { loadIconFont } from "./font";
+import { el, mountChrome, wireApp } from "./shell";
 
 // kick off immediately — the decision-table controls need it, nothing blocks
 loadIconFont("dmn").catch(() => {
   /* icons degrade to tofu; the modeler itself is unaffected */
 });
 
-const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
-const toolbar = { title: el<HTMLSpanElement>("title"), dirty: el<HTMLSpanElement>("dirty") };
-const saveBtn = el<HTMLButtonElement>("save");
-const fullscreenBtn = el<HTMLButtonElement>("fullscreen");
-const banner = el<HTMLDivElement>("banner");
-const status = el<HTMLDivElement>("status");
+const { toolbar, saveBtn, fullscreenBtn, status, setStatus, showBanner, hideBanner } = mountChrome();
 
 const cfg = bootConfig();
 const app = makeApp();
@@ -56,10 +52,6 @@ let inactive = false; // superseded by a newer widget — stop all saving
 let editSeq = 0; // bumps on every edit — save() detects mid-flight edits
 let loadEpoch = 0; // bumps on every load() — stale continuations bail out
 let releaseClaim: (() => void) | undefined;
-
-const setStatus = (text: string): void => {
-  status.textContent = text;
-};
 
 /**
  * The save button IS the state display: nothing to save reads "Saved" and is
@@ -91,24 +83,6 @@ function scheduleAutosave(): void {
   if (inactive || autosavePaused || !modeler?.editable) return;
   autosaveTimer = setTimeout(() => void save(), AUTOSAVE_MS);
 }
-
-function showBanner(text: string, actions: Array<{ label: string; danger?: boolean; run: () => void }>): void {
-  banner.innerHTML = "";
-  const msg = document.createElement("span");
-  msg.textContent = text;
-  banner.append(msg);
-  for (const a of actions) {
-    const b = document.createElement("button");
-    b.textContent = a.label;
-    if (a.danger) b.classList.add("danger");
-    b.onclick = () => a.run();
-    banner.append(b);
-  }
-  banner.hidden = false;
-}
-const hideBanner = (): void => {
-  banner.hidden = true;
-};
 
 async function load(decisionRef: ProcessRef, scenario?: Scenario): Promise<void> {
   const epoch = ++loadEpoch;
@@ -260,24 +234,9 @@ function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void 
 saveBtn.onclick = () => void save();
 fullscreenBtn.onclick = () => void app.requestDisplayMode({ mode: "fullscreen" });
 
-app.ontoolinput = (params) => {
-  const args = (params.arguments ?? {}) as {
-    repo?: string;
-    id?: string;
-    path?: string;
-    scenario?: Record<string, string | number | boolean | null>;
-  };
-  if (!args.repo) {
-    setStatus("Missing tool input (repo)");
-    return;
-  }
-  load({ repo: args.repo, id: args.id, path: args.path }, args.scenario).catch((err) => {
-    setStatus(`Load failed: ${(err as Error).message}`);
-  });
-};
-
-setTimeout(() => {
-  if (!ref) setStatus("No tool input received — open this connector in claude.ai or Claude Desktop.");
-}, 8000);
-
-app.connect().catch((err) => setStatus(`Bridge connect failed: ${(err as Error).message}`));
+wireApp(app, {
+  setStatus,
+  hasLoaded: () => ref !== undefined,
+  onToolArgs: (args) =>
+    load({ repo: args.repo, id: args.id, path: args.path }, (args as { scenario?: Scenario }).scenario),
+});

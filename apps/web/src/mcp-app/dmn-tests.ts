@@ -30,14 +30,13 @@ import {
   type SuiteRunWire,
 } from "./bridge";
 import type { DmnModelerHandle, Scenario } from "./dmn-modeler";
+import { el } from "./shell";
 
 export interface TestsHandle {
   /** (re)load the panel for a decision */
   load(ref: ProcessRef): void;
   destroy(): void;
 }
-
-const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 export function mountTests(
   app: App,
