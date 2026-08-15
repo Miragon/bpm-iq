@@ -23,6 +23,7 @@ import {
 import { loadIconFont } from "./font";
 import { type LiveHandle, tryLive, type TryLiveHooks } from "./live";
 import { type ModelerHandle, mountModeler } from "./modeler";
+import { el, mountChrome, wireApp } from "./shell";
 import { mountTodos, type TodosHandle } from "./todos";
 
 // kick off immediately — palette icons need it, but nothing blocks on it
@@ -30,12 +31,7 @@ loadIconFont("bpmn").catch(() => {
   /* icons degrade to tofu; the modeler itself is unaffected */
 });
 
-const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
-const toolbar = { title: el<HTMLSpanElement>("title"), dirty: el<HTMLSpanElement>("dirty") };
-const saveBtn = el<HTMLButtonElement>("save");
-const fullscreenBtn = el<HTMLButtonElement>("fullscreen");
-const banner = el<HTMLDivElement>("banner");
-const status = el<HTMLDivElement>("status");
+const { toolbar, saveBtn, fullscreenBtn, status, setStatus, showBanner, hideBanner } = mountChrome();
 
 const cfg = bootConfig();
 const app = makeApp();
@@ -52,9 +48,6 @@ let liveEpoch = 0; // bumps on every load() — stale async continuations bail o
 let upgradingLive = false; // single-flight guard for upgradeToLive
 let releaseClaim: (() => void) | undefined; // undo of the current claimDocument
 
-const setStatus = (text: string): void => {
-  status.textContent = text;
-};
 const setDirty = (d: boolean): void => {
   dirty = d;
   toolbar.dirty.hidden = !d;
@@ -85,24 +78,6 @@ function showFindings(errors: string[] | undefined, warnings: string[]): void {
   setStatus(parts.join(" · "));
   status.title = [...(errors ?? []), ...warnings].join("\n");
 }
-
-function showBanner(html: string, actions: Array<{ label: string; danger?: boolean; run: () => void }>): void {
-  banner.innerHTML = "";
-  const msg = document.createElement("span");
-  msg.textContent = html;
-  banner.append(msg);
-  for (const a of actions) {
-    const b = document.createElement("button");
-    b.textContent = a.label;
-    if (a.danger) b.classList.add("danger");
-    b.onclick = () => a.run();
-    banner.append(b);
-  }
-  banner.hidden = false;
-}
-const hideBanner = (): void => {
-  banner.hidden = true;
-};
 
 async function load(processRef: ProcessRef): Promise<void> {
   // defensive against out-of-contract hosts re-delivering tool input: this
@@ -443,21 +418,8 @@ function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void 
 saveBtn.onclick = () => void save();
 fullscreenBtn.onclick = () => void app.requestDisplayMode({ mode: "fullscreen" });
 
-app.ontoolinput = (params) => {
-  const args = (params.arguments ?? {}) as { repo?: string; id?: string; path?: string };
-  if (!args.repo) {
-    setStatus("Missing tool input (repo)");
-    return;
-  }
-  load({ repo: args.repo, id: args.id, path: args.path }).catch((err) => {
-    setStatus(`Load failed: ${(err as Error).message}`);
-  });
-};
-
-// hosts without lifecycle notifications (Claude iOS, ext-apps #734) never send
-// tool input — surface that instead of an eternal spinner
-setTimeout(() => {
-  if (!ref) setStatus("No tool input received — open this connector in claude.ai or Claude Desktop.");
-}, 8000);
-
-app.connect().catch((err) => setStatus(`Bridge connect failed: ${(err as Error).message}`));
+wireApp(app, {
+  setStatus,
+  hasLoaded: () => ref !== undefined,
+  onToolArgs: (args) => load({ repo: args.repo, id: args.id, path: args.path }),
+});

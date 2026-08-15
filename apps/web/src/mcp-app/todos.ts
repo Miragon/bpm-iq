@@ -31,6 +31,7 @@ import {
 
 import { closeTodo, createTodo, isMissingTool, listTodos } from "./bridge";
 import type { ModelerHandle } from "./modeler";
+import { el } from "./shell";
 import { implementPrompt, type PromptTarget } from "./todo-prompt";
 
 export interface TodosHandle {
@@ -38,8 +39,6 @@ export interface TodosHandle {
   load(ref: PromptTarget): void;
   destroy(): void;
 }
-
-const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 export function mountTodos(app: App, modeler: ModelerHandle, opts: { readonly: boolean }): TodosHandle {
   const toggle = el<HTMLButtonElement>("todo-toggle");
