@@ -43,6 +43,7 @@ COPY --from=build /app/packages/notations ./packages/notations
 COPY --from=build /app/packages/contracts ./packages/contracts
 # http.ts imports @bpmiq/http-kit and @bpmiq/mcp-kit — the workspace symlinks
 # in node_modules dangle without the real package sources
+COPY --from=build /app/packages/github-app ./packages/github-app
 COPY --from=build /app/packages/http-kit ./packages/http-kit
 COPY --from=build /app/packages/mcp-kit ./packages/mcp-kit
 COPY --from=build /app/packages/mcp ./packages/mcp

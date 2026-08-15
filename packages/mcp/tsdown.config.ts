@@ -17,5 +17,5 @@ export default defineConfig({
   // other dependency stays external and installs from npm (fast-xml-parser is
   // declared as a dependency here because the inlined notations/extract
   // imports it at runtime; the MCP SDK because the inlined mcp-kit/mount does).
-  deps: { alwaysBundle: [/^@bpmiq\/(notations|contracts|http-kit|mcp-kit)/] },
+  deps: { alwaysBundle: [/^@bpmiq\/(notations|contracts|http-kit|mcp-kit|github-app)/] },
 });

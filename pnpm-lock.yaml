@@ -314,6 +314,9 @@ importers:
       '@bpmiq/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@bpmiq/github-app':
+        specifier: workspace:*
+        version: link:../github-app
       '@bpmiq/http-kit':
         specifier: workspace:*
         version: link:../http-kit
