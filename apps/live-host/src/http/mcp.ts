@@ -55,6 +55,7 @@ import {
   type OverviewDeps,
 } from "../application/overview.ts";
 import { createDecision, createProcess } from "../application/scaffold.ts";
+import { closeTodoFor, fileTodo } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
@@ -321,17 +322,6 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
         },
       ),
     );
-  };
-
-  /** processRef → the pair a todo anchor needs: the process id and the model
-   *  file it lives in (a `path` names its own process — see processIdOf) */
-  const resolveAnchorTarget = async (
-    repo: ConnectedRepo,
-    id?: string,
-    path?: string,
-  ): Promise<{ process: string; file: string }> => {
-    const file = await resolveBpmnPath(repo, id, path);
-    return { process: id ?? processIdOf(file), file };
   };
 
   server.registerTool(
@@ -819,22 +809,16 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
             elements?: Array<{ id: string; name?: string | null }>;
           }) => {
             const r = await requireRepo(repo);
-            if (title.trim().length === 0) return fail("`title` must not be empty.");
-            const target = await resolveAnchorTarget(r, id, path);
-            const todo = await issues.createTodo(r.fullName, {
-              title: title.trim(),
-              body: body ?? "",
-              anchor: {
-                process: target.process,
-                file: target.file,
-                elements: (elements ?? []).map((el) => ({ id: el.id, name: el.name ?? null })),
-                // the slim content contract carries no version metadata
-                processVersion: null,
-              },
-              // attribution is the CALLER's platform login, never a tool argument
-              author: session.user.login,
-            });
-            console.log(`todo created in ${r.fullName} by @${session.user.login} via mcp: #${todo.id} "${todo.title}"`);
+            // validation, server-side anchor resolution and the audit line are
+            // the shared use-case — same rules as POST /todos
+            const todo = await fileTodo(
+              opts,
+              issues,
+              session,
+              r,
+              { title, body, process: id, file: path, elements },
+              "mcp",
+            );
             return ok({ todo: todo satisfies TodoWire });
           },
         ),
@@ -854,8 +838,7 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
         },
         safe(async ({ repo, todoId }: { repo: string; todoId: string }) => {
           const r = await requireRepo(repo);
-          await issues.closeTodo(r.fullName, todoId, session.user.login);
-          console.log(`todo closed in ${r.fullName} by @${session.user.login} via mcp: #${todoId}`);
+          await closeTodoFor(issues, session, r, todoId, "mcp");
           return ok({ ok: true, repo: r.fullName, todoId });
         }),
       );

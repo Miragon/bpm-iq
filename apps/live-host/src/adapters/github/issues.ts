@@ -15,16 +15,17 @@
  */
 import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 import { GitHubHttpError, paginate, tokenRest } from "@bpmiq/github-app";
+import {
+  type GitHubIssueRow,
+  isPullRequestRow,
+  processLabel,
+  TODO_LABEL,
+  todoLabelQuery,
+} from "@bpmiq/github-app/todos";
 import { AppError } from "@bpmiq/http-kit";
 
 import type { IssueTracker, Todo, TodoInput } from "../../ports/issue-tracker.ts";
 import { githubApi } from "./app-auth.ts";
-
-/** the label every platform-managed todo carries */
-export const TODO_LABEL = "todo";
-
-/** the per-process label that makes the tracker-side filter cheap */
-export const processLabel = (processId: string): string => `process:${processId}`;
 
 /** attribution line appended to every created issue (items are bot-authored) */
 export const attributionLine = (author: string): string => `_Created from the bpmiq live model by @${author}_`;
@@ -94,7 +95,7 @@ export function todoBody(input: TodoInput, deepLink?: DeepLinkTarget): string {
     .join("\n\n");
 }
 
-export interface GitHubIssuesDeps {
+export interface GitHubIssueRowsDeps {
   /** REST base, e.g. https://api.github.com */
   apiUrl: string;
   /** installation token for ONE repo — server.ts composes registry → TokenService */
@@ -105,18 +106,6 @@ export interface GitHubIssuesDeps {
 }
 
 /** the slice of GitHub's issue wire shape this adapter maps */
-interface GitHubIssue {
-  number: number;
-  html_url: string;
-  title: string;
-  state: string;
-  body: string | null;
-  assignees?: Array<{ login: string }>;
-  created_at: string;
-  /** present on PULL REQUESTS — GitHub returns them in the issues list */
-  pull_request?: unknown;
-}
-
 /** a 403 here means the app was registered without the Issues permission
  * (apps created before the manifest gained `issues: write`) — user-actionable */
 function issuesPermissionError(repoFullName: string): AppError {
@@ -129,7 +118,7 @@ function issuesPermissionError(repoFullName: string): AppError {
   );
 }
 
-export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
+export function createGitHubIssueTracker(deps: GitHubIssueRowsDeps): IssueTracker {
   const api = deps.apiUrl.replace(/\/$/, "");
   const ghApi = githubApi(api);
 
@@ -157,7 +146,7 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
     await raise(res, repoFullName, `label '${label.name}' creation in ${repoFullName}`);
   }
 
-  function toTodo(issue: GitHubIssue): Todo {
+  function toTodo(issue: GitHubIssueRow): Todo {
     const body = issue.body ?? "";
     return {
       id: String(issue.number),
@@ -196,16 +185,15 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
         }),
       });
       if (!res.ok) await raise(res, repoFullName, `issue creation in ${repoFullName}`);
-      return toTodo((await res.json()) as GitHubIssue);
+      return toTodo((await res.json()) as GitHubIssueRow);
     },
 
     async listTodos(repoFullName, processId) {
       const token = await deps.tokenFor(repoFullName);
-      const labels = processId ? `${TODO_LABEL},${processLabel(processId)}` : TODO_LABEL;
-      const path = `/repos/${repoFullName}/issues?state=open&labels=${encodeURIComponent(labels)}&per_page=100`;
-      let issues: GitHubIssue[];
+      const path = `/repos/${repoFullName}/issues?state=open&labels=${encodeURIComponent(todoLabelQuery(processId))}&per_page=100`;
+      let issues: GitHubIssueRow[];
       try {
-        issues = (await paginate(ghApi, path, { token })) as GitHubIssue[];
+        issues = (await paginate(ghApi, path, { token })) as GitHubIssueRow[];
       } catch (e) {
         // paginate throws GitHubHttpError with the response status/body attached
         if (e instanceof GitHubHttpError && e.status === 403 && e.body.includes("Resource not accessible")) {
@@ -213,8 +201,7 @@ export function createGitHubIssueTracker(deps: GitHubIssuesDeps): IssueTracker {
         }
         throw e;
       }
-      // GitHub's issues list INCLUDES pull requests (they carry a pull_request key)
-      return issues.filter((issue) => issue.pull_request === undefined).map(toTodo);
+      return issues.filter((issue) => !isPullRequestRow(issue)).map(toTodo);
     },
 
     async closeTodo(repoFullName, id, closedBy) {

@@ -88,6 +88,7 @@ import { fileAtCommit, fileHistory } from "../application/history.ts";
 import { listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
 import { createDecision, createFolder, createProcess, listFolders } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
+import { closeTodoFor, fileTodo } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
@@ -694,8 +695,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
           const todoId = repoRoute[3];
           if (todoId) {
             if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
-            await opts.issues.closeTodo(repo.fullName, todoId, session.user.login);
-            console.log(`todo closed in ${repo.fullName} by @${session.user.login}: #${todoId}`);
+            await closeTodoFor(opts.issues, session, repo, todoId, "rest");
             return send(res, 200, { ok: true });
           }
           if (req.method === "GET") {
@@ -705,28 +705,24 @@ export function startApi(port: number, opts: ApiOptions): Server {
           if (req.method === "POST") {
             const body = await jsonBody<CreateTodoBody>(req, res);
             if (body === undefined) return;
-            if (typeof body?.title !== "string" || body.title.trim().length === 0) {
-              return send(res, 400, { error: "title must be a non-empty string" });
-            }
-            if (typeof body?.anchor?.process !== "string" || body.anchor.process.trim().length === 0) {
-              return send(res, 400, { error: "anchor.process must be a non-empty string" });
-            }
-            const todo = await opts.issues.createTodo(repo.fullName, {
-              title: body.title.trim(),
-              body: typeof body.body === "string" ? body.body : "",
-              anchor: {
-                process: body.anchor.process.trim(),
-                file: typeof body.anchor.file === "string" ? body.anchor.file : null,
-                elements: (Array.isArray(body.anchor.elements) ? body.anchor.elements : [])
-                  .filter((el) => typeof el?.id === "string" && el.id.length > 0)
-                  .map((el) => ({ id: el.id, name: typeof el.name === "string" ? el.name : null })),
-                processVersion: typeof body.anchor.processVersion === "string" ? body.anchor.processVersion : null,
+            // validation, server-side anchor resolution (unknown process = 404,
+            // client file only kept when it names that process) and the audit
+            // line live in the shared use-case
+            const todo = await fileTodo(
+              opts,
+              opts.issues,
+              session,
+              repo,
+              {
+                title: body?.title,
+                body: body?.body,
+                process: typeof body?.anchor?.process === "string" ? body.anchor.process : undefined,
+                file: typeof body?.anchor?.file === "string" ? body.anchor.file : undefined,
+                elements: Array.isArray(body?.anchor?.elements) ? body.anchor.elements : [],
+                processVersion: body?.anchor?.processVersion,
               },
-              // attribution: the platform login of the SESSION is authoritative,
-              // never a client-supplied author field
-              author: session.user.login,
-            });
-            console.log(`todo created in ${repo.fullName} by @${session.user.login}: #${todo.id} "${todo.title}"`);
+              "rest",
+            );
             return send(res, 201, todo satisfies TodoWire);
           }
           return send(res, 405, { error: "method not allowed" });

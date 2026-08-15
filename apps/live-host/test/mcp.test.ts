@@ -328,10 +328,17 @@ test("todos: create anchors to the open process, list filters by it, close compl
   assert.deepEqual(issues.closed, [created.todo.id]);
   assert.equal((await callJson("list_todos", { repo: REPO.fullName })).todos.length, 1);
 
-  // an empty title is refused before the tracker is touched
+  // an empty title is refused before the tracker is touched (the shared
+  // use-case speaks the REST wording on both transports)
   const blank = await call("create_todo", { repo: REPO.fullName, id: "order", title: "   " });
   assert.ok(blank.isError);
-  assert.match(blank.text, /must not be empty/);
+  assert.match(blank.text, /title must be a non-empty string/);
+  assert.equal(issues.created.length, 2);
+
+  // an unknown process is a typed 404, never a stored anchor pointing at nothing
+  const dangling = await call("create_todo", { repo: REPO.fullName, id: "no-such-process", title: "x" });
+  assert.ok(dangling.isError);
+  assert.match(dangling.text, /process 'no-such-process' not found/);
   assert.equal(issues.created.length, 2);
 });
 
