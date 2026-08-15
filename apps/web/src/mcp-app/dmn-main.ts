@@ -70,6 +70,10 @@ const setStatus = (text: string): void => {
 let dirty = false;
 const setDirty = (d: boolean): void => {
   dirty = d;
+  // a superseded instance never re-arms: the claim callback disabled the save
+  // button for good, and the next edit's setDirty(true) must not undo that
+  // (save() would return immediately — an armed button that does nothing)
+  if (inactive) return;
   toolbar.dirty.hidden = !d;
   if (!modeler?.editable) return;
   saveBtn.disabled = saving || !d;
