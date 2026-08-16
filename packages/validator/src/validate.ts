@@ -16,9 +16,9 @@
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
+import { kindOf } from "@bpmiq/notations/bpmn-kinds";
 import { cliRoot, notContentRepoError } from "@bpmiq/notations/cli";
-import { decisionRefOf } from "@bpmiq/notations/extract";
-import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { asArray, parseXml, readBpmn, requirementHref, XMLValidator } from "@bpmiq/notations/extract";
 
 export type Severity = "ERROR" | "WARN";
 export interface Finding {
@@ -27,8 +27,6 @@ export interface Finding {
   file: string;
   message: string;
 }
-
-const asArray = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
 
 /** collect DI element refs from every <keys> element anywhere under root —
  *  recursive, so drilldown planes of collapsed sub-processes are included; the
@@ -52,129 +50,6 @@ function collectDiRefs(root: unknown, keys: readonly string[], attr: string): Se
     }
   })(root);
   return di;
-}
-
-const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true });
-
-// Explicit BPMN flow-node whitelist (with namespace prefixes stripped). Everything
-// else — textAnnotation, association, dataObject(Reference), group, … — is a legal
-// artifact but NOT a flow node; treating it as one produces false "unreachable"/
-// "dead end" errors on perfectly valid models.
-const FLOW_NODE_TAGS = new Set([
-  "task",
-  "userTask",
-  "serviceTask",
-  "scriptTask",
-  "businessRuleTask",
-  "manualTask",
-  "sendTask",
-  "receiveTask",
-  "callActivity",
-  "subProcess",
-  "adHocSubProcess",
-  "transaction",
-  "startEvent",
-  "endEvent",
-  "intermediateThrowEvent",
-  "intermediateCatchEvent",
-  "boundaryEvent",
-  "exclusiveGateway",
-  "parallelGateway",
-  "inclusiveGateway",
-  "eventBasedGateway",
-  "complexGateway",
-]);
-/** container tags whose children form their own flow graph */
-const SUB_CONTAINER_TAGS = new Set(["subProcess", "adHocSubProcess", "transaction"]);
-/** non-flow-node artifacts that still need a BPMNDI shape/edge to render */
-const DI_ARTIFACT_TAGS = new Set([
-  "textAnnotation",
-  "association",
-  "dataObjectReference",
-  "dataStoreReference",
-  "group",
-]);
-
-interface FlowContainer {
-  /** container id for messages ("process Process_1", "subProcess Sub_1") */
-  label: string;
-  /** flow nodes directly in this container */
-  nodes: Map<string, string>;
-  /** sequence flows directly in this container: id -> [source, target] */
-  flows: Map<string, [string, string]>;
-  isSubProcess: boolean;
-  triggeredByEvent: boolean;
-}
-
-/**
- * Recursively collect flow containers (process + embedded sub-processes),
- * artifacts needing DI, boundary attachments and callActivity targets.
- */
-function collectContainers(
-  el: Record<string, unknown>,
-  label: string,
-  isSubProcess: boolean,
-  out: {
-    containers: FlowContainer[];
-    diRequired: Set<string>;
-    boundaries: Map<string, string>;
-    called: string[];
-    /** businessRuleTask → the decision it delegates to, per engine spelling */
-    decides: Array<{ id: string; ref: string }>;
-    /** event sub-processes: intentionally NOT wired into the parent's flow */
-    eventSubProcesses: Set<string>;
-  },
-): FlowContainer {
-  const container: FlowContainer = {
-    label,
-    nodes: new Map(),
-    flows: new Map(),
-    isSubProcess,
-    triggeredByEvent: String((el as Record<string, string>)["@_triggeredByEvent"]) === "true",
-  };
-  out.containers.push(container);
-
-  for (const [tag, value] of Object.entries(el)) {
-    if (tag.startsWith("@_")) continue;
-    if (tag === "sequenceFlow") {
-      for (const f of asArray(value as Record<string, string>[])) {
-        container.flows.set(f["@_id"] ?? "", [f["@_sourceRef"] ?? "", f["@_targetRef"] ?? ""]);
-        if (f["@_id"]) out.diRequired.add(f["@_id"]);
-      }
-      continue;
-    }
-    if (FLOW_NODE_TAGS.has(tag)) {
-      for (const node of asArray(value as Record<string, unknown>[])) {
-        const rec = node as Record<string, string>;
-        const id = rec["@_id"];
-        if (!id) continue;
-        container.nodes.set(id, tag);
-        out.diRequired.add(id);
-        if (tag === "boundaryEvent") out.boundaries.set(id, rec["@_attachedToRef"] ?? "");
-        if (tag === "callActivity" && rec["@_calledElement"]) out.called.push(rec["@_calledElement"]);
-        if (tag === "businessRuleTask") {
-          // no standard BPMN attribute for this — the spelling list is owned by
-          // @bpmiq/notations/extract, so this check reads exactly the links the
-          // platform follows (a private re-list drifted once: calledElement)
-          const ref = decisionRefOf(node as Record<string, unknown>);
-          if (ref) out.decides.push({ id, ref });
-        }
-        // an event sub-process is triggered by its own start event, never by a
-        // sequence flow from the parent — exempt it from parent reachability
-        if (SUB_CONTAINER_TAGS.has(tag) && String(rec["@_triggeredByEvent"]) === "true") out.eventSubProcesses.add(id);
-        if (SUB_CONTAINER_TAGS.has(tag)) {
-          collectContainers(node as Record<string, unknown>, `${tag} ${id}`, true, out);
-        }
-      }
-      continue;
-    }
-    if (DI_ARTIFACT_TAGS.has(tag)) {
-      for (const node of asArray(value as Record<string, string>[])) {
-        if (node["@_id"]) out.diRequired.add(node["@_id"]);
-      }
-    }
-  }
-  return container;
 }
 
 /** fast-xml-parser is not namespace-aware — check that every used prefix is declared. */
@@ -223,7 +98,7 @@ export function checkBpmnXml(
   }
   checkXmlNamespaces(raw, err);
 
-  const defs = xml.parse(raw).definitions;
+  const defs = parseXml(raw).definitions;
   // collaborations have one <bpmn:process> per pool — always treat as a list
   const processes = asArray(defs?.process as Record<string, unknown>[]);
   if (processes.length === 0) {
@@ -231,29 +106,34 @@ export function checkBpmnXml(
     return { findings, called: [], decides: [] };
   }
 
-  const collected = {
-    containers: [] as FlowContainer[],
-    diRequired: new Set<string>(),
-    boundaries: new Map<string, string>(),
-    called: [] as string[],
-    decides: [] as Array<{ id: string; ref: string }>,
-    eventSubProcesses: new Set<string>(),
-  };
-  const topContainers: FlowContainer[] = [];
-  for (const proc of processes) {
-    const id = (proc as Record<string, string>)["@_id"] ?? "(anonymous)";
-    topContainers.push(collectContainers(proc, `process ${id}`, false, collected));
-  }
+  // the ONE walk (@bpmiq/notations/extract) — everything below is a pure
+  // consumer of the shared model; the validator's byte-identical copy of the
+  // traversal is gone
+  const model = readBpmn(defs ?? {});
+  const diRequired = model.diRequired;
+  const topContainers = model.containers.filter((c) => !c.isSubProcess);
+  const boundaries = new Map<string, string>();
+  for (const n of model.nodes) if (n.tag === "boundaryEvent") boundaries.set(n.id, n.attachedTo ?? "");
+  const called = model.nodes.filter((n) => n.tag === "callActivity" && n.calledElement).map((n) => n.calledElement!);
+  const decides = model.nodes
+    .filter((n) => n.tag === "businessRuleTask" && n.decisionRef)
+    .map((n) => ({ id: n.id, ref: n.decisionRef! }));
+  const eventSubProcesses = new Set(
+    model.containers.filter((c) => c.isSubProcess && c.triggeredByEvent && c.id).map((c) => c.id!),
+  );
 
   /** every flow node of every container (incl. embedded sub-processes) */
   const nodes = new Map<string, string>();
-  for (const c of collected.containers) for (const [id, tag] of c.nodes) nodes.set(id, tag);
+  for (const c of model.containers) for (const [id, n] of c.nodes) nodes.set(id, n.tag);
 
   // structural checks — per container: each pool / embedded sub-process is its own graph
-  for (const c of collected.containers) {
+  for (const c of model.containers) {
+    // the model keeps flows as a walk-ordered array; the Map preserves the
+    // historical last-wins on a duplicate (or missing) flow id
+    const flowMap = new Map(c.flows.map((f) => [f.id, [f.from, f.to] as [string, string]]));
     const inc = new Map<string, number>();
     const out = new Map<string, number>();
-    for (const [fid, [s, t]] of c.flows) {
+    for (const [fid, [s, t]] of flowMap) {
       for (const ref of [s, t]) {
         if (!c.nodes.has(ref)) err(`sequenceFlow ${fid} references missing node '${ref}' (${c.label})`);
       }
@@ -261,13 +141,13 @@ export function checkBpmnXml(
       inc.set(t, (inc.get(t) ?? 0) + 1);
     }
     if (c.nodes.size === 0) continue; // empty pool / collapsed reference — nothing to check
-    const starts = [...c.nodes.values()].filter((tag) => tag === "startEvent").length;
+    const starts = [...c.nodes.values()].filter((n) => n.tag === "startEvent").length;
     if (!c.isSubProcess && starts !== 1) err(`expected exactly one start event in ${c.label}, found ${starts}`);
     if (c.isSubProcess && !c.triggeredByEvent && starts > 1) err(`${c.label} has ${starts} start events`);
-    for (const [id, tag] of c.nodes) {
+    for (const [id, { tag }] of c.nodes) {
       // an event sub-process attaches to its own trigger, not the parent flow —
       // it is legitimately unconnected to the parent's sequence flow
-      if (collected.eventSubProcesses.has(id)) continue;
+      if (eventSubProcesses.has(id)) continue;
       if (tag === "startEvent" && (inc.get(id) ?? 0) > 0) err(`start event ${id} has incoming flows`);
       if (tag === "endEvent" && (out.get(id) ?? 0) > 0) err(`end event ${id} has outgoing flows`);
       if (tag !== "startEvent" && tag !== "boundaryEvent" && (inc.get(id) ?? 0) === 0)
@@ -275,24 +155,26 @@ export function checkBpmnXml(
       if (tag !== "endEvent" && (out.get(id) ?? 0) === 0) err(`${id} is a dead end (no outgoing flow, ${c.label})`);
     }
   }
-  for (const [b, attached] of collected.boundaries) {
+  for (const [b, attached] of boundaries) {
     if (!nodes.has(attached)) err(`boundary event ${b} attached to missing '${attached}'`);
   }
 
-  // collaboration: participants need DI, message flows must connect real elements
+  // collaboration: participants need DI, message flows must connect real
+  // elements. Participants and messageFlow ids join diRequired HERE, per
+  // collaboration, in this order — the DI-error order is wire-visible
   const participantIds = new Set<string>();
-  for (const collab of asArray(defs?.collaboration as Record<string, unknown>[])) {
-    for (const p of asArray(collab.participant as Record<string, string>[])) {
-      if (p["@_id"]) {
-        participantIds.add(p["@_id"]);
-        collected.diRequired.add(p["@_id"]);
+  for (const collab of model.collaborations) {
+    for (const pl of collab.pools) {
+      if (pl.id) {
+        participantIds.add(pl.id);
+        diRequired.add(pl.id);
       }
     }
-    for (const mf of asArray(collab.messageFlow as Record<string, string>[])) {
-      if (mf["@_id"]) collected.diRequired.add(mf["@_id"]);
-      for (const ref of [mf["@_sourceRef"], mf["@_targetRef"]]) {
+    for (const mf of collab.messageFlows) {
+      if (mf.id) diRequired.add(mf.id);
+      for (const ref of [mf.from, mf.to]) {
         if (ref && !nodes.has(ref) && !participantIds.has(ref)) {
-          err(`messageFlow ${mf["@_id"]} references missing element '${ref}'`);
+          err(`messageFlow ${mf.id} references missing element '${ref}'`);
         }
       }
     }
@@ -301,24 +183,22 @@ export function checkBpmnXml(
   // DI coverage — collect bpmnElement refs from all BPMNShape/BPMNEdge anywhere
   // (drilldown planes of collapsed sub-processes included: the walk is recursive)
   const di = collectDiRefs(defs, ["BPMNShape", "BPMNEdge"], "@_bpmnElement");
-  for (const id of collected.diRequired) {
+  for (const id of diRequired) {
     if (!di.has(id)) err(`${id} has no BPMNDI shape/edge (breaks the visual editor)`);
   }
 
   // lanes: if present, every top-level node must be assigned, and lanes render → need DI
   for (let i = 0; i < processes.length; i++) {
-    const proc = processes[i] as Record<string, any>;
-    const lanes = asArray(proc.laneSet?.lane);
+    const lanes = model.lanes.filter((l) => l.processIndex === i);
     if (lanes.length === 0) continue;
     const laned = new Set<string>();
     for (const lane of lanes) {
-      if (lane["@_id"] && !di.has(lane["@_id"]))
-        err(`lane ${lane["@_id"]} has no BPMNDI shape (breaks the visual editor)`);
-      for (const ref of asArray(lane.flowNodeRef as string[])) laned.add(String(ref));
+      if (lane.id && !di.has(lane.id)) err(`lane ${lane.id} has no BPMNDI shape (breaks the visual editor)`);
+      for (const ref of lane.nodeIds) laned.add(ref);
     }
     const topContainer = topContainers[i];
     if (topContainer)
-      for (const [id, tag] of topContainer.nodes) {
+      for (const [id, { tag }] of topContainer.nodes) {
         // boundary events belong to their host activity's lane implicitly and
         // are routinely omitted from flowNodeRef by editors — don't flag them
         if (tag === "boundaryEvent") continue;
@@ -326,14 +206,16 @@ export function checkBpmnXml(
       }
   }
 
-  const activities = [...nodes.values()].filter(
-    (tag) => tag.toLowerCase().endsWith("task") || tag === "callActivity" || tag === "subProcess",
-  ).length;
+  // the count runs over the id-deduped union of all containers' nodes — the
+  // shared taxonomy makes adHocSubProcess/transaction count like deriveProcess
+  // always did (the two classifiers had drifted; stats.steps said 10 while
+  // this warning stayed silent)
+  const activities = [...nodes.values()].filter((tag) => kindOf(tag) === "activity").length;
   if (activities > 9) warn(`${activities} activities — consider extracting a sub-process (7±2 rule)`);
 
   // link integrity: a callActivity should reference a process that exists in the repo
   if (opts.processIds) {
-    for (const ref of collected.called) {
+    for (const ref of called) {
       if (!opts.processIds.has(ref)) {
         warn(`callActivity calls '${ref}', which is not a process in this repo (external or dangling?)`);
       }
@@ -341,14 +223,14 @@ export function checkBpmnXml(
   }
   // …and the same for a business rule task and the repo's decisions
   if (opts.decisionIds) {
-    for (const { id, ref } of collected.decides) {
+    for (const { id, ref } of decides) {
       if (!opts.decisionIds.has(ref)) {
         warn(`businessRuleTask ${id} decides '${ref}', which is not a decision in this repo (external or dangling?)`);
       }
     }
   }
 
-  return { findings, called: collected.called, decides: collected.decides.map((d) => d.ref) };
+  return { findings, called, decides: decides.map((d) => d.ref) };
 }
 
 /**
@@ -379,7 +261,7 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
   }
   checkXmlNamespaces(raw, err);
 
-  const defs = xml.parse(raw).definitions;
+  const defs = parseXml(raw).definitions;
   const decisions = asArray(defs?.decision as Record<string, any>[]);
   const inputData = asArray(defs?.inputData as Record<string, any>[]);
   if (decisions.length === 0) {
@@ -417,11 +299,11 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
     }
 
     for (const req of asArray(decision.informationRequirement as Record<string, any>[])) {
-      const href: string | undefined = req.requiredInput?.["@_href"] ?? req.requiredDecision?.["@_href"];
-      if (href === undefined) continue;
-      const target = href.replace(/^#/, "");
+      const r = requirementHref(req);
+      if (r === undefined) continue;
+      const target = r.href.replace(/^#/, "");
       // an href into another file (namespace-qualified) is out of scope here
-      if (href.startsWith("#") && !known.has(target)) {
+      if (r.local && !known.has(target)) {
         err(`decision ${id} requires '${target}', which does not exist in this file`);
       }
     }

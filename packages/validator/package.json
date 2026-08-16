@@ -2,7 +2,7 @@
   "name": "@bpmiq/validator",
   "version": "3.3.0",
   "type": "module",
-  "description": "Platform-owned validator for BPM content repos — bpmiq.yml discovery + BPMN structure and BPMNDI coverage. Runs against any checkout via --root; never executes content-repo code.",
+  "description": "Platform-owned validator for BPM content repos \u2014 bpmiq.yml discovery + BPMN structure and BPMNDI coverage. Runs against any checkout via --root; never executes content-repo code.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -42,6 +42,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts"
   },
+  "//": "fast-xml-parser stays a RUNTIME dependency although src/ no longer imports it directly: tsdown inlines @bpmiq/notations (whose extract.ts imports it) but keeps npm deps external, so the published dist/ resolves it from here. Removing it breaks the npm artifact at import time while the workspace keeps working.",
   "dependencies": {
     "fast-xml-parser": "5.10.1",
     "yaml": "2.9.0"
