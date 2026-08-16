@@ -98,3 +98,19 @@ test("checkBpmnXml: the full findings list of a nested broken model is pinned", 
     },
   ]);
 });
+
+test("7±2: adHocSubProcess and transaction count as activities — like deriveProcess's steps", () => {
+  // 8 userTask + 1 transaction + 1 adHocSubProcess = 10 activities. The old
+  // predicate (endsWith("task") || callActivity || subProcess) counted 8 and
+  // stayed silent while deriveProcess reported stats.steps = 10 — the two
+  // classifiers now share @bpmiq/notations/bpmn-kinds.
+  const tasks = Array.from({ length: 8 }, (_, i) => `<userTask id="T${i}"/>`).join("");
+  const bpmn = `<?xml version="1.0"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <process id="p">${tasks}<transaction id="Tx"/><adHocSubProcess id="AH"/></process>
+</definitions>`;
+  const { findings } = checkBpmnXml(bpmn, { file: "many.bpmn" });
+  const warning = findings.find((f) => /7±2/.test(f.message));
+  assert.equal(warning?.severity, "WARN");
+  assert.match(warning?.message ?? "", /10 activities/);
+});

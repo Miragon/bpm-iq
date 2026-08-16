@@ -10,6 +10,7 @@
  */
 import { XMLParser } from "fast-xml-parser";
 
+import { BPMN_FLOW_NODE_TAGS, BPMN_SUB_CONTAINER_TAGS } from "./bpmn-kinds.ts";
 import { byExtension, byId, type NotationDescriptor } from "./index.ts";
 
 export interface ModelNode {
@@ -39,31 +40,6 @@ export interface ModelGraph {
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true });
 const asArray = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
-
-const BPMN_FLOW_NODE_TAGS = new Set([
-  "task",
-  "userTask",
-  "serviceTask",
-  "scriptTask",
-  "businessRuleTask",
-  "manualTask",
-  "sendTask",
-  "receiveTask",
-  "callActivity",
-  "subProcess",
-  "adHocSubProcess",
-  "transaction",
-  "startEvent",
-  "endEvent",
-  "intermediateThrowEvent",
-  "intermediateCatchEvent",
-  "boundaryEvent",
-  "exclusiveGateway",
-  "parallelGateway",
-  "inclusiveGateway",
-  "eventBasedGateway",
-  "complexGateway",
-]);
 
 /**
  * The decision a businessRuleTask delegates to. BPMN 2.0 has no standard
@@ -127,7 +103,7 @@ function extractBpmn(raw: string): ModelGraph {
             ...(decisionRef ? { decisionRef } : {}),
           },
         });
-        if (tag === "subProcess" || tag === "adHocSubProcess" || tag === "transaction") {
+        if (BPMN_SUB_CONTAINER_TAGS.has(tag)) {
           collect(el as Record<string, unknown>, rec["@_id"]);
         }
       }

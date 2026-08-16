@@ -109,6 +109,16 @@ export default {
       },
     },
     {
+      name: "bpmn-kinds-has-zero-imports",
+      severity: "error",
+      comment:
+        "bpmn-kinds.ts is the ONE BPMN taxonomy and derive.ts runtime-imports it " +
+        "into the browser bundles — it may import NOTHING (a ./extract import " +
+        "would drag fast-xml-parser in transitively, and no-circular is only a warn).",
+      from: { path: "^packages/notations/bpmn-kinds\\.ts$" },
+      to: { dependencyTypesNot: ["type-only"], path: ".+" },
+    },
+    {
       name: "notations-index-and-derive-stay-browser-safe",
       severity: "error",
       comment:

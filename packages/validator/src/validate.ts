@@ -16,6 +16,12 @@
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
+import {
+  BPMN_DI_ARTIFACT_TAGS,
+  BPMN_FLOW_NODE_TAGS,
+  BPMN_SUB_CONTAINER_TAGS,
+  kindOf,
+} from "@bpmiq/notations/bpmn-kinds";
 import { cliRoot, notContentRepoError } from "@bpmiq/notations/cli";
 import { decisionRefOf } from "@bpmiq/notations/extract";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
@@ -55,45 +61,6 @@ function collectDiRefs(root: unknown, keys: readonly string[], attr: string): Se
 }
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true });
-
-// Explicit BPMN flow-node whitelist (with namespace prefixes stripped). Everything
-// else — textAnnotation, association, dataObject(Reference), group, … — is a legal
-// artifact but NOT a flow node; treating it as one produces false "unreachable"/
-// "dead end" errors on perfectly valid models.
-const FLOW_NODE_TAGS = new Set([
-  "task",
-  "userTask",
-  "serviceTask",
-  "scriptTask",
-  "businessRuleTask",
-  "manualTask",
-  "sendTask",
-  "receiveTask",
-  "callActivity",
-  "subProcess",
-  "adHocSubProcess",
-  "transaction",
-  "startEvent",
-  "endEvent",
-  "intermediateThrowEvent",
-  "intermediateCatchEvent",
-  "boundaryEvent",
-  "exclusiveGateway",
-  "parallelGateway",
-  "inclusiveGateway",
-  "eventBasedGateway",
-  "complexGateway",
-]);
-/** container tags whose children form their own flow graph */
-const SUB_CONTAINER_TAGS = new Set(["subProcess", "adHocSubProcess", "transaction"]);
-/** non-flow-node artifacts that still need a BPMNDI shape/edge to render */
-const DI_ARTIFACT_TAGS = new Set([
-  "textAnnotation",
-  "association",
-  "dataObjectReference",
-  "dataStoreReference",
-  "group",
-]);
 
 interface FlowContainer {
   /** container id for messages ("process Process_1", "subProcess Sub_1") */
@@ -143,7 +110,7 @@ function collectContainers(
       }
       continue;
     }
-    if (FLOW_NODE_TAGS.has(tag)) {
+    if (BPMN_FLOW_NODE_TAGS.has(tag)) {
       for (const node of asArray(value as Record<string, unknown>[])) {
         const rec = node as Record<string, string>;
         const id = rec["@_id"];
@@ -161,14 +128,15 @@ function collectContainers(
         }
         // an event sub-process is triggered by its own start event, never by a
         // sequence flow from the parent — exempt it from parent reachability
-        if (SUB_CONTAINER_TAGS.has(tag) && String(rec["@_triggeredByEvent"]) === "true") out.eventSubProcesses.add(id);
-        if (SUB_CONTAINER_TAGS.has(tag)) {
+        if (BPMN_SUB_CONTAINER_TAGS.has(tag) && String(rec["@_triggeredByEvent"]) === "true")
+          out.eventSubProcesses.add(id);
+        if (BPMN_SUB_CONTAINER_TAGS.has(tag)) {
           collectContainers(node as Record<string, unknown>, `${tag} ${id}`, true, out);
         }
       }
       continue;
     }
-    if (DI_ARTIFACT_TAGS.has(tag)) {
+    if (BPMN_DI_ARTIFACT_TAGS.has(tag)) {
       for (const node of asArray(value as Record<string, string>[])) {
         if (node["@_id"]) out.diRequired.add(node["@_id"]);
       }
@@ -326,9 +294,11 @@ export function checkBpmnXml(
       }
   }
 
-  const activities = [...nodes.values()].filter(
-    (tag) => tag.toLowerCase().endsWith("task") || tag === "callActivity" || tag === "subProcess",
-  ).length;
+  // the count runs over the id-deduped union of all containers' nodes — the
+  // shared taxonomy makes adHocSubProcess/transaction count like deriveProcess
+  // always did (the two classifiers had drifted; stats.steps said 10 while
+  // this warning stayed silent)
+  const activities = [...nodes.values()].filter((tag) => kindOf(tag) === "activity").length;
   if (activities > 9) warn(`${activities} activities — consider extracting a sub-process (7±2 rule)`);
 
   // link integrity: a callActivity should reference a process that exists in the repo

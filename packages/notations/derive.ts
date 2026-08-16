@@ -13,6 +13,7 @@
  *
  * Pure + browser-safe: operates on the already-parsed ModelGraph, no fs, no XML.
  */
+import { kindOf } from "./bpmn-kinds.ts";
 import type { ModelGraph, ModelNode } from "./extract.ts";
 
 /** a BPMN lane — the closest thing the model has to an owning team/role */
@@ -59,28 +60,6 @@ export interface DerivedProcess {
   stats: { steps: number; events: number; gateways: number; flows: number; roles: number };
 }
 
-const ACTIVITY_TYPES = new Set([
-  "task",
-  "userTask",
-  "serviceTask",
-  "scriptTask",
-  "businessRuleTask",
-  "manualTask",
-  "sendTask",
-  "receiveTask",
-  "callActivity",
-  "subProcess",
-  "adHocSubProcess",
-  "transaction",
-]);
-const EVENT_TYPES = new Set([
-  "startEvent",
-  "endEvent",
-  "intermediateThrowEvent",
-  "intermediateCatchEvent",
-  "boundaryEvent",
-]);
-
 /** the ModelGraph shape deriveProcess reads from BPMN extract meta */
 interface BpmnMeta {
   lanes?: { id: string; name?: string; nodeIds: string[] }[];
@@ -117,9 +96,9 @@ export function deriveProcess(graph: ModelGraph): DerivedProcess {
     };
   };
 
-  const steps = graph.nodes.filter((n) => ACTIVITY_TYPES.has(n.type)).map(element);
-  const events = graph.nodes.filter((n) => EVENT_TYPES.has(n.type)).map(element);
-  const gateways = graph.nodes.filter((n) => n.type.endsWith("Gateway")).map(element);
+  const steps = graph.nodes.filter((n) => kindOf(n.type) === "activity").map(element);
+  const events = graph.nodes.filter((n) => kindOf(n.type) === "event").map(element);
+  const gateways = graph.nodes.filter((n) => kindOf(n.type) === "gateway").map(element);
 
   const flows = graph.edges.map((e) => ({
     id: e.id,
