@@ -10,7 +10,12 @@
  */
 import { XMLParser } from "fast-xml-parser";
 
-import { BPMN_FLOW_NODE_TAGS, BPMN_SUB_CONTAINER_TAGS } from "./bpmn-kinds.ts";
+// re-exported so the validator's raw well-formedness check needs no direct
+// fast-xml-parser import (arch rule one-bpmn-reader: the parser dependency
+// lives HERE, once)
+export { XMLValidator } from "fast-xml-parser";
+
+import { BPMN_DI_ARTIFACT_TAGS, BPMN_FLOW_NODE_TAGS, BPMN_SUB_CONTAINER_TAGS } from "./bpmn-kinds.ts";
 import { byExtension, byId, type NotationDescriptor } from "./index.ts";
 
 export interface ModelNode {
@@ -39,7 +44,12 @@ export interface ModelGraph {
 }
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: true });
-const asArray = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
+
+/** the ONE fast-xml-parser configuration (the validator used to carry a
+ *  byte-identical copy — that is how the two BPMN walks drifted) */
+export const parseXml = (raw: string): Record<string, any> => xml.parse(raw) as Record<string, any>;
+
+export const asArray = <T>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
 
 /**
  * The decision a businessRuleTask delegates to. BPMN 2.0 has no standard
@@ -66,76 +76,195 @@ export function decisionRefOf(task: Record<string, any>): string | undefined {
   return text === "" ? undefined : text;
 }
 
-function extractBpmn(raw: string): ModelGraph {
-  const defs = xml.parse(raw).definitions ?? {};
-  const nodes: ModelNode[] = [];
-  const edges: ModelEdge[] = [];
-  const lanes: Array<{ id: string; name?: string; nodeIds: string[] }> = [];
-  const pools: Array<{ id: string; name?: string; processRef?: string }> = [];
+// ── the ONE BPMN walk ────────────────────────────────────────────────────────
+// readBpmn serves BOTH consumers of the tree: extractBpmn (the flat
+// ModelGraph) and the validator's checkBpmnXml (per-container structure,
+// DI-required ids). One set of node RECORDS, two views: the flat arrays keep
+// the exact extraction order (tag-grouped first-occurrence order with
+// recursion inline at the sub-container key — fast-xml-parser groups repeated
+// tags, so this is NOT document order), the per-container Maps keep the
+// validator's last-wins semantics. diRequired is filled INLINE during the
+// walk — the DI-error ORDER is wire-visible and interleaves node, flow and
+// artifact ids at their tag-key positions.
 
-  const collect = (container: Record<string, unknown>, parent?: string): void => {
-    for (const [tag, value] of Object.entries(container)) {
+export interface BpmnModelNode {
+  id: string;
+  /** element tag, namespace prefix stripped (e.g. "userTask") */
+  tag: string;
+  name?: string;
+  /** boundaryEvent → its host activity */
+  attachedTo?: string;
+  /** callActivity → the called process (raw attribute — any tag may carry it) */
+  calledElement?: string;
+  /** businessRuleTask → the decision it delegates to (decisionRefOf) */
+  decisionRef?: string;
+  container: BpmnContainer;
+}
+
+export interface BpmnContainer {
+  /** for messages: "process P" / "subProcess S" */
+  label: string;
+  /** the container element's id (parent of its children in ModelGraph.extra) */
+  id?: string;
+  isSubProcess: boolean;
+  triggeredByEvent: boolean;
+  /** the SAME record objects as in BpmnModel.nodes — last-wins on duplicate ids */
+  nodes: Map<string, BpmnModelNode>;
+  flows: Array<{ id: string; from: string; to: string; name?: string }>;
+}
+
+export interface BpmnModel {
+  /** walk push order: a container first, its children mid-iteration */
+  containers: BpmnContainer[];
+  /** flat, in extraction order */
+  nodes: BpmnModelNode[];
+  /** flat sequence flows, in extraction order (a child's flows can precede the parent's) */
+  flows: Array<{ id: string; from: string; to: string; name?: string }>;
+  /** flow-node + sequenceFlow + DI-artifact ids, inserted inline during the
+   *  walk; the validator appends participants and messageFlow ids per
+   *  collaboration (their DI requirement is a check-side concern) */
+  diRequired: Set<string>;
+  /** raw optionals — extractBpmn projects identity, the validator filters truthy */
+  lanes: Array<{ id?: string; name?: string; nodeIds: string[]; processIndex: number }>;
+  /** grouped per <collaboration> — the validator's per-collab pass order is wire-visible */
+  collaborations: Array<{
+    pools: Array<{ id?: string; name?: string; processRef?: string }>;
+    messageFlows: Array<{ id?: string; from?: string; to?: string; name?: string }>;
+  }>;
+}
+
+/** parse-tree in (parseXml(raw).definitions), the shared model out */
+export function readBpmn(defs: Record<string, any>): BpmnModel {
+  const model: BpmnModel = {
+    containers: [],
+    nodes: [],
+    flows: [],
+    diRequired: new Set(),
+    lanes: [],
+    collaborations: [],
+  };
+
+  const walk = (el: Record<string, unknown>, label: string, id: string | undefined, isSubProcess: boolean): void => {
+    const container: BpmnContainer = {
+      label,
+      id,
+      isSubProcess,
+      triggeredByEvent: String((el as Record<string, string>)["@_triggeredByEvent"]) === "true",
+      nodes: new Map(),
+      flows: [],
+    };
+    model.containers.push(container);
+    for (const [tag, value] of Object.entries(el)) {
+      if (tag.startsWith("@_")) continue;
       if (tag === "sequenceFlow") {
         for (const f of asArray(value as Record<string, string>[])) {
-          edges.push({
+          const flow = {
             id: f["@_id"] ?? "",
             from: f["@_sourceRef"] ?? "",
             to: f["@_targetRef"] ?? "",
-            kind: "sequenceFlow",
             name: f["@_name"],
-          });
+          };
+          container.flows.push(flow);
+          model.flows.push(flow);
+          if (f["@_id"]) model.diRequired.add(f["@_id"]);
         }
         continue;
       }
-      if (!BPMN_FLOW_NODE_TAGS.has(tag)) continue;
-      for (const el of asArray(value as Record<string, unknown>[])) {
-        const rec = el as Record<string, string>;
-        if (!rec["@_id"]) continue;
-        const decisionRef = tag === "businessRuleTask" ? decisionRefOf(el as Record<string, any>) : undefined;
-        nodes.push({
-          id: rec["@_id"],
-          type: tag,
-          name: rec["@_name"],
-          extra: {
-            ...(parent ? { parent } : {}),
-            ...(rec["@_calledElement"] ? { calledElement: rec["@_calledElement"] } : {}),
-            ...(rec["@_attachedToRef"] ? { attachedTo: rec["@_attachedToRef"] } : {}),
+      if (BPMN_FLOW_NODE_TAGS.has(tag)) {
+        for (const node of asArray(value as Record<string, unknown>[])) {
+          const rec = node as Record<string, string>;
+          const nodeId = rec["@_id"];
+          if (!nodeId) continue;
+          const decisionRef = tag === "businessRuleTask" ? decisionRefOf(node as Record<string, any>) : undefined;
+          const entry: BpmnModelNode = {
+            id: nodeId,
+            tag,
+            name: rec["@_name"],
+            ...(rec["@_attachedToRef"] !== undefined ? { attachedTo: rec["@_attachedToRef"] } : {}),
+            ...(rec["@_calledElement"] !== undefined ? { calledElement: rec["@_calledElement"] } : {}),
             ...(decisionRef ? { decisionRef } : {}),
-          },
-        });
-        if (BPMN_SUB_CONTAINER_TAGS.has(tag)) {
-          collect(el as Record<string, unknown>, rec["@_id"]);
+            container,
+          };
+          model.nodes.push(entry);
+          container.nodes.set(nodeId, entry);
+          model.diRequired.add(nodeId);
+          if (BPMN_SUB_CONTAINER_TAGS.has(tag)) {
+            walk(node as Record<string, unknown>, `${tag} ${nodeId}`, nodeId, true);
+          }
+        }
+        continue;
+      }
+      if (BPMN_DI_ARTIFACT_TAGS.has(tag)) {
+        for (const node of asArray(value as Record<string, string>[])) {
+          if (node["@_id"]) model.diRequired.add(node["@_id"]);
         }
       }
     }
   };
 
+  let processIndex = 0;
   for (const proc of asArray(defs.process as Record<string, unknown>[])) {
-    collect(proc);
     const rec = proc as Record<string, any>;
+    const pid = rec["@_id"] as string | undefined;
+    walk(proc as Record<string, unknown>, `process ${pid ?? "(anonymous)"}`, pid, false);
     for (const lane of asArray(rec.laneSet?.lane)) {
-      lanes.push({
+      model.lanes.push({
         id: lane["@_id"],
         name: lane["@_name"],
         nodeIds: asArray(lane.flowNodeRef as string[]).map(String),
+        processIndex,
       });
     }
+    processIndex++;
   }
   for (const collab of asArray(defs.collaboration as Record<string, unknown>[])) {
     const rec = collab as Record<string, any>;
-    for (const p of asArray(rec.participant as Record<string, string>[])) {
-      pools.push({ id: p["@_id"] ?? "", name: p["@_name"] ?? "", processRef: p["@_processRef"] ?? "" });
-    }
-    for (const mf of asArray(rec.messageFlow as Record<string, string>[])) {
-      edges.push({
-        id: mf["@_id"] ?? "",
-        from: mf["@_sourceRef"] ?? "",
-        to: mf["@_targetRef"] ?? "",
-        kind: "messageFlow",
+    model.collaborations.push({
+      pools: asArray(rec.participant as Record<string, string>[]).map((pl) => ({
+        id: pl["@_id"],
+        name: pl["@_name"],
+        processRef: pl["@_processRef"],
+      })),
+      messageFlows: asArray(rec.messageFlow as Record<string, string>[]).map((mf) => ({
+        id: mf["@_id"],
+        from: mf["@_sourceRef"],
+        to: mf["@_targetRef"],
         name: mf["@_name"],
-      });
+      })),
+    });
+  }
+  return model;
+}
+
+function extractBpmn(raw: string): ModelGraph {
+  const model = readBpmn(parseXml(raw).definitions ?? {});
+  const nodes: ModelNode[] = model.nodes.map((n) => ({
+    id: n.id,
+    type: n.tag,
+    name: n.name,
+    extra: {
+      ...(n.container.isSubProcess && n.container.id ? { parent: n.container.id } : {}),
+      ...(n.calledElement ? { calledElement: n.calledElement } : {}),
+      ...(n.attachedTo ? { attachedTo: n.attachedTo } : {}),
+      ...(n.decisionRef ? { decisionRef: n.decisionRef } : {}),
+    },
+  }));
+  const edges: ModelEdge[] = model.flows.map((f) => ({
+    id: f.id,
+    from: f.from,
+    to: f.to,
+    kind: "sequenceFlow",
+    name: f.name,
+  }));
+  for (const collab of model.collaborations) {
+    for (const mf of collab.messageFlows) {
+      edges.push({ id: mf.id ?? "", from: mf.from ?? "", to: mf.to ?? "", kind: "messageFlow", name: mf.name });
     }
   }
+  const lanes = model.lanes.map((l) => ({ id: l.id, name: l.name, nodeIds: l.nodeIds }));
+  const pools = model.collaborations.flatMap((c) =>
+    c.pools.map((pl) => ({ id: pl.id ?? "", name: pl.name ?? "", processRef: pl.processRef ?? "" })),
+  );
   return { notation: "bpmn", nodes, edges, meta: { lanes, pools } };
 }
 
@@ -152,6 +281,20 @@ function textOf(value: unknown): string {
 }
 
 /**
+ * The target of an informationRequirement — requiredInput/requiredDecision,
+ * in that lookup order. THE spelling pair (it was byte-identical in the
+ * validator, the decisionRefOf duplication class): `local` means same-file
+ * ("#id"); a namespace-qualified href ("other.dmn#id") is NOT local — the
+ * validator's dangling check skips it, and extractDmn currently passes it
+ * through verbatim (known inconsistency vs analyze_decision, tracked in #86).
+ */
+export function requirementHref(req: Record<string, any>): { href: string; local: boolean } | undefined {
+  const href: string | undefined = req.requiredInput?.["@_href"] ?? req.requiredDecision?.["@_href"];
+  if (href === undefined) return undefined;
+  return { href, local: href.startsWith("#") };
+}
+
+/**
  * DMN: decisions (with their full decision-table logic), input data and the
  * information requirements between them. The table detail rides in
  * node.extra — deriveDecision (derive.ts) turns it into the decision view,
@@ -159,7 +302,7 @@ function textOf(value: unknown): string {
  * the ONE DMN parser on the server side.
  */
 function extractDmn(raw: string): ModelGraph {
-  const defs = xml.parse(raw).definitions ?? {};
+  const defs = parseXml(raw).definitions ?? {};
   const nodes: ModelNode[] = [];
   const edges: ModelEdge[] = [];
   for (const input of asArray(defs.inputData as Record<string, any>[])) {
@@ -218,11 +361,11 @@ function extractDmn(raw: string): ModelGraph {
       },
     });
     for (const req of asArray(decision.informationRequirement as Record<string, any>[])) {
-      const href: string | undefined = req.requiredInput?.["@_href"] ?? req.requiredDecision?.["@_href"];
-      if (href) {
+      const target = requirementHref(req);
+      if (target && target.href) {
         edges.push({
           id: req["@_id"] ?? `req-${edges.length}`,
-          from: href.replace(/^#/, ""),
+          from: target.href.replace(/^#/, ""),
           to: decision["@_id"],
           kind: "informationRequirement",
         });

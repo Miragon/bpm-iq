@@ -109,6 +109,16 @@ export default {
       },
     },
     {
+      name: "one-bpmn-reader",
+      severity: "error",
+      comment:
+        "fast-xml-parser is configured ONCE, in @bpmiq/notations/extract " +
+        "(parseXml + the XMLValidator re-export). The validator's byte-identical " +
+        "parser copy is how the two BPMN walks drifted (#86).",
+      from: { path: "^(apps|packages)/", pathNot: ["^packages/notations/extract\\.ts$"] },
+      to: { path: "(^|/)node_modules/fast-xml-parser/" },
+    },
+    {
       name: "bpmn-kinds-has-zero-imports",
       severity: "error",
       comment:
