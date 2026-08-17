@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.4.0](https://github.com/Miragon/bpm-iq/compare/v3.3.0...v3.4.0) (2026-08-17)
+
+
+### Features
+
+* dedup L-tier — the ModelKind collapse, and repos that count decisions ([#95](https://github.com/Miragon/bpm-iq/issues/95)) ([789a349](https://github.com/Miragon/bpm-iq/commit/789a3494cc9124fe51fc910c1c2cbf34ea5a23a5))
+
+
+### Bug Fixes
+
+* dedup M-tier (2) — trusted-anchor todos, widget save-button latch, tracker vocabulary, panel rule ([#90](https://github.com/Miragon/bpm-iq/issues/90)) ([695b3ce](https://github.com/Miragon/bpm-iq/commit/695b3ce2cc7cbd4a52896cd123eaf730553f69fb))
+* **live-host,web:** close the three review findings on the ModelKind collapse ([#95](https://github.com/Miragon/bpm-iq/issues/95)) ([#96](https://github.com/Miragon/bpm-iq/issues/96)) ([270ee21](https://github.com/Miragon/bpm-iq/commit/270ee2130a114ed3525c2a763f003c780b3bda2c))
+
 ## [3.3.0](https://github.com/Miragon/bpm-iq/compare/v3.2.0...v3.3.0) (2026-08-15)
 
 
