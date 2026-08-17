@@ -84,7 +84,12 @@ export function ProcessList() {
   // would discard, and repos being actively edited (Variant A: a reset can't
   // safely race an open session). Decisions used to be discarded UNLISTED —
   // the confirmation named only processes while the reset dropped both.
-  const dirtyModels = [...list, ...decisions].filter((m) => m.dirty).map((m) => m.name);
+  // keyed by PATH: names may collide across kinds (order.bpmn + order.dmn are
+  // legal separate namespaces), paths are unique repo-wide
+  const dirtyModels = [
+    ...list.filter((p) => p.dirty).map((p) => ({ path: p.bpmn, name: p.name })),
+    ...decisions.filter((d) => d.dirty).map((d) => ({ path: d.path, name: d.name })),
+  ];
   const activeSessions = [...list, ...decisions].reduce((n, m) => n + m.liveSessions, 0);
 
   // the folder tree: disk folders (includes empty ones) ∪ ancestors of every
@@ -236,7 +241,7 @@ export function ProcessList() {
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          {list.length > 0 && (
+          {(list.length > 0 || decisions.length > 0) && (
             <Button
               variant="outline"
               size="sm"

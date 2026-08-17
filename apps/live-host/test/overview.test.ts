@@ -151,6 +151,38 @@ test("listDecisions: the full wire row is pinned (the .dmn sibling of listProces
   ]);
 });
 
+test("listDecisions: a changed .dmn is dirty — the changed-set intersection covers decision paths", async () => {
+  // the review's mutation probe showed the headline fix of #95 was unguarded:
+  // dropping decisions from the dirty union kept every test green
+  const base = setup();
+  const dirtyDeps = {
+    ...base.deps,
+    workspaces: {
+      dir: () => base.ws,
+      changedPaths: async () => ["processes/rabatt.dmn"],
+      changedFiles: async () => [],
+    },
+  };
+  const rows = await listDecisions(dirtyDeps, REPO, base.ws);
+  assert.equal(rows[0]?.dirty, true, "the decision's path is in the changed set");
+});
+
+test("listRepos: a repo whose ONLY change is a decision shows a dirty badge (the pre-#95 bug)", async () => {
+  const base = setup();
+  const deps = {
+    ...base.deps,
+    workspaces: {
+      dir: () => base.ws,
+      changedPaths: async () => ["processes/rabatt.dmn"],
+      changedFiles: async () => [],
+    },
+  };
+  const repos = await listRepos(deps, session("dev", "dev-token"));
+  assert.equal(repos[0]?.dirtyCount, 1, "dirty decisions count — dirtyCount was process-only before #95");
+  assert.equal(repos[0]?.processCount, 2, "counts stay discovery-based");
+  assert.equal(repos[0]?.decisionCount, 1);
+});
+
 // ── listRepos ───────────────────────────────────────────────────────────────
 
 test("listRepos: dev session sees every repo with write permission + counts", async () => {
