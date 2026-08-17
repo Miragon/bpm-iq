@@ -47,6 +47,12 @@ body,
   flex: 1;
 }
 
+/* the brand mark (shell.ts puts it before the title) — never squeezed */
+#toolbar > svg {
+  flex: none;
+  display: block;
+}
+
 #dirty {
   color: var(--accent);
 }

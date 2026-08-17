@@ -20,6 +20,8 @@ export const widgetConfig = (htmlFile: string) =>
       // the shared browser modules under src/lib import via "@/lib/…"
       alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },
+    // public/ belongs to the SPA build; a widget carries everything inline
+    publicDir: false,
     build: {
       rollupOptions: { input: fileURLToPath(new URL(`./${htmlFile}`, import.meta.url)) },
       outDir: "dist",

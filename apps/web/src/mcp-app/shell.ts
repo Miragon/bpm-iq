@@ -14,6 +14,8 @@
  */
 import type { App } from "@modelcontextprotocol/ext-apps";
 
+import { cometElement } from "@/lib/comet";
+
 export const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 export interface WidgetChrome {
@@ -32,8 +34,12 @@ export interface WidgetChrome {
 export function mountChrome(): WidgetChrome {
   const banner = el<HTMLDivElement>("banner");
   const status = el<HTMLDivElement>("status");
+  // the brand mark rides in from lib/comet rather than sitting in both HTML
+  // entries — one geometry, not a path duplicated per widget
+  const title = el<HTMLSpanElement>("title");
+  title.before(cometElement(9));
   return {
-    toolbar: { title: el<HTMLSpanElement>("title"), dirty: el<HTMLSpanElement>("dirty") },
+    toolbar: { title, dirty: el<HTMLSpanElement>("dirty") },
     saveBtn: el<HTMLButtonElement>("save"),
     fullscreenBtn: el<HTMLButtonElement>("fullscreen"),
     banner,
