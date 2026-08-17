@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@bpmiq/ui-kit/components/av
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { Link } from "@tanstack/react-router";
 
+import { MiragonComet } from "@/components/miragon-comet";
 import type { Me } from "@/lib/api";
 import { useLogout } from "@/lib/queries";
 
@@ -9,9 +10,12 @@ export function AppHeader({ me }: { me?: Me }) {
   const logout = useLogout();
   return (
     <header className="flex items-center gap-3 border-b px-5 py-3">
-      <Link to="/" className="flex items-baseline gap-2">
-        <span className="text-lg font-semibold tracking-tight">bpmiq</span>
-        <span className="text-muted-foreground hidden text-xs sm:inline">Let your processes talk</span>
+      <Link to="/" className="flex items-center gap-2.5">
+        <MiragonComet className="h-3 w-auto shrink-0" />
+        <span className="flex items-baseline gap-2">
+          <span className="text-lg font-semibold tracking-tight">bpmiq</span>
+          <span className="text-muted-foreground hidden text-xs sm:inline">Let your processes talk</span>
+        </span>
       </Link>
       <div className="flex-1" />
       <a
