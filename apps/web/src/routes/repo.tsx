@@ -446,7 +446,7 @@ export function ProcessList() {
       {confirmOpen && (
         <SyncRepoDialog
           branch={branch}
-          dirtyProcesses={dirtyModels}
+          dirtyModels={dirtyModels}
           pending={sync.isPending}
           error={sync.error}
           onConfirm={runSync}
