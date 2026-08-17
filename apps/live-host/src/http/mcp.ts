@@ -327,7 +327,8 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
   server.registerTool(
     "list_repos",
     {
-      description: "List the repositories you can access on this Live Host, with permission and process counts.",
+      description:
+        "List the repositories you can access on this Live Host, with permission and model counts (processes + decisions).",
       annotations: READ,
     },
     safe(async () => ok({ repos: await listRepos(opts, session) })),
