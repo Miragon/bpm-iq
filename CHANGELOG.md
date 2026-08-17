@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.0](https://github.com/Miragon/bpm-iq/compare/v3.4.0...v3.5.0) (2026-08-17)
+
+
+### Features
+
+* **web:** the Miragon comet in the header, the widget toolbars and the favicon ([#97](https://github.com/Miragon/bpm-iq/issues/97)) ([8828d57](https://github.com/Miragon/bpm-iq/commit/8828d579e9afc69edb0950e4ebcce2bd9732cc4d))
+
 ## [3.4.0](https://github.com/Miragon/bpm-iq/compare/v3.3.0...v3.4.0) (2026-08-17)
 
 
