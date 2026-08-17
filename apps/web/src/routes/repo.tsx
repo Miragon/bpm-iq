@@ -80,10 +80,12 @@ export function ProcessList() {
   const [decisionOpen, setDecisionOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
 
-  // processes with unreleased live edits the reset would discard, and repos
-  // being actively edited (Variant A: a reset can't safely race an open session)
-  const dirtyProcesses = list.filter((p) => p.dirty).map((p) => p.name);
-  const activeSessions = list.reduce((n, p) => n + p.liveSessions, 0);
+  // models (processes AND decisions) with unreleased live edits the reset
+  // would discard, and repos being actively edited (Variant A: a reset can't
+  // safely race an open session). Decisions used to be discarded UNLISTED —
+  // the confirmation named only processes while the reset dropped both.
+  const dirtyModels = [...list, ...decisions].filter((m) => m.dirty).map((m) => m.name);
+  const activeSessions = [...list, ...decisions].reduce((n, m) => n + m.liveSessions, 0);
 
   // the folder tree: disk folders (includes empty ones) ∪ ancestors of every
   // process/decision path — so rows render even while the folders query is
@@ -137,7 +139,7 @@ export function ProcessList() {
     });
 
   const onLoadLatest = () => {
-    if (dirtyProcesses.length > 0) setConfirmOpen(true);
+    if (dirtyModels.length > 0) setConfirmOpen(true);
     else runSync();
   };
 
@@ -444,7 +446,7 @@ export function ProcessList() {
       {confirmOpen && (
         <SyncRepoDialog
           branch={branch}
-          dirtyProcesses={dirtyProcesses}
+          dirtyModels={dirtyModels}
           pending={sync.isPending}
           error={sync.error}
           onConfirm={runSync}

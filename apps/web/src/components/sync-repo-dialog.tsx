@@ -1,8 +1,8 @@
 /**
  * "Load latest from <default branch>" confirmation — shown only when the repo
  * has unreleased live changes the reset would DISCARD (a clean repo syncs
- * without asking). Lists the affected processes so the discard is an informed
- * choice. Mounted on open, so state resets by unmounting; the reset itself
+ * without asking). Lists the affected models (processes AND decisions — the
+ * reset drops both) so the discard is an informed choice. Mounted on open, so state resets by unmounting; the reset itself
  * (mutation, toast) is owned by the parent (routes/repo.tsx).
  */
 import { Badge } from "@bpmiq/ui-kit/components/badge";
@@ -11,7 +11,7 @@ import { useEffect } from "react";
 
 export function SyncRepoDialog({
   branch,
-  dirtyProcesses,
+  dirtyModels,
   pending,
   error,
   onConfirm,
@@ -19,8 +19,8 @@ export function SyncRepoDialog({
 }: {
   /** the default branch the workspace is reset onto */
   branch: string;
-  /** names of processes with unreleased live edits the reset will discard */
-  dirtyProcesses: string[];
+  /** names of models (processes and decisions) with unreleased live edits the reset will discard */
+  dirtyModels: string[];
   pending: boolean;
   error: Error | null;
   onConfirm: () => void;
@@ -47,10 +47,10 @@ export function SyncRepoDialog({
         <p className="text-muted-foreground mt-2 text-sm">
           This resets the workspace to <code className="bg-muted rounded px-1">{branch}</code> and{" "}
           <strong className="text-foreground">discards the unreleased live changes</strong> in{" "}
-          {dirtyProcesses.length === 1 ? "this process" : `these ${dirtyProcesses.length} processes`}:
+          {dirtyModels.length === 1 ? "this model" : `these ${dirtyModels.length} models`}:
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {dirtyProcesses.map((name) => (
+          {dirtyModels.map((name) => (
             <Badge key={name} variant="warning" className="max-w-64" title={name}>
               <span className="truncate">{name}</span>
             </Badge>

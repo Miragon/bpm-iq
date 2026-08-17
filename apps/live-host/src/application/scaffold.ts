@@ -152,117 +152,117 @@ export async function createFolder(repo: ConnectedRepo, workspace: string, path:
   return segments.join("/");
 }
 
+/** what a create needs to know about its model kind — the two creates were
+ *  ~50-line token-swap twins (extension, template, wire code, noun) */
+interface CreateKindSpec {
+  extension: ".bpmn" | ".dmn";
+  noun: "process" | "decision";
+  discover: (root: string, cfg: ContentConfig) => Promise<Array<{ id: string; path: string }>>;
+  template: (id: string, name: string) => string;
+  /** wire-pinned 409 code (scaffold/process-exists | scaffold/decision-exists) */
+  existsCode: string;
+}
+
+/** the shared create core: slug, per-kind repo-wide stem uniqueness (process
+ *  and decision ids stay SEPARATE namespaces — deliberate, test-pinned),
+ *  traversal/symlink guards, EEXIST → 409, template write. Returns the
+ *  repo-relative path; the wire row stays per wrapper. */
+async function createModel(
+  repo: ConnectedRepo,
+  workspace: string,
+  body: { name: string; folder?: string },
+  spec: CreateKindSpec,
+): Promise<{ id: string; repoPath: string; folder: string }> {
+  const cfg = requireConfig(repo, workspace);
+  const segments = folderSegments(body.folder ?? "");
+  const id = processIdFromName(body.name);
+  if (id === "") {
+    throw new AppError(
+      "scaffold/invalid-name",
+      `'${body.name}' does not yield a usable file name — use at least one letter or digit`,
+      { status: 400, expose: true },
+    );
+  }
+  const duplicate = (await spec.discover(workspace, cfg)).find((m) => m.id === id);
+  if (duplicate) {
+    throw new AppError(
+      spec.existsCode,
+      `${spec.noun} '${id}' already exists (${duplicate.path}) — ids are unique across all folders`,
+      { status: 409, expose: true },
+    );
+  }
+  const root = processesRoot(workspace, cfg);
+  const file = resolve(root, ...segments, `${id}${spec.extension}`);
+  assertInsideRoot(file, root, `${spec.noun} '${id}'`);
+  assertRealInsideWorkspace(file, workspace, `${spec.noun} '${id}'`, "scaffold/outside-processes-root");
+  if (existsSync(file)) {
+    // not discovered (e.g. under a dot-folder clash) but present on disk
+    throw new AppError(spec.existsCode, `'${relative(workspace, file)}' already exists`, {
+      status: 409,
+      expose: true,
+    });
+  }
+  await writeGuarded(`${spec.noun} '${id}'`, async () => {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, spec.template(id, body.name.trim()), { flag: "wx" });
+  });
+  return { id, repoPath: relative(workspace, file).split(sep).join("/"), folder: segments.join("/") };
+}
+
 /**
  * Create a new process: <processes root>/<folder>/<slug(name)>.bpmn seeded
  * with the blank-diagram template. The id (= file stem) must be unique
- * REPO-WIDE — a duplicate stem in another folder would silently shadow one of
- * the two files in discovery (repos/content.ts), so it is refused up front.
- * Returns the created process as the overview wire row (dirty by definition:
- * the file does not exist on origin yet).
+ * REPO-WIDE among .bpmn files — a duplicate stem in another folder would
+ * silently shadow one of the two files in discovery (repos/content.ts), so it
+ * is refused up front. Returns the created process as the overview wire row
+ * (dirty by definition: the file does not exist on origin yet).
  */
 export async function createProcess(
   repo: ConnectedRepo,
   workspace: string,
   body: { name: string; folder?: string },
 ): Promise<ProcessInfo> {
-  const cfg = requireConfig(repo, workspace);
-  const segments = folderSegments(body.folder ?? "");
-  const id = processIdFromName(body.name);
-  if (id === "") {
-    throw new AppError(
-      "scaffold/invalid-name",
-      `'${body.name}' does not yield a usable file name — use at least one letter or digit`,
-      { status: 400, expose: true },
-    );
-  }
-  const duplicate = (await discoverProcesses(workspace, cfg)).find((p) => p.id === id);
-  if (duplicate) {
-    throw new AppError(
-      "scaffold/process-exists",
-      `process '${id}' already exists (${duplicate.path}) — ids are unique across all folders`,
-      { status: 409, expose: true },
-    );
-  }
-  const root = processesRoot(workspace, cfg);
-  const file = resolve(root, ...segments, `${id}.bpmn`);
-  assertInsideRoot(file, root, `process '${id}'`);
-  assertRealInsideWorkspace(file, workspace, `process '${id}'`, "scaffold/outside-processes-root");
-  if (existsSync(file)) {
-    // not discovered (e.g. under a dot-folder clash) but present on disk
-    throw new AppError("scaffold/process-exists", `'${relative(workspace, file)}' already exists`, {
-      status: 409,
-      expose: true,
-    });
-  }
-  await writeGuarded(`process '${id}'`, async () => {
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, newBpmnXml(id, body.name.trim()), { flag: "wx" });
+  const { id, repoPath, folder } = await createModel(repo, workspace, body, {
+    extension: ".bpmn",
+    noun: "process",
+    discover: discoverProcesses,
+    template: newBpmnXml,
+    existsCode: "scaffold/process-exists",
   });
-
-  const repoPath = relative(workspace, file).split(sep).join("/");
   return {
     repo: repo.fullName,
     id,
     name: id,
     bpmn: repoPath,
     models: [{ notation: byExtension(repoPath)?.id ?? "text", path: repoPath }],
-    folder: segments.join("/"),
+    folder,
     dirty: true, // brand-new — by definition not on origin yet
     liveSessions: 0,
   };
 }
 
 /**
- * Create a new decision: <processes root>/<folder>/<slug(name)>.dmn seeded
- * with the blank-decision template — the dmn sibling of createProcess with
- * the same gates: repo-wide unique file stem (a duplicate would shadow in
- * discovery), traversal/symlink guards, EEXIST → 409.
+ * Create a new decision: the dmn sibling of createProcess with the same gates
+ * (repo-wide unique .dmn stem, traversal/symlink guards, EEXIST → 409).
  */
 export async function createDecision(
   repo: ConnectedRepo,
   workspace: string,
   body: { name: string; folder?: string },
 ): Promise<DecisionInfo> {
-  const cfg = requireConfig(repo, workspace);
-  const segments = folderSegments(body.folder ?? "");
-  const id = processIdFromName(body.name);
-  if (id === "") {
-    throw new AppError(
-      "scaffold/invalid-name",
-      `'${body.name}' does not yield a usable file name — use at least one letter or digit`,
-      { status: 400, expose: true },
-    );
-  }
-  const duplicate = (await discoverDecisions(workspace, cfg)).find((d) => d.id === id);
-  if (duplicate) {
-    throw new AppError(
-      "scaffold/decision-exists",
-      `decision '${id}' already exists (${duplicate.path}) — ids are unique across all folders`,
-      { status: 409, expose: true },
-    );
-  }
-  const root = processesRoot(workspace, cfg);
-  const file = resolve(root, ...segments, `${id}.dmn`);
-  assertInsideRoot(file, root, `decision '${id}'`);
-  assertRealInsideWorkspace(file, workspace, `decision '${id}'`, "scaffold/outside-processes-root");
-  if (existsSync(file)) {
-    // not discovered (e.g. under a dot-folder clash) but present on disk
-    throw new AppError("scaffold/decision-exists", `'${relative(workspace, file)}' already exists`, {
-      status: 409,
-      expose: true,
-    });
-  }
-  await writeGuarded(`decision '${id}'`, async () => {
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, newDmnXml(id, body.name.trim()), { flag: "wx" });
+  const { id, repoPath, folder } = await createModel(repo, workspace, body, {
+    extension: ".dmn",
+    noun: "decision",
+    discover: discoverDecisions,
+    template: newDmnXml,
+    existsCode: "scaffold/decision-exists",
   });
-
   return {
     repo: repo.fullName,
     id,
     name: id,
-    path: relative(workspace, file).split(sep).join("/"),
-    folder: segments.join("/"),
+    path: repoPath,
+    folder,
     dirty: true, // brand-new — by definition not on origin yet
     liveSessions: 0,
   };

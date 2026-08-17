@@ -109,6 +109,8 @@ export function Overview() {
                   <p className="text-muted-foreground text-sm">
                     {r.defaultBranch}
                     {r.processCount !== null ? ` · ${r.processCount} process(es)` : " · not loaded yet"}
+                    {/* != null guards BOTH null and a pre-3.4 server that does not send the field */}
+                    {r.decisionCount != null && r.decisionCount > 0 ? ` · ${r.decisionCount} decision(s)` : ""}
                   </p>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-1.5">

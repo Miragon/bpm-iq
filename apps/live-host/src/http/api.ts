@@ -296,6 +296,23 @@ export function startApi(port: number, opts: ApiOptions): Server {
     ...(opts.oidc!.scopes?.length ? { scopes_supported: opts.oidc!.scopes } : {}),
   });
 
+  /** the create routes' shared body gate (undefined = the 400 was already sent) */
+  const parseCreateBody = (
+    res: ServerResponse,
+    body: CreateProcessBody | CreateDecisionBody | undefined,
+  ): { name: string; folder?: string } | undefined => {
+    if (body === undefined) return undefined;
+    if (typeof body?.name !== "string" || body.name.trim().length === 0) {
+      send(res, 400, { error: "name must be a non-empty string" });
+      return undefined;
+    }
+    if (body.folder !== undefined && typeof body.folder !== "string") {
+      send(res, 400, { error: "folder must be a string" });
+      return undefined;
+    }
+    return { name: body.name, folder: body.folder };
+  };
+
   /** resolve + authorize a repo route segment (the shared application-layer
    *  gate); sends the error response itself — NOT via the catch-all, which
    *  would log every ordinary 403 as a 500 and re-run sessionOf */
@@ -590,15 +607,9 @@ export function startApi(port: number, opts: ApiOptions): Server {
         if (repoRoute[2] === "processes") {
           const workspace = await opts.workspaces.ensure(repo);
           if (req.method === "POST") {
-            const body = await jsonBody<CreateProcessBody>(req, res);
+            const body = parseCreateBody(res, await jsonBody<CreateProcessBody>(req, res));
             if (body === undefined) return;
-            if (typeof body?.name !== "string" || body.name.trim().length === 0) {
-              return send(res, 400, { error: "name must be a non-empty string" });
-            }
-            if (body.folder !== undefined && typeof body.folder !== "string") {
-              return send(res, 400, { error: "folder must be a string" });
-            }
-            const created = await createProcess(repo, workspace, { name: body.name, folder: body.folder });
+            const created = await createProcess(repo, workspace, body);
             console.log(`process created in ${repo.fullName} by @${session.user.login}: ${created.bpmn}`);
             return send(res, 201, created satisfies ProcessInfo);
           }
@@ -608,15 +619,9 @@ export function startApi(port: number, opts: ApiOptions): Server {
         if (repoRoute[2] === "decisions") {
           const workspace = await opts.workspaces.ensure(repo);
           if (req.method === "POST") {
-            const body = await jsonBody<CreateDecisionBody>(req, res);
+            const body = parseCreateBody(res, await jsonBody<CreateDecisionBody>(req, res));
             if (body === undefined) return;
-            if (typeof body?.name !== "string" || body.name.trim().length === 0) {
-              return send(res, 400, { error: "name must be a non-empty string" });
-            }
-            if (body.folder !== undefined && typeof body.folder !== "string") {
-              return send(res, 400, { error: "folder must be a string" });
-            }
-            const created = await createDecision(repo, workspace, { name: body.name, folder: body.folder });
+            const created = await createDecision(repo, workspace, body);
             console.log(`decision created in ${repo.fullName} by @${session.user.login}: ${created.path}`);
             return send(res, 201, created satisfies DecisionInfo);
           }

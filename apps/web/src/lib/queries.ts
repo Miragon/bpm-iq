@@ -11,7 +11,6 @@ import {
   type CreateProcessBody,
   createTodo,
   type CreateTodoBody,
-  type DecisionInfo,
   fetchChanges,
   fetchConfig,
   fetchDecisions,
@@ -23,7 +22,6 @@ import {
   fetchTodos,
   type FolderListWire,
   logout,
-  type ProcessInfo,
   releaseFiles,
   type ReleaseFilesBody,
   syncRepo,
@@ -65,15 +63,28 @@ export function useDecisions(repo: string) {
 /** create a decision from the blank template — cache seeding mirrors
  *  useCreateProcess (the repo view renders from the cached decision list) */
 export function useCreateDecision(repo: string) {
+  return useCreateModel(repo, "decisions", (body: CreateDecisionBody) => createDecision(repo, body));
+}
+
+/** the shared create-mutation cache policy: seed the kind's list, then refetch
+ *  it, the folder tree (a brand-new folder) and the repo overview — decision
+ *  creates used to SKIP the repos invalidation, which becomes real staleness
+ *  now that RepoInfo carries decisionCount/dirty decisions */
+function useCreateModel<TBody, TInfo extends { id: string }>(
+  repo: string,
+  key: "processes" | "decisions",
+  mutationFn: (body: TBody) => Promise<TInfo>,
+) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateDecisionBody) => createDecision(repo, body),
+    mutationFn,
     onSuccess: (created) => {
-      qc.setQueryData<DecisionInfo[]>(["decisions", repo], (old) =>
-        old ? (old.some((d) => d.id === created.id) ? old : [...old, created]) : [created],
+      qc.setQueryData<TInfo[]>([key, repo], (old) =>
+        old ? (old.some((m) => m.id === created.id) ? old : [...old, created]) : [created],
       );
-      void qc.invalidateQueries({ queryKey: ["decisions", repo] });
+      void qc.invalidateQueries({ queryKey: [key, repo] });
       void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the folder may be brand-new too
+      void qc.invalidateQueries({ queryKey: ["repos"] }); // process/decision/dirty counts changed
     },
   });
 }
@@ -140,18 +151,7 @@ export function useCreateFolder(repo: string) {
  *  NotFound. The create response IS the new row: seed it into the cache before
  *  the caller navigates, then refetch in the background. */
 export function useCreateProcess(repo: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: CreateProcessBody) => createProcess(repo, body),
-    onSuccess: (created) => {
-      qc.setQueryData<ProcessInfo[]>(["processes", repo], (old) =>
-        old ? (old.some((p) => p.id === created.id) ? old : [...old, created]) : [created],
-      );
-      void qc.invalidateQueries({ queryKey: ["processes", repo] });
-      void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the folder may be brand-new too
-      void qc.invalidateQueries({ queryKey: ["repos"] }); // processCount/dirtyCount changed
-    },
-  });
+  return useCreateModel(repo, "processes", (body: CreateProcessBody) => createProcess(repo, body));
 }
 
 /** hard-reset the repo's workspace onto its default branch ("load latest from

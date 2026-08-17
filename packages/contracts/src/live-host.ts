@@ -108,6 +108,9 @@ export interface RepoInfo {
   permission: "write" | "none";
   /** null when the workspace is not cloned yet (the overview never clones) */
   processCount: number | null;
+  /** .dmn twin of processCount (additive: absent from pre-3.4 servers) */
+  decisionCount: number | null;
+  /** models (processes AND decisions) differing from origin/<default> */
   dirtyCount: number | null;
   liveSessions: number;
 }
