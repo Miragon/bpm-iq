@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import type { Session } from "../src/adapters/sqlite/sessions.ts";
-import { listProcesses, listRepos, type OverviewDeps } from "../src/application/overview.ts";
+import { listDecisions, listProcesses, listRepos, type OverviewDeps } from "../src/application/overview.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 const REPO: ConnectedRepo = {
@@ -38,6 +38,7 @@ function setup(over: Partial<OverviewDeps> = {}) {
   mkdirSync(join(ws, "processes", "sub"), { recursive: true });
   writeFileSync(join(ws, "processes", "order.bpmn"), "<bpmn/>");
   writeFileSync(join(ws, "processes", "sub", "check-credit.bpmn"), "<bpmn/>");
+  writeFileSync(join(ws, "processes", "rabatt.dmn"), "<dmn/>");
   writeFileSync(join(ws, "processes", "notes.md"), "not a process"); // wrong extension → skipped
   mkdirSync(join(ws, "docs"));
   writeFileSync(join(ws, "docs", "stray.bpmn"), "<bpmn/>"); // outside the folder → skipped
@@ -49,7 +50,8 @@ function setup(over: Partial<OverviewDeps> = {}) {
       dir: () => ws,
       changedPaths: async (_repo, pathspec) => {
         changedPathsCalls.push(pathspec);
-        return pathspec === "processes/order.bpmn" ? ["processes/order.bpmn"] : [];
+        // the lists and listRepos ask ONCE with the processes root as pathspec
+        return pathspec === "processes" ? ["processes/order.bpmn"] : [];
       },
       changedFiles: async () => [{ path: "processes/order.bpmn", status: "modified" as const }],
     },
@@ -87,7 +89,7 @@ test("listProcesses: one row per .bpmn under the configured folder (recursive)",
     dirty: true, // from the injected changedPaths (git stays behind the seam)
     liveSessions: 2, // exact room match, foreign repos never counted
   });
-  assert.equal(changedPathsCalls.filter((c) => c === "processes/order.bpmn").length, 1);
+  assert.equal(changedPathsCalls.length, 1, "ONE git call for the whole list, not one per row");
 
   const nested = rows.find((r) => r.id === "check-credit");
   assert.equal(nested?.bpmn, "processes/sub/check-credit.bpmn");
@@ -131,6 +133,24 @@ test("listProcesses: duplicate file names — the first (sorted) wins, the shado
   assert.equal(rows[0]?.bpmn, "processes/a/order.bpmn");
 });
 
+// ── listDecisions ───────────────────────────────────────────────────────────
+
+test("listDecisions: the full wire row is pinned (the .dmn sibling of listProcesses)", async () => {
+  const { ws, deps } = setup();
+  const rows = await listDecisions(deps, REPO, ws);
+  assert.deepEqual(rows, [
+    {
+      repo: "acme/models",
+      id: "rabatt",
+      name: "rabatt",
+      path: "processes/rabatt.dmn",
+      folder: "",
+      dirty: false,
+      liveSessions: 0,
+    },
+  ]);
+});
+
 // ── listRepos ───────────────────────────────────────────────────────────────
 
 test("listRepos: dev session sees every repo with write permission + counts", async () => {
@@ -145,7 +165,8 @@ test("listRepos: dev session sees every repo with write permission + counts", as
   assert.equal(r.defaultBranch, "main");
   assert.equal(r.permission, "write");
   assert.equal(r.processCount, 2);
-  assert.equal(r.dirtyCount, 1, "only the order process differs from origin");
+  assert.equal(r.decisionCount, 1, "the .dmn twin of processCount");
+  assert.equal(r.dirtyCount, 1, "only the order process differs from origin (dirty DECISIONS would count too)");
   assert.equal(r.liveSessions, 3, "every live room of the repo counts, foreign repos never");
 });
 
@@ -162,5 +183,6 @@ test("listRepos: no bpmiq.yml (workspace absent or plain repo) → null counts",
   const repos = await listRepos(deps, session("sess-petra"));
   assert.equal(repos.length, 1);
   assert.equal(repos[0]?.processCount, null);
+  assert.equal(repos[0]?.decisionCount, null);
   assert.equal(repos[0]?.dirtyCount, null);
 });

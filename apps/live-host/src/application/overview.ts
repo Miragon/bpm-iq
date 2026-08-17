@@ -46,35 +46,71 @@ export interface OverviewDeps {
   liveDocs: () => string[];
 }
 
+/** the row shape both model kinds share — wire mapping stays per wrapper */
+interface ModelRow {
+  id: string;
+  path: string;
+  folder: string;
+  dirty: boolean;
+  liveSessions: number;
+}
+
+/**
+ * The shared list core: discovery + folder math + dirty + live sessions.
+ * Dirty comes from ONE changedPaths call over the processes root for the
+ * whole list (it used to be one git subprocess pair PER ROW — the read-model
+ * half of the cost #86 item 10 removed from the MCP path).
+ */
+async function listModels(
+  opts: OverviewDeps,
+  repo: ConnectedRepo,
+  workspace: string,
+  discover: (
+    root: string,
+    cfg: NonNullable<ReturnType<typeof loadContentConfig>>,
+  ) => Promise<Array<{ id: string; path: string }>>,
+): Promise<ModelRow[]> {
+  const cfg = loadContentConfig(workspace);
+  if (!cfg) return [];
+  const live = opts.liveDocs();
+  // m.path is repo-root-relative; the folder the UI groups by is relative
+  // to the processes root ("" = directly inside it)
+  const rootPrefix = cfg.processes === "." ? "" : `${cfg.processes}/`;
+  const discovered = await discover(workspace, cfg);
+  const changed = new Set(await opts.workspaces.changedPaths(repo, cfg.processes));
+  return discovered.map((m) => {
+    const rel = m.path.startsWith(rootPrefix) ? m.path.slice(rootPrefix.length) : m.path;
+    return {
+      id: m.id,
+      path: m.path,
+      folder: rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "",
+      dirty: changed.has(m.path),
+      // a model is exactly one file — its room is the exact match
+      liveSessions: live.filter((d) => d === roomName(repo.fullName, m.path)).length,
+    };
+  });
+}
+
+/**
+ * One row per process (.bpmn) of a CONNECTED repo's workspace — the overview
+ * read-model. Dirty means the file differs from origin/<default>.
+ */
 export async function listProcesses(
   opts: OverviewDeps,
   repo: ConnectedRepo,
   workspace: string,
 ): Promise<ProcessInfo[]> {
-  const cfg = loadContentConfig(workspace);
-  if (!cfg) return [];
-  const live = opts.liveDocs();
-  // proc.path is repo-root-relative; the folder the UI groups by is relative
-  // to the processes root ("" = directly inside it)
-  const rootPrefix = cfg.processes === "." ? "" : `${cfg.processes}/`;
-  const processes: ProcessInfo[] = [];
-  for (const proc of await discoverProcesses(workspace, cfg)) {
-    // dirty flag comes from the injected changedPaths (git stays behind the seam)
-    const dirty = (await opts.workspaces.changedPaths(repo, proc.path)).length > 0;
-    const rel = proc.path.startsWith(rootPrefix) ? proc.path.slice(rootPrefix.length) : proc.path;
-    processes.push({
-      repo: repo.fullName,
-      id: proc.id,
-      name: proc.id,
-      bpmn: proc.path,
-      models: [{ notation: byExtension(proc.path)?.id ?? "text", path: proc.path }],
-      folder: rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "",
-      dirty,
-      // a process is exactly one file — its room is the exact match
-      liveSessions: live.filter((d) => d === roomName(repo.fullName, proc.path)).length,
-    });
-  }
-  return processes;
+  const rows = await listModels(opts, repo, workspace, discoverProcesses);
+  return rows.map((m) => ({
+    repo: repo.fullName,
+    id: m.id,
+    name: m.id,
+    bpmn: m.path,
+    models: [{ notation: byExtension(m.path)?.id ?? "text", path: m.path }],
+    folder: m.folder,
+    dirty: m.dirty,
+    liveSessions: m.liveSessions,
+  }));
 }
 
 /** The .dmn sibling of listProcesses — one row per decision file. */
@@ -83,25 +119,16 @@ export async function listDecisions(
   repo: ConnectedRepo,
   workspace: string,
 ): Promise<DecisionInfo[]> {
-  const cfg = loadContentConfig(workspace);
-  if (!cfg) return [];
-  const live = opts.liveDocs();
-  const rootPrefix = cfg.processes === "." ? "" : `${cfg.processes}/`;
-  const decisions: DecisionInfo[] = [];
-  for (const decision of await discoverDecisions(workspace, cfg)) {
-    const dirty = (await opts.workspaces.changedPaths(repo, decision.path)).length > 0;
-    const rel = decision.path.startsWith(rootPrefix) ? decision.path.slice(rootPrefix.length) : decision.path;
-    decisions.push({
-      repo: repo.fullName,
-      id: decision.id,
-      name: decision.id,
-      path: decision.path,
-      folder: rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "",
-      dirty,
-      liveSessions: live.filter((d) => d === roomName(repo.fullName, decision.path)).length,
-    });
-  }
-  return decisions;
+  const rows = await listModels(opts, repo, workspace, discoverDecisions);
+  return rows.map((m) => ({
+    repo: repo.fullName,
+    id: m.id,
+    name: m.id,
+    path: m.path,
+    folder: m.folder,
+    dirty: m.dirty,
+    liveSessions: m.liveSessions,
+  }));
 }
 
 /** one businessRuleTask that delegates to a decision */
@@ -177,12 +204,22 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
     // overview (adversarial review).
     const ws = opts.workspaces.dir(repo);
     let processCount: number | null = null;
+    let decisionCount: number | null = null;
     let dirtyCount: number | null = null;
-    if (loadContentConfig(ws)) {
+    const cfg = loadContentConfig(ws);
+    if (cfg) {
       try {
-        const processes = await listProcesses(opts, repo, ws);
-        processCount = processes.length;
-        dirtyCount = processes.filter((p) => p.dirty).length;
+        // counts come from DISCOVERY (readdir only) and dirty from ONE
+        // changedPaths call per repo — the per-row git subprocesses the list
+        // endpoints used to pay never belonged on the overview. dirtyCount
+        // deliberately includes dirty DECISIONS now: a repo whose only change
+        // is a decision used to show no "live changes" badge at all.
+        const procs = await discoverProcesses(ws, cfg);
+        const decs = await discoverDecisions(ws, cfg);
+        const changed = new Set(await opts.workspaces.changedPaths(repo, cfg.processes));
+        processCount = procs.length;
+        decisionCount = decs.length;
+        dirtyCount = [...procs, ...decs].filter((m) => changed.has(m.path)).length;
       } catch (e) {
         console.log(`overview: listing ${repo.fullName} failed (${(e as Error).message.split("\n")[0]})`);
       }
@@ -200,6 +237,7 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
       suspended: repo.suspended,
       permission: writable ? "write" : "none",
       processCount,
+      decisionCount,
       dirtyCount,
       liveSessions: live.filter((d) => d.startsWith(roomPrefix(repo.fullName))).length,
     });
