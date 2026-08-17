@@ -4,8 +4,8 @@
  * (mcp-app/shell.ts). The contour is fitted from the brand asset; the colour
  * is hard-wired because a brand colour does not follow the theme.
  *
- * The favicon (public/favicon.svg) carries the same path rotated onto the
- * diagonal — a standalone file cannot import, so keep the two in sync.
+ * The favicon (public/favicon.svg) carries the same path — a standalone file
+ * cannot import, so keep the two in sync.
  */
 export const COMET_VIEW_BOX = "0 0 112 34.9";
 export const COMET_ASPECT = 112 / 34.9;
