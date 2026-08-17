@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.1](https://github.com/Miragon/bpm-iq/compare/v3.5.0...v3.5.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* **web:** the favicon comet flies level, like miragon.io's own ([#99](https://github.com/Miragon/bpm-iq/issues/99)) ([b03cd39](https://github.com/Miragon/bpm-iq/commit/b03cd39680ba8d0d81627edd4795f9c8782b208c))
+
 ## [3.5.0](https://github.com/Miragon/bpm-iq/compare/v3.4.0...v3.5.0) (2026-08-17)
 
 
