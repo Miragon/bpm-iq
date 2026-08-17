@@ -19,8 +19,9 @@ export function SyncRepoDialog({
 }: {
   /** the default branch the workspace is reset onto */
   branch: string;
-  /** names of models (processes and decisions) with unreleased live edits the reset will discard */
-  dirtyModels: string[];
+  /** models (processes and decisions) with unreleased live edits the reset
+   *  will discard — keyed by path (names may collide across kinds) */
+  dirtyModels: Array<{ path: string; name: string }>;
   pending: boolean;
   error: Error | null;
   onConfirm: () => void;
@@ -50,9 +51,9 @@ export function SyncRepoDialog({
           {dirtyModels.length === 1 ? "this model" : `these ${dirtyModels.length} models`}:
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {dirtyModels.map((name) => (
-            <Badge key={name} variant="warning" className="max-w-64" title={name}>
-              <span className="truncate">{name}</span>
+          {dirtyModels.map((m) => (
+            <Badge key={m.path} variant="warning" className="max-w-64" title={m.path}>
+              <span className="truncate">{m.name}</span>
             </Badge>
           ))}
         </div>

@@ -191,28 +191,28 @@ export class WorkspaceManager {
       const dir = this.dir(repo);
       // quotepath off: git would C-quote non-ASCII names ("\303\244…"), which
       // must never leak into wire paths / room-name comparisons
-      const { stdout: diff } = await runGit([
-        "-C",
-        dir,
-        "-c",
-        "core.quotepath=false",
-        "diff",
-        "--name-only",
-        `origin/${repo.defaultBranch}`,
-        "--",
-        pathspec,
-      ]);
-      const { stdout: untracked } = await runGit([
-        "-C",
-        dir,
-        "-c",
-        "core.quotepath=false",
-        "ls-files",
-        "--others",
-        "--exclude-standard",
-        "--",
-        pathspec,
-      ]);
+      const { stdout: diff } = await runGit(
+        [
+          "-C",
+          dir,
+          "-c",
+          "core.quotepath=false",
+          "diff",
+          "--name-only",
+          `origin/${repo.defaultBranch}`,
+          "--",
+          pathspec,
+          // the pathspec can be the WHOLE processes root since the one-call dirty
+          // aggregation (#95) — the default 1 MiB execFile buffer silently turned
+          // >1 MiB of untracked/diff output into "everything clean" (the catch
+          // maps errors to []), which skipped the destructive-sync confirmation
+        ],
+        { maxBuffer: GIT_OUT_MAX },
+      );
+      const { stdout: untracked } = await runGit(
+        ["-C", dir, "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "--", pathspec],
+        { maxBuffer: GIT_OUT_MAX },
+      );
       const paths = new Set(
         `${diff}\n${untracked}`
           .split("\n")
@@ -241,29 +241,25 @@ export class WorkspaceManager {
   ): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>> {
     try {
       const dir = this.dir(repo);
-      const { stdout: diff } = await runGit([
-        "-C",
-        dir,
-        "-c",
-        "core.quotepath=false",
-        "diff",
-        "--name-status",
-        "--no-renames",
-        `origin/${repo.defaultBranch}`,
-        "--",
-        pathspec,
-      ]);
-      const { stdout: untracked } = await runGit([
-        "-C",
-        dir,
-        "-c",
-        "core.quotepath=false",
-        "ls-files",
-        "--others",
-        "--exclude-standard",
-        "--",
-        pathspec,
-      ]);
+      const { stdout: diff } = await runGit(
+        [
+          "-C",
+          dir,
+          "-c",
+          "core.quotepath=false",
+          "diff",
+          "--name-status",
+          "--no-renames",
+          `origin/${repo.defaultBranch}`,
+          "--",
+          pathspec,
+        ],
+        { maxBuffer: GIT_OUT_MAX },
+      );
+      const { stdout: untracked } = await runGit(
+        ["-C", dir, "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "--", pathspec],
+        { maxBuffer: GIT_OUT_MAX },
+      );
       const out = new Map<string, "modified" | "added" | "deleted">();
       for (const line of diff.split("\n")) {
         const [status, path] = line.split("\t").map((c) => c.trim());
