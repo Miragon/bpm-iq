@@ -18,6 +18,14 @@
   height: 100%;
 }
 
+/* …but not its very edge: dmn-js draws a table view edge to edge, so the "View
+   DRD" button, the simulation form and the table would sit ON the widget's
+   border. The DRD keeps the full pane — it is a canvas with an edge palette. */
+#canvas .dmn-decision-table-container,
+#canvas .dmn-literal-expression-container {
+  padding: 12px;
+}
+
 /* ── tests: the side panel (mcp-app/dmn-tests.ts) ─────────────────────────── */
 
 #tests:not([hidden]) {

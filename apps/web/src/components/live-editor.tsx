@@ -22,7 +22,6 @@ import { byExtension } from "@bpmiq/notations";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
-import DmnSimulationModule from "@emaarco/dmn-js-simulation";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import BpmnModeler from "bpmn-js/lib/Modeler";
@@ -47,6 +46,7 @@ import {
   type TodoElementWire,
   type TodoWire,
 } from "@/lib/api";
+import { dmnSimulationViews } from "@/lib/dmn-simulation";
 import { useFileHistory, useTodos } from "@/lib/queries";
 import { attachTodoCanvas, type TodoCanvas } from "@/lib/todo-canvas";
 
@@ -213,8 +213,7 @@ export function LiveEditor({
           // enter values in a decision table and the matching rows light up.
           // It evaluates with `feelin`, as does @bpmiq/decisions in the Checks
           // panel and on the server — one semantics, three places.
-          drd: { additionalModules: [DmnSimulationModule.decisionRequirementsDiagram] },
-          decisionTable: { additionalModules: [DmnSimulationModule.decisionTable] },
+          ...dmnSimulationViews,
         });
         unbindCanvas = bindDmn(
           dmnModeler as never,
