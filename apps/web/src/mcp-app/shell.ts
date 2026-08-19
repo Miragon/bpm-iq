@@ -21,6 +21,9 @@ export const el = <T extends HTMLElement>(id: string): T => document.getElementB
 export interface WidgetChrome {
   toolbar: { title: HTMLSpanElement; dirty: HTMLSpanElement };
   saveBtn: HTMLButtonElement;
+  /** "Open in bpmiq" — hidden until a model is loaded AND a deep-link base is
+   *  known; each widget wires its own URL builder (per-widget link shapes) */
+  openBtn: HTMLButtonElement;
   fullscreenBtn: HTMLButtonElement;
   banner: HTMLDivElement;
   /** exposed for `status.title` (the findings tooltip) */
@@ -41,6 +44,7 @@ export function mountChrome(): WidgetChrome {
   return {
     toolbar: { title, dirty: el<HTMLSpanElement>("dirty") },
     saveBtn: el<HTMLButtonElement>("save"),
+    openBtn: el<HTMLButtonElement>("open"),
     fullscreenBtn: el<HTMLButtonElement>("fullscreen"),
     banner,
     status,
@@ -65,6 +69,31 @@ export function mountChrome(): WidgetChrome {
       banner.hidden = true;
     },
   };
+}
+
+/**
+ * Open an external URL from inside the app sandbox: the sandbox blocks plain
+ * navigation, so the HOST opens it (`ui/open-link`). A denial or a missing
+ * bridge (the dev preview outside a host) falls back to window.open; if that
+ * is blocked too, tell the caller instead of swallowing the click. Callers own
+ * the error sink (toolbar status line vs. the todo panel's error row).
+ */
+export async function openExternal(app: App, url: string, onBlocked: (msg: string) => void): Promise<void> {
+  try {
+    const { isError } = await app.openLink({ url });
+    if (!isError) return;
+  } catch {
+    /* no host bridge — try the browser directly */
+  }
+  // NOT the "noopener" feature: that makes window.open return null even on
+  // success, which would misreport every working fallback as blocked — sever
+  // the opener on the returned proxy instead
+  const win = window.open(url, "_blank");
+  if (win) {
+    win.opener = null;
+    return;
+  }
+  onBlocked(`Could not open ${url} — your client blocked it.`);
 }
 
 /**

@@ -31,7 +31,7 @@ import {
 
 import { closeTodo, createTodo, isMissingTool, listTodos } from "./bridge";
 import type { ModelerHandle } from "./modeler";
-import { el } from "./shell";
+import { el, openExternal } from "./shell";
 import { implementPrompt, type PromptTarget } from "./todo-prompt";
 
 export interface TodosHandle {
@@ -217,20 +217,13 @@ export function mountTodos(app: App, modeler: ModelerHandle, opts: { readonly: b
 
   // ── host actions (link, prompt) ───────────────────────────────────────────
 
-  /** the app sandbox blocks navigation, so the HOST opens tracker links
-   *  (`ui/open-link`). A denial or a missing bridge (the dev preview outside a
-   *  host) falls back to window.open; if that is blocked too, say so instead of
-   *  swallowing the click. */
+  /** tracker links go through the shared host-open ladder (shell.ts); a
+   *  blocked link surfaces in the panel's own error row */
   async function openTracker(url: string): Promise<void> {
-    try {
-      const { isError } = await app.openLink({ url });
-      if (!isError) return;
-    } catch {
-      /* no host bridge — try the browser directly */
-    }
-    if (window.open(url, "_blank", "noopener")) return;
-    error = `Could not open ${url} — your client blocked it.`;
-    render();
+    await openExternal(app, url, (msg) => {
+      error = msg;
+      render();
+    });
   }
 
   /** hand the todo to the assistant: inject the work order as a user message

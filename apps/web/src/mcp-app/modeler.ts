@@ -11,6 +11,9 @@ export interface ModelerHandle {
   saveXml(): Promise<string>;
   editable: boolean;
   onDirty(cb: () => void): void;
+  /** the single selected element's id (labels resolve to their target), or
+   *  undefined — read at click time by the "Open in bpmiq" deep link */
+  selectedElementId(): string | undefined;
   destroy(): void;
   /** the underlying bpmn-js instance — bindBpmn (live mode) needs it raw */
   raw: Modeler | NavigatedViewer;
@@ -40,6 +43,16 @@ export function mountModeler(container: HTMLElement, readonly: boolean): Modeler
     },
     onDirty(cb: () => void): void {
       dirtyCbs.push(cb);
+    },
+    selectedElementId(): string | undefined {
+      try {
+        const selection = instance.get("selection") as { get(): Array<{ id: string; labelTarget?: { id: string } }> };
+        const selected = selection.get();
+        if (selected.length !== 1) return undefined;
+        return selected[0]?.labelTarget?.id ?? selected[0]?.id;
+      } catch {
+        return undefined; // a viewer build without the selection service
+      }
     },
     destroy(): void {
       instance.destroy();

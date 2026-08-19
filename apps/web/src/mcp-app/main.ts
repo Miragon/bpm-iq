@@ -9,6 +9,7 @@
  */
 import "./styles.css";
 
+import { modelStem, processDeepLink } from "@bpmiq/contracts/deep-link";
 import { roomName } from "@bpmiq/contracts/live";
 
 import {
@@ -23,7 +24,7 @@ import {
 import { loadIconFont } from "./font";
 import { type LiveHandle, tryLive, type TryLiveHooks } from "./live";
 import { type ModelerHandle, mountModeler } from "./modeler";
-import { el, mountChrome, wireApp } from "./shell";
+import { el, mountChrome, openExternal, wireApp } from "./shell";
 import { mountTodos, type TodosHandle } from "./todos";
 
 // kick off immediately — palette icons need it, but nothing blocks on it
@@ -31,10 +32,11 @@ loadIconFont("bpmn").catch(() => {
   /* icons degrade to tofu; the modeler itself is unaffected */
 });
 
-const { toolbar, saveBtn, fullscreenBtn, status, setStatus, showBanner, hideBanner } = mountChrome();
+const { toolbar, saveBtn, openBtn, fullscreenBtn, status, setStatus, showBanner, hideBanner } = mountChrome();
 
 const cfg = bootConfig();
 const app = makeApp();
+if (cfg.publicUrl) openBtn.title = `Open this model in the full bpmiq web modeler (${cfg.publicUrl})`;
 
 let modeler: ModelerHandle | undefined;
 let todos: TodosHandle | undefined; // model-anchored work items — absent without a tracker
@@ -94,11 +96,17 @@ async function load(processRef: ProcessRef): Promise<void> {
   hideBanner();
   autosavePaused = false;
   ref = processRef;
+  // `ref` now names the INCOMING document while the canvas still shows the old
+  // one — no deep link (and no flush) until the load owns the widget
+  openBtn.hidden = true;
   setStatus("Loading model…");
   const content = await getBpmnXml(app, processRef);
   if (epoch !== liveEpoch || inactive) return; // a newer load owns the widget
   ref = { repo: processRef.repo, path: content.path };
   toolbar.title.textContent = `${processRef.repo} · ${content.path}`;
+  // a loaded model has a web address — even for a later-superseded instance
+  // the deep link stays the most useful remaining control
+  openBtn.hidden = !cfg.publicUrl;
   baseVersion = content.baseVersion;
   if (!modeler) {
     modeler = mountModeler(el<HTMLDivElement>("canvas"), cfg.readonly);
@@ -416,6 +424,20 @@ function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void 
 }
 
 saveBtn.onclick = () => void save();
+// deep link into the web modeler, carrying the canvas selection (?element=).
+// openLink FIRST, nothing awaited before it — an await would burn the user
+// activation the window.open fallback needs. A still-unsaved edit follows via
+// save() in parallel: REST saves land in the very live document the opened
+// web editor joins (in live mode Yjs has already persisted everything). While
+// a conflict/interrupted banner is up, save() stays paused on purpose — the
+// opened editor then shows the SERVER version and the banner keeps owning the
+// divergence decision.
+openBtn.onclick = () => {
+  if (!ref?.path || !cfg.publicUrl) return;
+  const url = processDeepLink(cfg.publicUrl, ref.repo, modelStem(ref.path), modeler?.selectedElementId());
+  void openExternal(app, url, setStatus);
+  if (dirty && !live) void save();
+};
 fullscreenBtn.onclick = () => void app.requestDisplayMode({ mode: "fullscreen" });
 
 wireApp(app, {

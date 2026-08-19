@@ -18,6 +18,7 @@
  */
 import "./dmn-styles.css";
 
+import { fileDeepLink } from "@bpmiq/contracts/deep-link";
 import { roomName } from "@bpmiq/contracts/live";
 
 import {
@@ -32,17 +33,18 @@ import {
 import { type DmnModelerHandle, mountDmnModeler, type Scenario } from "./dmn-modeler";
 import { mountTests, type TestsHandle } from "./dmn-tests";
 import { loadIconFont } from "./font";
-import { el, mountChrome, wireApp } from "./shell";
+import { el, mountChrome, openExternal, wireApp } from "./shell";
 
 // kick off immediately — the decision-table controls need it, nothing blocks
 loadIconFont("dmn").catch(() => {
   /* icons degrade to tofu; the modeler itself is unaffected */
 });
 
-const { toolbar, saveBtn, fullscreenBtn, status, setStatus, showBanner, hideBanner } = mountChrome();
+const { toolbar, saveBtn, openBtn, fullscreenBtn, status, setStatus, showBanner, hideBanner } = mountChrome();
 
 const cfg = bootConfig();
 const app = makeApp();
+if (cfg.publicUrl) openBtn.title = `Open this decision in the full bpmiq web modeler (${cfg.publicUrl})`;
 
 let modeler: DmnModelerHandle | undefined;
 let tests: TestsHandle | undefined;
@@ -92,11 +94,17 @@ async function load(decisionRef: ProcessRef, scenario?: Scenario): Promise<void>
   hideBanner();
   autosavePaused = false;
   ref = decisionRef;
+  // `ref` now names the INCOMING document while the table still shows the old
+  // one — no deep link (and no flush) until the load owns the widget
+  openBtn.hidden = true;
   setStatus("Loading decision…");
   const content = await getDmnXml(app, decisionRef);
   if (epoch !== loadEpoch || inactive) return;
   ref = { repo: decisionRef.repo, path: content.path };
   toolbar.title.textContent = `${decisionRef.repo} · ${content.path}`;
+  // a loaded decision has a web address (the file-editor route — the same
+  // target the repo overview links decisions to)
+  openBtn.hidden = !cfg.publicUrl;
   baseVersion = content.baseVersion;
   if (!modeler) {
     modeler = mountDmnModeler(el<HTMLDivElement>("canvas"), cfg.readonly);
@@ -232,6 +240,18 @@ function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void 
 }
 
 saveBtn.onclick = () => void save();
+// deep link into the web app's file editor. openLink FIRST, nothing awaited
+// before it (user activation, see the BPMN twin); the DMN widget has no live
+// mode, so a pending edit is flushed in parallel — it lands in the same live
+// document the opened editor joins. While a conflict banner is up, save()
+// stays paused on purpose: the opened editor shows the SERVER version and the
+// banner keeps owning the divergence decision.
+openBtn.onclick = () => {
+  if (!ref?.path || !cfg.publicUrl) return;
+  const url = fileDeepLink(cfg.publicUrl, ref.repo, ref.path);
+  void openExternal(app, url, setStatus);
+  if (dirty) void save();
+};
 fullscreenBtn.onclick = () => void app.requestDisplayMode({ mode: "fullscreen" });
 
 wireApp(app, {

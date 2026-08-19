@@ -13,6 +13,7 @@
  * (remote mint). Nothing GitHub-specific leaks through the port — GitLab/Jira
  * implement the same contract against their own issue APIs.
  */
+import { processDeepLink } from "@bpmiq/contracts/deep-link";
 import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 import { GitHubHttpError, paginate, tokenRest } from "@bpmiq/github-app";
 import {
@@ -64,20 +65,12 @@ export interface DeepLinkTarget {
 }
 
 /** one 📍 line per anchored element, linking into the web app's process-editor
- * route (`/r/$owner/$repo/p/$processId`, TanStack router — apps/web/src/router.tsx).
- * The repo segment is split at the FIRST slash: GitHub is always owner/name;
- * GitLab subgroups (multi-segment repos) need the router to capture the repo as
- * a splat first — mirror of the comment in apps/web/src/router.tsx. */
+ * route — the URL shape is the shared @bpmiq/contracts/deep-link builder (the
+ * widget button and the open_modeler result build the very same links) */
 function deepLinkLines(anchor: TodoAnchor, target: DeepLinkTarget): string {
-  const slash = target.repoFullName.indexOf("/");
-  const owner = slash === -1 ? target.repoFullName : target.repoFullName.slice(0, slash);
-  const repo = slash === -1 ? "" : target.repoFullName.slice(slash + 1);
-  const base = target.publicUrl.replace(/\/$/, "");
   return anchor.elements
     .map((el) => {
-      const url =
-        `${base}/r/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
-        `/p/${encodeURIComponent(anchor.process)}?element=${encodeURIComponent(el.id)}`;
+      const url = processDeepLink(target.publicUrl, target.repoFullName, anchor.process, el.id);
       return `📍 [${el.name ?? el.id}](${url})`;
     })
     .join("\n");

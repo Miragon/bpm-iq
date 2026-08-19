@@ -53,7 +53,9 @@ if (existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
 
 // ONE port for HTTP + WebSocket (Fly maps 443 → this internal port)
 const PORT = Number(process.env.PORT ?? 8301);
-const PUBLIC_URL = process.env.LIVE_PUBLIC_URL ?? `http://localhost:${PORT}`;
+// normalized ONCE: a trailing slash in the env would leak into every derived
+// URL (`${PUBLIC_URL}/mcp` audiences, deep links, OAuth redirect URIs)
+const PUBLIC_URL = (process.env.LIVE_PUBLIC_URL ?? `http://localhost:${PORT}`).replace(/\/+$/, "");
 /** the content repo served in place for local dev (registry fallback) */
 const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/bpm-iq";
 /** the bpmiq monorepo root: apps/live-host/src → ../../.. */
