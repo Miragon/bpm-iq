@@ -363,10 +363,16 @@ test("MCP App: open_modeler carries the ui resource link; the resource serves th
   // the tool advertises its UI template (nested + legacy flat key, per ext-apps)
   const tool = (await client.listTools()).tools.find((t) => t.name === "open_modeler");
   assert.ok(tool, "open_modeler registered");
-  const meta = tool._meta as { ui?: { resourceUri?: string }; "ui/resourceUri"?: string };
+  const meta = tool._meta as {
+    ui?: { resourceUri?: string };
+    "ui/resourceUri"?: string;
+    "openai/outputTemplate"?: string;
+  };
   const uri = meta?.ui?.resourceUri;
   assert.ok(uri?.startsWith("ui://bpmiq/modeler-"), `ui resourceUri: ${uri}`);
   assert.equal(meta?.["ui/resourceUri"], uri);
+  // ChatGPT's compatibility alias — older builds read only this key
+  assert.equal(meta?.["openai/outputTemplate"], uri);
 
   // the resource serves the single-file widget with the boot marker replaced
   const res = await client.readResource({ uri: uri! });
@@ -393,6 +399,7 @@ test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario"
   assert.ok(tool, "open_decision_modeler registered");
   const uri = (tool._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri;
   assert.ok(uri?.startsWith("ui://bpmiq/decision-modeler-"), `ui resourceUri: ${uri}`);
+  assert.equal((tool._meta as { "openai/outputTemplate"?: string })?.["openai/outputTemplate"], uri);
   // its own resource — never the BPMN widget's
   const other = (await client.listTools()).tools.find((t) => t.name === "open_modeler");
   assert.notEqual(uri, (other?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri);

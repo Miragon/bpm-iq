@@ -28,14 +28,21 @@ its `client_id` to users; every MCP client that matters accepts it out of band.
 What the admin must allowlist as redirect URIs differs per client — check the
 client's current docs, the URIs below were verified 2026-07-31:
 
-| Client              | Where the `client_id` goes                              | Redirect URI to register                                                                  |
-| ------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Claude Code         | `--client-id` (+ `--callback-port`) on `claude mcp add` | `http://localhost:<port>/callback` — pick a port, pass the SAME one via `--callback-port` |
-| claude.ai / Desktop | custom connector → Advanced settings                    | `https://claude.ai/api/mcp/auth_callback`                                                 |
-| Cursor              | `auth.CLIENT_ID` in the MCP server config               | see Cursor's connector docs (web callback + localhost)                                    |
-| VS Code             | `oauth.clientId` in `.vscode/mcp.json`                  | `http://127.0.0.1:33418/` + `https://vscode.dev/redirect`                                 |
-| MCP Inspector       | client-ID field in the auth settings                    | its own loopback URI                                                                      |
-| others (no field)   | wrap with `mcp-remote --static-oauth-client-info`       | mcp-remote's loopback URI                                                                 |
+| Client              | Where the `client_id` goes                                                                                            | Redirect URI to register                                                                                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code         | `--client-id` (+ `--callback-port`) on `claude mcp add`                                                               | `http://localhost:<port>/callback` — pick a port, pass the SAME one via `--callback-port`                                                                           |
+| claude.ai / Desktop | custom connector → Advanced settings                                                                                  | `https://claude.ai/api/mcp/auth_callback`                                                                                                                           |
+| ChatGPT             | connector (developer mode) → pre-registered client or CIMD — [docs](https://developers.openai.com/plugins/build/auth) | `https://chatgpt.com/connector/oauth/{callback_id}` (shown per connector) + `https://chatgpt.com/connector_platform_oauth_redirect` (per OpenAI's docs, 2026-08-19) |
+| Cursor              | `auth.CLIENT_ID` in the MCP server config                                                                             | see Cursor's connector docs (web callback + localhost)                                                                                                              |
+| VS Code             | `oauth.clientId` in `.vscode/mcp.json`                                                                                | `http://127.0.0.1:33418/` + `https://vscode.dev/redirect`                                                                                                           |
+| MCP Inspector       | client-ID field in the auth settings                                                                                  | its own loopback URI                                                                                                                                                |
+| others (no field)   | wrap with `mcp-remote --static-oauth-client-info`                                                                     | mcp-remote's loopback URI                                                                                                                                           |
+
+ChatGPT's authorization-server requirements go beyond the table: the IdP's
+metadata must advertise `code_challenge_methods_supported` including `S256`
+(ChatGPT refuses the server otherwise), and full write-capable MCP in ChatGPT
+is currently a Business/Enterprise/Edu beta — Pro connects read-only. DCR is
+optional for ChatGPT since mid-2026; a pre-registered client works.
 
 Two sharp edges:
 
