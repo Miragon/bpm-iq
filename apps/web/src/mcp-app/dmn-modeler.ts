@@ -1,6 +1,7 @@
 /**
  * dmn-js wrapper for the decision widget — the modeler PLUS the simulation
- * add-on (@emaarco/dmn-js-simulation), mounted into both views:
+ * add-on (@emaarco/dmn-js-simulation), mounted into both views through the
+ * wiring the live editor uses too (lib/dmn-simulation.ts):
  *
  *   drd            → run the whole decision requirements diagram
  *   decisionTable  → enter values, see which rows light up
@@ -20,9 +21,10 @@
  * for nothing else — see the note on variableOf in @bpmiq/decisions.
  */
 import { type Scenario, variableOf } from "@bpmiq/decisions";
-import DmnSimulationModule from "@emaarco/dmn-js-simulation";
 import DmnModeler from "dmn-js/lib/Modeler";
 import DmnViewer from "dmn-js/lib/Viewer";
+
+import { dmnSimulationViews } from "@/lib/dmn-simulation";
 
 /** the simulation store of the ACTIVE decision-table view (add-on internals we
  *  depend on deliberately — its published surface, see SimulationStore.d.ts) */
@@ -68,11 +70,7 @@ export interface DmnModelerHandle {
 }
 
 export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnModelerHandle {
-  const options = {
-    container,
-    drd: { additionalModules: [DmnSimulationModule.decisionRequirementsDiagram] },
-    decisionTable: { additionalModules: [DmnSimulationModule.decisionTable] },
-  };
+  const options = { container, ...dmnSimulationViews };
   const instance = readonly ? new DmnViewer(options) : new DmnModeler(options);
 
   const dirtyCbs: Array<() => void> = [];

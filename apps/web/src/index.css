@@ -18,6 +18,13 @@
 .dmn-canvas {
   overflow: auto;
 }
+/* dmn-js draws a table view edge to edge: the "View DRD" button, the simulation
+   form and the table itself would all sit ON the pane's border. Inset them.
+   The DRD keeps the full pane — it is a canvas, and its palette IS at the edge. */
+.dmn-canvas .dmn-decision-table-container,
+.dmn-canvas .dmn-literal-expression-container {
+  padding: 1rem;
+}
 
 /* todo count badge on BPMN elements — created imperatively by lib/todo-canvas.ts
    (bpmn-js overlays get raw DOM, not React), so it is styled here, not via JSX */
