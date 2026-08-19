@@ -11,9 +11,15 @@
     "./live-host": "./src/live-host.ts",
     "./common": "./src/common.ts",
     "./live": "./src/live.ts",
-    "./todo-anchor": "./src/todo-anchor.ts"
+    "./todo-anchor": "./src/todo-anchor.ts",
+    "./assist": "./src/assist.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "typescript": "6.0.3"
   }
 }

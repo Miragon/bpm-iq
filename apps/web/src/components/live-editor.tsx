@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { MonacoBinding } from "y-monaco";
 import type * as Y from "yjs";
 
+import { AssistMenu } from "@/components/assist-menu";
 import { HistoryDiffDialog } from "@/components/history-diff-dialog";
 import { HistoryPanel } from "@/components/history-panel";
 import { ReleaseDialog } from "@/components/release-dialog";
@@ -188,23 +189,24 @@ export function LiveEditor({
       if (isBpmn && canvasRef.current) {
         modeler = new BpmnModeler({ container: canvasRef.current });
         unbindCanvas = bindBpmn(modeler as never, ytext, session.doc, (msg) => toast.error(msg));
-        if (hasTodos) {
-          // badges re-attach on every import.done (bindBpmn re-imports remote
-          // changes); a badge click opens the panel filtered to its element
-          todoCanvas = attachTodoCanvas(modeler as never, {
-            onBadgeClick: (elementId) => {
-              setTodoFilter(elementId);
-              setPanel("todos");
-            },
-            onSelectionChanged: setSelectedElements,
-          });
-          todoCanvasRef.current = todoCanvas;
-          todoCanvas.setTodos(todosRef.current);
-          if (pendingRevealRef.current) {
-            // deep link opened before the session synced — arm the one-shot now
-            todoCanvas.revealOnce(pendingRevealRef.current);
-            pendingRevealRef.current = null;
-          }
+        // attached for EVERY bpmn file, not only process members: the selection
+        // feeds the todo buttons AND the Analyse-with-AI handover (a sub-process
+        // has no process id, but its selection matters just the same). Badges
+        // re-attach on every import.done (bindBpmn re-imports remote changes);
+        // without todos the list stays empty and no badge ever renders.
+        todoCanvas = attachTodoCanvas(modeler as never, {
+          onBadgeClick: (elementId) => {
+            setTodoFilter(elementId);
+            setPanel("todos");
+          },
+          onSelectionChanged: setSelectedElements,
+        });
+        todoCanvasRef.current = todoCanvas;
+        todoCanvas.setTodos(todosRef.current);
+        if (pendingRevealRef.current) {
+          // deep link opened before the session synced — arm the one-shot now
+          todoCanvas.revealOnce(pendingRevealRef.current);
+          pendingRevealRef.current = null;
         }
       } else if (isDmn && canvasRef.current) {
         dmnModeler = new DmnModeler({
@@ -430,6 +432,14 @@ export function LiveEditor({
               Todo{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ""}
             </Button>
           </>
+        )}
+        {isVisual && (
+          <AssistMenu
+            repo={repo}
+            path={docPath}
+            notation={isBpmn ? "bpmn" : "dmn"}
+            selection={isBpmn ? selectedElements : undefined}
+          />
         )}
         <Button size="sm" onClick={() => setReleaseOpen(true)}>
           Release → PR

@@ -889,7 +889,10 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
           "text summary — use get_process/get_bpmn_xml there instead.",
         inputSchema: processRef,
         annotations: READ,
-        _meta: { ui: { resourceUri: modeler.uri } },
+        // "openai/outputTemplate" is ChatGPT's compatibility alias for
+        // ui.resourceUri — current builds read the MCP-Apps key, older ones
+        // only the alias; registerAppTool passes extra _meta keys through
+        _meta: { ui: { resourceUri: modeler.uri }, "openai/outputTemplate": modeler.uri },
       },
       safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
         const r = await requireRepo(repo);
@@ -962,7 +965,8 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
             .describe("input values to pre-fill the simulator with, keyed by variable name"),
         },
         annotations: READ,
-        _meta: { ui: { resourceUri: decisionModeler.uri } },
+        // same ChatGPT alias as open_modeler
+        _meta: { ui: { resourceUri: decisionModeler.uri }, "openai/outputTemplate": decisionModeler.uri },
       },
       safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
         const r = await requireRepo(repo);

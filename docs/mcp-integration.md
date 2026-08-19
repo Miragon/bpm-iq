@@ -330,6 +330,41 @@ cannot disagree. Saving works like the BPMN widget (autosave, `lint:"warn"`,
 live upgrade — decision tables are edited cell by cell by one person at a time, and the
 conflict flow covers the rare collision honestly.
 
+### Analyse with AI: the deep link into the widget
+
+The web editor's toolbar (and every process/decision row on the repo overview) carries
+an **"Analyse with AI"** dropdown — the doorway in the opposite direction: one click
+opens an AI chat whose first move is `open_modeler` / `open_decision_modeler` for
+exactly the model on screen, so the widget comes up live-synced with the editor the
+user just left. The menu only picks the destination — Claude Desktop, ChatGPT, or the
+clipboard. The prompt is a work order built by `@bpmiq/contracts/assist`: the literal
+tool call with repo and path inlined, the Live Host's MCP URL named (a connector
+pointed at a _different_ instance then fails as a recognizable "wrong instance", not a
+phantom missing repo), and the current canvas selection riding along as fenced data —
+what to do with the model stays the user's next message.
+
+Every target is a **prefill** — the chat opens with the prompt prepared and the user
+reviews and sends it; nothing runs on its own:
+
+- **Claude Desktop** — `claude://claude.ai/new?q=…`
+  ([documented](https://support.claude.com/en/articles/14729294-open-claude-desktop-with-a-link);
+  `q` truncates around 14k characters, our prompts stay far below). Whether the scheme
+  is handled cannot be read from a browser, so a quiet miss softly offers the fallback.
+- **ChatGPT** — `https://chatgpt.com/?prompt=…` (undocumented; deliberately not `?q=`,
+  which auto-submits). ChatGPT implements the open MCP Apps standard, so the same
+  widgets render there; the tools additionally carry ChatGPT's legacy
+  `openai/outputTemplate` alias. Caveats: the connector must be added in developer
+  mode, and full (write-capable) MCP is currently a Business/Enterprise/Edu beta —
+  Pro is read-only. Register ChatGPT's redirect URIs at the IdP
+  (see [extending/mcp-idp-setup.md](extending/mcp-idp-setup.md)).
+- **Copy the prompt** — the escape hatch for every other client (or a missing
+  install): paste it into any chat connected to this connector.
+
+The connector is the hard prerequisite — without it the chat opens and stalls, which is
+why the menu links to this page. And a prompt is not a protocol: the receiving model
+_should_ open the widget first, but nothing guarantees it — the imperative first step
+with the literal tool call is the lever, honest UI copy is the promise.
+
 `save_bpmn_xml` is compare-and-set: the caller passes the `baseVersion` from a prior
 `get_bpmn_xml`, and if the live document moved in between, the save is refused with a
 retryable `{conflict: true, currentXml}` — re-read (or rebase onto `currentXml`) and retry;

@@ -33,6 +33,7 @@ import {
 import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { AssistMenu } from "@/components/assist-menu";
 import { CreateDecisionDialog } from "@/components/create-decision-dialog";
 import { CreateFolderDialog } from "@/components/create-folder-dialog";
 import { CreateProcessDialog } from "@/components/create-process-dialog";
@@ -210,6 +211,14 @@ export function ProcessList() {
             </div>
           );
         },
+      },
+      {
+        id: "analyse",
+        header: "",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <AssistMenu repo={`${owner}/${name}`} path={row.original.bpmn} notation="bpmn" variant="row" />
+        ),
       },
     ],
     [owner, name],
@@ -390,6 +399,7 @@ export function ProcessList() {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
+                  <TableCell />
                 </TableRow>
               ))}
               {table.getRowModel().rows.map((row) => (
@@ -440,6 +450,9 @@ export function ProcessList() {
                         {d.liveSessions > 0 && <Badge>{d.liveSessions} active</Badge>}
                       </div>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <AssistMenu repo={repo} path={d.path} notation="dmn" variant="row" />
                   </TableCell>
                 </TableRow>
               ))}
