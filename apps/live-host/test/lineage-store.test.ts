@@ -37,6 +37,31 @@ test("drop removes a persisted lineage", () => {
   assert.equal(store.load("acme/repo/docs/readme.md"), undefined);
 });
 
+test("seed flag: saveSeed marks, the first real save clears — in the row itself (crash-atomic)", () => {
+  const db = new DatabaseSync(":memory:");
+  const store = new LineageStore(db, HOST);
+  const room = "acme/repo/processes/x.bpmn";
+  assert.equal(store.isSeed(room), false, "unknown room is not a seed");
+  store.saveSeed(room, new Uint8Array([1]));
+  assert.equal(store.isSeed(room), true);
+  store.save(room, new Uint8Array([2]));
+  assert.equal(store.isSeed(room), false, "a real store clears the flag");
+  store.drop(room);
+  store.saveSeed(room, new Uint8Array([3]));
+  assert.equal(store.isSeed(room), true, "re-seeding after a drop marks again");
+});
+
+test("legacy live.db without the seed column gains it; old rows count as edited (never droppable)", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE IF NOT EXISTS documents (name TEXT PRIMARY KEY, state BLOB)");
+  db.prepare("INSERT INTO documents (name, state) VALUES (?, ?)").run("processes/order/order.bpmn", Buffer.from([1]));
+
+  const store = new LineageStore(db, HOST);
+  assert.equal(store.isSeed(`${HOST}/processes/order/order.bpmn`), false);
+  assert.deepEqual([...(store.load(`${HOST}/processes/order/order.bpmn`) ?? [])], [1]);
+  new LineageStore(db, HOST); // idempotent on the migrated schema
+});
+
 test("migration prefixes pre-multi-repo rows with the host repo — once", () => {
   const db = new DatabaseSync(":memory:");
   // legacy layout: bare repo-relative room names (pre-multi-repo), no meta flag

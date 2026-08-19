@@ -5,7 +5,7 @@
  *   onAuthenticate   → session (from OAuth login) + PER-REPO write permission
  *                      for the room being joined (AccessCache)
  *   onLoadDocument   → restore Yjs lineage from SQLite, else seed from the
- *                      repo's workspace tree
+ *                      repo's workspace tree (persisting the seed eagerly — #103)
  *   onStoreDocument  → persist lineage + debounced write-through to the tree
  *
  * Every dependency is injected (no module state); the hook parameter types are
@@ -32,7 +32,7 @@ import {
 import type { ConnectedRepo } from "../repos/registry.ts";
 
 export interface CollabDeps {
-  lineage: Pick<LineageStore, "load" | "save">;
+  lineage: Pick<LineageStore, "load" | "save" | "saveSeed" | "isSeed" | "drop">;
   docGuard: DocSizeGuard;
   maxDocBytes: number;
   sessions: { get(id: string | undefined): Session | undefined };
@@ -113,7 +113,23 @@ export function makeCollabHooks(deps: CollabDeps) {
       // NB docGuard.load() below must stay AFTER every throw site in this hook: a
       // failed load never fires afterUnloadDocument (no document registered), so a
       // guard entry registered before a throw would leak forever.
-      const stored = lineage.load(documentName);
+      let stored = lineage.load(documentName);
+      if (stored && lineage.isSeed(documentName)) {
+        // A seed-marked row was written by the eager persist below and NO client
+        // ever edited it (the first real store clears the marker). If the
+        // workspace file has since changed out of band — git pull / editor on the
+        // in-place host checkout, a reconcile racing this load — the row is a
+        // stale snapshot of a dead file state: drop it and seed freshly from the
+        // file, exactly as if the row never existed. A row WITH edits is never
+        // dropped here — the client history it anchors exists nowhere else.
+        const seedDoc = new Y.Doc();
+        Y.applyUpdate(seedDoc, new Uint8Array(stored));
+        if (seedDoc.getText(CONTENT_KEY).toString() !== (await readFile(disk, "utf8"))) {
+          lineage.drop(documentName);
+          stored = undefined;
+          console.log(`stale seed dropped: ${documentName} (workspace file changed since the seed)`);
+        }
+      }
       if (stored) {
         // resume the persisted lineage — never re-seed on top of it
         Y.applyUpdate(document, new Uint8Array(stored));
@@ -131,8 +147,17 @@ export function makeCollabHooks(deps: CollabDeps) {
         if (ytext.length === 0) {
           const content = await readFile(disk, "utf8");
           ytext.insert(0, content);
-          // estimate; the guard re-measures precisely if a doc ever nears the cap
-          docGuard.load(documentName, Buffer.byteLength(content));
+          // Persist the seed EAGERLY, not only via the debounced onStoreDocument
+          // (2s/10s): a host dying inside that window loses the row while every
+          // connected client still holds the seed's history — the next start
+          // seeds AGAIN and Yjs merges both inserts, duplicating every character
+          // (#103). Seed-marked, so the stale-seed check above may replace it if
+          // the file changes before any client edit. Same cap rule as
+          // onStoreDocument: an over-cap doc never reaches SQLite, so the
+          // durable footprint stays bounded.
+          const seeded = Y.encodeStateAsUpdate(document);
+          if (seeded.length <= maxDocBytes) lineage.saveSeed(documentName, seeded);
+          docGuard.load(documentName, seeded.length); // the blob IS the encoded size
           console.log(`seeded: ${documentName} (${ytext.length} chars from workspace)`);
         }
       }
