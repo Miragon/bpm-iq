@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.6.0](https://github.com/Miragon/bpm-iq/compare/v3.5.1...v3.6.0) (2026-08-19)
+
+
+### Features
+
+* **web:** "Analyse with AI" — deep-link a model into a Claude or ChatGPT chat ([#104](https://github.com/Miragon/bpm-iq/issues/104)) ([8977ae1](https://github.com/Miragon/bpm-iq/commit/8977ae18742ce7244feb1ceab4e6ec7c4ba3ed4e))
+
+
+### Bug Fixes
+
+* **web:** every decision-table input is optional, and the table gets an inset ([#101](https://github.com/Miragon/bpm-iq/issues/101)) ([2cf94e1](https://github.com/Miragon/bpm-iq/commit/2cf94e155bdbf5eaf50a72fc002a3bb163c908ab))
+
 ## [3.5.1](https://github.com/Miragon/bpm-iq/compare/v3.5.0...v3.5.1) (2026-08-17)
 
 
