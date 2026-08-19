@@ -278,3 +278,15 @@ export interface ContentConflictWire {
   currentXml: string;
   baseVersion: string;
 }
+
+/** the boot payload the Live Host bakes into the modeler widgets' HTML
+ *  (the __BPMIQ_BOOT__ marker, http/mcp.ts) — parsed back by the widgets'
+ *  bridge.ts. The widget iframe is sandboxed on the HOST's origin, so this is
+ *  its only source of instance facts. */
+export interface WidgetBootWire {
+  /** LIVE_MCP_READONLY — the widget mounts a viewer instead of the editor */
+  readonly: boolean;
+  /** the instance's public origin — the base for "Open in bpmiq" deep links;
+   *  absent when an older Live Host injects a pre-publicUrl payload */
+  publicUrl?: string;
+}

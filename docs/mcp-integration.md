@@ -298,10 +298,25 @@ widget then returns to inline display and closes the panel,
 because the answer arrives in the conversation, not in the iframe. Tracker links go through
 the host too (`ui/open-link`) — the app sandbox blocks `target="_blank"` navigation.
 
+**"Open in bpmiq" leaves the chat for the full product.** The toolbar's deep link opens
+the loaded model in the web modeler — the process route, carrying the current canvas
+selection as `?element=` so the web editor reveals exactly the element under discussion
+(the DMN widget links its file route). The instance origin rides in the widget's boot
+payload (the sandboxed iframe cannot know it otherwise), the link opens through the same
+`ui/open-link` ladder as tracker links, and a still-unsaved edit is flushed in parallel —
+it lands in the very live document the opened editor joins (while a conflict banner is
+up, the flush stays paused: the opened editor shows the server version and the banner
+keeps owning the divergence decision). Logged-out recipients pass
+the login gate and land on the model, not the overview (the SPA stashes the deep link
+across the auth round-trip). The `open_modeler` / `open_decision_modeler` results carry
+the same link as `opened.url`, so non-apps clients can surface it in plain text.
+
 Clients without apps support (Claude Code, the read-only `@bpmiq/mcp` package) see a
-plain tool that returns a short process summary — use `get_process`/`get_bpmn_xml`
-there. Under `LIVE_MCP_READONLY=1` the tool stays registered but the widget becomes a
-read-only viewer (no save button, no ws ticket), matching the absent write tools.
+plain tool that returns a short process summary plus the model's web URL — use
+`get_process`/`get_bpmn_xml` there. Under `LIVE_MCP_READONLY=1` the tool stays registered
+but the widget becomes a read-only viewer (no save button, no ws ticket), matching the
+absent write tools — the "Open in bpmiq" link stays, pointing at the differently
+authenticated web surface.
 
 ### MCP App: the decision modeler and its simulator
 

@@ -2,6 +2,7 @@ import { Button } from "@bpmiq/ui-kit/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bpmiq/ui-kit/components/card";
 
 import { useConfig } from "@/lib/queries";
+import { stashReturnTo } from "@/lib/return-to";
 
 export function Login() {
   const cfg = useConfig();
@@ -32,7 +33,12 @@ export function Login() {
           ) : (
             providers.map((p) => (
               <Button key={p.id} asChild className="w-full">
-                <a href={`/auth/${p.id}`}>Sign in with {p.label}</a>
+                {/* the deep-link URL is still in the address bar (Login renders
+                    in place of the route) — stash it, the auth callback lands
+                    on "/" and the root layout restores it */}
+                <a href={`/auth/${p.id}`} onClick={stashReturnTo}>
+                  Sign in with {p.label}
+                </a>
               </Button>
             ))
           )}

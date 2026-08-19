@@ -15,14 +15,18 @@
  * (hide the UI) from a real tracker error (show it; those messages are
  * actionable).
  */
-import type { ContentWire, PutContentResultWire, TodoElementWire, TodoWire } from "@bpmiq/contracts/live-host";
+import type {
+  ContentWire,
+  PutContentResultWire,
+  TodoElementWire,
+  TodoWire,
+  WidgetBootWire,
+} from "@bpmiq/contracts/live-host";
 import type { CaseOutcome, SuiteOutcome, TestCase, TestSuite } from "@bpmiq/decisions/tests";
 import { unwrapToolResult } from "@bpmiq/mcp-kit";
 import { App } from "@modelcontextprotocol/ext-apps";
 
-export interface BootConfig {
-  readonly: boolean;
-}
+export type BootConfig = WidgetBootWire;
 
 export interface ProcessRef {
   repo: string;
@@ -51,7 +55,10 @@ export type SaveResult = ({ ok: true } & PutContentResultWire) | SaveConflict;
 // PutContentResultWire.errors carries ERROR findings on lint:"warn" saves
 
 /** the host-injected marker (mcp.ts replaces it); a raw marker means the file
- *  is served outside the Live Host (dev preview) — default to editable */
+ *  is served outside the Live Host (dev preview) — default to editable, with
+ *  this very origin as the deep-link base (the dev server serves the SPA too).
+ *  A parsed payload WITHOUT publicUrl (older Live Host) keeps it absent — the
+ *  "Open in bpmiq" button hides rather than dead-link. */
 export function bootConfig(): BootConfig {
   const raw = (window as { BPMIQ_BOOT?: unknown }).BPMIQ_BOOT;
   if (typeof raw === "string" && !raw.startsWith("__")) {
@@ -61,7 +68,7 @@ export function bootConfig(): BootConfig {
       /* fall through to the default */
     }
   }
-  return { readonly: false };
+  return { readonly: false, publicUrl: window.location.origin };
 }
 
 export function makeApp(): App {

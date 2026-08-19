@@ -10,6 +10,7 @@
   "exports": {
     "./live-host": "./src/live-host.ts",
     "./common": "./src/common.ts",
+    "./deep-link": "./src/deep-link.ts",
     "./live": "./src/live.ts",
     "./todo-anchor": "./src/todo-anchor.ts",
     "./assist": "./src/assist.ts"

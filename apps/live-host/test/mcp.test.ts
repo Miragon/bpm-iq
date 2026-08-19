@@ -379,17 +379,27 @@ test("MCP App: open_modeler carries the ui resource link; the resource serves th
   const doc = res.contents[0] as { mimeType?: string; text?: string };
   assert.equal(doc.mimeType, "text/html;profile=mcp-app");
   assert.ok(!doc.text!.includes("__BPMIQ_BOOT__"), "marker replaced");
-  assert.ok(doc.text!.includes('{\\"readonly\\":false}'), "boot config injected");
+  assert.ok(doc.text!.includes('\\"readonly\\":false'), "boot config injected");
+  // the deep-link base rides in the boot payload — the sandboxed iframe has
+  // no other way to learn the instance origin
+  assert.ok(doc.text!.includes('\\"publicUrl\\":\\"http://live.test\\"'), "publicUrl injected");
 
-  // the tool result stays lean: a summary, never the XML
+  // the tool result stays lean: a summary + the web deep link, never the XML
   const opened = await callJson("open_modeler", { repo: REPO.fullName, id: "order" });
   assert.equal(opened.opened.path, PATH);
+  assert.equal(opened.opened.url, "http://live.test/r/acme/models/p/order");
   assert.ok(!JSON.stringify(opened).includes("<bpmn"), "no XML in the tool result");
 
-  // read-only mode flips the widget's boot flag
+  // read-only mode flips the widget's boot flag — under a NEW resource uri:
+  // the boot payload salts the hash, so hosts caching by uri re-fetch on a
+  // config change instead of serving a stale boot
   const ro = await connect(deps({ mcpReadOnly: true }));
-  const roRes = await ro.client.readResource({ uri: uri! });
-  assert.ok((roRes.contents[0] as { text?: string }).text!.includes('{\\"readonly\\":true}'));
+  const roTool = (await ro.client.listTools()).tools.find((t) => t.name === "open_modeler");
+  const roUri = (roTool?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri;
+  assert.ok(roUri, "read-only server advertises its widget");
+  assert.notEqual(roUri, uri, "a changed boot payload mints a new resource uri");
+  const roRes = await ro.client.readResource({ uri: roUri! });
+  assert.ok((roRes.contents[0] as { text?: string }).text!.includes('\\"readonly\\":true'));
 });
 
 test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario", async () => {
@@ -406,7 +416,8 @@ test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario"
 
   const doc = (await client.readResource({ uri: uri! })).contents[0] as { text?: string };
   assert.match(doc.text ?? "", /<body>dmn<\/body>/);
-  assert.ok(doc.text!.includes('{\\"readonly\\":false}'), "boot config injected");
+  assert.ok(doc.text!.includes('\\"readonly\\":false'), "boot config injected");
+  assert.ok(doc.text!.includes('\\"publicUrl\\":\\"http://live.test\\"'), "publicUrl injected");
 
   // the scenario rides in the tool ARGUMENTS (the widget reads ontoolinput);
   // the result stays a lean summary, never the XML
@@ -416,6 +427,8 @@ test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario"
     scenario: { kundentyp: "stamm" },
   });
   assert.equal(opened.opened.path, DMN_PATH);
+  // decisions deep-link to the file-editor splat route
+  assert.equal(opened.opened.url, "http://live.test/r/acme/models/f/processes/rabatt.dmn");
   assert.deepEqual(opened.summary.decisions, [{ id: "rabatt", hitPolicy: "FIRST", rules: 2 }]);
   assert.ok(!JSON.stringify(opened).includes("<decision"), "no XML in the tool result");
 });
