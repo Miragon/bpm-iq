@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.7.0](https://github.com/Miragon/bpm-iq/compare/v3.6.0...v3.7.0) (2026-08-19)
+
+
+### Features
+
+* **web,live-host:** "Open in bpmiq" — deep-link a widget model into the web modeler ([#106](https://github.com/Miragon/bpm-iq/issues/106)) ([ecb01fd](https://github.com/Miragon/bpm-iq/commit/ecb01fd17ba0c64861fead9c30d3e8b3cb878d7f))
+
+
+### Bug Fixes
+
+* **live-host:** persist seeds eagerly and flush on SIGHUP so re-seeded live docs cannot duplicate ([#107](https://github.com/Miragon/bpm-iq/issues/107)) ([94b77ff](https://github.com/Miragon/bpm-iq/commit/94b77ff7ce4e384bdd6430e25dadde0be2ada812)), closes [#103](https://github.com/Miragon/bpm-iq/issues/103)
+
 ## [3.6.0](https://github.com/Miragon/bpm-iq/compare/v3.5.1...v3.6.0) (2026-08-19)
 
 
