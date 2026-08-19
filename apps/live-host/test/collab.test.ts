@@ -113,6 +113,82 @@ test("onLoadDocument: no lineage → seeds once from the workspace file", async 
   assert.equal(doc.getText("content").toString(), "<bpmn from disk/>");
 });
 
+test("onLoadDocument: the seed is persisted EAGERLY — a host death before the debounced store must not re-seed (#103)", async () => {
+  const { ws, deps, hooks } = setup();
+  const content = "<bpmn from disk/>";
+  writeFileSync(join(ws, "processes", "order", "order.bpmn"), content);
+
+  // first load seeds from the workspace file …
+  const server1 = new Y.Doc();
+  await hooks.onLoadDocument({ document: server1, documentName: ROOM });
+  // … and the lineage row must exist NOW, not only after the debounced
+  // onStoreDocument (which a dying host never reaches)
+  assert.ok(deps.lineage.load(ROOM), "seed persisted in onLoadDocument itself");
+
+  // a browser tab syncs the seeded doc and keeps holding it in memory
+  const browser = new Y.Doc();
+  Y.applyUpdate(browser, Y.encodeStateAsUpdate(server1));
+
+  // the host dies without ever reaching onStoreDocument, then restarts:
+  // the next load must RESTORE the eager row (not seed a second time) …
+  await hooks.afterUnloadDocument({ documentName: ROOM });
+  const server2 = new Y.Doc();
+  await hooks.onLoadDocument({ document: server2, documentName: ROOM });
+  // … so the tab's auto-reconnect push merges cleanly instead of duplicating
+  Y.applyUpdate(server2, Y.encodeStateAsUpdate(browser));
+
+  assert.equal(server2.getText("content").toString(), content, "content must not grow on reconnect");
+});
+
+test("onLoadDocument: a never-edited seed row is REPLACED when the workspace file changed out of band (no stale pinning)", async () => {
+  // in-place host checkout: no reconcile/reset path ever drops lineage there, so
+  // without the stale-seed check a view-only open would pin the file's content
+  // in live.db forever and the next edit would overwrite out-of-band updates
+  const { ws, hooks } = setup();
+  const file = join(ws, "processes", "order", "order.bpmn");
+  writeFileSync(file, "<bpmn v1/>");
+
+  // view-only session: seed (persisted eagerly), then the tab closes
+  await hooks.onLoadDocument({ document: new Y.Doc(), documentName: ROOM });
+  await hooks.afterUnloadDocument({ documentName: ROOM });
+
+  // the operator updates the file out of band (git pull, editor, an agent)
+  writeFileSync(file, "<bpmn v2 out-of-band/>");
+
+  const doc = new Y.Doc();
+  await hooks.onLoadDocument({ document: doc, documentName: ROOM });
+  assert.equal(doc.getText("content").toString(), "<bpmn v2 out-of-band/>", "the fresh file wins over a pure seed");
+});
+
+test("onLoadDocument: an EDITED row wins over an out-of-band file change (client history is irreplaceable)", async () => {
+  const { ws, hooks } = setup();
+  const file = join(ws, "processes", "order", "order.bpmn");
+  writeFileSync(file, "<bpmn v1/>");
+
+  const doc = new Y.Doc();
+  await hooks.onLoadDocument({ document: doc, documentName: ROOM });
+  doc.getText("content").insert(0, "edited: ");
+  await hooks.onStoreDocument({ document: doc, documentName: ROOM }); // clears the seed marker
+  await hooks.afterUnloadDocument({ documentName: ROOM });
+
+  writeFileSync(file, "<bpmn v2 out-of-band/>");
+
+  const reopened = new Y.Doc();
+  await hooks.onLoadDocument({ document: reopened, documentName: ROOM });
+  assert.equal(reopened.getText("content").toString(), "edited: <bpmn v1/>", "edited lineage is never dropped");
+});
+
+test("onLoadDocument: an over-cap workspace file is seeded but never persisted (durable footprint stays bounded)", async () => {
+  const { ws, deps, hooks } = setup({ docGuard: new DocSizeGuard(10), maxDocBytes: 10 });
+  const big = "definitely more than ten bytes of content";
+  writeFileSync(join(ws, "processes", "order", "order.bpmn"), big);
+
+  const doc = new Y.Doc();
+  await hooks.onLoadDocument({ document: doc, documentName: ROOM });
+  assert.equal(doc.getText("content").toString(), big, "the room itself still opens");
+  assert.equal(deps.lineage.load(ROOM), undefined, "oversized seed must never reach SQLite");
+});
+
 test("onLoadDocument: throws for a missing file (room validated, nothing registered)", async () => {
   const { deps, hooks } = setup();
   await assert.rejects(

@@ -408,8 +408,12 @@ httpServer.on("upgrade", (request, socket, head) => {
 
 // graceful shutdown: the platform sends SIGINT/SIGTERM on every deploy/stop
 // (Fly, docker stop, compose down) — flush the debounced write-throughs (up to
-// 10s of edits) instead of tearing them off mid-flight. Server.listen() is never
-// called here, so Hocuspocus' own signal handling is inactive; we own the lifecycle.
+// 10s of edits) instead of tearing them off mid-flight. SIGHUP is in the list
+// because Node's default action for it is a flush-less terminate: a closed
+// terminal, a dropped SSH session or `docker kill -s HUP` would otherwise lose
+// up to 10s of edits and any not-yet-persisted seed (#103). Server.listen() is
+// never called here, so Hocuspocus' own signal handling is inactive; we own the
+// lifecycle.
 //
 // The hard-exit MUST stay below the deployment's kill timeout (Fly kill_timeout /
 // compose stop_grace_period — 30s in both references) so we exit cleanly rather
@@ -417,7 +421,7 @@ httpServer.on("upgrade", (request, socket, head) => {
 // write + one file write per doc, so give it real room.
 const SHUTDOWN_HARD_EXIT_MS = Number(process.env.LIVE_SHUTDOWN_MS ?? 25_000);
 let shuttingDown = false;
-for (const signal of ["SIGTERM", "SIGINT"] as const) {
+for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
   process.on(signal, () => {
     if (shuttingDown) return;
     shuttingDown = true;
