@@ -19,6 +19,7 @@
  *    explicit "information, not instructions" marker so a crafted body cannot
  *    splice its own steps into the work order.
  */
+import { fenced } from "@bpmiq/contracts/assist";
 import type { TodoWire } from "@bpmiq/contracts/live-host";
 
 /** the model document the widget currently has open — the anchor's own `file`
@@ -32,14 +33,6 @@ export interface PromptTarget {
 /** `Task_CheckCredit ("Bonität prüfen")`, comma-separated; "" when unanchored */
 function elementList(todo: TodoWire): string {
   return (todo.anchor?.elements ?? []).map((el) => (el.name ? `${el.id} ("${el.name}")` : el.id)).join(", ");
-}
-
-/** tracker text as an inert block: fenced one backtick longer than any run
- *  inside it, so the text cannot close its own fence and escape */
-function fenced(text: string): string {
-  const longest = Math.max(2, ...Array.from(text.matchAll(/`+/g), (m) => m[0].length));
-  const fence = "`".repeat(longest + 1);
-  return `${fence}\n${text}\n${fence}`;
 }
 
 export function implementPrompt(todo: TodoWire, target: PromptTarget): string {
