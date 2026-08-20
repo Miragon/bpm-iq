@@ -36,7 +36,7 @@ import { dirname, join } from "node:path";
 
 import type { ReleaseResult } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
-import { processIdFromName } from "@bpmiq/notations";
+import { modelStem, processIdFromName } from "@bpmiq/notations";
 
 import { gitEnv, runGit } from "./adapters/git/run.ts";
 import type { Session } from "./adapters/sqlite/sessions.ts";
@@ -62,8 +62,7 @@ export function releaseFilesSlug(files: string[], title?: string): string {
   const fromTitle = title ? cap(processIdFromName(title)) : "";
   if (fromTitle) return fromTitle;
   if (files.length === 1) {
-    const name = files[0]?.split("/").pop() ?? "";
-    const fromStem = cap(processIdFromName(name.replace(/\.[^.]*$/, "")));
+    const fromStem = cap(processIdFromName(modelStem(files[0] ?? "")));
     if (fromStem) return fromStem;
   }
   return "changes";

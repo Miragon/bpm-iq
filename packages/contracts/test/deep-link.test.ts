@@ -7,13 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { fileDeepLink, modelStem, processDeepLink } from "../src/deep-link.ts";
-
-test("modelStem: the file stem is the model id", () => {
-  assert.equal(modelStem("processes/order.bpmn"), "order");
-  assert.equal(modelStem("processes/subprocesses/check-stock.bpmn"), "check-stock");
-  assert.equal(modelStem("processes/rabatt.dmn"), "rabatt");
-});
+import { fileDeepLink, processDeepLink } from "../src/deep-link.ts";
 
 test("processDeepLink: /r/<owner>/<repo>/p/<id>, trailing slash stripped, segments encoded", () => {
   assert.equal(

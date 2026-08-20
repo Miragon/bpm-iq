@@ -11,10 +11,6 @@
  * as a splat first — mirror of the comment in apps/web/src/router.tsx.
  */
 
-/** the file stem that IS a model's id (the content contract — a process is its
- *  .bpmn file, a decision its .dmn file, @bpmiq/notations/content) */
-export const modelStem = (path: string): string => (path.split("/").pop() ?? path).replace(/\.[^.]+$/, "");
-
 const repoBase = (publicUrl: string, repoFullName: string): string => {
   const slash = repoFullName.indexOf("/");
   const owner = slash === -1 ? repoFullName : repoFullName.slice(0, slash);

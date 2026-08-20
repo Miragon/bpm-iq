@@ -1,0 +1,155 @@
+{
+  "version": 2,
+  "title": "Online retail — team topology",
+  "nodes": [
+    {
+      "id": "team_checkout",
+      "type": "stream-aligned",
+      "label": "Checkout Stream",
+      "position": {
+        "x": 320,
+        "y": 110
+      },
+      "size": {
+        "width": 240,
+        "height": 96
+      },
+      "description": "Owns the end-to-end checkout & payments journey."
+    },
+    {
+      "id": "team_enabling",
+      "type": "enabling",
+      "label": "Agile Enablement",
+      "position": {
+        "x": 60,
+        "y": 150
+      },
+      "size": {
+        "width": 120,
+        "height": 200
+      },
+      "description": "Coaches teams on testing and continuous delivery practices."
+    },
+    {
+      "id": "team_fraud",
+      "type": "complicated-subsystem",
+      "label": "Risk & Fraud Engine",
+      "position": {
+        "x": 740,
+        "y": 320
+      },
+      "size": {
+        "width": 170,
+        "height": 150
+      },
+      "description": "Specialist ML team owning real-time fraud scoring."
+    },
+    {
+      "id": "team_mobile",
+      "type": "stream-aligned",
+      "label": "Mobile Experience",
+      "position": {
+        "x": 700,
+        "y": 110
+      },
+      "size": {
+        "width": 240,
+        "height": 96
+      },
+      "description": "Owns the native mobile shopping experience."
+    },
+    {
+      "id": "team_platform",
+      "type": "platform",
+      "label": "Internal Developer Platform",
+      "position": {
+        "x": 300,
+        "y": 540
+      },
+      "size": {
+        "width": 380,
+        "height": 130
+      },
+      "description": "Self-service CI/CD, observability and runtime for all streams."
+    }
+  ],
+  "interactions": [
+    {
+      "id": "int_checkout_fraud",
+      "mode": "collaboration",
+      "position": {
+        "x": 566,
+        "y": 232
+      },
+      "size": {
+        "width": 112,
+        "height": 72
+      },
+      "label": "fraud rules discovery"
+    },
+    {
+      "id": "int_enable_checkout",
+      "mode": "facilitating",
+      "position": {
+        "x": 212,
+        "y": 158
+      },
+      "size": {
+        "width": 84,
+        "height": 84
+      },
+      "label": "test automation"
+    },
+    {
+      "id": "int_fraud_mobile",
+      "mode": "x-as-a-service",
+      "position": {
+        "x": 800,
+        "y": 238
+      },
+      "size": {
+        "width": 88,
+        "height": 78
+      },
+      "label": "risk scoring API"
+    },
+    {
+      "id": "int_platform_checkout",
+      "mode": "x-as-a-service",
+      "position": {
+        "x": 384,
+        "y": 396
+      },
+      "size": {
+        "width": 88,
+        "height": 78
+      }
+    },
+    {
+      "id": "int_platform_mobile",
+      "mode": "x-as-a-service",
+      "position": {
+        "x": 612,
+        "y": 396
+      },
+      "size": {
+        "width": 88,
+        "height": 78
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow_main",
+      "position": {
+        "x": 60,
+        "y": 712
+      },
+      "size": {
+        "width": 880,
+        "height": 60
+      },
+      "label": "Flow of change"
+    }
+  ]
+}

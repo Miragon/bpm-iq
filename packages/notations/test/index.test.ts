@@ -1,9 +1,28 @@
 /** processIdFromName — the shared title→file-stem slug rule (backend create +
- *  web preview must agree, so the cases here pin the behavior). */
+ *  web preview must agree, so the cases here pin the behavior) — and
+ *  modelStem, the one path→model-id rule (deep links, todos, discovery). */
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { processIdFromName } from "../index.ts";
+import { modelStem, processIdFromName } from "../index.ts";
+
+test("modelStem: the file stem is the model id", () => {
+  assert.equal(modelStem("processes/order.bpmn"), "order");
+  assert.equal(modelStem("processes/subprocesses/check-stock.bpmn"), "check-stock");
+  assert.equal(modelStem("processes/rabatt.dmn"), "rabatt");
+});
+
+test("modelStem: strips the FULL registered compound extension", () => {
+  assert.equal(modelStem("processes/supply.vc.json"), "supply");
+  assert.equal(modelStem("processes/platform.ttm.json"), "platform");
+  assert.equal(modelStem("maps/tea-shop.owm"), "tea-shop");
+});
+
+test("modelStem: unknown extensions fall back to the final dot-suffix", () => {
+  assert.equal(modelStem("docs/readme.md"), "readme");
+  assert.equal(modelStem("processes/rabatt.tests.yaml"), "rabatt.tests");
+  assert.equal(modelStem("no-extension"), "no-extension");
+});
 
 test("processIdFromName: kebab-cases titles", () => {
   assert.equal(processIdFromName("Order to Cash"), "order-to-cash");

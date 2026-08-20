@@ -13,14 +13,19 @@
  */
 import type { TodoWire } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
+import { byExtension, modelStem } from "@bpmiq/notations";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 import { type FindModelDeps, findProcessPath } from "./find-model.ts";
 
-/** the process a model path belongs to — id IS the file stem (the content contract) */
-const processIdOf = (path: string): string => (path.split("/").pop() ?? path).replace(/\.bpmn$/i, "");
+/** the process a model path belongs to — id IS the file stem (the content
+ *  contract). Only a .bpmn path names a process; anything else keeps its
+ *  basename, so it can never pass the "names that process" gate below (it
+ *  fails typed in findProcessPath instead of anchoring a non-process file). */
+const processIdOf = (path: string): string =>
+  byExtension(path)?.id === "bpmn" ? modelStem(path) : (path.split("/").pop() ?? path);
 
 export interface FileTodoInput {
   title: unknown;
