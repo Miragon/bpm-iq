@@ -21,7 +21,7 @@
     "@bpmiq/notations": "workspace:*",
     "@emaarco/dmn-js-simulation": "0.2.0",
     "feelin": "7.0.1",
-    "inferno": "5.6.3",
+    "inferno": "9.1.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {
