@@ -11,11 +11,14 @@ import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
   type Column,
   type ColumnDef,
+  createSortedRowModel,
   flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_text,
   type SortingState,
-  useReactTable,
+  tableFeatures,
+  useTable,
 } from "@tanstack/react-table";
 import {
   ArrowDownToLine,
@@ -43,6 +46,20 @@ import { type ProcessInfo } from "@/lib/api";
 import { useDecisions, useFolders, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
 
 const route = getRouteApi("/r/$owner/$repo");
+
+/**
+ * The table features this route opts into — v9 ships nothing but the core, so
+ * anything beyond plain rows is registered here. Sorting only: the process
+ * table sorts client-side over one page of rows. The two sort fns are the ones
+ * `sortFn: "auto"` resolves to for our columns (strings — names and file
+ * paths); numeric columns fall back to the built-in basic comparator, which
+ * needs no registration.
+ */
+const features = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+  sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
+});
 
 /** one sub-folder row of the current directory, with aggregated child stats */
 interface FolderRow {
@@ -151,7 +168,7 @@ export function ProcessList() {
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
 
-  const columns = useMemo<ColumnDef<ProcessInfo>[]>(
+  const columns = useMemo<ColumnDef<typeof features, ProcessInfo>[]>(
     () => [
       {
         accessorKey: "name",
@@ -224,13 +241,12 @@ export function ProcessList() {
     [owner, name],
   );
 
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data: visible,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
   });
 
   const empty = childFolders.length === 0 && visible.length === 0 && visibleDecisions.length === 0;
@@ -413,7 +429,7 @@ export function ProcessList() {
                     })
                   }
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getAllCells().map((cell) => (
                     <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
                 </TableRow>
@@ -517,7 +533,7 @@ export function ProcessList() {
   );
 }
 
-function SortHeader({ column, children }: { column: Column<ProcessInfo>; children: ReactNode }) {
+function SortHeader({ column, children }: { column: Column<typeof features, ProcessInfo>; children: ReactNode }) {
   const sorted = column.getIsSorted();
   return (
     <Button
