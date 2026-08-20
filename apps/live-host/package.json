@@ -24,10 +24,10 @@
     "@bpmiq/mcp-kit": "workspace:*",
     "@bpmiq/notations": "workspace:*",
     "@bpmiq/validator": "workspace:*",
-    "@hocuspocus/server": "4.5.0",
+    "@hocuspocus/server": "4.6.0",
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.30.0",
-    "jose": "6.2.8",
+    "jose": "6.2.9",
     "yaml": "2.9.0",
     "yjs": "13.6.32",
     "zod": "4.4.3"
