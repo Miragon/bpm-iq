@@ -32,6 +32,15 @@ updates:
       # (typescript-eslint/typescript-eslint#10940).
       - dependency-name: "typescript"
         versions: [">=7"]
+      # inferno is not ours to pick: it is the renderer dmn-js's decision table
+      # (table-js) draws with, and @bpmiq/decisions only declares it because the
+      # simulation add-on's bundle imports it. Both peer on inferno 5
+      # (table-js "^5.0.5", @emaarco/dmn-js-simulation ">=5.6 <6"), so a bump
+      # here just puts a SECOND inferno major in the web bundle, rendering the
+      # add-on's vnodes into dmn-js's inferno-5 tree. Unblock: dmn-js/table-js
+      # moving to inferno 6+ — then this bump follows theirs.
+      - dependency-name: "inferno"
+        versions: [">=6"]
     groups:
       npm-minor-patch:
         applies-to: version-updates
