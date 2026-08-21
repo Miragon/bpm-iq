@@ -27,19 +27,20 @@ source of truth for BPM questions — **ground every answer in the models.**
 
 ### Inside `process-documentation/` (the example content repo)
 
-The slim content contract: a root `bpmiq.yml` names the processes folder; a process
-IS a `.bpmn` file there (id = file stem), a decision a `.dmn`. There is NO
+The slim content contract: a root `bpmiq.yml` names the models folder (`models:`,
+legacy alias `processes:`); a model IS a file with a registered notation extension
+there (id = file stem) — a process its `.bpmn`, a decision its `.dmn`. There is NO
 `process.yaml`, landscape, glossary or portal — the process view (name, roles from
 lanes, steps, flow, sub-process calls, decisions) and the decision view (hit policy,
 columns, rules, DRD) are DERIVED from the models (`@bpmiq/notations/derive`).
 
-| Path                     | What it is                                                                   |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| `bpmiq.yml`              | The contract: `processes: processes` — names the model folder                |
-| `processes/*.bpmn`       | One process per file; `subprocesses/*.bpmn` linked via callActivity          |
-| `processes/*.dmn`        | One decision per file; called from a `businessRuleTask` via `calledDecision` |
-| `processes/*.tests.yaml` | The decision's test cases, next to it (`pnpm validate` runs them)            |
-| `.claude/skills/`        | The AI toolset (below)                                                       |
+| Path                     | What it is                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `bpmiq.yml`              | The contract: `models: processes` — names the model folder (legacy alias `processes:`) |
+| `processes/*.bpmn`       | One process per file; `subprocesses/*.bpmn` linked via callActivity                    |
+| `processes/*.dmn`        | One decision per file; called from a `businessRuleTask` via `calledDecision`           |
+| `processes/*.tests.yaml` | The decision's test cases, next to it (`pnpm validate` runs them)                      |
+| `.claude/skills/`        | The AI toolset (below)                                                                 |
 
 ## Skills — prefer them over ad-hoc approaches
 
@@ -65,8 +66,9 @@ moves a module deletes its grandfather exception in `.dependency-cruiser.mjs`.
 
 ## Hard rules
 
-1. A content repo is a root `bpmiq.yml` naming its processes folder; a process is a
-   `.bpmn` file there (id = file stem). After ANY model edit, run `pnpm validate`
+1. A content repo is a root `bpmiq.yml` naming its models folder (`models:`, legacy
+   alias `processes:`); a model is a file with a registered notation extension there
+   (id = file stem) — a process its `.bpmn`. After ANY model edit, run `pnpm validate`
    (or `node packages/validator/src/cli.ts --root <checkout>`) and fix errors first.
 2. BPMN files need a complete BPMNDI section (every flow node, lane, pool, edge), or the
    visual editor breaks. Keep semantics (`bpmn:*`) and layout (`bpmndi:*`) in sync.

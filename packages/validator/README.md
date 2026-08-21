@@ -1,9 +1,11 @@
 # @bpmiq/validator
 
 Deterministic validator for BPM content repositories: `bpmiq.yml` discovery, BPMN structural
-checks (flow soundness, complete BPMNDI coverage), and `callActivity` link integrity (a
-`calledElement` should resolve to a process in the repo). It treats the target repo as pure
-data — it never executes content-repo code. Exit code 0 = no errors (warnings allowed), 1 = errors.
+checks (flow soundness, complete BPMNDI coverage), `callActivity` link integrity (a
+`calledElement` should resolve to a process in the repo), and a per-mediaKind parse baseline
+for every other registered notation (a broken `.tt`/`.vc.json` is an ERROR; DSL notations are
+lenient by design). It treats the target repo as pure data — it never executes content-repo
+code. Exit code 0 = no errors (warnings allowed), 1 = errors.
 
 ## Usage
 
@@ -16,7 +18,7 @@ npx @bpmiq/validator --root . order-to-cash
 ```
 
 `--root` points at any checkout that follows the content contract (a root `bpmiq.yml` naming
-the BPMN processes folder).
+the models folder — `models:`, legacy alias `processes:`).
 
 ## Part of bpm-iq
 

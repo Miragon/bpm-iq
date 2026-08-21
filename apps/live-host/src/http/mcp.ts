@@ -50,6 +50,7 @@ import { readDecisionTests, runTestsFor, saveTestsFor } from "../application/dec
 import { findDecisionPath, findProcessPath } from "../application/find-model.ts";
 import {
   decisionUsers,
+  listAllModels,
   listChanges,
   listDecisions,
   listProcesses,
@@ -352,6 +353,26 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
       const r = await requireRepo(repo);
       const workspace = await opts.workspaces.ensure(r);
       return ok({ processes: await listProcesses(opts, r, workspace) });
+    }),
+  );
+
+  server.registerTool(
+    "list_models",
+    {
+      description:
+        "List EVERY model file of the repository, grouped by notation (bpmn, dmn, wardley, " +
+        "team-topology, …) — the registry-wide superset of list_processes/list_decisions. " +
+        "Each row: id (file stem), path, dirty flag, live session count.",
+      inputSchema: { repo: repoArg },
+      annotations: READ,
+    },
+    safe(async ({ repo }: { repo: string }) => {
+      const r = await requireRepo(repo);
+      const workspace = await opts.workspaces.ensure(r);
+      const models = await listAllModels(opts, r, workspace);
+      const grouped: Record<string, typeof models> = {};
+      for (const m of models) (grouped[m.notation] ??= []).push(m);
+      return ok({ models: grouped });
     }),
   );
 

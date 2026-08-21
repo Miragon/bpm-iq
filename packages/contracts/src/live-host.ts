@@ -73,6 +73,26 @@ export interface CreateDecisionBody {
 }
 
 /**
+ * GET /api/repos/:fullName/models — one row per model file of ANY registered
+ * notation under the repo's bpmiq.yml models folder (id = file stem, unique
+ * per notation). The registry-wide superset of the processes/decisions lists,
+ * which stay the typed views.
+ */
+export interface ModelInfo {
+  repo: string;
+  id: string;
+  name: string;
+  /** the model file (repo-relative path) */
+  path: string;
+  /** notation registry id (@bpmiq/notations) */
+  notation: string;
+  /** folder of the file relative to the models root ("" = root) */
+  folder: string;
+  dirty: boolean;
+  liveSessions: number;
+}
+
+/**
  * GET /api/repos/:fullName/folders — the repo's folder tree plus whether the
  * repo is a bpm content repo at all. `isContentRepo` is false when the repo has
  * NO root bpmiq.yml; the repo view hides its create/release actions then (a

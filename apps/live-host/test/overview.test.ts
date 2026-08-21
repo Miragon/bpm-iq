@@ -12,7 +12,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import type { Session } from "../src/adapters/sqlite/sessions.ts";
-import { listDecisions, listProcesses, listRepos, type OverviewDeps } from "../src/application/overview.ts";
+import {
+  listAllModels,
+  listDecisions,
+  listProcesses,
+  listRepos,
+  type OverviewDeps,
+} from "../src/application/overview.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 const REPO: ConnectedRepo = {
@@ -39,6 +45,7 @@ function setup(over: Partial<OverviewDeps> = {}) {
   writeFileSync(join(ws, "processes", "order.bpmn"), "<bpmn/>");
   writeFileSync(join(ws, "processes", "sub", "check-credit.bpmn"), "<bpmn/>");
   writeFileSync(join(ws, "processes", "rabatt.dmn"), "<dmn/>");
+  writeFileSync(join(ws, "processes", "strategy.owm"), "component Tea [0.5, 0.5]"); // another notation
   writeFileSync(join(ws, "processes", "notes.md"), "not a process"); // wrong extension → skipped
   mkdirSync(join(ws, "docs"));
   writeFileSync(join(ws, "docs", "stray.bpmn"), "<bpmn/>"); // outside the folder → skipped
@@ -131,6 +138,31 @@ test("listProcesses: duplicate file names — the first (sorted) wins, the shado
   const rows = await listProcesses(deps, REPO, ws);
   assert.equal(rows.length, 1, "an id must stay unique");
   assert.equal(rows[0]?.bpmn, "processes/a/order.bpmn");
+});
+
+// ── listAllModels ───────────────────────────────────────────────────────────
+
+test("listAllModels: every registered notation in one list — the full wire row is pinned", async () => {
+  const { ws, deps } = setup();
+  const rows = await listAllModels(deps, REPO, ws);
+  assert.deepEqual(
+    rows.map((r) => `${r.notation}:${r.id}`).sort(),
+    ["bpmn:check-credit", "bpmn:order", "dmn:rabatt", "wardley:strategy"],
+    "the registry-wide superset of the processes/decisions lists",
+  );
+  assert.deepEqual(
+    rows.find((r) => r.notation === "wardley"),
+    {
+      repo: "acme/models",
+      id: "strategy",
+      name: "strategy",
+      path: "processes/strategy.owm",
+      notation: "wardley",
+      folder: "",
+      dirty: false,
+      liveSessions: 0,
+    },
+  );
 });
 
 // ── listDecisions ───────────────────────────────────────────────────────────

@@ -19,13 +19,13 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { roomName, roomPrefix } from "@bpmiq/contracts/live";
-import type { ChangedFileWire, DecisionInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { ChangedFileWire, DecisionInfo, ModelInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { byExtension } from "@bpmiq/notations";
 import { deriveProcess } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
-import { discoverDecisions, discoverProcesses, loadContentConfig } from "../repos/content.ts";
+import { discoverDecisions, discoverModels, discoverProcesses, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 
 export interface OverviewDeps {
@@ -125,6 +125,24 @@ export async function listDecisions(
     id: m.id,
     name: m.id,
     path: m.path,
+    folder: m.folder,
+    dirty: m.dirty,
+    liveSessions: m.liveSessions,
+  }));
+}
+
+/**
+ * One row per model file of ANY registered notation — the registry-wide
+ * superset of listProcesses/listDecisions (which stay the typed views).
+ */
+export async function listAllModels(opts: OverviewDeps, repo: ConnectedRepo, workspace: string): Promise<ModelInfo[]> {
+  const rows = await listModels(opts, repo, workspace, discoverModels);
+  return rows.map((m) => ({
+    repo: repo.fullName,
+    id: m.id,
+    name: m.id,
+    path: m.path,
+    notation: byExtension(m.path)?.id ?? "text",
     folder: m.folder,
     dirty: m.dirty,
     liveSessions: m.liveSessions,

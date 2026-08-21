@@ -17,6 +17,7 @@ import {
   fetchFileHistory,
   fetchFolders,
   fetchMe,
+  fetchModels,
   fetchProcesses,
   fetchRepos,
   fetchTodos,
@@ -58,6 +59,11 @@ export function useProcesses(repo: string) {
 /** decisions (.dmn files) under the repo's processes root */
 export function useDecisions(repo: string) {
   return useQuery({ queryKey: ["decisions", repo], queryFn: () => fetchDecisions(repo), enabled: repo.length > 0 });
+}
+
+/** every model file of ANY registered notation under the repo's models root */
+export function useModels(repo: string) {
+  return useQuery({ queryKey: ["models", repo], queryFn: () => fetchModels(repo), enabled: repo.length > 0 });
 }
 
 /** create a decision from the blank template — cache seeding mirrors
@@ -165,6 +171,7 @@ export function useSyncRepo(repo: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["processes", repo] });
       void qc.invalidateQueries({ queryKey: ["decisions", repo] }); // never-released .dmn files are gone too
+      void qc.invalidateQueries({ queryKey: ["models", repo] }); // …and never-released other-notation files
       void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the reset deletes never-released folders
       void qc.invalidateQueries({ queryKey: ["repos"] });
     },

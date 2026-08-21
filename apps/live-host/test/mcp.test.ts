@@ -231,6 +231,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_process",
     "list_changes",
     "list_decisions",
+    "list_models",
     "list_processes",
     "list_repos",
     "mint_ws_ticket",
@@ -256,6 +257,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_process",
     "list_changes",
     "list_decisions",
+    "list_models",
     "list_processes",
     "list_repos",
     "open_decision_modeler",
@@ -431,6 +433,14 @@ test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario"
   assert.equal(opened.opened.url, "http://live.test/r/acme/models/f/processes/rabatt.dmn");
   assert.deepEqual(opened.summary.decisions, [{ id: "rabatt", hitPolicy: "FIRST", rules: 2 }]);
   assert.ok(!JSON.stringify(opened).includes("<decision"), "no XML in the tool result");
+});
+
+test("list_models: every notation of the repo in one grouped listing", async () => {
+  const { callJson } = await connect(deps());
+  const res = await callJson("list_models", { repo: REPO.fullName });
+  assert.deepEqual(Object.keys(res.models).sort(), ["bpmn", "dmn"]);
+  assert.ok(res.models.bpmn.some((m: { id: string }) => m.id === "order"));
+  assert.equal(res.models.dmn[0].notation, "dmn");
 });
 
 test("get→save round-trip incl. the conflict retry loop (stale token never overwrites)", async () => {
