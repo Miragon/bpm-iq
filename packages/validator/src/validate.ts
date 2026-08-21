@@ -16,9 +16,17 @@
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
+import { byId } from "@bpmiq/notations";
 import { kindOf } from "@bpmiq/notations/bpmn-kinds";
 import { cliRoot, notContentRepoError } from "@bpmiq/notations/cli";
-import { asArray, parseXml, readBpmn, requirementHref, XMLValidator } from "@bpmiq/notations/extract";
+import {
+  asArray,
+  extractModelGraph,
+  parseXml,
+  readBpmn,
+  requirementHref,
+  XMLValidator,
+} from "@bpmiq/notations/extract";
 
 export type Severity = "ERROR" | "WARN";
 export interface Finding {
@@ -325,18 +333,58 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
   return { findings };
 }
 
+/**
+ * Baseline parse gate for models WITHOUT a dedicated checker (any registered
+ * notation that is not .bpmn/.dmn): a discovered model must at minimum parse
+ * per its notation's mediaKind — a broken .tt/.vc.json used to pass
+ * validation untouched. Pure: no filesystem, no process.exit. Deliberately
+ * mechanical: notation-specific structure checks arrive with the per-notation
+ * checkers (epic #118, step 3).
+ */
+export function checkModelBaseline(raw: string, opts: { file?: string; notation: string }): Finding[] {
+  const file = opts.file ?? `<${opts.notation}>`;
+  const findings: Finding[] = [];
+  const err = (message: string): void => {
+    findings.push({ severity: "ERROR", file, message });
+  };
+  switch (byId(opts.notation)?.mediaKind) {
+    case "json":
+      try {
+        JSON.parse(raw);
+      } catch (e) {
+        err(`not parseable as JSON: ${(e as Error).message}`);
+      }
+      break;
+    case "xml": {
+      const wf = XMLValidator.validate(raw);
+      if (wf !== true) err(`not well-formed XML: ${wf.err.msg}`);
+      break;
+    }
+    case "dsl":
+      // DSL extractors are lenient by design (unknown lines are ignored) —
+      // the gate only catches a parser that throws outright
+      try {
+        extractModelGraph(opts.notation, raw);
+      } catch (e) {
+        err(`not parseable: ${(e as Error).message}`);
+      }
+      break;
+  }
+  return findings;
+}
+
 // ── CLI (invoked by src/cli.ts — the dedicated bin entry) ───────────────────────
 
 export async function runCli(): Promise<void> {
   const argv = process.argv.slice(2);
   /** content root: the checkout being validated (defaults to the cwd) */
   const ROOT = cliRoot(argv);
-  /** optional single-model filter (a .bpmn or .dmn file stem) */
+  /** optional single-model filter (a model file stem) */
   const only = argv[0];
 
   const rel = (p: string): string => (p.startsWith("/") ? relative(ROOT, p) : p);
 
-  const { discoverDecisions, discoverProcesses, loadContentConfig } = await import("@bpmiq/notations/content");
+  const { discoverModels, loadContentConfig } = await import("@bpmiq/notations/content");
   const cfg = loadContentConfig(ROOT);
   if (!cfg) {
     console.error(notContentRepoError(ROOT));
@@ -344,13 +392,16 @@ export async function runCli(): Promise<void> {
     process.exit(1);
   }
 
-  const all = await discoverProcesses(ROOT, cfg);
-  const allDecisions = await discoverDecisions(ROOT, cfg);
+  const models = await discoverModels(ROOT, cfg);
+  const all = models.filter((m) => m.notation === "bpmn");
+  const allDecisions = models.filter((m) => m.notation === "dmn");
+  const allOthers = models.filter((m) => m.notation !== "bpmn" && m.notation !== "dmn");
   const processes = only ? all.filter((p) => p.id === only) : all;
   const decisions = only ? allDecisions.filter((d) => d.id === only) : allDecisions;
-  if (only && processes.length === 0 && decisions.length === 0) {
-    const available = [...all.map((p) => p.id), ...allDecisions.map((d) => d.id)].join(", ") || "(none)";
-    console.error(`[ERROR] unknown process/decision '${only}'. Available: ${available}`);
+  const others = only ? allOthers.filter((m) => m.id === only) : allOthers;
+  if (only && processes.length === 0 && decisions.length === 0 && others.length === 0) {
+    const available = models.map((m) => m.id).join(", ") || "(none)";
+    console.error(`[ERROR] unknown model '${only}'. Available: ${available}`);
     process.exit(1);
   }
 
@@ -367,6 +418,10 @@ export async function runCli(): Promise<void> {
     const { findings: fs } = checkDmnXml(readFileSync(abs, "utf8"), { file: rel(abs) });
     findings.push(...fs);
   }
+  for (const model of others) {
+    const abs = resolve(ROOT, model.path);
+    findings.push(...checkModelBaseline(readFileSync(abs, "utf8"), { file: rel(abs), notation: model.notation }));
+  }
 
   for (const f of findings.sort((a, b) => a.file.localeCompare(b.file))) {
     console.log(`[${f.severity}] ${f.file}: ${f.message}`);
@@ -377,6 +432,7 @@ export async function runCli(): Promise<void> {
   const checked = [
     `${processes.length} process(es)`,
     ...(decisions.length > 0 ? [`${decisions.length} decision(s)`] : []),
+    ...(others.length > 0 ? [`${others.length} other model(s)`] : []),
   ].join(", ");
   console.log(`\n${errorCount} error(s), ${warnCount} warning(s) — ${verdict} (${checked} checked)`);
   process.exit(errorCount === 0 ? 0 : 1);

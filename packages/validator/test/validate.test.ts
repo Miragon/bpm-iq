@@ -67,7 +67,7 @@ test("a callActivity that resolves to a real process raises no link warning", ()
 test("unknown process id fails instead of reporting OK", () => {
   const { status, out } = run(["--root", FIXTURE, "no-such-process"]);
   assert.equal(status, 1);
-  assert.match(out, /unknown process\/decision 'no-such-process'/);
+  assert.match(out, /unknown model 'no-such-process'/);
 });
 
 test("--root without a bpmiq.yml fails gracefully (no stacktrace)", () => {

@@ -180,8 +180,9 @@ moves host-side; connected repos ship **content only**:
 
 The contract is deliberately minimal (v0; `process-documentation/` is the example
 and is mirrored to the template repo): a **`bpmiq.yml` at the repo root** naming the
-folder the BPMN processes live in (`processes: <folder>`). Every `.bpmn` under that folder is a process
-(id = file name without extension); a repo without the config is simply not a
+folder the model files live in (`models: <folder>`, legacy alias `processes:`).
+Every file with a registered notation extension under that folder is a model
+(id = file stem) — every `.bpmn` a process; a repo without the config is simply not a
 content repo — the Live Host neither lists nor serves it, and live rooms exist
 only inside the configured folder. There is no hand-written metadata: the process
 view (name, roles from BPMN lanes, steps, flow, sub-process calls) is **derived**

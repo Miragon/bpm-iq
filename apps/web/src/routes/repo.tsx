@@ -1,3 +1,4 @@
+import { byId } from "@bpmiq/notations";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import {
@@ -30,6 +31,7 @@ import {
   Folder,
   FolderPlus,
   Plus,
+  Shapes,
   Table2,
   Workflow,
 } from "lucide-react";
@@ -43,7 +45,7 @@ import { CreateProcessDialog } from "@/components/create-process-dialog";
 import { ReleaseDialog } from "@/components/release-dialog";
 import { SyncRepoDialog } from "@/components/sync-repo-dialog";
 import { type ProcessInfo } from "@/lib/api";
-import { useDecisions, useFolders, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
+import { useDecisions, useFolders, useModels, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
 
 const route = getRouteApi("/r/$owner/$repo");
 
@@ -83,6 +85,13 @@ export function ProcessList() {
   const list = useMemo(() => processes.data ?? [], [processes.data]);
   const decisionsQuery = useDecisions(repo);
   const decisions = useMemo(() => decisionsQuery.data ?? [], [decisionsQuery.data]);
+  // model files beyond .bpmn/.dmn (wardley, team-topology, …) — those two
+  // already render as the typed process/decision rows above
+  const modelsQuery = useModels(repo);
+  const otherModels = useMemo(
+    () => (modelsQuery.data ?? []).filter((m) => m.notation !== "bpmn" && m.notation !== "dmn"),
+    [modelsQuery.data],
+  );
   const folders = useFolders(repo);
   // a content repo declares itself with a root bpmiq.yml; without one, creating
   // folders/processes 422s and a release has nothing to ship — so the view hides
@@ -107,19 +116,20 @@ export function ProcessList() {
   const dirtyModels = [
     ...list.filter((p) => p.dirty).map((p) => ({ path: p.bpmn, name: p.name })),
     ...decisions.filter((d) => d.dirty).map((d) => ({ path: d.path, name: d.name })),
+    ...otherModels.filter((m) => m.dirty).map((m) => ({ path: m.path, name: m.name })),
   ];
-  const activeSessions = [...list, ...decisions].reduce((n, m) => n + m.liveSessions, 0);
+  const activeSessions = [...list, ...decisions, ...otherModels].reduce((n, m) => n + m.liveSessions, 0);
 
   // the folder tree: disk folders (includes empty ones) ∪ ancestors of every
   // process/decision path — so rows render even while the folders query is
   // still loading
   const folderSet = useMemo(() => {
     const set = new Set<string>(folders.data?.folders ?? []);
-    for (const m of [...list, ...decisions]) {
+    for (const m of [...list, ...decisions, ...otherModels]) {
       for (let f = m.folder; f !== ""; f = parentOf(f)) set.add(f);
     }
     return set;
-  }, [folders.data, list, decisions]);
+  }, [folders.data, list, decisions, otherModels]);
 
   const childFolders = useMemo<FolderRow[]>(
     () =>
@@ -127,7 +137,9 @@ export function ProcessList() {
         .filter((f) => parentOf(f) === dir)
         .sort()
         .map((path) => {
-          const inside = [...list, ...decisions].filter((m) => m.folder === path || m.folder.startsWith(`${path}/`));
+          const inside = [...list, ...decisions, ...otherModels].filter(
+            (m) => m.folder === path || m.folder.startsWith(`${path}/`),
+          );
           return {
             name: path.split("/").pop() ?? path,
             path,
@@ -135,13 +147,17 @@ export function ProcessList() {
             dirty: inside.some((m) => m.dirty),
           };
         }),
-    [folderSet, list, decisions, dir],
+    [folderSet, list, decisions, otherModels, dir],
   );
 
   const visible = useMemo(() => list.filter((p) => p.folder === dir), [list, dir]);
   const visibleDecisions = useMemo(
     () => decisions.filter((d) => d.folder === dir).sort((a, b) => a.name.localeCompare(b.name)),
     [decisions, dir],
+  );
+  const visibleModels = useMemo(
+    () => otherModels.filter((m) => m.folder === dir).sort((a, b) => a.name.localeCompare(b.name)),
+    [otherModels, dir],
   );
   const segments = dir === "" ? [] : dir.split("/");
 
@@ -249,7 +265,8 @@ export function ProcessList() {
     onSortingChange: setSorting,
   });
 
-  const empty = childFolders.length === 0 && visible.length === 0 && visibleDecisions.length === 0;
+  const empty =
+    childFolders.length === 0 && visible.length === 0 && visibleDecisions.length === 0 && visibleModels.length === 0;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
@@ -470,6 +487,42 @@ export function ProcessList() {
                   <TableCell>
                     <AssistMenu repo={repo} path={d.path} notation="dmn" variant="row" />
                   </TableCell>
+                </TableRow>
+              ))}
+              {visibleModels.map((m) => (
+                <TableRow
+                  key={`model:${m.path}`}
+                  className="cursor-pointer"
+                  onClick={() => navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: m.path } })}
+                >
+                  <TableCell>
+                    <Link
+                      to="/r/$owner/$repo/f/$"
+                      params={{ owner, repo: name, _splat: m.path }}
+                      className="flex items-center gap-2 font-medium hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Shapes className="text-muted-foreground size-4" />
+                      {m.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-muted-foreground font-mono text-xs">{m.path}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{byId(m.notation)?.label ?? m.notation}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {!m.dirty && m.liveSessions === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {m.dirty && <Badge variant="warning">live changes</Badge>}
+                        {m.liveSessions > 0 && <Badge>{m.liveSessions} active</Badge>}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell />
                 </TableRow>
               ))}
             </TableBody>
