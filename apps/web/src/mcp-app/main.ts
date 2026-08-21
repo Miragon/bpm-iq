@@ -9,8 +9,9 @@
  */
 import "./styles.css";
 
-import { modelStem, processDeepLink } from "@bpmiq/contracts/deep-link";
+import { processDeepLink } from "@bpmiq/contracts/deep-link";
 import { roomName } from "@bpmiq/contracts/live";
+import { modelStem } from "@bpmiq/notations";
 
 import {
   bootConfig,

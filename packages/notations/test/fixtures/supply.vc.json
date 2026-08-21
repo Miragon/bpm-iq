@@ -1,0 +1,11 @@
+{
+  "elements": [
+    { "id": "sourcing", "elementType": "primary", "label": "Sourcing" },
+    { "id": "assembly", "name": "Assembly" },
+    { "id": "qa", "elementType": "support", "label": "Quality Assurance", "name": "QA" }
+  ],
+  "connections": [
+    { "id": "c1", "source": "sourcing", "target": "assembly", "connectionType": "feeds" },
+    { "source": "assembly", "target": "qa" }
+  ]
+}

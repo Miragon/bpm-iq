@@ -24,20 +24,17 @@ export interface NotationDescriptor {
   mediaKind: MediaKind;
   /** Monaco language id for the text view of this notation */
   monacoLanguage: string;
-  /** may files of this notation be declared under process.yaml `models`? */
-  processModel: boolean;
 }
 
 export const NOTATIONS: readonly NotationDescriptor[] = [
-  { id: "bpmn", label: "BPMN 2.0", extensions: [".bpmn"], mediaKind: "xml", monacoLanguage: "xml", processModel: true },
-  { id: "dmn", label: "DMN", extensions: [".dmn"], mediaKind: "xml", monacoLanguage: "xml", processModel: true },
+  { id: "bpmn", label: "BPMN 2.0", extensions: [".bpmn"], mediaKind: "xml", monacoLanguage: "xml" },
+  { id: "dmn", label: "DMN", extensions: [".dmn"], mediaKind: "xml", monacoLanguage: "xml" },
   {
     id: "wardley",
     label: "Wardley Map",
     extensions: [".owm", ".wmap"],
     mediaKind: "dsl",
     monacoLanguage: "plaintext",
-    processModel: true,
   },
   {
     id: "team-topology",
@@ -45,7 +42,6 @@ export const NOTATIONS: readonly NotationDescriptor[] = [
     extensions: [".tt", ".ttm.json"],
     mediaKind: "json",
     monacoLanguage: "json",
-    processModel: true,
   },
   {
     id: "value-chain",
@@ -53,7 +49,6 @@ export const NOTATIONS: readonly NotationDescriptor[] = [
     extensions: [".vc.json"],
     mediaKind: "json",
     monacoLanguage: "json",
-    processModel: true,
   },
 ];
 
@@ -61,19 +56,34 @@ export function byId(id: string): NotationDescriptor | undefined {
   return NOTATIONS.find((n) => n.id === id);
 }
 
-/** longest-suffix match, so ".vc.json" wins over a hypothetical ".json" */
-export function byExtension(path: string): NotationDescriptor | undefined {
-  let best: NotationDescriptor | undefined;
-  let bestLen = 0;
+/** longest-suffix winner across every registered extension, so ".vc.json"
+ *  beats a hypothetical ".json" — shared by byExtension and modelStem */
+function longestMatch(path: string): { notation: NotationDescriptor; ext: string } | undefined {
+  let best: { notation: NotationDescriptor; ext: string } | undefined;
   for (const n of NOTATIONS) {
     for (const ext of n.extensions) {
-      if (path.endsWith(ext) && ext.length > bestLen) {
-        best = n;
-        bestLen = ext.length;
+      if (path.endsWith(ext) && ext.length > (best?.ext.length ?? 0)) {
+        best = { notation: n, ext };
       }
     }
   }
   return best;
+}
+
+export function byExtension(path: string): NotationDescriptor | undefined {
+  return longestMatch(path)?.notation;
+}
+
+/**
+ * The file stem that IS a model's id (the content contract: a process is its
+ * .bpmn file, a decision its .dmn file). Strips the FULL registered extension,
+ * so compound suffixes resolve correctly ("a.vc.json" → "a", never "a.vc");
+ * unknown extensions fall back to stripping the final dot-suffix.
+ */
+export function modelStem(path: string): string {
+  const base = path.split("/").pop() ?? path;
+  const ext = longestMatch(base)?.ext;
+  return ext ? base.slice(0, -ext.length) : base.replace(/\.[^.]+$/, "");
 }
 
 /**
