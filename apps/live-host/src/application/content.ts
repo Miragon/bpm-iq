@@ -34,11 +34,12 @@ import type {
 } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 import { updateText } from "@bpmiq/live-client/text";
-import { checkBpmnXml, checkDmnXml, type Finding } from "@bpmiq/validator";
+import { byExtension } from "@bpmiq/notations";
+import { checkModel, type Finding } from "@bpmiq/validator";
 import type * as Y from "yjs";
 
 import { type RegistryLookup, toDiskPath, type WorkspaceEnsure } from "../domain/rooms.ts";
-import { discoverDecisions, discoverProcesses, loadContentConfig } from "../repos/content.ts";
+import { discoverModels, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 import { modelPath } from "./model-path.ts";
 
@@ -176,17 +177,23 @@ export async function putContent(
   return outcome;
 }
 
-/** the platform validator for whatever notation this path is — `undefined`
- *  when the notation has no checker (the file still saves) */
-async function lintModel(workspace: string, safePath: string, xml: string): Promise<Finding[] | undefined> {
-  if (safePath.endsWith(".bpmn")) {
+/** the platform validator for whatever notation this path is — checkModel is
+ *  THE one dispatch the CLI also runs, so a live save and `pnpm validate`
+ *  always agree; `undefined` when the path is no registered notation (the
+ *  file still saves). The repo-wide id scan feeds only the BPMN link
+ *  warnings, so only .bpmn saves pay for it — the historical cost profile. */
+async function lintModel(workspace: string, safePath: string, content: string): Promise<Finding[] | undefined> {
+  let modelIds: Map<string, Set<string>> | undefined;
+  if (byExtension(safePath)?.id === "bpmn") {
     const cfg = loadContentConfig(workspace);
-    const processIds = cfg ? new Set((await discoverProcesses(workspace, cfg)).map((p) => p.id)) : undefined;
-    const decisionIds = cfg ? new Set((await discoverDecisions(workspace, cfg)).map((d) => d.id)) : undefined;
-    return checkBpmnXml(xml, { file: safePath, processIds, decisionIds }).findings;
+    if (cfg) {
+      modelIds = new Map();
+      for (const m of await discoverModels(workspace, cfg)) {
+        (modelIds.get(m.notation) ?? modelIds.set(m.notation, new Set()).get(m.notation)!).add(m.id);
+      }
+    }
   }
-  if (safePath.endsWith(".dmn")) return checkDmnXml(xml, { file: safePath }).findings;
-  return undefined;
+  return checkModel(content, { path: safePath, modelIds });
 }
 
 /** pre-flight: content repo + file exists (typed errors BEFORE any doc work).

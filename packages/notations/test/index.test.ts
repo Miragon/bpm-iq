@@ -19,6 +19,8 @@ test("modelStem: strips the FULL registered compound extension", () => {
 });
 
 test("modelStem: unknown extensions fall back to the final dot-suffix", () => {
+  // .md is a REGISTERED extension since markdown became a notation — listed
+  // here only because the registered strip and the fallback agree on it
   assert.equal(modelStem("docs/readme.md"), "readme");
   assert.equal(modelStem("processes/rabatt.tests.yaml"), "rabatt.tests");
   assert.equal(modelStem("no-extension"), "no-extension");

@@ -23,9 +23,8 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import type { DecisionInfo, FolderListWire, ProcessInfo } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 import { byExtension, processIdFromName } from "@bpmiq/notations";
+import { newBpmnXml, newDmnXml } from "@bpmiq/notations/templates";
 
-import { newBpmnXml } from "../domain/bpmn-template.ts";
-import { newDmnXml } from "../domain/dmn-template.ts";
 import {
   CONTENT_CONFIG_FILE,
   type ContentConfig,

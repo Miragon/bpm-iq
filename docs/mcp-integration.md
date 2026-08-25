@@ -25,17 +25,17 @@ the BPMN** at call time (`@bpmiq/notations/derive`). No build step; the tool def
 - `packages/mcp/http.ts` — **Streamable HTTP** (`POST /mcp`), for remote use; the root
   `Dockerfile` packages exactly this
 
-| Tool                         | Question it answers                 | Reads / derives                                                                                          |
-| ---------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `list_models`                | What models exist, of ANY notation? | every registered-notation file under the `bpmiq.yml` folder, grouped by notation: id (file stem), path   |
-| `list_processes`             | What processes exist?               | every `.bpmn` under the `bpmiq.yml` folder: id (file stem), derived name, path, stats                    |
-| `get_process(id)`            | Everything about one process        | the derived view: name, roles (BPMN lanes), steps (with role), gateways, events, flow, sub-process calls |
-| `get_model(id)`              | What does the MODEL say?            | the process's BPMN parsed into a generic graph (nodes/edges/lanes/pools) via `@bpmiq/notations/extract`  |
-| `enumerate_paths(id, max?)`  | Which ways can a case take?         | the BPMN, start→end path enumeration (cycle-safe, capped)                                                |
-| `find_cycles(id)`            | Where does the flow loop?           | the BPMN's sequence flows                                                                                |
-| `who_owns(id)`               | Who does what?                      | the BPMN lanes (roles) and the steps each contains; the pools                                            |
-| `which_processes_use(query)` | Impact: what references this?       | each process's id, derived name, role names, step names, and `callActivity` `calledElement`              |
-| `list_todos(process?)`       | What work is open (opt-in)?         | the content repo's issue tracker (label `todo` + `process:<id>`), anchors parsed from issue bodies       |
+| Tool                         | Question it answers                 | Reads / derives                                                                                                                                                  |
+| ---------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_models`                | What models exist, of ANY notation? | every registered-notation file under the `bpmiq.yml` folder, grouped by notation: id (file stem), path, plus name/summary/stats where the notation has a deriver |
+| `list_processes`             | What processes exist?               | every `.bpmn` under the `bpmiq.yml` folder: id (file stem), derived name, path, stats                                                                            |
+| `get_process(id)`            | Everything about one process        | the derived view: name, roles (BPMN lanes), steps (with role), gateways, events, flow, sub-process calls                                                         |
+| `get_model(id)`              | What does the MODEL say?            | the process's BPMN parsed into a generic graph (nodes/edges/lanes/pools) via `@bpmiq/notations/extract`                                                          |
+| `enumerate_paths(id, max?)`  | Which ways can a case take?         | the BPMN, start→end path enumeration (cycle-safe, capped)                                                                                                        |
+| `find_cycles(id)`            | Where does the flow loop?           | the BPMN's sequence flows                                                                                                                                        |
+| `who_owns(id)`               | Who does what?                      | the BPMN lanes (roles) and the steps each contains; the pools                                                                                                    |
+| `which_processes_use(query)` | Impact: what references this?       | each process's id, derived name, role names, step names, and `callActivity` `calledElement`                                                                      |
+| `list_todos(process?)`       | What work is open (opt-in)?         | the content repo's issue tracker (label `todo` + `process:<id>`), anchors parsed from issue bodies                                                               |
 
 All tools carry `readOnlyHint` annotations, so clients may auto-approve them. The content repo
 is configurable: `node server.ts --root /path/to/repo` or the `BPM_CONTENT_ROOT` env var — the

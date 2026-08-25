@@ -110,9 +110,12 @@ test("discoverModels: every registry notation, id = modelStem, per-notation name
   writeFileSync(join(w, "models", "teams.tt"), "{}");
   // compound extension: the id is the FULL-extension stem
   writeFileSync(join(w, "models", "sub", "supply.vc.json"), "{}");
-  // not a registered notation — invisible to discovery
+  // markdown IS a registered notation (epic #118 step 3) — docs are models
   writeFileSync(join(w, "models", "notes.md"), "x");
+  // not a registered notation — invisible to discovery
+  writeFileSync(join(w, "models", "cases.tests.yaml"), "cases: []");
   assert.deepEqual(await discoverModels(w, cfg("models")), [
+    { id: "notes", path: "models/notes.md", notation: "markdown" },
     { id: "order", path: "models/order.bpmn", notation: "bpmn" },
     { id: "order", path: "models/order.dmn", notation: "dmn" },
     { id: "supply", path: "models/sub/supply.vc.json", notation: "value-chain" },
