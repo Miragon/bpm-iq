@@ -29,7 +29,7 @@ import { WsTicketStore } from "../src/application/ws-tickets.ts";
 import { newBpmnXml } from "../src/domain/bpmn-template.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
 import { type ApiOptions, startApi } from "../src/http/api.ts";
-import { createLiveMcpServer, type McpDeps } from "../src/http/mcp.ts";
+import { createLiveMcpServer, type LiveToolContribution, type McpDeps } from "../src/http/mcp.ts";
 import type { GitProvider } from "../src/ports/git-provider.ts";
 import type { IssueTracker, Todo, TodoInput } from "../src/ports/issue-tracker.ts";
 import { loadContentConfig } from "../src/repos/content.ts";
@@ -78,6 +78,10 @@ const DMN = `<?xml version="1.0" encoding="UTF-8"?>
 </definitions>
 `;
 
+/** a wardley map — the non-BPMN/DMN notation of the fixture (get_view, list_models) */
+const OWM_PATH = "processes/strategy.owm";
+const OWM = "component Platform [0.3, 0.4]\ncomponent Checkout [0.8, 0.6]\nCheckout -> Platform\n";
+
 /** a process that delegates to the decision above — the impact link */
 const USER_PATH = "processes/uses-rabatt.bpmn";
 const USER_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
@@ -121,6 +125,7 @@ function deps(over: Partial<McpDeps> = {}): McpDeps {
   writeFileSync(join(ws, PATH), VALID);
   writeFileSync(join(ws, DMN_PATH), DMN);
   writeFileSync(join(ws, USER_PATH), USER_BPMN);
+  writeFileSync(join(ws, OWM_PATH), OWM);
   const webDist = mkdtempSync(join(tmpdir(), "bpm-webdist-"));
   writeFileSync(join(webDist, "mcp-app.html"), WIDGET_STUB);
   writeFileSync(join(webDist, "mcp-app-dmn.html"), DMN_WIDGET_STUB);
@@ -200,8 +205,8 @@ function fakeIssues(): IssueTracker & { created: Array<{ repo: string; input: To
   };
 }
 
-async function connect(d: McpDeps, s: Session = session()) {
-  const server = createLiveMcpServer(d, s);
+async function connect(d: McpDeps, s: Session = session(), contributions: LiveToolContribution[] = []) {
+  const server = createLiveMcpServer(d, s, contributions);
   const [ct, st] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "mcp-test", version: "0" });
   await Promise.all([server.connect(st), client.connect(ct)]);
@@ -229,6 +234,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_decision_tests",
     "get_dmn_xml",
     "get_process",
+    "get_view",
     "list_changes",
     "list_decisions",
     "list_models",
@@ -255,6 +261,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_decision_tests",
     "get_dmn_xml",
     "get_process",
+    "get_view",
     "list_changes",
     "list_decisions",
     "list_models",
@@ -438,9 +445,55 @@ test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario"
 test("list_models: every notation of the repo in one grouped listing", async () => {
   const { callJson } = await connect(deps());
   const res = await callJson("list_models", { repo: REPO.fullName });
-  assert.deepEqual(Object.keys(res.models).sort(), ["bpmn", "dmn"]);
+  assert.deepEqual(Object.keys(res.models).sort(), ["bpmn", "dmn", "wardley"]);
   assert.ok(res.models.bpmn.some((m: { id: string }) => m.id === "order"));
   assert.equal(res.models.dmn[0].notation, "dmn");
+});
+
+test("get_view: the derived view of ANY live model — wardley incl. baseVersion", async () => {
+  const { callJson } = await connect(deps());
+  const wardley = await callJson("get_view", { repo: REPO.fullName, id: "strategy" });
+  assert.equal(wardley.path, OWM_PATH);
+  assert.equal(wardley.notation, "wardley");
+  assert.deepEqual(wardley.stats, { components: 2, dependencies: 1 });
+  assert.ok(wardley.baseVersion.length > 20, "live content token rides along");
+
+  const process = await callJson("get_view", { repo: REPO.fullName, id: "order" });
+  assert.equal(process.notation, "bpmn");
+  assert.match(process.summary, /^Process with /);
+  assert.ok(process.detail, "the rich DerivedProcess rides in detail");
+
+  // a direct path resolves too, and the payload id comes from the RESOLVED
+  // path — a conflicting caller-supplied id must not ride along verbatim
+  const byPath = await callJson("get_view", { repo: REPO.fullName, id: "order", path: OWM_PATH });
+  assert.equal(byPath.id, "strategy");
+  assert.equal(byPath.notation, "wardley");
+
+  const { call } = await connect(deps());
+  const unknown = await call("get_view", { repo: REPO.fullName, id: "nope" });
+  assert.ok(unknown.isError && /unknown model 'nope'/.test(unknown.text));
+});
+
+test("contributions: a capability module's tools register after the core, with deps + session", async () => {
+  const d = deps();
+  const me = session("carla");
+  let received: { deps: unknown; login: string } | undefined;
+  const contribute: LiveToolContribution = (server, contribDeps, contribSession) => {
+    received = { deps: contribDeps, login: contribSession.user.login };
+    server.registerTool(
+      "my_capability_tool",
+      { description: "contributed", annotations: { readOnlyHint: true } },
+      async () => ({ content: [{ type: "text" as const, text: "hi" }] }),
+    );
+  };
+  const { client } = await connect(d, me, [contribute]);
+  const names = (await client.listTools()).tools.map((t) => t.name);
+  assert.ok(names.includes("my_capability_tool"));
+  assert.ok(names.includes("list_models"), "core registration untouched");
+  // the hook forwards the SAME deps object and the CALLER's session — the
+  // contract the decisions quartet will build on
+  assert.equal(received?.deps, d);
+  assert.equal(received?.login, "carla");
 });
 
 test("get→save round-trip incl. the conflict retry loop (stale token never overwrites)", async () => {

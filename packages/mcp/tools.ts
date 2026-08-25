@@ -26,15 +26,17 @@ import { fileURLToPath } from "node:url";
 import { parseAnchor } from "@bpmiq/contracts/todo-anchor";
 import { type GitHubIssueRow, isPullRequestRow, todoLabelQuery } from "@bpmiq/github-app/todos";
 import { fail, ok, READ, safe as kitSafe, type ToolResult } from "@bpmiq/mcp-kit";
+import { byId, NOTATIONS } from "@bpmiq/notations";
 import {
   buildRepoIndex,
   type ContentConfig,
+  type DiscoveredModel,
   type DiscoveredProcess,
   discoverModels,
   discoverProcesses,
   loadContentConfig,
 } from "@bpmiq/notations/content";
-import { deriveProcess, deriveView } from "@bpmiq/notations/derive";
+import { deriveProcess, deriveView, hasDeriver } from "@bpmiq/notations/derive";
 import { extractModelGraph, type ModelGraph } from "@bpmiq/notations/extract";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -60,15 +62,34 @@ const READ_ONLY = READ;
 
 // ── Graph analyses (notation-agnostic where possible) ────────────────────────
 
-/** all simple start→end paths through sequence flows, cycle-cut, capped */
-function enumeratePaths(graph: ModelGraph, max: number): { paths: string[][]; truncated: boolean } {
-  const out = new Map<string, string[]>(); // node -> outgoing sequence-flow targets
+/** what "flow" means in this graph's notation — undefined = no flow semantics */
+function flowKindsOf(graph: ModelGraph): string[] | undefined {
+  const kinds = byId(graph.notation)?.graphHints?.flowEdgeKinds;
+  return kinds && kinds.length > 0 ? kinds : undefined;
+}
+
+/** node -> outgoing flow-edge targets, per the notation's graphHints */
+function flowTargets(graph: ModelGraph, kinds: string[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
   for (const e of graph.edges) {
-    if (e.kind !== "sequenceFlow") continue;
+    if (!kinds.includes(e.kind)) continue;
     (out.get(e.from) ?? out.set(e.from, []).get(e.from)!).push(e.to);
   }
+  return out;
+}
+
+/** all simple start→end paths through the notation's flow edges, cycle-cut, capped */
+function enumeratePaths(graph: ModelGraph, kinds: string[], max: number): { paths: string[][]; truncated: boolean } {
+  const out = flowTargets(graph, kinds);
   const label = new Map(graph.nodes.map((n) => [n.id, n.name ? `${n.name} (${n.type})` : `${n.id} (${n.type})`]));
-  const starts = graph.nodes.filter((n) => n.type === "startEvent" && !n.extra?.parent);
+  // entry nodes per the notation's hints (BPMN: top-level startEvents); a
+  // notation without entry types falls back to nodes nothing flows into
+  const entryTypes = byId(graph.notation)?.graphHints?.entryNodeTypes ?? [];
+  const hasIncoming = new Set([...out.values()].flat());
+  const starts =
+    entryTypes.length > 0
+      ? graph.nodes.filter((n) => entryTypes.includes(n.type) && !n.extra?.parent)
+      : graph.nodes.filter((n) => !hasIncoming.has(n.id) && (out.get(n.id)?.length ?? 0) > 0);
   const paths: string[][] = [];
   let truncated = false;
   const walk = (node: string, seen: Set<string>, path: string[]): void => {
@@ -90,13 +111,9 @@ function enumeratePaths(graph: ModelGraph, max: number): { paths: string[][]; tr
   return { paths, truncated };
 }
 
-/** cycles over sequence flows (DFS back-edge detection) */
-function findCycles(graph: ModelGraph): string[][] {
-  const out = new Map<string, string[]>();
-  for (const e of graph.edges) {
-    if (e.kind !== "sequenceFlow") continue;
-    (out.get(e.from) ?? out.set(e.from, []).get(e.from)!).push(e.to);
-  }
+/** cycles over the notation's flow edges (DFS back-edge detection) */
+function findCycles(graph: ModelGraph, kinds: string[]): string[][] {
+  const out = flowTargets(graph, kinds);
   const label = new Map(graph.nodes.map((n) => [n.id, n.name ?? n.id]));
   const cycles: string[][] = [];
   const seenCycles = new Set<string>();
@@ -137,8 +154,18 @@ export function todosConfigFromEnv(env: Record<string, string | undefined>): Tod
     : undefined;
 }
 
+/** A per-capability tool contribution for the read-only server — the same
+ *  composition hook the Live Host exposes (LiveToolContribution), applied
+ *  AFTER the core registration. Contributions must stay read-only like every
+ *  tool here. */
+export type McpToolContribution = (server: McpServer, root: string) => void;
+
 /** Build a fully configured, read-only MCP server over the repo at `root`. */
-export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig): McpServer {
+export function createMcpServer(
+  root: string = DEFAULT_ROOT,
+  todos?: TodosConfig,
+  contributions: readonly McpToolContribution[] = [],
+): McpServer {
   // re-read the contract per call so the server reflects a live-edited checkout
   const config = (): ContentConfig | undefined => loadContentConfig(root);
   const processes = async (): Promise<DiscoveredProcess[]> => {
@@ -147,6 +174,23 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
   };
   const findProcess = async (id: string): Promise<DiscoveredProcess | null> =>
     (await processes()).find((p) => p.id === id) ?? null;
+  /** any-notation lookup; a stem shared across notations resolves bpmn-first
+   *  (back-compat: process ids keep meaning what they always meant) */
+  const findModel = async (id: string, notation?: string): Promise<DiscoveredModel | null> => {
+    const cfg = config();
+    if (!cfg) return null;
+    const matches = (await discoverModels(root, cfg)).filter(
+      (m) => m.id === id && (!notation || m.notation === notation),
+    );
+    return matches.find((m) => m.notation === "bpmn") ?? matches[0] ?? null;
+  };
+  const unknownModel = async (id: string, notation?: string) => {
+    const cfg = config();
+    const models = (cfg ? await discoverModels(root, cfg) : []).filter((m) => !notation || m.notation === notation);
+    const listed = models.map((m) => `${m.id} (${m.notation})`).join(", ") || "(none)";
+    const what = notation ? (byId(notation)?.noun.singular ?? notation) : "model";
+    return fail(`Unknown ${what} '${id}'. Available: ${listed}.`);
+  };
   /** parse a discovered process's .bpmn into a ModelGraph, or a failure result */
   const graphOf = (proc: DiscoveredProcess): ModelGraph | ToolResult => {
     const raw = readText(join(root, proc.path));
@@ -156,6 +200,9 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     return graph;
   };
   const isGraph = (g: ModelGraph | ToolResult): g is ModelGraph => !("content" in g);
+  /** the registry nouns for user-facing copy ("wardley map" / "team topologies") */
+  const nounOf = (notation: string): string => byId(notation)?.noun.singular ?? notation;
+  const pluralOf = (notation: string): string => byId(notation)?.noun.plural ?? notation;
   const notAContentRepo = () =>
     fail(
       `No bpmiq.yml at the content root — not a BPM content repo. Expected a root bpmiq.yml naming a processes folder.`,
@@ -258,18 +305,50 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     "get_model",
     {
       description:
-        "Parse a process's BPMN model into a generic graph: nodes (id, type, name), edges " +
-        "(sequence/message flows) and meta (lanes, pools). Use to see the raw flow structure, " +
-        "or to ground any 'how does X work' answer in the actual model.",
-      inputSchema: { id: z.string().describe("Process id, e.g. order-to-cash") },
+        "Parse ANY model file into its generic graph: nodes (id, type, name), edges and meta — " +
+        "BPMN flows and lanes, DMN requirements, Wardley components/dependencies, … " +
+        "Use to see the raw structure, or to ground any 'how does X work' answer in the actual model.",
+      inputSchema: {
+        id: z.string().describe("Model id = file stem (from list_models), e.g. order-to-cash"),
+        notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
+      },
       annotations: READ_ONLY,
     },
-    safe(async ({ id }) => {
+    safe(async ({ id, notation }) => {
       if (!config()) return notAContentRepo();
-      const proc = await findProcess(id);
-      if (!proc) return unknownProcess(id);
-      const graph = graphOf(proc);
-      return isGraph(graph) ? ok({ id: proc.id, file: proc.path, ...graph }) : graph;
+      const m = await findModel(id, notation);
+      if (!m) return unknownModel(id, notation);
+      const graph = graphOf(m);
+      return isGraph(graph) ? ok({ id: m.id, file: m.path, ...graph }) : graph;
+    }),
+  );
+
+  server.registerTool(
+    "get_view",
+    {
+      description:
+        "The derived view of ANY model — its own name, a one-line summary, stats, and the rich " +
+        "notation payload in `detail` where one exists (process view, decision tables, …). The " +
+        "notation-agnostic sibling of get_process: works for every notation with extract+derive " +
+        `capabilities (${NOTATIONS.filter((n) => hasDeriver(n.id))
+          .map((n) => n.id)
+          .join(", ")}).`,
+      inputSchema: {
+        id: z.string().describe("Model id = file stem (from list_models), e.g. tea-shop"),
+        notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
+      },
+      annotations: READ_ONLY,
+    },
+    safe(async ({ id, notation }) => {
+      if (!config()) return notAContentRepo();
+      const m = await findModel(id, notation);
+      if (!m) return unknownModel(id, notation);
+      const graph = graphOf(m);
+      if (!isGraph(graph)) return graph;
+      const view = deriveView(graph);
+      if (!view)
+        return fail(`a ${nounOf(m.notation)} has no registered deriver — get_view needs the derive capability.`);
+      return ok({ id: m.id, path: m.path, ...view });
     }),
   );
 
@@ -277,24 +356,37 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     "enumerate_paths",
     {
       description:
-        "Enumerate the possible start→end paths through a process's BPMN flow (cycle-safe, " +
-        "capped). Each path is the ordered list of element names. Use for walkthroughs " +
-        "('what are the ways an order can go?'), test-case derivation, and spotting unexpected " +
-        "shortcuts or dead branches.",
+        "Enumerate the possible start→end paths through a model's flow (cycle-safe, capped) — " +
+        "BPMN sequence flows, Wardley dependencies, … per the notation's graph hints. Each path " +
+        "is the ordered list of element names. Use for walkthroughs ('what are the ways an order " +
+        "can go?'), test-case derivation, and spotting unexpected shortcuts or dead branches.",
       inputSchema: {
-        id: z.string().describe("Process id, e.g. order-to-cash"),
+        id: z.string().describe("Model id = file stem, e.g. order-to-cash"),
+        notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
         max: z.number().int().min(1).max(100).optional().describe("Maximum number of paths to return (default 20)"),
       },
       annotations: READ_ONLY,
     },
-    safe(async ({ id, max }) => {
+    safe(async ({ id, notation, max }) => {
       if (!config()) return notAContentRepo();
-      const proc = await findProcess(id);
-      if (!proc) return unknownProcess(id);
-      const graph = graphOf(proc);
+      const m = await findModel(id, notation);
+      if (!m) return unknownModel(id, notation);
+      const graph = graphOf(m);
       if (!isGraph(graph)) return graph;
-      const { paths, truncated } = enumeratePaths(graph, max ?? 20);
-      return ok({ id: proc.id, pathCount: paths.length, truncated, paths });
+      const kinds = flowKindsOf(graph);
+      if (!kinds) return ok(`${pluralOf(m.notation)} have no flow semantics (no graphHints) — nothing to enumerate.`);
+      const { paths, truncated } = enumeratePaths(graph, kinds, max ?? 20);
+      return ok({
+        id: m.id,
+        pathCount: paths.length,
+        truncated,
+        paths,
+        ...(paths.length === 0
+          ? {
+              note: "no start→end chains over the notation's flow edges — isolated or cyclic-only elements are not paths",
+            }
+          : {}),
+      });
     }),
   );
 
@@ -302,20 +394,26 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     "find_cycles",
     {
       description:
-        "Detect cycles (loops) in a process's BPMN sequence flow — rework loops, retry loops, " +
-        "or accidental infinite loops. Returns each cycle as the ordered list of element names. " +
-        "Use when analyzing process complexity, rework cost, or 'why does this case never finish'.",
-      inputSchema: { id: z.string().describe("Process id, e.g. order-to-cash") },
+        "Detect cycles (loops) in a model's flow — BPMN rework/retry loops, circular Wardley " +
+        "dependencies, circular DMN requirements — per the notation's graph hints. Returns each " +
+        "cycle as the ordered list of element names. Use when analyzing complexity, rework cost, " +
+        "or 'why does this case never finish'.",
+      inputSchema: {
+        id: z.string().describe("Model id = file stem, e.g. order-to-cash"),
+        notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
+      },
       annotations: READ_ONLY,
     },
-    safe(async ({ id }) => {
+    safe(async ({ id, notation }) => {
       if (!config()) return notAContentRepo();
-      const proc = await findProcess(id);
-      if (!proc) return unknownProcess(id);
-      const graph = graphOf(proc);
+      const m = await findModel(id, notation);
+      if (!m) return unknownModel(id, notation);
+      const graph = graphOf(m);
       if (!isGraph(graph)) return graph;
-      const cycles = findCycles(graph);
-      return ok(cycles.length === 0 ? `No cycles in ${proc.id}'s sequence flow.` : { id: proc.id, cycles });
+      const kinds = flowKindsOf(graph);
+      if (!kinds) return ok(`${pluralOf(m.notation)} have no flow semantics (no graphHints) — nothing to check.`);
+      const cycles = findCycles(graph, kinds);
+      return ok(cycles.length === 0 ? `No cycles in ${m.id}'s flow.` : { id: m.id, cycles });
     }),
   );
 
@@ -478,6 +576,9 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
       }),
     );
   }
+
+  // per-capability contributions LAST — they see the fully registered core
+  for (const contribute of contributions) contribute(server, root);
 
   return server;
 }

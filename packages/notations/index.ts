@@ -31,8 +31,10 @@ export interface NotationDescriptor {
   /** stable id, used as key in tooling and per-capability registries */
   id: string;
   label: string;
-  /** how listings/tools name ONE artifact of this notation — drives MCP tool
-   *  names and copy (consumed by the tool factories, epic #118 step 5) */
+  /** how listings/tools name ONE artifact of this notation — drives tool COPY
+   *  (error messages, capability listings). Deliberately NOT tool names: the
+   *  existing *_process/*_decision names are wire-pinned and the noun scheme
+   *  would mint new parallel names (#123, recorded on the ticket). */
   noun: { singular: string; plural: string };
   /** file suffixes, compound suffixes allowed (".vc.json") — longest wins */
   extensions: string[];

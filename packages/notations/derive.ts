@@ -355,3 +355,9 @@ const DERIVERS: Record<string, (graph: ModelGraph) => DerivedView> = {
 export function deriveView(graph: ModelGraph): DerivedView | undefined {
   return DERIVERS[graph.notation]?.(graph);
 }
+
+/** whether a notation has a registered deriver — lets tool copy and
+ *  capability listings stay registry-driven instead of hand-enumerated */
+export function hasDeriver(notation: string): boolean {
+  return notation in DERIVERS;
+}
