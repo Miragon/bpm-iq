@@ -3,7 +3,7 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
 import { LiveEditor } from "@/components/live-editor";
-import { useDecisions, useMe, useProcesses } from "@/lib/queries";
+import { useDecisions, useMe, useModels, useProcesses } from "@/lib/queries";
 
 const processRoute = getRouteApi("/r/$owner/$repo/p/$processId");
 const fileRoute = getRouteApi("/r/$owner/$repo/f/$");
@@ -68,6 +68,9 @@ export function FileEditorScreen() {
   // a decision is a file too — its row carries the folder the Back arrow returns to
   const decisions = useDecisions(repo);
   const decision = decisions.data?.find((d) => d.path === path);
+  // …and so is any other-notation model (wardley, team-topology, …)
+  const models = useModels(repo);
+  const model = models.data?.find((m) => m.path === path);
   if (me.isLoading) return <Loading />;
   if (!me.data) return null;
   return (
@@ -76,7 +79,7 @@ export function FileEditorScreen() {
       repo={repo}
       processId={proc?.id ?? ""}
       docPath={path}
-      backDir={proc?.folder ?? decision?.folder}
+      backDir={proc?.folder ?? decision?.folder ?? model?.folder}
       me={me.data}
     />
   );

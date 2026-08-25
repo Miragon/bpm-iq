@@ -15,25 +15,27 @@ work-in-progress → the Live Host endpoint.
 
 A minimal, read-only [MCP](https://modelcontextprotocol.io) server that exposes a content
 repo's processes. Any MCP client (Claude Code, other IDEs, agent frameworks) can query the
-processes **live from HEAD**: a content repo is a root `bpmiq.yml` naming its BPMN processes
-folder, a process IS a `.bpmn` file there, and its view is **derived from the BPMN** at call
-time (`@bpmiq/notations/derive`). No build step; the tool definitions live in
+processes **live from HEAD**: a content repo is a root `bpmiq.yml` naming its models folder
+(`models:`, legacy alias `processes:`), a model IS a file with a registered notation extension
+there (a process its `.bpmn`, a decision its `.dmn`), and the process view is **derived from
+the BPMN** at call time (`@bpmiq/notations/derive`). No build step; the tool definitions live in
 `packages/mcp/tools.ts`, shared by two entry points:
 
 - `packages/mcp/server.ts` — **stdio**, for local use (Claude Code auto-connects via `.mcp.json`)
 - `packages/mcp/http.ts` — **Streamable HTTP** (`POST /mcp`), for remote use; the root
   `Dockerfile` packages exactly this
 
-| Tool                         | Question it answers           | Reads / derives                                                                                          |
-| ---------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `list_processes`             | What processes exist?         | every `.bpmn` under the `bpmiq.yml` folder: id (file stem), derived name, path, stats                    |
-| `get_process(id)`            | Everything about one process  | the derived view: name, roles (BPMN lanes), steps (with role), gateways, events, flow, sub-process calls |
-| `get_model(id)`              | What does the MODEL say?      | the process's BPMN parsed into a generic graph (nodes/edges/lanes/pools) via `@bpmiq/notations/extract`  |
-| `enumerate_paths(id, max?)`  | Which ways can a case take?   | the BPMN, start→end path enumeration (cycle-safe, capped)                                                |
-| `find_cycles(id)`            | Where does the flow loop?     | the BPMN's sequence flows                                                                                |
-| `who_owns(id)`               | Who does what?                | the BPMN lanes (roles) and the steps each contains; the pools                                            |
-| `which_processes_use(query)` | Impact: what references this? | each process's id, derived name, role names, step names, and `callActivity` `calledElement`              |
-| `list_todos(process?)`       | What work is open (opt-in)?   | the content repo's issue tracker (label `todo` + `process:<id>`), anchors parsed from issue bodies       |
+| Tool                         | Question it answers                 | Reads / derives                                                                                          |
+| ---------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `list_models`                | What models exist, of ANY notation? | every registered-notation file under the `bpmiq.yml` folder, grouped by notation: id (file stem), path   |
+| `list_processes`             | What processes exist?               | every `.bpmn` under the `bpmiq.yml` folder: id (file stem), derived name, path, stats                    |
+| `get_process(id)`            | Everything about one process        | the derived view: name, roles (BPMN lanes), steps (with role), gateways, events, flow, sub-process calls |
+| `get_model(id)`              | What does the MODEL say?            | the process's BPMN parsed into a generic graph (nodes/edges/lanes/pools) via `@bpmiq/notations/extract`  |
+| `enumerate_paths(id, max?)`  | Which ways can a case take?         | the BPMN, start→end path enumeration (cycle-safe, capped)                                                |
+| `find_cycles(id)`            | Where does the flow loop?           | the BPMN's sequence flows                                                                                |
+| `who_owns(id)`               | Who does what?                      | the BPMN lanes (roles) and the steps each contains; the pools                                            |
+| `which_processes_use(query)` | Impact: what references this?       | each process's id, derived name, role names, step names, and `callActivity` `calledElement`              |
+| `list_todos(process?)`       | What work is open (opt-in)?         | the content repo's issue tracker (label `todo` + `process:<id>`), anchors parsed from issue bodies       |
 
 All tools carry `readOnlyHint` annotations, so clients may auto-approve them. The content repo
 is configurable: `node server.ts --root /path/to/repo` or the `BPM_CONTENT_ROOT` env var — the
@@ -104,32 +106,33 @@ accessed server-side via a Hocuspocus direct connection. `repo` is a **tool argu
 (`owner/name`), not a URL segment — one endpoint serves every connected repo, and every
 call is gated by the caller's per-repo permission.
 
-| Tool                    | Kind  | What it does                                                                          |
-| ----------------------- | ----- | ------------------------------------------------------------------------------------- |
-| `list_repos`            | read  | The connected repos the caller may work on.                                           |
-| `list_processes`        | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).       |
-| `get_process`           | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.            |
-| `get_bpmn_xml`          | read  | The live BPMN XML plus the `baseVersion` for a later save.                            |
-| `validate_bpmn`         | read  | Dry-run the platform validator on submitted XML — check before saving.                |
-| `list_decisions`        | read  | The DMN decisions of one repo (id = `.dmn` file stem, path, dirty, live sessions).    |
-| `get_decision`          | read  | The derived decision view (hit policy, columns, rules, DRD wiring) — see below.       |
-| `get_dmn_xml`           | read  | The live DMN XML plus the `baseVersion` for a later save.                             |
-| `simulate_decision`     | read  | Run one scenario and see which rules fired — live model or unsaved `xml`.             |
-| `analyze_decision`      | read  | Static checks (broken FEEL, dead rules, dead wiring) + test-value candidates.         |
-| `run_decision_tests`    | read  | Run the stored test suite (or cases passed inline) with rule coverage.                |
-| `get_decision_tests`    | read  | The stored suite + the `baseVersion` a save needs.                                    |
-| `list_changes`          | read  | A repo's unreleased live changes.                                                     |
-| `list_todos`            | read  | Open model-anchored todos — whole repo, or narrowed to one process.                   |
-| `open_modeler`          | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                          |
-| `open_decision_modeler` | read  | Open the embedded DMN modeler + simulator, optionally with a scenario applied.        |
-| `create_process`        | write | Scaffold a new process `.bpmn` in the live workspace.                                 |
-| `save_bpmn_xml`         | write | Validated, conflict-guarded save into the live document (requires `baseVersion`).     |
-| `create_decision`       | write | Scaffold a new decision `.dmn` from the blank template.                               |
-| `save_dmn_xml`          | write | Conflict-guarded save of DMN XML into the live document (requires `baseVersion`).     |
-| `save_decision_tests`   | write | Write `<decision>.tests.yaml` next to the model (`record` freezes today's behaviour). |
-| `create_todo`           | write | File a todo, anchored to the process and (optionally) concrete BPMN elements.         |
-| `close_todo`            | write | Complete a todo in the tracker (`todoId` from `list_todos`).                          |
-| `release_process`       | write | Open the release PR — merge rights stay at the git provider.                          |
+| Tool                    | Kind  | What it does                                                                             |
+| ----------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `list_repos`            | read  | The connected repos the caller may work on.                                              |
+| `list_models`           | read  | EVERY model file of one repo, grouped by notation — the superset of the two lists below. |
+| `list_processes`        | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).          |
+| `get_process`           | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.               |
+| `get_bpmn_xml`          | read  | The live BPMN XML plus the `baseVersion` for a later save.                               |
+| `validate_bpmn`         | read  | Dry-run the platform validator on submitted XML — check before saving.                   |
+| `list_decisions`        | read  | The DMN decisions of one repo (id = `.dmn` file stem, path, dirty, live sessions).       |
+| `get_decision`          | read  | The derived decision view (hit policy, columns, rules, DRD wiring) — see below.          |
+| `get_dmn_xml`           | read  | The live DMN XML plus the `baseVersion` for a later save.                                |
+| `simulate_decision`     | read  | Run one scenario and see which rules fired — live model or unsaved `xml`.                |
+| `analyze_decision`      | read  | Static checks (broken FEEL, dead rules, dead wiring) + test-value candidates.            |
+| `run_decision_tests`    | read  | Run the stored test suite (or cases passed inline) with rule coverage.                   |
+| `get_decision_tests`    | read  | The stored suite + the `baseVersion` a save needs.                                       |
+| `list_changes`          | read  | A repo's unreleased live changes.                                                        |
+| `list_todos`            | read  | Open model-anchored todos — whole repo, or narrowed to one process.                      |
+| `open_modeler`          | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                             |
+| `open_decision_modeler` | read  | Open the embedded DMN modeler + simulator, optionally with a scenario applied.           |
+| `create_process`        | write | Scaffold a new process `.bpmn` in the live workspace.                                    |
+| `save_bpmn_xml`         | write | Validated, conflict-guarded save into the live document (requires `baseVersion`).        |
+| `create_decision`       | write | Scaffold a new decision `.dmn` from the blank template.                                  |
+| `save_dmn_xml`          | write | Conflict-guarded save of DMN XML into the live document (requires `baseVersion`).        |
+| `save_decision_tests`   | write | Write `<decision>.tests.yaml` next to the model (`record` freezes today's behaviour).    |
+| `create_todo`           | write | File a todo, anchored to the process and (optionally) concrete BPMN elements.            |
+| `close_todo`            | write | Complete a todo in the tracker (`todoId` from `list_todos`).                             |
+| `release_process`       | write | Open the release PR — merge rights stay at the git provider.                             |
 
 ### Decisions: DMN as a first-class model
 

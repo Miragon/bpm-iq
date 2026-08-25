@@ -14,6 +14,7 @@ import type {
   FolderListWire,
   FolderWire,
   Me,
+  ModelInfo,
   ProcessInfo,
   ReleaseFilesBody,
   ReleaseResult,
@@ -40,6 +41,7 @@ export type {
   FolderListWire,
   FolderWire,
   Me,
+  ModelInfo,
   ModelRef,
   ProcessInfo,
   ReleaseFilesBody,
@@ -78,6 +80,8 @@ export const createProcess = (repo: string, body: CreateProcessBody): Promise<Pr
   });
 /** decisions (.dmn files) under the repo's processes root */
 export const fetchDecisions = (repo: string): Promise<DecisionInfo[]> => api(`/api/repos/${repo}/decisions`);
+/** every model file of ANY registered notation — the superset of processes + decisions */
+export const fetchModels = (repo: string): Promise<ModelInfo[]> => api(`/api/repos/${repo}/models`);
 /** create a new decision from the blank template; response is its DecisionInfo row */
 export const createDecision = (repo: string, body: CreateDecisionBody): Promise<DecisionInfo> =>
   api(`/api/repos/${repo}/decisions`, {

@@ -85,7 +85,7 @@ import {
 import { authorizeRepo } from "../application/authz.ts";
 import { type DirectDoc, getContent, putContent } from "../application/content.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
-import { listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
+import { listAllModels, listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
 import { createDecision, createFolder, createProcess, listFolders } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
@@ -597,7 +597,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // address /content over REST (the URL is claimed by history/content) —
       // accepted keyword-collision edge; MCP tools and ws rooms are unaffected.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|decisions|folders|changes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
+        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|changes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
       );
       if (repoRoute) {
         const session = await sessionOf(req);
@@ -627,6 +627,14 @@ export function startApi(port: number, opts: ApiOptions): Server {
           }
           if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
           return send(res, 200, await listDecisions(opts, repo, workspace));
+        }
+        // every model file of ANY registered notation — the registry-wide
+        // superset of /processes and /decisions (read-only; creation stays
+        // with the typed routes)
+        if (repoRoute[2] === "models") {
+          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
+          const workspace = await opts.workspaces.ensure(repo);
+          return send(res, 200, await listAllModels(opts, repo, workspace));
         }
         if (repoRoute[2] === "folders") {
           const workspace = await opts.workspaces.ensure(repo);

@@ -8,7 +8,9 @@ export {
   type ContentConfig,
   discoverDecisions,
   type DiscoveredDecision,
+  type DiscoveredModel,
   type DiscoveredProcess,
+  discoverModels,
   discoverProcesses,
   loadContentConfig,
 } from "@bpmiq/notations/content";

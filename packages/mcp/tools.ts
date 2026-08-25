@@ -29,6 +29,7 @@ import { fail, ok, READ, safe as kitSafe, type ToolResult } from "@bpmiq/mcp-kit
 import {
   type ContentConfig,
   type DiscoveredProcess,
+  discoverModels,
   discoverProcesses,
   loadContentConfig,
 } from "@bpmiq/notations/content";
@@ -162,6 +163,27 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
     fail(`Unknown process '${id}'. Available: ${(await processes()).map((p) => p.id).join(", ") || "(none)"}.`);
 
   const server = new McpServer({ name: "bpm-architecture", version: "0.2.0" });
+
+  server.registerTool(
+    "list_models",
+    {
+      description:
+        "List EVERY model file of the repository, grouped by notation (bpmn, dmn, wardley, " +
+        "team-topology, …) — the registry-wide superset of list_processes. Each row: id " +
+        "(file stem) and path. Use to see which notations a repo contains before reaching " +
+        "for the notation-specific tools.",
+      annotations: READ_ONLY,
+    },
+    safe(async () => {
+      const cfg = config();
+      if (!cfg) return notAContentRepo();
+      const models = await discoverModels(root, cfg);
+      if (models.length === 0) return ok("No model files found under the configured models folder.");
+      const grouped: Record<string, Array<{ id: string; path: string }>> = {};
+      for (const m of models) (grouped[m.notation] ??= []).push({ id: m.id, path: m.path });
+      return ok({ models: grouped });
+    }),
+  );
 
   server.registerTool(
     "list_processes",

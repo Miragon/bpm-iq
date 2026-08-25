@@ -90,17 +90,24 @@ async function callJson(name: string, args: Record<string, unknown> = {}): Promi
   return JSON.parse(text);
 }
 
-test("registration: the seven read-only tools are exposed (no rich-layout tools)", async () => {
+test("registration: the eight read-only tools are exposed (no rich-layout tools)", async () => {
   const names = (await client.listTools()).tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "enumerate_paths",
     "find_cycles",
     "get_model",
     "get_process",
+    "list_models",
     "list_processes",
     "which_processes_use",
     "who_owns",
   ]);
+});
+
+test("list_models: grouped by notation — the registry-wide superset", async () => {
+  const grouped = await callJson("list_models");
+  assert.deepEqual(Object.keys(grouped.models), ["bpmn"]);
+  assert.deepEqual(grouped.models.bpmn.map((m: { id: string }) => m.id).sort(), ["invoice-handling", "order-to-cash"]);
 });
 
 test("list_processes: one row per .bpmn with derived name + stats", async () => {
