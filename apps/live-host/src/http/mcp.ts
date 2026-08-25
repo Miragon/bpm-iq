@@ -35,8 +35,8 @@ import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
 import { parseTestSuite, type TestCase, testsPathFor } from "@bpmiq/decisions/tests";
 import { fail, ok, READ, safe, WRITE } from "@bpmiq/mcp-kit";
 import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
-import { modelStem } from "@bpmiq/notations";
-import { deriveDecision, deriveProcess } from "@bpmiq/notations/derive";
+import { modelStem, NOTATIONS } from "@bpmiq/notations";
+import { deriveDecision, deriveProcess, deriveView, hasDeriver } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
 import { checkModel } from "@bpmiq/validator";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
@@ -170,7 +170,24 @@ const decisionIdOf = modelStem;
 /** stands in for the path of a caller-supplied (unsaved) model */
 const PROVIDED = "<provided xml>";
 
-export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer {
+/**
+ * A per-capability tool contribution — the composition hook capability modules
+ * (the @bpmiq/decisions pattern) plug their live tools into. Contributions run
+ * AFTER the core registration, against the same deps and caller session; the
+ * decision-semantics quartet migrates onto this hook once a second semantics
+ * module exists (epic #118 — the same restraint as the sidecar-test framework).
+ *
+ * Contributions run regardless of LIVE_MCP_READONLY — a contribution that
+ * registers WRITE tools must gate them on deps.mcpReadOnly itself, exactly
+ * like the core registration does.
+ */
+export type LiveToolContribution = (server: McpServer, deps: McpDeps, session: Session) => void;
+
+export function createLiveMcpServer(
+  opts: McpDeps,
+  session: Session,
+  contributions: readonly LiveToolContribution[] = [],
+): McpServer {
   const server = new McpServer({ name: "bpmiq-live", version: "1.0.0" });
 
   /** registry 404 + per-repo write authz — the shared application-layer gate;
@@ -392,6 +409,52 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
       const graph = extractModelGraph(content.path, content.xml);
       if (!graph) return fail(`could not derive a process view from ${content.path}.`);
       return ok({ id: id ?? null, path: content.path, baseVersion: content.baseVersion, ...deriveProcess(graph) });
+    }),
+  );
+
+  server.registerTool(
+    "get_view",
+    {
+      description:
+        "The derived view of ANY live model — its own name, a one-line summary, stats, and the " +
+        "rich notation payload in `detail` where one exists. The notation-agnostic sibling of " +
+        "get_process/get_decision: works for every notation with extract+derive capabilities " +
+        `(${NOTATIONS.filter((n) => hasDeriver(n.id))
+          .map((n) => n.id)
+          .join(", ")}).`,
+      inputSchema: {
+        repo: repoArg,
+        id: z.string().optional().describe("model id = file stem (from list_models)"),
+        path: z.string().optional().describe("repo-relative model path (alternative to id)"),
+        notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
+      },
+      annotations: READ,
+    },
+    safe(async ({ repo, id, path, notation }: { repo: string; id?: string; path?: string; notation?: string }) => {
+      const r = await requireRepo(repo);
+      let target = path;
+      if (!target) {
+        if (!id) throw new Error("provide either `id` or `path`.");
+        const workspace = await opts.workspaces.ensure(r);
+        const cfg = loadContentConfig(workspace);
+        const matches = cfg
+          ? (await discoverModels(workspace, cfg)).filter((m) => m.id === id && (!notation || m.notation === notation))
+          : [];
+        // a stem shared across notations resolves bpmn-first (back-compat)
+        const m = matches.find((x) => x.notation === "bpmn") ?? matches[0];
+        if (!m) {
+          if (!cfg) throw new Error(`${r.fullName} has no bpmiq.yml — not a BPM content repo.`);
+          throw new Error(`unknown model '${id}' — list_models shows what exists.`);
+        }
+        target = m.path;
+      }
+      const content = await getContent(opts, r, target);
+      const graph = extractModelGraph(content.path, content.xml);
+      const view = graph && deriveView(graph);
+      if (!view) return fail(`no derived view for ${content.path} — the notation has no extract/derive capability.`);
+      // id from the RESOLVED path — a caller-supplied id must not ride along
+      // verbatim when a conflicting `path` won the resolution
+      return ok({ id: modelStem(content.path), path: content.path, baseVersion: content.baseVersion, ...view });
     }),
   );
 
@@ -1038,6 +1101,9 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
       }),
     );
   }
+
+  // per-capability contributions LAST — they see the fully registered core
+  for (const contribute of contributions) contribute(server, opts, session);
 
   return server;
 }

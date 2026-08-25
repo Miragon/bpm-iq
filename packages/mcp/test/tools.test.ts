@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 
+import { READ } from "@bpmiq/mcp-kit";
 import { toolText } from "@bpmiq/mcp-kit/testing";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -62,6 +63,12 @@ function slimRepo(): string {
   mkdirSync(join(root, "processes", "subprocesses"), { recursive: true });
   writeFileSync(join(root, "processes", "order-to-cash.bpmn"), ORDER_BPMN);
   writeFileSync(join(root, "processes", "subprocesses", "invoice-handling.bpmn"), INVOICE_BPMN);
+  // a wardley map with a circular dependency — the non-BPMN notation of the
+  // fixture (get_view, graphHints-driven find_cycles)
+  writeFileSync(
+    join(root, "processes", "strategy.owm"),
+    "component Checkout [0.8, 0.6]\ncomponent Platform [0.3, 0.4]\nCheckout -> Platform\nPlatform -> Checkout\n",
+  );
   return root;
 }
 
@@ -90,13 +97,14 @@ async function callJson(name: string, args: Record<string, unknown> = {}): Promi
   return JSON.parse(text);
 }
 
-test("registration: the nine read-only tools are exposed (no rich-layout tools)", async () => {
+test("registration: the ten read-only tools are exposed (no rich-layout tools)", async () => {
   const names = (await client.listTools()).tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "enumerate_paths",
     "find_cycles",
     "get_model",
     "get_process",
+    "get_view",
     "list_models",
     "list_processes",
     "which_models_use",
@@ -107,8 +115,9 @@ test("registration: the nine read-only tools are exposed (no rich-layout tools)"
 
 test("list_models: grouped by notation, rows enriched via extract+deriveView", async () => {
   const grouped = await callJson("list_models");
-  assert.deepEqual(Object.keys(grouped.models), ["bpmn"]);
+  assert.deepEqual(Object.keys(grouped.models).sort(), ["bpmn", "wardley"]);
   assert.deepEqual(grouped.models.bpmn.map((m: { id: string }) => m.id).sort(), ["invoice-handling", "order-to-cash"]);
+  assert.match(grouped.models.wardley[0].summary, /^Wardley map with /);
   // notations with extract+derive get the derived core on every row —
   // the acceptance path of epic #118 step 3 (zero consumer changes)
   const row = grouped.models.bpmn.find((m: { id: string }) => m.id === "order-to-cash");
@@ -167,6 +176,131 @@ test("which_models_use: reference-level impact across notations, incl. dangling"
   // an id nothing references
   const none = await call("which_models_use", { id: "no-such-model" });
   assert.ok(!none.isError && /No model references 'no-such-model'/.test(none.text));
+});
+
+test("get_view: the derived view of ANY notation — wardley and bpmn", async () => {
+  const wardley = await callJson("get_view", { id: "strategy" });
+  assert.equal(wardley.notation, "wardley");
+  assert.equal(wardley.path, "processes/strategy.owm");
+  assert.deepEqual(wardley.stats, { components: 2, dependencies: 2 });
+  assert.match(wardley.summary, /2 components, 2 dependencies/);
+
+  const process = await callJson("get_view", { id: "order-to-cash" });
+  assert.equal(process.notation, "bpmn");
+  assert.ok(process.detail, "the rich DerivedProcess rides in detail");
+});
+
+test("find_cycles: graphHints make the graph tools notation-aware", async () => {
+  // the wardley fixture has Checkout -> Platform -> Checkout
+  const cycles = await callJson("find_cycles", { id: "strategy" });
+  assert.equal(cycles.cycles.length, 1);
+  assert.deepEqual([...cycles.cycles[0]].sort(), ["Checkout", "Checkout", "Platform"].sort());
+
+  // bpmn keeps its exact behavior (no cycle in the fixture)
+  const none = await call("find_cycles", { id: "order-to-cash" });
+  assert.ok(!none.isError && /No cycles/.test(none.text));
+});
+
+test("get_model: any-notation resolution, unknown ids list every model with its notation", async () => {
+  const wardley = await callJson("get_model", { id: "strategy" });
+  assert.equal(wardley.notation, "wardley");
+  assert.equal(wardley.nodes.length, 2);
+
+  const unknown = await call("get_model", { id: "nope" });
+  assert.ok(unknown.isError && /Unknown model 'nope'/.test(unknown.text));
+  assert.match(unknown.text, /strategy \(wardley\)/);
+});
+
+test("shared stems: bpmn wins by default, the notation arg disambiguates, unknown honors the filter", async () => {
+  const root = mkdtempSync(join(tmpdir(), "bpm-mcp-shared-"));
+  writeFileSync(join(root, "bpmiq.yml"), "models: models\n");
+  mkdirSync(join(root, "models"), { recursive: true });
+  writeFileSync(join(root, "models", "order.bpmn"), ORDER_BPMN);
+  writeFileSync(join(root, "models", "order.owm"), "component A [0.5, 0.5]\ncomponent B [0.2, 0.7]\nA -> B\n");
+  const s = createMcpServer(root);
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  const c = new Client({ name: "shared-test", version: "0" });
+  await Promise.all([s.connect(st), c.connect(ct)]);
+  try {
+    const j = async (name: string, args: Record<string, unknown>) => {
+      const { isError, text } = toolText(await c.callTool({ name, arguments: args }));
+      assert.ok(!isError, text);
+      return JSON.parse(text);
+    };
+    // bpmn-first on the shared stem (back-compat: process ids keep meaning what they meant)
+    assert.equal((await j("get_model", { id: "order" })).notation, "bpmn");
+    // the notation arg reaches all four generalized tools
+    assert.equal((await j("get_model", { id: "order", notation: "wardley" })).notation, "wardley");
+    assert.equal((await j("get_view", { id: "order", notation: "wardley" })).notation, "wardley");
+    const noCycles = toolText(
+      await c.callTool({ name: "find_cycles", arguments: { id: "order", notation: "wardley" } }),
+    );
+    assert.ok(!noCycles.isError && /No cycles in order's flow/.test(noCycles.text));
+    const paths = await j("enumerate_paths", { id: "order", notation: "wardley" });
+    assert.equal(paths.pathCount, 1, "no-incoming fallback: A starts the only chain");
+
+    // an unknown id under a notation filter lists ONLY that notation, noun-phrased
+    const filtered = toolText(await c.callTool({ name: "get_view", arguments: { id: "ghost", notation: "wardley" } }));
+    assert.ok(filtered.isError);
+    assert.match(filtered.text, /Unknown wardley map 'ghost'/);
+    assert.doesNotMatch(filtered.text, /\(bpmn\)/);
+  } finally {
+    await c.close();
+    await s.close();
+  }
+});
+
+test("graph tools: notations without graphHints opt out gracefully; cyclic-only wardley yields the 0-path note", async () => {
+  const root = mkdtempSync(join(tmpdir(), "bpm-mcp-nohints-"));
+  writeFileSync(join(root, "bpmiq.yml"), "models: models\n");
+  mkdirSync(join(root, "models"), { recursive: true });
+  writeFileSync(join(root, "models", "teams.tt"), JSON.stringify({ version: 2, nodes: [] }));
+  writeFileSync(join(root, "models", "loop.owm"), "component A [0.5, 0.5]\ncomponent B [0.2, 0.7]\nA -> B\nB -> A\n");
+  const s = createMcpServer(root);
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  const c = new Client({ name: "nohints-test", version: "0" });
+  await Promise.all([s.connect(st), c.connect(ct)]);
+  try {
+    const paths = toolText(await c.callTool({ name: "enumerate_paths", arguments: { id: "teams" } }));
+    assert.ok(!paths.isError && /team topologies have no flow semantics/.test(paths.text));
+    const cycles = toolText(await c.callTool({ name: "find_cycles", arguments: { id: "teams" } }));
+    assert.ok(!cycles.isError && /have no flow semantics/.test(cycles.text));
+
+    // a purely cyclic wardley map has no entry nodes — 0 paths, with the note
+    const looped = toolText(await c.callTool({ name: "enumerate_paths", arguments: { id: "loop" } }));
+    assert.ok(!looped.isError);
+    const out = JSON.parse(looped.text);
+    assert.equal(out.pathCount, 0);
+    assert.match(out.note, /isolated or cyclic-only/);
+  } finally {
+    await c.close();
+    await s.close();
+  }
+});
+
+test("contributions: a read-only capability module registers after the core", async () => {
+  const seen: string[] = [];
+  const s = createMcpServer(slimRepo(), undefined, [
+    (server, root) => {
+      seen.push(root);
+      server.registerTool("my_readonly_tool", { description: "contributed", annotations: READ }, async () => ({
+        content: [{ type: "text" as const, text: "hi" }],
+      }));
+    },
+  ]);
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  const c = new Client({ name: "contrib-test", version: "0" });
+  await Promise.all([s.connect(st), c.connect(ct)]);
+  try {
+    const names = (await c.listTools()).tools.map((t) => t.name);
+    assert.ok(names.includes("my_readonly_tool"));
+    assert.ok(names.includes("list_models"), "core registration untouched");
+    assert.equal(seen.length, 1, "the contribution received the content root");
+    assert.ok(seen[0] && seen[0].length > 0);
+  } finally {
+    await c.close();
+    await s.close();
+  }
 });
 
 test("list_processes: one row per .bpmn with derived name + stats", async () => {
