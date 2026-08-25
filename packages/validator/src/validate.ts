@@ -27,10 +27,14 @@ import {
   requirementHref,
   XMLValidator,
 } from "@bpmiq/notations/extract";
+import { hasRefs, type ModelRef, refsOf } from "@bpmiq/notations/refs";
 
 export type Severity = "ERROR" | "WARN";
 export interface Finding {
   severity: Severity;
+  /** stable rule family id, e.g. "bpmn/flow", "dmn/di", "refs/dangling" —
+   *  the hook for per-repo severity config (epic #118) */
+  ruleId: string;
   /** the file/label the finding is about (checkBpmnXml uses opts.file, else "<bpmn>") */
   file: string;
   message: string;
@@ -92,25 +96,25 @@ export function checkBpmnXml(
 } {
   const file = opts.file ?? "<bpmn>";
   const findings: Finding[] = [];
-  const err = (message: string): void => {
-    findings.push({ severity: "ERROR", file, message });
+  const err = (ruleId: string, message: string): void => {
+    findings.push({ severity: "ERROR", ruleId, file, message });
   };
-  const warn = (message: string): void => {
-    findings.push({ severity: "WARN", file, message });
+  const warn = (ruleId: string, message: string): void => {
+    findings.push({ severity: "WARN", ruleId, file, message });
   };
 
   const wf = XMLValidator.validate(raw);
   if (wf !== true) {
-    err(`not well-formed XML: ${wf.err.msg}`);
+    err("bpmn/xml", `not well-formed XML: ${wf.err.msg}`);
     return { findings, called: [], decides: [] };
   }
-  checkXmlNamespaces(raw, err);
+  checkXmlNamespaces(raw, (m) => err("bpmn/xml", m));
 
   const defs = parseXml(raw).definitions;
   // collaborations have one <bpmn:process> per pool — always treat as a list
   const processes = asArray(defs?.process as Record<string, unknown>[]);
   if (processes.length === 0) {
-    err("no <bpmn:process> element");
+    err("bpmn/structure", "no <bpmn:process> element");
     return { findings, called: [], decides: [] };
   }
 
@@ -143,28 +147,30 @@ export function checkBpmnXml(
     const out = new Map<string, number>();
     for (const [fid, [s, t]] of flowMap) {
       for (const ref of [s, t]) {
-        if (!c.nodes.has(ref)) err(`sequenceFlow ${fid} references missing node '${ref}' (${c.label})`);
+        if (!c.nodes.has(ref)) err("bpmn/flow", `sequenceFlow ${fid} references missing node '${ref}' (${c.label})`);
       }
       out.set(s, (out.get(s) ?? 0) + 1);
       inc.set(t, (inc.get(t) ?? 0) + 1);
     }
     if (c.nodes.size === 0) continue; // empty pool / collapsed reference — nothing to check
     const starts = [...c.nodes.values()].filter((n) => n.tag === "startEvent").length;
-    if (!c.isSubProcess && starts !== 1) err(`expected exactly one start event in ${c.label}, found ${starts}`);
-    if (c.isSubProcess && !c.triggeredByEvent && starts > 1) err(`${c.label} has ${starts} start events`);
+    if (!c.isSubProcess && starts !== 1)
+      err("bpmn/flow", `expected exactly one start event in ${c.label}, found ${starts}`);
+    if (c.isSubProcess && !c.triggeredByEvent && starts > 1) err("bpmn/flow", `${c.label} has ${starts} start events`);
     for (const [id, { tag }] of c.nodes) {
       // an event sub-process attaches to its own trigger, not the parent flow —
       // it is legitimately unconnected to the parent's sequence flow
       if (eventSubProcesses.has(id)) continue;
-      if (tag === "startEvent" && (inc.get(id) ?? 0) > 0) err(`start event ${id} has incoming flows`);
-      if (tag === "endEvent" && (out.get(id) ?? 0) > 0) err(`end event ${id} has outgoing flows`);
+      if (tag === "startEvent" && (inc.get(id) ?? 0) > 0) err("bpmn/flow", `start event ${id} has incoming flows`);
+      if (tag === "endEvent" && (out.get(id) ?? 0) > 0) err("bpmn/flow", `end event ${id} has outgoing flows`);
       if (tag !== "startEvent" && tag !== "boundaryEvent" && (inc.get(id) ?? 0) === 0)
-        err(`${id} is unreachable (no incoming flow, ${c.label})`);
-      if (tag !== "endEvent" && (out.get(id) ?? 0) === 0) err(`${id} is a dead end (no outgoing flow, ${c.label})`);
+        err("bpmn/flow", `${id} is unreachable (no incoming flow, ${c.label})`);
+      if (tag !== "endEvent" && (out.get(id) ?? 0) === 0)
+        err("bpmn/flow", `${id} is a dead end (no outgoing flow, ${c.label})`);
     }
   }
   for (const [b, attached] of boundaries) {
-    if (!nodes.has(attached)) err(`boundary event ${b} attached to missing '${attached}'`);
+    if (!nodes.has(attached)) err("bpmn/flow", `boundary event ${b} attached to missing '${attached}'`);
   }
 
   // collaboration: participants need DI, message flows must connect real
@@ -182,7 +188,7 @@ export function checkBpmnXml(
       if (mf.id) diRequired.add(mf.id);
       for (const ref of [mf.from, mf.to]) {
         if (ref && !nodes.has(ref) && !participantIds.has(ref)) {
-          err(`messageFlow ${mf.id} references missing element '${ref}'`);
+          err("bpmn/flow", `messageFlow ${mf.id} references missing element '${ref}'`);
         }
       }
     }
@@ -192,7 +198,7 @@ export function checkBpmnXml(
   // (drilldown planes of collapsed sub-processes included: the walk is recursive)
   const di = collectDiRefs(defs, ["BPMNShape", "BPMNEdge"], "@_bpmnElement");
   for (const id of diRequired) {
-    if (!di.has(id)) err(`${id} has no BPMNDI shape/edge (breaks the visual editor)`);
+    if (!di.has(id)) err("bpmn/di", `${id} has no BPMNDI shape/edge (breaks the visual editor)`);
   }
 
   // lanes: if present, every top-level node must be assigned, and lanes render → need DI
@@ -201,7 +207,7 @@ export function checkBpmnXml(
     if (lanes.length === 0) continue;
     const laned = new Set<string>();
     for (const lane of lanes) {
-      if (lane.id && !di.has(lane.id)) err(`lane ${lane.id} has no BPMNDI shape (breaks the visual editor)`);
+      if (lane.id && !di.has(lane.id)) err("bpmn/di", `lane ${lane.id} has no BPMNDI shape (breaks the visual editor)`);
       for (const ref of lane.nodeIds) laned.add(ref);
     }
     const topContainer = topContainers[i];
@@ -210,7 +216,7 @@ export function checkBpmnXml(
         // boundary events belong to their host activity's lane implicitly and
         // are routinely omitted from flowNodeRef by editors — don't flag them
         if (tag === "boundaryEvent") continue;
-        if (!laned.has(id)) err(`${id} is not assigned to any lane`);
+        if (!laned.has(id)) err("bpmn/lanes", `${id} is not assigned to any lane`);
       }
   }
 
@@ -219,13 +225,17 @@ export function checkBpmnXml(
   // always did (the two classifiers had drifted; stats.steps said 10 while
   // this warning stayed silent)
   const activities = [...nodes.values()].filter((tag) => kindOf(tag) === "activity").length;
-  if (activities > 9) warn(`${activities} activities — consider extracting a sub-process (7±2 rule)`);
+  if (activities > 9)
+    warn("bpmn/complexity", `${activities} activities — consider extracting a sub-process (7±2 rule)`);
 
   // link integrity: a callActivity should reference a process that exists in the repo
   if (opts.processIds) {
     for (const ref of called) {
       if (!opts.processIds.has(ref)) {
-        warn(`callActivity calls '${ref}', which is not a process in this repo (external or dangling?)`);
+        warn(
+          "refs/dangling",
+          `callActivity calls '${ref}', which is not a process in this repo (external or dangling?)`,
+        );
       }
     }
   }
@@ -233,7 +243,10 @@ export function checkBpmnXml(
   if (opts.decisionIds) {
     for (const { id, ref } of decides) {
       if (!opts.decisionIds.has(ref)) {
-        warn(`businessRuleTask ${id} decides '${ref}', which is not a decision in this repo (external or dangling?)`);
+        warn(
+          "refs/dangling",
+          `businessRuleTask ${id} decides '${ref}', which is not a decision in this repo (external or dangling?)`,
+        );
       }
     }
   }
@@ -255,25 +268,25 @@ export function checkBpmnXml(
 export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findings: Finding[] } {
   const file = opts.file ?? "<dmn>";
   const findings: Finding[] = [];
-  const err = (message: string): void => {
-    findings.push({ severity: "ERROR", file, message });
+  const err = (ruleId: string, message: string): void => {
+    findings.push({ severity: "ERROR", ruleId, file, message });
   };
-  const warn = (message: string): void => {
-    findings.push({ severity: "WARN", file, message });
+  const warn = (ruleId: string, message: string): void => {
+    findings.push({ severity: "WARN", ruleId, file, message });
   };
 
   const wf = XMLValidator.validate(raw);
   if (wf !== true) {
-    err(`not well-formed XML: ${wf.err.msg}`);
+    err("dmn/xml", `not well-formed XML: ${wf.err.msg}`);
     return { findings };
   }
-  checkXmlNamespaces(raw, err);
+  checkXmlNamespaces(raw, (m) => err("dmn/xml", m));
 
   const defs = parseXml(raw).definitions;
   const decisions = asArray(defs?.decision as Record<string, any>[]);
   const inputData = asArray(defs?.inputData as Record<string, any>[]);
   if (decisions.length === 0) {
-    err("no <decision> element");
+    err("dmn/structure", "no <decision> element");
     return { findings };
   }
 
@@ -284,24 +297,28 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
   const diRequired = new Set<string>();
   for (const decision of decisions) {
     const id = decision["@_id"] ? String(decision["@_id"]) : "(anonymous)";
-    if (!decision["@_id"]) err("a <decision> has no id");
+    if (!decision["@_id"]) err("dmn/structure", "a <decision> has no id");
     else diRequired.add(id);
 
     const table = decision.decisionTable;
     if (!table && !decision.literalExpression) {
-      warn(`decision ${id} has neither a decisionTable nor a literalExpression — it cannot produce a result`);
+      warn(
+        "dmn/structure",
+        `decision ${id} has neither a decisionTable nor a literalExpression — it cannot produce a result`,
+      );
     }
     if (table) {
       const inputs = asArray(table.input as Record<string, unknown>[]).length;
       const outputs = asArray(table.output as Record<string, unknown>[]).length;
-      if (outputs === 0) err(`decision ${id} has no output column`);
+      if (outputs === 0) err("dmn/structure", `decision ${id} has no output column`);
       for (const rule of asArray(table.rule as Record<string, any>[])) {
         const ruleId = rule["@_id"] ? String(rule["@_id"]) : "(anonymous rule)";
         const given = asArray(rule.inputEntry as unknown[]).length;
         const produced = asArray(rule.outputEntry as unknown[]).length;
-        if (given !== inputs) err(`rule ${ruleId} of decision ${id} has ${given} input entries, expected ${inputs}`);
+        if (given !== inputs)
+          err("dmn/rules", `rule ${ruleId} of decision ${id} has ${given} input entries, expected ${inputs}`);
         if (produced !== outputs) {
-          err(`rule ${ruleId} of decision ${id} has ${produced} output entries, expected ${outputs}`);
+          err("dmn/rules", `rule ${ruleId} of decision ${id} has ${produced} output entries, expected ${outputs}`);
         }
       }
     }
@@ -312,7 +329,7 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
       const target = r.href.replace(/^#/, "");
       // an href into another file (namespace-qualified) is out of scope here
       if (r.local && !known.has(target)) {
-        err(`decision ${id} requires '${target}', which does not exist in this file`);
+        err("dmn/requirements", `decision ${id} requires '${target}', which does not exist in this file`);
       }
     }
   }
@@ -323,10 +340,10 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
   // a DMN with no DMNDI at all is a decision table authored outside a modeler —
   // legal and common, so report it ONCE instead of per element
   if (di.size === 0) {
-    warn("no DMNDI section — the DRD opens empty in the visual editor");
+    warn("dmn/di", "no DMNDI section — the DRD opens empty in the visual editor");
   } else {
     for (const id of diRequired) {
-      if (!di.has(id)) err(`${id} has no DMNDI shape (breaks the visual editor)`);
+      if (!di.has(id)) err("dmn/di", `${id} has no DMNDI shape (breaks the visual editor)`);
     }
   }
 
@@ -345,7 +362,7 @@ export function checkModelBaseline(raw: string, opts: { file?: string; notation:
   const file = opts.file ?? `<${opts.notation}>`;
   const findings: Finding[] = [];
   const err = (message: string): void => {
-    findings.push({ severity: "ERROR", file, message });
+    findings.push({ severity: "ERROR", ruleId: "baseline/parse", file, message });
   };
   switch (byId(opts.notation)?.mediaKind) {
     case "json":
@@ -377,6 +394,9 @@ export function checkModelBaseline(raw: string, opts: { file?: string; notation:
 export interface CheckContext {
   /** repo-relative path — selects the notation AND labels the findings */
   path: string;
+  /** explicit notation id — for callers whose `path` is a free-form label
+   *  rather than a real file path (e.g. the validate_bpmn tool) */
+  notation?: string;
   /** repo-wide model ids per notation id (discoverModels) — enables the
    *  cross-model link warnings (callActivity → process, decisionRef →
    *  decision); absent = link checks are skipped */
@@ -386,22 +406,64 @@ export interface CheckContext {
 /**
  * THE one check dispatch: the platform check for whatever notation `ctx.path`
  * is — full checkers for BPMN/DMN, the mediaKind baseline for everything
- * else, `undefined` when the path matches no registered notation (the file is
- * not a model; nothing to check). Consumed by the CLI (runCli) AND the Live
- * Host's save gate (application/content.ts) so both always agree.
+ * else, plus the generic dangling-reference rule for ANY notation with a
+ * refs emitter; `undefined` when the path matches no registered notation
+ * (the file is not a model; nothing to check). Consumed by the CLI (runCli)
+ * AND the Live Host's save gate (application/content.ts) so both always agree.
  */
 export function checkModel(raw: string, ctx: CheckContext): Finding[] | undefined {
-  const notation = byExtension(ctx.path)?.id;
+  const notation = ctx.notation ?? byExtension(ctx.path)?.id;
   if (!notation) return undefined;
-  if (notation === "bpmn") {
-    return checkBpmnXml(raw, {
-      file: ctx.path,
-      processIds: ctx.modelIds ? new Set(ctx.modelIds.get("bpmn") ?? []) : undefined,
-      decisionIds: ctx.modelIds ? new Set(ctx.modelIds.get("dmn") ?? []) : undefined,
-    }).findings;
+  const base =
+    notation === "bpmn"
+      ? checkBpmnXml(raw, { file: ctx.path }).findings
+      : notation === "dmn"
+        ? checkDmnXml(raw, { file: ctx.path }).findings
+        : checkModelBaseline(raw, { file: ctx.path, notation });
+  return [...base, ...checkRefs(notation, raw, ctx)];
+}
+
+/**
+ * The generic dangling-reference rule: every REQUIRED reference the model
+ * emits (@bpmiq/notations/refs) must resolve against the repo-wide ids —
+ * ONE rule for every notation, replacing the bespoke processIds/decisionIds
+ * plumbing. Skipped without ctx.modelIds (single-file use has no repo view).
+ */
+function checkRefs(notation: string, raw: string, ctx: CheckContext): Finding[] {
+  if (!ctx.modelIds || !hasRefs(notation)) return []; // no emitter → skip the extract entirely
+  // mirror the xml checkers' early return: no refs verdict on a file whose
+  // well-formedness already failed (the lenient parser would still see nodes)
+  if (byId(notation)?.mediaKind === "xml" && XMLValidator.validate(raw) !== true) return [];
+  let graph;
+  try {
+    graph = extractModelGraph(notation, raw);
+  } catch {
+    return []; // unparseable — the notation's own checker already errored
   }
-  if (notation === "dmn") return checkDmnXml(raw, { file: ctx.path }).findings;
-  return checkModelBaseline(raw, { file: ctx.path, notation });
+  if (!graph) return [];
+  const findings: Finding[] = [];
+  for (const ref of refsOf(graph)) {
+    if (ref.strength !== "required") continue;
+    const resolved = ref.to.notation
+      ? (ctx.modelIds.get(ref.to.notation)?.has(ref.to.id) ?? false)
+      : [...ctx.modelIds.values()].some((ids) => ids.has(ref.to.id));
+    if (resolved) continue;
+    findings.push({ severity: "WARN", ruleId: "refs/dangling", file: ctx.path, message: danglingMessage(ref) });
+  }
+  return findings;
+}
+
+/** rel-specific wording, pinned to the historical link warnings — the texts
+ *  are wire-visible (save results, CLI output) and must not drift */
+function danglingMessage(ref: ModelRef): string {
+  if (ref.rel === "calls") {
+    return `callActivity calls '${ref.to.id}', which is not a process in this repo (external or dangling?)`;
+  }
+  if (ref.rel === "decides" && ref.fromElement) {
+    return `businessRuleTask ${ref.fromElement} decides '${ref.to.id}', which is not a decision in this repo (external or dangling?)`;
+  }
+  const target = ref.to.notation ? `${ref.to.notation} '${ref.to.id}'` : `'${ref.to.id}'`;
+  return `${ref.fromElement ?? "the model"} references ${target}, which does not resolve in this repo (${ref.rel})`;
 }
 
 // ── CLI (invoked by src/cli.ts — the dedicated bin entry) ───────────────────────

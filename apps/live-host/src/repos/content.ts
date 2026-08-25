@@ -4,6 +4,7 @@
  * Re-exported here so the existing live-host import paths stay stable.
  */
 export {
+  buildRepoIndex,
   CONTENT_CONFIG_FILE,
   type ContentConfig,
   discoverDecisions,
@@ -13,4 +14,6 @@ export {
   discoverModels,
   discoverProcesses,
   loadContentConfig,
+  type RepoIndex,
+  type ResolvedReference,
 } from "@bpmiq/notations/content";

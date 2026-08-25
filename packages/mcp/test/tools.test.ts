@@ -90,7 +90,7 @@ async function callJson(name: string, args: Record<string, unknown> = {}): Promi
   return JSON.parse(text);
 }
 
-test("registration: the eight read-only tools are exposed (no rich-layout tools)", async () => {
+test("registration: the nine read-only tools are exposed (no rich-layout tools)", async () => {
   const names = (await client.listTools()).tools.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "enumerate_paths",
@@ -99,6 +99,7 @@ test("registration: the eight read-only tools are exposed (no rich-layout tools)
     "get_process",
     "list_models",
     "list_processes",
+    "which_models_use",
     "which_processes_use",
     "who_owns",
   ]);
@@ -134,10 +135,38 @@ test("list_models: one broken model degrades to its bare row, the listing surviv
     assert.deepEqual(Object.keys(grouped.models).sort(), ["bpmn", "team-topology"]);
     assert.deepEqual(grouped.models["team-topology"], [{ id: "teams", path: "models/teams.tt" }]);
     assert.match(grouped.models.bpmn[0].summary, /^Process with /);
+
+    // which_models_use over the same repo: order-to-cash calls invoice-handling,
+    // which does NOT exist here — the dangling (resolved:false) path is pinned
+    const dangling = toolText(await c.callTool({ name: "which_models_use", arguments: { id: "invoice-handling" } }));
+    assert.ok(!dangling.isError);
+    const hits = JSON.parse(dangling.text);
+    assert.deepEqual(hits.referencedBy, [
+      {
+        from: "models/order-to-cash.bpmn",
+        notation: "bpmn",
+        element: "Invoice",
+        rel: "calls",
+        resolved: false,
+      },
+    ]);
   } finally {
     await c.close();
     await s.close();
   }
+});
+
+test("which_models_use: reference-level impact across notations, incl. dangling", async () => {
+  // order-to-cash calls invoice-handling (a real process) — resolved
+  const hits = await callJson("which_models_use", { id: "invoice-handling" });
+  assert.equal(hits.target, "invoice-handling");
+  assert.deepEqual(
+    hits.referencedBy.map((h: { from: string; rel: string; resolved: boolean }) => `${h.from}:${h.rel}:${h.resolved}`),
+    ["processes/order-to-cash.bpmn:calls:true"],
+  );
+  // an id nothing references
+  const none = await call("which_models_use", { id: "no-such-model" });
+  assert.ok(!none.isError && /No model references 'no-such-model'/.test(none.text));
 });
 
 test("list_processes: one row per .bpmn with derived name + stats", async () => {

@@ -21,7 +21,9 @@ import { join, posix, relative } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
+import { extractModelGraph } from "./extract.ts";
 import { byExtension, modelStem } from "./index.ts";
+import { refsOf } from "./refs.ts";
 
 export const CONTENT_CONFIG_FILE = "bpmiq.yml";
 
@@ -125,6 +127,77 @@ export async function discoverModels(root: string, cfg: ContentConfig): Promise<
     out.push({ id, path, notation: notation.id });
   }
   return out;
+}
+
+/** a Reference with its source attached and its target resolved (or not) */
+export interface ResolvedReference {
+  from: { path: string; notation: string; element?: string };
+  rel: string;
+  to: { id: string; notation?: string; element?: string };
+  strength: "required" | "informative";
+  /** the artifact the reference resolves to; undefined = dangling/external */
+  resolved?: DiscoveredModel;
+}
+
+/**
+ * The repo-wide reference index — built once per checkout, the substrate for
+ * who-uses-what, backlink navigation, release impact and link validation.
+ */
+export interface RepoIndex {
+  artifacts: DiscoveredModel[];
+  refs: ResolvedReference[];
+  byId(id: string, notation?: string): DiscoveredModel | undefined;
+  /** references EMITTED by the model at `path` */
+  outgoing(path: string): ResolvedReference[];
+  /** references POINTING AT the model at `path` (resolved ones only) */
+  incoming(path: string): ResolvedReference[];
+}
+
+/**
+ * Build the reference index of a checkout: discover every model, run its
+ * extract + refs capabilities, resolve each reference against the discovered
+ * artifacts. Degrades per file (an unreadable/broken model simply emits no
+ * refs) — an index build must never fail a listing or a release.
+ */
+export async function buildRepoIndex(root: string, cfg: ContentConfig): Promise<RepoIndex> {
+  const artifacts = await discoverModels(root, cfg);
+  const byKey = new Map<string, DiscoveredModel>();
+  for (const a of artifacts) byKey.set(`${a.notation}/${a.id}`, a);
+  const byId = (id: string, notation?: string): DiscoveredModel | undefined =>
+    notation ? byKey.get(`${notation}/${id}`) : artifacts.find((a) => a.id === id);
+
+  const refs: ResolvedReference[] = [];
+  for (const artifact of artifacts) {
+    let emitted;
+    try {
+      const raw = readFileSync(join(root, artifact.path), "utf8");
+      const graph = extractModelGraph(artifact.path, raw);
+      emitted = graph ? refsOf(graph) : [];
+    } catch {
+      continue;
+    }
+    for (const ref of emitted) {
+      refs.push({
+        from: {
+          path: artifact.path,
+          notation: artifact.notation,
+          ...(ref.fromElement ? { element: ref.fromElement } : {}),
+        },
+        rel: ref.rel,
+        to: ref.to,
+        strength: ref.strength,
+        resolved: byId(ref.to.id, ref.to.notation),
+      });
+    }
+  }
+
+  return {
+    artifacts,
+    refs,
+    byId,
+    outgoing: (path) => refs.filter((r) => r.from.path === path),
+    incoming: (path) => refs.filter((r) => r.resolved?.path === path),
+  };
 }
 
 /** every .bpmn under the configured folder — a process IS its BPMN file */

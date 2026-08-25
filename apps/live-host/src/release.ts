@@ -41,6 +41,7 @@ import { modelStem, processIdFromName } from "@bpmiq/notations";
 import { gitEnv, runGit } from "./adapters/git/run.ts";
 import type { Session } from "./adapters/sqlite/sessions.ts";
 import { decisionImpact } from "./application/decision-impact.ts";
+import { referenceImpact } from "./application/reference-impact.ts";
 import type { RepoConnectionSource } from "./ports/connection-source.ts";
 import type { GitProvider } from "./ports/git-provider.ts";
 import { CONTENT_CONFIG_FILE, type ContentConfig, discoverProcesses, loadContentConfig } from "./repos/content.ts";
@@ -344,7 +345,8 @@ export async function release(
     prTitle: `release(${id}): publish live model state`,
     prBody: async (botAuthored, staged) =>
       releasePrBody(id, repo.fullName, session.user.login, botAuthored) +
-      (await decisionImpact(opts, repo, workspace, staged)),
+      (await decisionImpact(opts, repo, workspace, staged)) +
+      (await referenceImpact(workspace, staged)),
   });
 }
 
@@ -404,6 +406,8 @@ export async function releaseFiles(
         repo.fullName,
         session.user.login,
         botAuthored,
-      ) + (await decisionImpact(opts, repo, workspace, staged)),
+      ) +
+      (await decisionImpact(opts, repo, workspace, staged)) +
+      (await referenceImpact(workspace, staged)),
   });
 }

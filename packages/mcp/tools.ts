@@ -27,6 +27,7 @@ import { parseAnchor } from "@bpmiq/contracts/todo-anchor";
 import { type GitHubIssueRow, isPullRequestRow, todoLabelQuery } from "@bpmiq/github-app/todos";
 import { fail, ok, READ, safe as kitSafe, type ToolResult } from "@bpmiq/mcp-kit";
 import {
+  buildRepoIndex,
   type ContentConfig,
   type DiscoveredProcess,
   discoverModels,
@@ -387,6 +388,40 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
         );
       }
       return ok(hits);
+    }),
+  );
+
+  server.registerTool(
+    "which_models_use",
+    {
+      description:
+        "Reference-level impact analysis across EVERY notation: all models whose typed " +
+        "cross-model references (callActivity calls, businessRuleTask decides, …) point at the " +
+        "given model id (file stem, exact match) — the repo-wide reference index behind it also " +
+        "flags dangling references. The registry-wide sibling of which_processes_use; use for " +
+        "'what breaks if I change or delete this model?'.",
+      inputSchema: {
+        id: z.string().describe("Target model id = file stem (from list_models), e.g. 'credit-check'"),
+      },
+      annotations: READ_ONLY,
+    },
+    safe(async ({ id }) => {
+      const cfg = config();
+      if (!cfg) return notAContentRepo();
+      const index = await buildRepoIndex(root, cfg);
+      const hits = index.refs
+        .filter((r) => r.to.id === id)
+        .map((r) => ({
+          from: r.from.path,
+          notation: r.from.notation,
+          ...(r.from.element ? { element: r.from.element } : {}),
+          rel: r.rel,
+          resolved: r.resolved !== undefined,
+        }));
+      if (hits.length === 0) {
+        return ok(`No model references '${id}' (checked ${index.refs.length} reference(s) across the repo).`);
+      }
+      return ok({ target: id, referencedBy: hits });
     }),
   );
 

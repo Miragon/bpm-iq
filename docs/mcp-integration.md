@@ -35,6 +35,7 @@ the BPMN** at call time (`@bpmiq/notations/derive`). No build step; the tool def
 | `find_cycles(id)`            | Where does the flow loop?           | the BPMN's sequence flows                                                                                                                                        |
 | `who_owns(id)`               | Who does what?                      | the BPMN lanes (roles) and the steps each contains; the pools                                                                                                    |
 | `which_processes_use(query)` | Impact: what references this?       | each process's id, derived name, role names, step names, and `callActivity` `calledElement`                                                                      |
+| `which_models_use(id)`       | Impact, across EVERY notation       | the repo-wide reference index (typed cross-model refs: calls, decides, …) — incl. dangling references                                                            |
 | `list_todos(process?)`       | What work is open (opt-in)?         | the content repo's issue tracker (label `todo` + `process:<id>`), anchors parsed from issue bodies                                                               |
 
 All tools carry `readOnlyHint` annotations, so clients may auto-approve them. The content repo
