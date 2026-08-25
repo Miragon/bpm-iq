@@ -74,7 +74,7 @@ export function AssistMenu({
   repo: string;
   /** repo-relative model path */
   path: string;
-  notation: "bpmn" | "dmn";
+  notation: string;
   /** current canvas selection — rides along as data (BPMN editor only) */
   selection?: TodoElementWire[];
   /** "row" = compact icon trigger for an overview table row */

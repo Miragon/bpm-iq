@@ -1,22 +1,19 @@
 /**
- * The collaborative editor — chosen per notation (@bpmiq/notations):
- *   bpmn        → bpmn-js canvas (primary) + Monaco XML toggle, both bound to the
- *                 same shared Y.Text
- *   dmn         → dmn-js (DRD + decision table + literal expression) with the
- *                 simulation add-on + the same Monaco XML toggle, same shared
- *                 Y.Text; the Checks panel analyses and simulates it in-browser
- *                 through @bpmiq/decisions (the module the Live Host uses too)
- *   everything  → Monaco text editor on the shared Y.Text, language from the
- *   else          registry (OWM/TT/VC live-edit as text)
+ * The collaborative editor shell — the EDITOR a notation gets comes from the
+ * web plugin registry (@/notations/registry, epic #118 step 6):
+ *
+ *   plugin       → its visual editor (bpmn-js / dmn-js / …) mounted on the
+ *                  shared Y.Text, plus its side panels, assist handoff and
+ *                  history diff — the ENGINE chunks load lazily on mount
+ *   no plugin    → Monaco text editor on the shared Y.Text, language from the
+ *                  registry (OWM/TT/VC/Markdown live-edit as text)
  *
  * React owns the shell (toolbar, presence, release); the editor ENGINES stay
- * imperative — bpmn-js / dmn-js / Monaco / Yjs live in refs inside one effect
+ * imperative — the mounted plugin / Monaco / Yjs live in refs inside one effect
  * whose cleanup tears the whole live session down (provider, sockets, bindings).
  */
 import { roomName } from "@bpmiq/contracts/live";
 import { openLiveSession } from "@bpmiq/live-client";
-import { bindBpmn } from "@bpmiq/live-client/bpmn-sync";
-import { bindDmn } from "@bpmiq/live-client/dmn-sync";
 import { updateText } from "@bpmiq/live-client/text";
 import { byExtension } from "@bpmiq/notations";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
@@ -24,11 +21,9 @@ import { Button } from "@bpmiq/ui-kit/components/button";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import BpmnModeler from "bpmn-js/lib/Modeler";
-import DmnModeler from "dmn-js/lib/Modeler";
-import { ArrowLeft, History, ListTodo, Loader2, Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, History, ListTodo, Loader2, Plus } from "lucide-react";
 import * as monaco from "monaco-editor";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MonacoBinding } from "y-monaco";
 import type * as Y from "yjs";
@@ -47,27 +42,19 @@ import {
   type TodoElementWire,
   type TodoWire,
 } from "@/lib/api";
-import { dmnSimulationViews } from "@/lib/dmn-simulation";
 import { useFileHistory, useTodos } from "@/lib/queries";
-import { attachTodoCanvas, type TodoCanvas } from "@/lib/todo-canvas";
+import type { TodoCanvas } from "@/lib/todo-canvas";
+import { type MountedEditor, webPlugin } from "@/notations/registry";
 
 interface Presence {
   name: string;
   color: string;
 }
 
-// The decision checks pull in the FEEL engine and the DMN parser
-// (@bpmiq/decisions + @bpmiq/notations). Split them off: only a .dmn author who
-// opens the panel pays for them, and a BPMN session never loads them at all.
-const DecisionChecksPanel = lazy(() =>
-  import("@/components/decision-checks-panel").then((m) => ({ default: m.DecisionChecksPanel })),
-);
-
 function monacoLanguage(docPath: string): string {
   const notation = byExtension(docPath);
   if (notation) return notation.monacoLanguage;
   if (docPath.endsWith(".yaml") || docPath.endsWith(".yml")) return "yaml";
-  if (docPath.endsWith(".md")) return "markdown";
   return "plaintext";
 }
 
@@ -89,9 +76,11 @@ export function LiveEditor({
   me: Me;
 }) {
   const notation = byExtension(docPath);
+  const plugin = webPlugin(notation?.id);
+  const isVisual = plugin?.mountEditor !== undefined;
+  // cosmetic special case: bpmn is the platform's primary notation — its label
+  // badge stays hidden and the title shows the process id alone
   const isBpmn = notation?.id === "bpmn";
-  const isDmn = notation?.id === "dmn";
-  const isVisual = isBpmn || isDmn;
   const fileName = docPath.split("/").pop() ?? docPath;
   const [owner = "", name = ""] = repo.split("/");
 
@@ -101,6 +90,8 @@ export function LiveEditor({
   const [error, setError] = useState<string | null>(null);
   const [showXml, setShowXml] = useState(!isVisual);
   const [presence, setPresence] = useState<Presence[]>([]);
+  /** the mounted editor exposed an element surface (selection, reveal) */
+  const [hasElements, setHasElements] = useState(false);
 
   // model-anchored todos — only for documents that belong to a process
   const hasTodos = processId.length > 0;
@@ -113,15 +104,14 @@ export function LiveEditor({
   const todoCanvasRef = useRef<TodoCanvas | null>(null);
   const todosRef = useRef<TodoWire[]>([]);
 
-  // decision checks (.dmn only) — analysis + simulation, computed in-browser
-  // from the live document by @bpmiq/decisions
-  const [dmnXml, setDmnXml] = useState("");
+  // plugin side panels — fed the debounced live text while open
+  const [panelContent, setPanelContent] = useState("");
 
   // the ONE open side panel — the panels are mutually exclusive, and the rule
   // lives here instead of being hand-written into every toggle (one of the
-  // five copies had already gone stale)
-  const [panel, setPanel] = useState<"todos" | "history" | "checks" | null>(null);
-  const togglePanel = (name: "todos" | "history" | "checks"): void => {
+  // five copies had already gone stale). Plugin panels join by their id.
+  const [panel, setPanel] = useState<string | null>(null);
+  const togglePanel = (name: string): void => {
     setTodoFilter(null);
     setPanel((current) => (current === name ? null : name));
   };
@@ -129,6 +119,7 @@ export function LiveEditor({
     setTodoFilter(null);
     setPanel(null);
   };
+  const activePanelSpec = plugin?.panels?.find((p) => p.id === panel);
   // default-branch commit history of THIS file — fetched while the panel is open
   const historyQuery = useFileHistory(repo, docPath, panel === "history");
   // the shared Y.Text, exposed from the session effect for Compare/Restore
@@ -168,10 +159,7 @@ export function LiveEditor({
     });
     session.setUser({ name: me.user.name || me.user.login, color: config.color });
 
-    let modeler: InstanceType<typeof BpmnModeler> | undefined;
-    let dmnModeler: InstanceType<typeof DmnModeler> | undefined;
-    let unbindCanvas: (() => void) | undefined;
-    let todoCanvas: TodoCanvas | undefined;
+    let mounted: MountedEditor | undefined;
     let monacoBinding: MonacoBinding | undefined;
     let xmlEditor: monaco.editor.IStandaloneCodeEditor | undefined;
     let xmlModel: monaco.editor.ITextModel | undefined;
@@ -181,58 +169,62 @@ export function LiveEditor({
     // Attach the editor ENGINES when the doc syncs — even if that takes longer
     // than the "slow" hint below (a Fly cell resuming from suspend + first clone
     // can exceed 10s). No hard timeout that abandons a late sync into a dead editor.
-    const attach = () => {
+    const attach = async () => {
       if (cancelled || attached) return;
       attached = true;
       const ytext = session.content;
       contentRef.current = ytext;
-      if (isBpmn && canvasRef.current) {
-        modeler = new BpmnModeler({ container: canvasRef.current });
-        unbindCanvas = bindBpmn(modeler as never, ytext, session.doc, (msg) => toast.error(msg));
-        // attached for EVERY bpmn file, not only process members: the selection
-        // feeds the todo buttons AND the Analyse-with-AI handover (a sub-process
-        // has no process id, but its selection matters just the same). Badges
-        // re-attach on every import.done (bindBpmn re-imports remote changes);
-        // without todos the list stays empty and no badge ever renders.
-        todoCanvas = attachTodoCanvas(modeler as never, {
-          onBadgeClick: (elementId) => {
-            setTodoFilter(elementId);
-            setPanel("todos");
-          },
-          onSelectionChanged: setSelectedElements,
-        });
-        todoCanvasRef.current = todoCanvas;
-        todoCanvas.setTodos(todosRef.current);
-        if (pendingRevealRef.current) {
-          // deep link opened before the session synced — arm the one-shot now
-          todoCanvas.revealOnce(pendingRevealRef.current);
-          pendingRevealRef.current = null;
-        }
-      } else if (isDmn && canvasRef.current) {
-        dmnModeler = new DmnModeler({
-          container: canvasRef.current,
-          // the SAME simulation add-on the MCP-App decision widget mounts:
-          // enter values in a decision table and the matching rows light up.
-          // It evaluates with `feelin`, as does @bpmiq/decisions in the Checks
-          // panel and on the server — one semantics, three places.
-          ...dmnSimulationViews,
-        });
-        unbindCanvas = bindDmn(
-          dmnModeler as never,
-          ytext,
-          session.doc,
-          (msg) => {
-            if (!cancelled) toast.error(msg);
-          },
-          // malformed from the start: nothing to render — surface the error and
-          // fall back to the XML view, where the document stays editable
-          (msg) => {
-            if (cancelled) return; // an in-flight first import can settle after unmount
-            toast.error(`DMN import failed: ${msg}`);
+      if (plugin?.mountEditor && canvasRef.current) {
+        // the engine chunk loads HERE — the eager bundle carries no editor
+        // engine. A failed chunk load (offline, stale deploy rotating hashed
+        // asset URLs) must NOT strand the session: fall back to the text view
+        // below — the ytext is already synced, editing works without the engine.
+        let editor: MountedEditor | undefined;
+        try {
+          editor = await plugin.mountEditor(canvasRef.current, {
+            ytext,
+            doc: session.doc,
+            docPath,
+            onSyncError: (msg) => {
+              if (!cancelled) toast.error(msg);
+            },
+            onImportFailed: (msg) => {
+              if (cancelled) return; // an in-flight first import can settle after unmount
+              toast.error(`${notation?.label ?? "Model"} import failed: ${msg}`);
+              setShowXml(true);
+            },
+            onBadgeClick: (elementId) => {
+              setTodoFilter(elementId);
+              setPanel("todos");
+            },
+            onSelectionChanged: setSelectedElements,
+          });
+        } catch (e) {
+          if (!cancelled) {
+            toast.error(
+              `${notation?.label ?? "Model"} editor failed to load (${e instanceof Error ? e.message : String(e)}) — falling back to the text view.`,
+            );
             setShowXml(true);
-          },
-        );
+          }
+        }
+        if (cancelled) {
+          // unmounted while the chunk loaded — tear the late editor down
+          editor?.destroy();
+          return;
+        }
+        mounted = editor;
+        if (editor?.elements) {
+          setHasElements(true);
+          todoCanvasRef.current = editor.elements;
+          editor.elements.setTodos(todosRef.current);
+          if (pendingRevealRef.current) {
+            // deep link opened before the session synced — arm the one-shot now
+            editor.elements.revealOnce(pendingRevealRef.current);
+            pendingRevealRef.current = null;
+          }
+        }
       }
+      if (cancelled) return;
       if (xmlRef.current) {
         xmlModel = monaco.editor.createModel(ytext.toString(), monacoLanguage(docPath));
         xmlEditor = monaco.editor.create(xmlRef.current, {
@@ -246,7 +238,7 @@ export function LiveEditor({
       offPresence = session.onPresence(setPresence);
       setStatus("live");
     };
-    const offSynced = session.onSynced(attach);
+    const offSynced = session.onSynced(() => void attach());
     // still connecting after 10s → tell the user it's taking a while, keep waiting
     const slow = setTimeout(() => {
       if (!cancelled && !attached) setStatus("slow");
@@ -258,26 +250,23 @@ export function LiveEditor({
       offSynced();
       offPresence?.();
       contentRef.current = null;
-      todoCanvas?.destroy();
       todoCanvasRef.current = null;
-      unbindCanvas?.();
+      mounted?.destroy();
       monacoBinding?.destroy();
       xmlEditor?.dispose();
       xmlModel?.dispose();
-      modeler?.destroy();
-      dmnModeler?.destroy();
       session.destroy(); // provider AND socket
     };
   }, [repo, docPath, me.wsToken]);
 
-  // Feed the Checks panel from the shared Y.Text — only while it is OPEN, and
-  // debounced: re-analysing on every keystroke of a co-editor would be pure
+  // Feed the open plugin panel from the shared Y.Text — only while it is OPEN,
+  // and debounced: re-analysing on every keystroke of a co-editor would be pure
   // waste (`status` re-runs this once the session attached contentRef).
   useEffect(() => {
-    const ytext = panel === "checks" && isDmn ? contentRef.current : null;
+    const ytext = activePanelSpec ? contentRef.current : null;
     if (!ytext) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const sync = () => setDmnXml(ytext.toString());
+    const sync = () => setPanelContent(ytext.toString());
     sync();
     const onChange = () => {
       clearTimeout(timer);
@@ -288,7 +277,7 @@ export function LiveEditor({
       clearTimeout(timer);
       ytext.unobserve(onChange);
     };
-  }, [panel, isDmn, status]);
+  }, [activePanelSpec, status]);
 
   // release = pick files in the ReleaseDialog, THIS document preselected
   const [releaseOpen, setReleaseOpen] = useState(false);
@@ -348,6 +337,7 @@ export function LiveEditor({
       : null;
 
   const xmlActive = showXml || !isVisual;
+  const ActivePanel = activePanelSpec?.component;
 
   return (
     <div className="flex h-full flex-col">
@@ -387,17 +377,12 @@ export function LiveEditor({
             XML
           </Button>
         )}
-        {isDmn && (
-          <Button
-            variant="outline"
-            size="sm"
-            title="Analyse this decision and try a scenario — runs in the browser"
-            onClick={() => togglePanel("checks")}
-          >
-            <ShieldCheck />
-            Checks
+        {plugin?.panels?.map((p) => (
+          <Button key={p.id} variant="outline" size="sm" title={p.buttonTitle} onClick={() => togglePanel(p.id)}>
+            <p.icon />
+            {p.label}
           </Button>
-        )}
+        ))}
         <Button
           variant="outline"
           size="sm"
@@ -433,12 +418,12 @@ export function LiveEditor({
             </Button>
           </>
         )}
-        {isVisual && (
+        {plugin?.assistNotation && (
           <AssistMenu
             repo={repo}
             path={docPath}
-            notation={isBpmn ? "bpmn" : "dmn"}
-            selection={isBpmn ? selectedElements : undefined}
+            notation={plugin.assistNotation}
+            selection={hasElements ? selectedElements : undefined}
           />
         )}
         <Button size="sm" onClick={() => setReleaseOpen(true)}>
@@ -449,19 +434,15 @@ export function LiveEditor({
       <div className="relative min-h-0 flex-1">
         <div
           ref={canvasRef}
-          className={cn(
-            isDmn ? "dmn-canvas" : "bpmn-canvas",
-            "absolute inset-0",
-            xmlActive && "pointer-events-none opacity-0",
-          )}
+          className={cn(plugin?.canvasClassName, "absolute inset-0", xmlActive && "pointer-events-none opacity-0")}
         />
         <div
           ref={xmlRef}
           className={cn("monaco-host absolute inset-0", !xmlActive && "pointer-events-none opacity-0")}
         />
-        {isDmn && panel === "checks" && (
+        {ActivePanel && (
           <Suspense fallback={null}>
-            <DecisionChecksPanel repo={repo} xml={dmnXml} docPath={docPath} onClose={closePanel} />
+            <ActivePanel repo={repo} docPath={docPath} content={panelContent} onClose={closePanel} />
           </Suspense>
         )}
         {panel === "history" && (
@@ -507,7 +488,7 @@ export function LiveEditor({
           historical={diff.historical}
           current={diff.current}
           language={monacoLanguage(docPath)}
-          isBpmn={isBpmn}
+          diagramDiff={plugin?.diff}
           restorePending={restore.isPending}
           onRestore={() => restore.mutate(diff.commit)}
           onClose={() => setDiff(null)}
