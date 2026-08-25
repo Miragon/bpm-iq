@@ -145,7 +145,7 @@ test("list_models: one broken model degrades to its bare row, the listing surviv
       {
         from: "models/order-to-cash.bpmn",
         notation: "bpmn",
-        element: hits.referencedBy[0].element,
+        element: "Invoice",
         rel: "calls",
         resolved: false,
       },

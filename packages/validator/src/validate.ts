@@ -27,7 +27,7 @@ import {
   requirementHref,
   XMLValidator,
 } from "@bpmiq/notations/extract";
-import { type ModelRef, refsOf } from "@bpmiq/notations/refs";
+import { hasRefs, type ModelRef, refsOf } from "@bpmiq/notations/refs";
 
 export type Severity = "ERROR" | "WARN";
 export interface Finding {
@@ -430,7 +430,7 @@ export function checkModel(raw: string, ctx: CheckContext): Finding[] | undefine
  * plumbing. Skipped without ctx.modelIds (single-file use has no repo view).
  */
 function checkRefs(notation: string, raw: string, ctx: CheckContext): Finding[] {
-  if (!ctx.modelIds) return [];
+  if (!ctx.modelIds || !hasRefs(notation)) return []; // no emitter → skip the extract entirely
   // mirror the xml checkers' early return: no refs verdict on a file whose
   // well-formedness already failed (the lenient parser would still see nodes)
   if (byId(notation)?.mediaKind === "xml" && XMLValidator.validate(raw) !== true) return [];
@@ -459,7 +459,7 @@ function danglingMessage(ref: ModelRef): string {
   if (ref.rel === "calls") {
     return `callActivity calls '${ref.to.id}', which is not a process in this repo (external or dangling?)`;
   }
-  if (ref.rel === "decides") {
+  if (ref.rel === "decides" && ref.fromElement) {
     return `businessRuleTask ${ref.fromElement} decides '${ref.to.id}', which is not a decision in this repo (external or dangling?)`;
   }
   const target = ref.to.notation ? `${ref.to.notation} '${ref.to.id}'` : `'${ref.to.id}'`;

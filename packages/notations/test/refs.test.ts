@@ -13,7 +13,7 @@ import { test } from "node:test";
 
 import { buildRepoIndex, type ContentConfig } from "../content.ts";
 import { extractModelGraph, type ModelGraph } from "../extract.ts";
-import { refsOf } from "../refs.ts";
+import { hasRefs, refsOf } from "../refs.ts";
 
 const cfg = (folder: string): ContentConfig => ({ models: folder, processes: folder });
 
@@ -38,6 +38,13 @@ test("refsOf(bpmn): calls before decides, typed targets, required strength", () 
 test("refsOf: notations without an emitter yield []", () => {
   assert.deepEqual(refsOf({ notation: "wardley", nodes: [], edges: [] }), []);
   assert.deepEqual(refsOf({ notation: "markdown", nodes: [], edges: [] }), []);
+});
+
+test("hasRefs: true exactly for notations with an emitter — the save/check skip gate", () => {
+  assert.ok(hasRefs("bpmn"));
+  assert.ok(!hasRefs("dmn"));
+  assert.ok(!hasRefs("markdown"));
+  assert.ok(!hasRefs(""));
 });
 
 test("buildRepoIndex: artifacts + resolved/dangling refs + incoming/outgoing traversal", async () => {
