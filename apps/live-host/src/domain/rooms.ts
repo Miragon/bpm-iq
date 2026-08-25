@@ -8,7 +8,8 @@
  */
 import { resolve } from "node:path";
 
-import { EDITABLE_EXTENSIONS } from "@bpmiq/notations";
+import { byExtension, EDITABLE_EXTENSIONS } from "@bpmiq/notations";
+import { type DocCodec, docCodecFor } from "@bpmiq/notations/codecs";
 
 import type { ConnectedRepo } from "../repos/registry.ts";
 
@@ -98,4 +99,14 @@ export async function toDiskPath(
   // for the write paths), which is where filesystem access belongs; this
   // domain module stays pure.
   return disk;
+}
+
+/**
+ * The doc codec of a room's file — defined iff the notation is STRUCTURED
+ * (docShape, epic #118 step 8) and has a registered codec. Text rooms (every
+ * shipped notation today) resolve undefined and stay on the Y.Text lane.
+ */
+export function docCodecForPath(path: string): DocCodec | undefined {
+  const notation = byExtension(path);
+  return notation?.docShape === "structured" ? docCodecFor(notation.id) : undefined;
 }

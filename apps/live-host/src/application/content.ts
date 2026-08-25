@@ -33,13 +33,15 @@ import type {
   PutContentResultWire,
 } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
+import { readSnapshot, reconcileSnapshot } from "@bpmiq/live-client/structured";
 import { updateText } from "@bpmiq/live-client/text";
 import { byExtension } from "@bpmiq/notations";
+import type { DocCodec } from "@bpmiq/notations/codecs";
 import { hasRefs } from "@bpmiq/notations/refs";
 import { checkModel, type Finding } from "@bpmiq/validator";
 import type * as Y from "yjs";
 
-import { type RegistryLookup, toDiskPath, type WorkspaceEnsure } from "../domain/rooms.ts";
+import { docCodecForPath, type RegistryLookup, toDiskPath, type WorkspaceEnsure } from "../domain/rooms.ts";
 import { discoverModels, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 import { modelPath } from "./model-path.ts";
@@ -60,6 +62,10 @@ export interface ContentDeps {
   /** the room size cap — enforced here because beforeHandleMessage never runs
    *  for direct connections */
   maxDocBytes: number;
+  /** the STRUCTURED lane's codec per path (epic #118 step 8) — defaults to
+   *  the registry resolution (dark: undefined for every shipped notation);
+   *  tests inject their own */
+  docCodec?: (path: string) => DocCodec | undefined;
 }
 
 export type PutOutcome = { ok: true; result: PutContentResultWire } | { ok: false; conflict: ContentConflictWire };
@@ -75,9 +81,12 @@ export async function getContent(opts: ContentDeps, repo: ConnectedRepo, path: s
   const safePath = modelPath(opts.registry, repo, path, "content/invalid-path");
   await assertOnDisk(opts, repo, safePath);
   let out: ContentWire | undefined;
+  const codec = (opts.docCodec ?? docCodecForPath)(safePath);
   await withDoc(opts, repo, safePath, async (conn) => {
     await conn.transact((doc) => {
-      const xml = doc.getText(CONTENT_KEY).toString();
+      // structured rooms (epic #118 step 8) read as their CANONICAL encoding —
+      // the same text git, history and the validator see
+      const xml = codec ? codec.encode(readSnapshot(doc)) : doc.getText(CONTENT_KEY).toString();
       out = { repo: repo.fullName, path: safePath, xml, baseVersion: baseVersionOf(xml) };
     });
   });
@@ -140,12 +149,16 @@ export async function putContent(
   }
 
   let outcome: PutOutcome | undefined;
+  const codec = (opts.docCodec ?? docCodecForPath)(safePath);
+  // a structured save normalizes: the doc's state after the write is the
+  // canonical encoding of the DECODED payload — the returned token must match
+  const canonicalNext = codec ? codec.encode(codec.decode(body.xml)) : body.xml;
   await withDoc(opts, repo, safePath, async (conn) => {
     // CAS + write inside ONE synchronous transact callback — atomic on the event
     // loop, so no remote update can land between the compare and the write
     await conn.transact((doc) => {
       const ytext = doc.getText(CONTENT_KEY);
-      const current = ytext.toString();
+      const current = codec ? codec.encode(readSnapshot(doc)) : ytext.toString();
       const currentVersion = baseVersionOf(current);
       if (body.baseVersion !== currentVersion) {
         outcome = {
@@ -160,14 +173,21 @@ export async function putContent(
         };
         return; // no mutation on conflict
       }
-      // minimal diff (shared writer with web/vscode) — co-editors see an
-      // incremental update, not a replace-all
-      updateText(ytext, body.xml);
+      if (codec) {
+        // structured lane: element-/attribute-wise reconcile — a whole-board
+        // agent save touches only what differs, so co-editors' concurrent
+        // work on other elements merges instead of being replaced
+        reconcileSnapshot(doc, codec.decode(body.xml));
+      } else {
+        // minimal diff (shared writer with web/vscode) — co-editors see an
+        // incremental update, not a replace-all
+        updateText(ytext, body.xml);
+      }
       outcome = {
         ok: true,
         result: {
           path: safePath,
-          baseVersion: baseVersionOf(body.xml),
+          baseVersion: baseVersionOf(canonicalNext),
           warnings,
           ...(lintErrors.length > 0 ? { errors: lintErrors } : {}),
         },

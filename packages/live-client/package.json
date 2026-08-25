@@ -13,7 +13,8 @@
     "./bpmn-sync": "./src/bpmn-sync.ts",
     "./dmn-sync": "./src/dmn-sync.ts",
     "./wardley-sync": "./src/wardley-sync.ts",
-    "./tt-sync": "./src/tt-sync.ts"
+    "./tt-sync": "./src/tt-sync.ts",
+    "./structured": "./src/structured.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

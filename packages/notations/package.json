@@ -15,7 +15,8 @@
     "./refs": "./refs.ts",
     "./templates": "./templates.ts",
     "./content": "./content.ts",
-    "./cli": "./cli.ts"
+    "./cli": "./cli.ts",
+    "./codecs": "./codecs.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

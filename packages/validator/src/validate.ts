@@ -361,6 +361,14 @@ export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findin
 export function checkModelBaseline(raw: string, opts: { file?: string; notation: string }): Finding[] {
   const file = opts.file ?? `<${opts.notation}>`;
   const findings: Finding[] = [];
+  // a STRUCTURED notation's at-rest text is its codec's canonical format
+  // (e.g. JSON lines), NOT a plain mediaKind document — the mediaKind parse
+  // gate would false-positive on every valid file. Its codec's decode is
+  // TOTAL by contract; real structure checks are the notation's own checker.
+  // DARK today (no registered notation is structured, byId has no injection
+  // point) — shipped now so #116's first board file does not trip the JSON
+  // gate the moment its descriptor flips; recorded on the ticket.
+  if (byId(opts.notation)?.docShape === "structured") return findings;
   const err = (message: string): void => {
     findings.push({ severity: "ERROR", ruleId: "baseline/parse", file, message });
   };

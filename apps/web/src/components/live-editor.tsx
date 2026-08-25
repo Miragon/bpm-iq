@@ -78,6 +78,11 @@ export function LiveEditor({
   const notation = byExtension(docPath);
   const plugin = webPlugin(notation?.id);
   const isVisual = plugin?.mountEditor !== undefined;
+  // a STRUCTURED room's truth lives in the element maps, NOT in CONTENT_KEY —
+  // a writable Monaco bound there would sync typed text to peers but never
+  // reach disk/REST/history (silent loss). No text tab until the structured
+  // text lane is properly wired (dark today: every shipped notation is text).
+  const structuredDoc = notation?.docShape === "structured";
   // cosmetic special case: bpmn is the platform's primary notation — its label
   // badge stays hidden and the title shows the process id alone
   const isBpmn = notation?.id === "bpmn";
@@ -225,7 +230,7 @@ export function LiveEditor({
         }
       }
       if (cancelled) return;
-      if (xmlRef.current) {
+      if (xmlRef.current && !structuredDoc) {
         xmlModel = monaco.editor.createModel(ytext.toString(), monacoLanguage(docPath));
         xmlEditor = monaco.editor.create(xmlRef.current, {
           model: xmlModel,
@@ -336,7 +341,7 @@ export function LiveEditor({
       ? (restore.variables?.sha ?? null)
       : null;
 
-  const xmlActive = showXml || !isVisual;
+  const xmlActive = (showXml || !isVisual) && !structuredDoc;
   const ActivePanel = activePanelSpec?.component;
 
   return (
@@ -372,7 +377,7 @@ export function LiveEditor({
             </div>
           ))}
         </div>
-        {isVisual && (
+        {isVisual && !structuredDoc && (
           <Button variant="outline" size="sm" onClick={() => setShowXml((v) => !v)}>
             {notation?.mediaKind === "xml" ? "XML" : notation?.mediaKind === "json" ? "JSON" : "Text"}
           </Button>
