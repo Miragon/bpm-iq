@@ -374,7 +374,7 @@ export function LiveEditor({
         </div>
         {isVisual && (
           <Button variant="outline" size="sm" onClick={() => setShowXml((v) => !v)}>
-            XML
+            {notation?.mediaKind === "xml" ? "XML" : notation?.mediaKind === "json" ? "JSON" : "Text"}
           </Button>
         )}
         {plugin?.panels?.map((p) => (

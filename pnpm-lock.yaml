@@ -166,6 +166,15 @@ importers:
       '@emaarco/dmn-js-simulation':
         specifier: 0.2.0
         version: 0.2.0(diagram-js@15.24.0)(dmn-js@17.10.1(@bpmn-io/cm-theme@0.2.2(@codemirror/state@6.7.1)(@codemirror/view@6.43.7)))(inferno@5.6.3)
+      '@miragon/team-topologies-renderer':
+        specifier: 0.6.0
+        version: 0.6.0
+      '@miragon/team-topologies-schema-model':
+        specifier: 0.6.0
+        version: 0.6.0
+      '@miragon/wardley-renderer':
+        specifier: 0.6.1
+        version: 0.6.1
       '@modelcontextprotocol/ext-apps':
         specifier: 1.7.5
         version: 1.7.5(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)
@@ -227,6 +236,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: 6.0.5
         version: 6.0.5(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+      postcss-prefix-selector:
+        specifier: 2.1.1
+        version: 2.1.1(postcss@8.5.26)
       vite:
         specifier: 8.2.1
         version: 8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0)
@@ -858,6 +870,21 @@ packages:
 
   '@marijn/find-cluster-break@1.0.3':
     resolution: {integrity: sha512-FY+MKLBoTsLNJF/eLWaOsXGdz6uh3Iu1axjPf6TUq92IYumcTcXWHoS747JARLkcdlJ/Waiaxc5wQfFO8jC6NA==}
+
+  '@miragon/team-topologies-renderer@0.6.0':
+    resolution: {integrity: sha512-Z4CGp54+R+OMaaP5IUZ6Tkq8B9o/i9XzJm/yaeZtx4ssK5tlmDSTJR5m4yhn6b7/qeM+0lMNzrEJALpyIOa9Pw==}
+
+  '@miragon/team-topologies-schema-model@0.6.0':
+    resolution: {integrity: sha512-WHDMlvMwF0jGSmqhiCVT4FluHGc4mKUUq7Nx4d+bKFeY1F9nKcVkOv/alr2EXf7eKH2+egxknMFgqMWYRqRJ1Q==}
+
+  '@miragon/wardley-dsl@0.5.1':
+    resolution: {integrity: sha512-gwLzrTmJVx4ywgG7UiHu4OGatrWMsuUo1xcjCVmW0FZVoLEh0HkuxPn8mMx0j5QlRuPYvmDLfBTAEwvY8EpROQ==}
+
+  '@miragon/wardley-renderer@0.6.1':
+    resolution: {integrity: sha512-S+yqmfZzjoprwCcieSL/O8IaNcB40TB+Y+cpLfnnCp1X61gkwWaZpvrlW60gl4Jei9709DMcshNcUHmwUlZdCQ==}
+
+  '@miragon/wardley-schema-model@0.5.0':
+    resolution: {integrity: sha512-oXElHfkWlZ4hDvaU6Gm7IKeVqB3jwwVkU+AWBvbVFJ5ege08qtCGySogejenNbp8ejqx65NE+0app/017IYO1w==}
 
   '@modelcontextprotocol/ext-apps@1.7.5':
     resolution: {integrity: sha512-TjPH2S2y5UEGKhmI6+XGFuqfqOV4ppe1x6DA3txnUaEWkgtA4G5vo14jGKFZmegdkZ1H4QMLyujLvoU1BEdnAg==}
@@ -1999,6 +2026,12 @@ packages:
     peerDependencies:
       diagram-js: '*'
 
+  diagram-js@15.22.0:
+    resolution: {integrity: sha512-xcX1e4lmRCrpwlnNqNHVqY8Xp4i70tXUZwO39IzRJsXWq6F+/osNs4biehnb5ZlHIzjZcEHWzOx/vlIui4qS8w==}
+
+  diagram-js@15.23.0:
+    resolution: {integrity: sha512-cCgL+4Ep0xrLe6TtdvRVgo6bWYjUbrQg+ES/9rpltqmTD2YaPoC+NYcRsKYw/fDO+1RN0q16NzErP1svVZhNQg==}
+
   diagram-js@15.24.0:
     resolution: {integrity: sha512-RVSeGHVNAWQHM7reWAP0geb245GMVPMeDlsYsilNUrQwR/t+rp8ov0agZArCfV7hUaj8VqIQCMROo50L5MLbbg==}
 
@@ -2768,6 +2801,11 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  nanoid@5.1.16:
+    resolution: {integrity: sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ==}
+    engines: {node: ^18 || >=20}
+    hasBin: true
+
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
@@ -2868,6 +2906,11 @@ packages:
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
     engines: {node: '>=16.20.0'}
+
+  postcss-prefix-selector@2.1.1:
+    resolution: {integrity: sha512-ZBgf427Et6+XnrnJ9VXtJEKCjJwTvn2wn/qMg+wvvlRhIeFIAxdbrlZZ0CSsWYMJfcyPLBh8ogj5O1kb/Mcx3g==}
+    peerDependencies:
+      postcss: ^8.0.0
 
   postcss@8.5.26:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
@@ -3909,6 +3952,39 @@ snapshots:
 
   '@marijn/find-cluster-break@1.0.3': {}
 
+  '@miragon/team-topologies-renderer@0.6.0':
+    dependencies:
+      '@miragon/team-topologies-schema-model': 0.6.0
+      diagram-js: 15.22.0
+      didi: 11.0.0
+      tiny-svg: 4.1.4
+    transitivePeerDependencies:
+      - preact-render-to-string
+
+  '@miragon/team-topologies-schema-model@0.6.0':
+    dependencies:
+      nanoid: 5.1.16
+      zod: 4.4.3
+
+  '@miragon/wardley-dsl@0.5.1':
+    dependencies:
+      '@miragon/wardley-schema-model': 0.5.0
+
+  '@miragon/wardley-renderer@0.6.1':
+    dependencies:
+      '@miragon/wardley-dsl': 0.5.1
+      '@miragon/wardley-schema-model': 0.5.0
+      clsx: 2.1.1
+      diagram-js: 15.23.0
+      didi: 11.0.0
+      tiny-svg: 4.1.4
+    transitivePeerDependencies:
+      - preact-render-to-string
+
+  '@miragon/wardley-schema-model@0.5.0':
+    dependencies:
+      zod: 4.4.3
+
   '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.4.3)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.30.0(zod@4.4.3)
@@ -4876,6 +4952,34 @@ snapshots:
       min-dash: 5.1.0
       min-dom: 5.3.0
 
+  diagram-js@15.22.0:
+    dependencies:
+      '@bpmn-io/diagram-js-ui': 0.2.4
+      clsx: 2.1.1
+      didi: 11.0.0
+      inherits-browser: 0.1.0
+      min-dash: 5.1.0
+      min-dom: 5.3.0
+      object-refs: 0.4.0
+      path-intersection: 4.1.0
+      tiny-svg: 4.1.4
+    transitivePeerDependencies:
+      - preact-render-to-string
+
+  diagram-js@15.23.0:
+    dependencies:
+      '@bpmn-io/diagram-js-ui': 0.2.4
+      clsx: 2.1.1
+      didi: 11.0.0
+      inherits-browser: 0.1.0
+      min-dash: 5.1.0
+      min-dom: 5.3.0
+      object-refs: 0.4.0
+      path-intersection: 4.1.0
+      tiny-svg: 4.1.4
+    transitivePeerDependencies:
+      - preact-render-to-string
+
   diagram-js@15.24.0:
     dependencies:
       '@bpmn-io/diagram-js-ui': 0.2.4
@@ -5671,6 +5775,8 @@ snapshots:
 
   nanoid@3.3.18: {}
 
+  nanoid@5.1.16: {}
+
   natural-compare@1.4.0: {}
 
   negotiator@1.0.0: {}
@@ -5751,6 +5857,10 @@ snapshots:
   picomatch@4.0.5: {}
 
   pkce-challenge@5.0.1: {}
+
+  postcss-prefix-selector@2.1.1(postcss@8.5.26):
+    dependencies:
+      postcss: 8.5.26
 
   postcss@8.5.26:
     dependencies:

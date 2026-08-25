@@ -18,6 +18,8 @@ import type { TodoCanvas } from "@/lib/todo-canvas";
 
 import { bpmnPlugin } from "./bpmn";
 import { dmnPlugin } from "./dmn";
+import { teamTopologyPlugin } from "./team-topology";
+import { wardleyPlugin } from "./wardley";
 
 /** what the shell hands a mounting editor engine */
 export interface EditorContext {
@@ -94,6 +96,8 @@ export interface WebNotationPlugin {
 const WEB_PLUGINS: Record<string, WebNotationPlugin> = {
   bpmn: bpmnPlugin,
   dmn: dmnPlugin,
+  wardley: wardleyPlugin,
+  "team-topology": teamTopologyPlugin,
 };
 
 // the shell renders its own panels on these ids — a plugin colliding with them

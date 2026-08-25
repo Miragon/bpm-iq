@@ -10,8 +10,9 @@
  *     rare invalid interleavings — the next update usually heals the document
  *
  * What differs per notation (how change events are observed, how the view
- * state survives a re-import) lives in a SyncAdapter; bpmn-sync and dmn-sync
- * are the two adapters. Consumers import those, never this module.
+ * state survives a re-import, what "renderable" means pre-import) lives in a
+ * SyncAdapter; bpmn-sync, dmn-sync, wardley-sync and tt-sync are the
+ * adapters. Consumers import those, never this module.
  */
 import type * as Y from "yjs";
 
@@ -25,6 +26,13 @@ export interface SyncAdapter {
   importXML(xml: string): Promise<unknown>;
   /** serialize the current model, formatted */
   saveXML(): Promise<string | undefined>;
+  /**
+   * rule-4 pre-gate: is this text worth an import attempt at all? Default is
+   * XML well-formedness (bpmn/dmn); text-DSL/JSON notations override it —
+   * their parser (importXML) stays the real judge, rejections keep the last
+   * good state either way
+   */
+  looksRenderable?(text: string): boolean;
   /**
    * snapshot the view state right before an import; returns the restore to
    * run after the import succeeded
@@ -80,10 +88,14 @@ export function bindModelSync(
       if (xml === "") reportFirstImportFailure("the document is empty");
       return;
     }
-    if (!looksValidXml(xml)) {
+    if (!(adapter.looksRenderable ?? looksValidXml)(xml)) {
       // rule 4: keep last good canvas, wait for next update — but a document
       // that is broken from the START has no last good canvas to keep
-      reportFirstImportFailure("the document is not well-formed XML");
+      reportFirstImportFailure(
+        adapter.looksRenderable
+          ? "the document is not renderable in its current state"
+          : "the document is not well-formed XML",
+      );
       return;
     }
     importing = true;
