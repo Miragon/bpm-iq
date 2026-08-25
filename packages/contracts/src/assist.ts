@@ -36,7 +36,10 @@ export interface AssistContext {
   repo: string;
   /** repo-relative model path */
   path: string;
-  notation: "bpmn" | "dmn";
+  /** notation registry id — the tool mapping below covers the notations with
+   *  a modeler widget; others have no assist surface yet (the menu only
+   *  renders for plugins that declare one) */
+  notation: string;
   /** the Live Host's MCP endpoint (AppConfig.mcpUrl) — names the instance */
   mcpUrl: string;
   /** current canvas selection (BPMN only) — rides along as data */
@@ -73,7 +76,7 @@ function selectionBlock(selection: TodoElement[]): string {
 }
 
 export function buildAssistPrompt(ctx: AssistContext): string {
-  const tool = ctx.notation === "bpmn" ? "open_modeler" : "open_decision_modeler";
+  const tool = ctx.notation === "dmn" ? "open_decision_modeler" : "open_modeler";
   // repo/path are repo-derived like the names: JSON.stringify keeps a quote,
   // backslash or newline in a committed filename INSIDE the quoted argument
   // instead of letting it rewrite the trusted first line
