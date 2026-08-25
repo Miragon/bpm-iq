@@ -1,17 +1,21 @@
 /**
- * deriveProcess(graph) => DerivedProcess — the "process.yaml on-the-fly".
+ * The derive capability: ModelGraph → human/agent-readable views.
  *
- * The slim content contract has NO hand-written process metadata: a process IS
- * a .bpmn file. This turns the generic ModelGraph (extract.ts) into the process
- * view everything used to read from process.yaml — name, the roles (BPMN lanes),
- * the steps/events/gateways, the flow, and the sub-process calls (callActivity →
- * calledElement). Consumers (MCP, validator, skills) read THIS instead of a file.
+ * deriveView(graph) is the GENERIC dispatch — one common core (name, summary,
+ * stats, rich payload in `detail`) for every notation with a registered
+ * deriver; consumers that want "a view of whatever this model is" (listings,
+ * get_view) call it and never gate on the notation.
  *
- * deriveDecision(graph) is its DMN sibling: a decision IS a .dmn file, and its
- * view is the decision table itself (inputs, outputs, hit policy, rules) plus
- * the DRD wiring between decisions.
+ * deriveProcess(graph) => DerivedProcess is the rich BPMN view — the
+ * "process.yaml on-the-fly": the slim content contract has NO hand-written
+ * process metadata, so this turns the generic ModelGraph (extract.ts) into
+ * name, roles (BPMN lanes), steps/events/gateways, flow and sub-process calls.
+ * deriveDecision(graph) is its DMN sibling (decision table + DRD wiring).
+ * Consumers that need those FIELDS keep calling them directly.
  *
- * Pure + browser-safe: operates on the already-parsed ModelGraph, no fs, no XML.
+ * Pure + browser-safe: operates on the already-parsed ModelGraph, no fs, no
+ * XML — this module is imported eagerly by the web SPA
+ * (CI: notations-index-and-derive-stay-browser-safe).
  */
 import { kindOf } from "./bpmn-kinds.ts";
 import type { ModelGraph, ModelNode } from "./extract.ts";
@@ -280,4 +284,74 @@ export function deriveDecision(graph: ModelGraph): DerivedDecision {
       rules: decisions.reduce((sum, d) => sum + d.rules.length, 0),
     },
   };
+}
+
+// ── the generic view (deriveView) ────────────────────────────────────────────
+
+/**
+ * The common core every notation's derived view shares — what listings and
+ * generic tools consume. The rich, notation-typed payload (DerivedProcess,
+ * DerivedDecision, …) rides in `detail` for consumers that know the notation.
+ */
+export interface DerivedView {
+  notation: string;
+  /** the model's own title (pool name, definitions name, …) — null when the
+   *  file carries none (the file stem is the id the caller already has) */
+  name: string | null;
+  /** one deterministic sentence for humans and agents */
+  summary: string;
+  /** listing badges and counts, e.g. { steps: 7, gateways: 2 } */
+  stats: Record<string, number>;
+  detail?: unknown;
+}
+
+/** "3 steps, 1 gateway" — deterministic stats prose for the summary line */
+const counted = (stats: Record<string, number>): string =>
+  Object.entries(stats)
+    .map(([k, v]) => `${v} ${v === 1 ? k.replace(/ies$/, "y").replace(/s$/, "") : k}`)
+    .join(", ");
+
+const DERIVERS: Record<string, (graph: ModelGraph) => DerivedView> = {
+  bpmn: (graph) => {
+    const d = deriveProcess(graph);
+    return {
+      notation: "bpmn",
+      name: d.name,
+      summary: `Process with ${counted(d.stats)}`,
+      stats: { ...d.stats },
+      detail: d,
+    };
+  },
+  dmn: (graph) => {
+    const d = deriveDecision(graph);
+    return {
+      notation: "dmn",
+      name: d.name,
+      summary: `Decision model with ${counted(d.stats)}`,
+      stats: { ...d.stats },
+      detail: d,
+    };
+  },
+  wardley: (graph) => {
+    const stats = { components: graph.nodes.length, dependencies: graph.edges.length };
+    return { notation: "wardley", name: null, summary: `Wardley map with ${counted(stats)}`, stats };
+  },
+  "team-topology": (graph) => {
+    const stats = { teams: graph.nodes.length, interactions: graph.edges.length };
+    return { notation: "team-topology", name: null, summary: `Team topology with ${counted(stats)}`, stats };
+  },
+  "value-chain": (graph) => {
+    const stats = { elements: graph.nodes.length, connections: graph.edges.length };
+    return { notation: "value-chain", name: null, summary: `Value chain with ${counted(stats)}`, stats };
+  },
+};
+
+/**
+ * THE generic derive dispatch: the view of whatever notation `graph` carries;
+ * `undefined` when no deriver is registered (the caller falls back to the
+ * bare listing row). Registering a notation's deriver here is the whole
+ * integration — no consumer changes.
+ */
+export function deriveView(graph: ModelGraph): DerivedView | undefined {
+  return DERIVERS[graph.notation]?.(graph);
 }

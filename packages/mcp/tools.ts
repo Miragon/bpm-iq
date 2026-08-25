@@ -33,7 +33,7 @@ import {
   discoverProcesses,
   loadContentConfig,
 } from "@bpmiq/notations/content";
-import { deriveProcess } from "@bpmiq/notations/derive";
+import { deriveProcess, deriveView } from "@bpmiq/notations/derive";
 import { extractModelGraph, type ModelGraph } from "@bpmiq/notations/extract";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -170,7 +170,8 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
       description:
         "List EVERY model file of the repository, grouped by notation (bpmn, dmn, wardley, " +
         "team-topology, …) — the registry-wide superset of list_processes. Each row: id " +
-        "(file stem) and path. Use to see which notations a repo contains before reaching " +
+        "(file stem), path, and — for notations with a registered deriver — the model's own " +
+        "name, summary and stats. Use to see which notations a repo contains before reaching " +
         "for the notation-specific tools.",
       annotations: READ_ONLY,
     },
@@ -179,8 +180,27 @@ export function createMcpServer(root: string = DEFAULT_ROOT, todos?: TodosConfig
       if (!cfg) return notAContentRepo();
       const models = await discoverModels(root, cfg);
       if (models.length === 0) return ok("No model files found under the configured models folder.");
-      const grouped: Record<string, Array<{ id: string; path: string }>> = {};
-      for (const m of models) (grouped[m.notation] ??= []).push({ id: m.id, path: m.path });
+      const grouped: Record<string, Array<Record<string, unknown>>> = {};
+      for (const m of models) {
+        // extract + deriveView are the notation's registered capabilities —
+        // a notation without them, an unreadable file OR a transiently broken
+        // one (this server reflects a live-edited checkout) still lists as
+        // the bare row; one bad file must never kill the whole listing
+        let view;
+        try {
+          const raw = readText(join(root, m.path));
+          const graph = raw === null ? undefined : extractModelGraph(m.path, raw);
+          view = graph ? deriveView(graph) : undefined;
+        } catch {
+          view = undefined;
+        }
+        (grouped[m.notation] ??= []).push({
+          id: m.id,
+          path: m.path,
+          ...(view?.name ? { name: view.name } : {}),
+          ...(view ? { summary: view.summary, stats: view.stats } : {}),
+        });
+      }
       return ok({ models: grouped });
     }),
   );

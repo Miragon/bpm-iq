@@ -104,10 +104,40 @@ test("registration: the eight read-only tools are exposed (no rich-layout tools)
   ]);
 });
 
-test("list_models: grouped by notation — the registry-wide superset", async () => {
+test("list_models: grouped by notation, rows enriched via extract+deriveView", async () => {
   const grouped = await callJson("list_models");
   assert.deepEqual(Object.keys(grouped.models), ["bpmn"]);
   assert.deepEqual(grouped.models.bpmn.map((m: { id: string }) => m.id).sort(), ["invoice-handling", "order-to-cash"]);
+  // notations with extract+derive get the derived core on every row —
+  // the acceptance path of epic #118 step 3 (zero consumer changes)
+  const row = grouped.models.bpmn.find((m: { id: string }) => m.id === "order-to-cash");
+  assert.match(row.summary, /^Process with /);
+  assert.equal(typeof row.stats.steps, "number");
+});
+
+test("list_models: one broken model degrades to its bare row, the listing survives", async () => {
+  // a live-edited checkout may hold transiently broken files — a per-row
+  // throw must never kill the whole tool call
+  const root = mkdtempSync(join(tmpdir(), "bpm-mcp-broken-"));
+  writeFileSync(join(root, "bpmiq.yml"), "models: models\n");
+  mkdirSync(join(root, "models"), { recursive: true });
+  writeFileSync(join(root, "models", "order-to-cash.bpmn"), ORDER_BPMN);
+  writeFileSync(join(root, "models", "teams.tt"), "{ broken json");
+  const s = createMcpServer(root);
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  const c = new Client({ name: "broken-test", version: "0" });
+  await Promise.all([s.connect(st), c.connect(ct)]);
+  try {
+    const { isError, text } = toolText(await c.callTool({ name: "list_models", arguments: {} }));
+    assert.ok(!isError, `listing must survive one broken file: ${text}`);
+    const grouped = JSON.parse(text);
+    assert.deepEqual(Object.keys(grouped.models).sort(), ["bpmn", "team-topology"]);
+    assert.deepEqual(grouped.models["team-topology"], [{ id: "teams", path: "models/teams.tt" }]);
+    assert.match(grouped.models.bpmn[0].summary, /^Process with /);
+  } finally {
+    await c.close();
+    await s.close();
+  }
 });
 
 test("list_processes: one row per .bpmn with derived name + stats", async () => {

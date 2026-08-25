@@ -46,7 +46,8 @@ function setup(over: Partial<OverviewDeps> = {}) {
   writeFileSync(join(ws, "processes", "sub", "check-credit.bpmn"), "<bpmn/>");
   writeFileSync(join(ws, "processes", "rabatt.dmn"), "<dmn/>");
   writeFileSync(join(ws, "processes", "strategy.owm"), "component Tea [0.5, 0.5]"); // another notation
-  writeFileSync(join(ws, "processes", "notes.md"), "not a process"); // wrong extension → skipped
+  writeFileSync(join(ws, "processes", "notes.md"), "not a process"); // markdown IS a notation — a model, not a process
+  writeFileSync(join(ws, "processes", "cases.tests.yaml"), "cases: []"); // unregistered extension → skipped
   mkdirSync(join(ws, "docs"));
   writeFileSync(join(ws, "docs", "stray.bpmn"), "<bpmn/>"); // outside the folder → skipped
 
@@ -147,7 +148,7 @@ test("listAllModels: every registered notation in one list — the full wire row
   const rows = await listAllModels(deps, REPO, ws);
   assert.deepEqual(
     rows.map((r) => `${r.notation}:${r.id}`).sort(),
-    ["bpmn:check-credit", "bpmn:order", "dmn:rabatt", "wardley:strategy"],
+    ["bpmn:check-credit", "bpmn:order", "dmn:rabatt", "markdown:notes", "wardley:strategy"],
     "the registry-wide superset of the processes/decisions lists",
   );
   assert.deepEqual(

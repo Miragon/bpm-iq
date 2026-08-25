@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
-import { byId } from "@bpmiq/notations";
+import { byExtension, byId } from "@bpmiq/notations";
 import { kindOf } from "@bpmiq/notations/bpmn-kinds";
 import { cliRoot, notContentRepoError } from "@bpmiq/notations/cli";
 import {
@@ -373,6 +373,37 @@ export function checkModelBaseline(raw: string, opts: { file?: string; notation:
   return findings;
 }
 
+/** what checkModel knows about the surrounding repo */
+export interface CheckContext {
+  /** repo-relative path — selects the notation AND labels the findings */
+  path: string;
+  /** repo-wide model ids per notation id (discoverModels) — enables the
+   *  cross-model link warnings (callActivity → process, decisionRef →
+   *  decision); absent = link checks are skipped */
+  modelIds?: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+/**
+ * THE one check dispatch: the platform check for whatever notation `ctx.path`
+ * is — full checkers for BPMN/DMN, the mediaKind baseline for everything
+ * else, `undefined` when the path matches no registered notation (the file is
+ * not a model; nothing to check). Consumed by the CLI (runCli) AND the Live
+ * Host's save gate (application/content.ts) so both always agree.
+ */
+export function checkModel(raw: string, ctx: CheckContext): Finding[] | undefined {
+  const notation = byExtension(ctx.path)?.id;
+  if (!notation) return undefined;
+  if (notation === "bpmn") {
+    return checkBpmnXml(raw, {
+      file: ctx.path,
+      processIds: ctx.modelIds ? new Set(ctx.modelIds.get("bpmn") ?? []) : undefined,
+      decisionIds: ctx.modelIds ? new Set(ctx.modelIds.get("dmn") ?? []) : undefined,
+    }).findings;
+  }
+  if (notation === "dmn") return checkDmnXml(raw, { file: ctx.path }).findings;
+  return checkModelBaseline(raw, { file: ctx.path, notation });
+}
+
 // ── CLI (invoked by src/cli.ts — the dedicated bin entry) ───────────────────────
 
 export async function runCli(): Promise<void> {
@@ -405,22 +436,12 @@ export async function runCli(): Promise<void> {
     process.exit(1);
   }
 
-  const processIds = new Set(all.map((p) => p.id));
-  const decisionIds = new Set(allDecisions.map((d) => d.id));
+  const modelIds = new Map<string, Set<string>>();
+  for (const m of models) (modelIds.get(m.notation) ?? modelIds.set(m.notation, new Set()).get(m.notation)!).add(m.id);
   const findings: Finding[] = [];
-  for (const proc of processes) {
-    const abs = resolve(ROOT, proc.path);
-    const { findings: fs } = checkBpmnXml(readFileSync(abs, "utf8"), { file: rel(abs), processIds, decisionIds });
-    findings.push(...fs);
-  }
-  for (const decision of decisions) {
-    const abs = resolve(ROOT, decision.path);
-    const { findings: fs } = checkDmnXml(readFileSync(abs, "utf8"), { file: rel(abs) });
-    findings.push(...fs);
-  }
-  for (const model of others) {
+  for (const model of [...processes, ...decisions, ...others]) {
     const abs = resolve(ROOT, model.path);
-    findings.push(...checkModelBaseline(readFileSync(abs, "utf8"), { file: rel(abs), notation: model.notation }));
+    findings.push(...(checkModel(readFileSync(abs, "utf8"), { path: rel(abs), modelIds }) ?? []));
   }
 
   for (const f of findings.sort((a, b) => a.file.localeCompare(b.file))) {

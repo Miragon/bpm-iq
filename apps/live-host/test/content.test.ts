@@ -248,11 +248,45 @@ test("putContent gates: baseVersion required, validation 422 (BPMN and DMN), siz
   assert.ok(saved.ok);
   assert.deepEqual(saved.result.warnings, []);
 
-  // a notation without a checker (.md) still passes through untouched
+  // markdown IS a registered notation, but one without a check — checkModel
+  // returns [] and the save passes through untouched
   writeFileSync(join(ws, "processes", "notes.md"), "# notes");
   const md = await getContent(deps, REPO, "processes/notes.md");
   const note = await putContent(deps, REPO, "processes/notes.md", { xml: "# more", baseVersion: md.baseVersion });
   assert.ok(note.ok);
+});
+
+test("putContent gates EVERY notation through checkModel — the save path and `pnpm validate` agree", async () => {
+  const { ws, deps } = setup();
+  // (a) a broken .tt is refused exactly like the CLI errors it (baseline gate)
+  writeFileSync(join(ws, "processes", "teams.tt"), "{}");
+  const tt = await getContent(deps, REPO, "processes/teams.tt");
+  await assert.rejects(
+    () => putContent(deps, REPO, "processes/teams.tt", { xml: "{ broken", baseVersion: tt.baseVersion }),
+    (e: AppError) => e.code === "content/invalid-model" && /not parseable as JSON/.test(e.message),
+  );
+  const ttOk = await putContent(deps, REPO, "processes/teams.tt", {
+    xml: '{"nodes": []}',
+    baseVersion: tt.baseVersion,
+  });
+  assert.ok(ttOk.ok);
+
+  // (b) the BPMN link warnings ride the repo-wide id scan: a callActivity
+  // calling a process that EXISTS stays clean, a dangling one warns — the
+  // lintModel modelIds aggregation is observed end-to-end, not implied
+  const CALLER = VALID.replace(
+    /<bpmn:process id="order"([^>]*)>/,
+    '<bpmn:process id="order"$1><bpmn:callActivity id="Call_1" calledElement="no-such-process"><bpmn:incoming>Flow_1b</bpmn:incoming><bpmn:outgoing>Flow_1c</bpmn:outgoing></bpmn:callActivity>',
+  );
+  writeFileSync(join(ws, PATH), VALID);
+  const got = await getContent(deps, REPO, PATH);
+  const saved = await putContent(deps, REPO, PATH, { xml: CALLER, baseVersion: got.baseVersion, lint: "warn" });
+  assert.ok(saved.ok);
+  assert.ok(
+    saved.result.errors?.some((m) => /calls 'no-such-process'/.test(m)) ||
+      saved.result.warnings.some((m) => /calls 'no-such-process'/.test(m)),
+    `expected the dangling-callActivity warning, got: ${JSON.stringify(saved.result)}`,
+  );
 });
 
 test("putContent lint:'warn' saves an invalid model and reports the errors instead of refusing", async () => {

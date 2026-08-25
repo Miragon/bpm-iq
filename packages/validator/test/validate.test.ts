@@ -37,7 +37,9 @@ test("fixture repo validates green (a process per .bpmn, artifacts + collaborati
   assert.match(out, /0 error\(s\)/);
   // three .bpmn files: order-to-cash, its invoice-handling sub-process, two-pool
   // plus the credit-check.dmn — decisions are validated in the same pass
-  assert.match(out, /3 process\(es\), 1 decision\(s\) checked/);
+  // the .md under the processes root counts as a model since markdown became
+  // a registered notation (epic #118 step 3) — baseline-gated, never failing
+  assert.match(out, /3 process\(es\), 1 decision\(s\), 1 other model\(s\) checked/);
 });
 
 test("a broken .dmn fails the same run as the processes", () => {
