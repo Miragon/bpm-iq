@@ -12,6 +12,7 @@
     "./bpmn-kinds": "./bpmn-kinds.ts",
     "./extract": "./extract.ts",
     "./derive": "./derive.ts",
+    "./refs": "./refs.ts",
     "./templates": "./templates.ts",
     "./content": "./content.ts",
     "./cli": "./cli.ts"

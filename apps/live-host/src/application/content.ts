@@ -35,6 +35,7 @@ import type {
 import { AppError } from "@bpmiq/http-kit";
 import { updateText } from "@bpmiq/live-client/text";
 import { byExtension } from "@bpmiq/notations";
+import { hasRefs } from "@bpmiq/notations/refs";
 import { checkModel, type Finding } from "@bpmiq/validator";
 import type * as Y from "yjs";
 
@@ -180,11 +181,11 @@ export async function putContent(
 /** the platform validator for whatever notation this path is — checkModel is
  *  THE one dispatch the CLI also runs, so a live save and `pnpm validate`
  *  always agree; `undefined` when the path is no registered notation (the
- *  file still saves). The repo-wide id scan feeds only the BPMN link
- *  warnings, so only .bpmn saves pay for it — the historical cost profile. */
+ *  file still saves). The repo-wide id scan feeds only the reference checks,
+ *  so only saves of a notation WITH a refs emitter pay for it. */
 async function lintModel(workspace: string, safePath: string, content: string): Promise<Finding[] | undefined> {
   let modelIds: Map<string, Set<string>> | undefined;
-  if (byExtension(safePath)?.id === "bpmn") {
+  if (hasRefs(byExtension(safePath)?.id ?? "")) {
     const cfg = loadContentConfig(workspace);
     if (cfg) {
       modelIds = new Map();

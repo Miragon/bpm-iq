@@ -165,6 +165,10 @@ export interface DecisionUsage {
  * documents on purpose: opening a live room per process would be a Hocuspocus
  * connection per file, and the released truth is what the link check and the
  * release PR reason about anyway.
+ *
+ * Deliberately NOT riding buildRepoIndex yet: the wire carries elementName
+ * (the businessRuleTask's label), which ModelRef does not represent —
+ * consolidate once refs carry a source-element label (epic #118).
  */
 export async function decisionUsers(workspace: string, decisionId: string): Promise<DecisionUsage[]> {
   const cfg = loadContentConfig(workspace);

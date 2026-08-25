@@ -140,14 +140,14 @@ test("zero-auth default: without BPM_TODOS_REPO + BPM_TODOS_TOKEN the tool does 
   await close();
 });
 
-test("opt-in: with both env vars set the tool registers (alongside the repo-local eight)", async () => {
+test("opt-in: with both env vars set the tool registers (alongside the repo-local nine)", async () => {
   process.env.BPM_TODOS_REPO = TRACKER_REPO;
   process.env.BPM_TODOS_TOKEN = "test-token";
   process.env.GITHUB_API_URL = `http://localhost:${(stub.address() as AddressInfo).port}`;
   const { client, close } = await connect();
   const names = (await client.listTools()).tools.map((t) => t.name);
   assert.ok(names.includes("list_todos"));
-  assert.equal(names.length, 9, "the eight repo-local tools stay untouched");
+  assert.equal(names.length, 10, "the nine repo-local tools stay untouched");
   await close();
 });
 

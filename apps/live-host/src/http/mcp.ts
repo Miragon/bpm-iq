@@ -38,7 +38,7 @@ import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
 import { modelStem } from "@bpmiq/notations";
 import { deriveDecision, deriveProcess } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
-import { checkBpmnXml } from "@bpmiq/validator";
+import { checkModel } from "@bpmiq/validator";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -63,7 +63,7 @@ import type { WsTicketStore } from "../application/ws-tickets.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
 import { release, type ReleaseDeps, releaseFiles } from "../release.ts";
-import { discoverDecisions, discoverProcesses, loadContentConfig } from "../repos/content.ts";
+import { discoverModels, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 
 /** everything the tools need — ApiOptions satisfies this structurally (the
@@ -419,18 +419,21 @@ export function createLiveMcpServer(opts: McpDeps, session: Session): McpServer 
       annotations: READ,
     },
     safe(async ({ xml, repo, path }: { xml: string; repo?: string; path?: string }) => {
-      let processIds: Set<string> | undefined;
-      let decisionIds: Set<string> | undefined;
+      // THE one check dispatch (incl. the generic dangling-reference rule) —
+      // the same path the CLI and the save gate run, so all three agree
+      let modelIds: Map<string, Set<string>> | undefined;
       if (repo) {
         const r = await requireRepo(repo);
         const workspace = await opts.workspaces.ensure(r);
         const cfg = loadContentConfig(workspace);
         if (cfg) {
-          processIds = new Set((await discoverProcesses(workspace, cfg)).map((p) => p.id));
-          decisionIds = new Set((await discoverDecisions(workspace, cfg)).map((d) => d.id));
+          modelIds = new Map();
+          for (const m of await discoverModels(workspace, cfg)) {
+            (modelIds.get(m.notation) ?? modelIds.set(m.notation, new Set()).get(m.notation)!).add(m.id);
+          }
         }
       }
-      const { findings } = checkBpmnXml(xml, { file: path, processIds, decisionIds });
+      const findings = checkModel(xml, { path: path ?? "<bpmn>", notation: "bpmn", modelIds }) ?? [];
       return ok({ ok: !findings.some((f) => f.severity === "ERROR"), findings });
     }),
   );
