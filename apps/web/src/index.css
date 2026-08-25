@@ -6,9 +6,11 @@
    Tailwind to pick up the utility classes its components use */
 @source "../node_modules/@bpmiq/ui-kit/src";
 
-/* the collaborative editor fills its route; bpmn-js/dmn-js + Monaco need explicit height */
+/* the collaborative editor fills its route; the diagram-js engines + Monaco need explicit height */
 .bpmn-canvas,
 .dmn-canvas,
+.wardley-canvas,
+.tt-canvas,
 .monaco-host {
   height: 100%;
   width: 100%;
