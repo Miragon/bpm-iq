@@ -16,7 +16,9 @@
 import { existsSync, realpathSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 
-import { CONTENT_KEY } from "@bpmiq/contracts/live";
+import { CONTENT_KEY, ELEMENTS_KEY, META_KEY } from "@bpmiq/contracts/live";
+import { readSnapshot, reconcileSnapshot } from "@bpmiq/live-client/structured";
+import { type DocCodec } from "@bpmiq/notations/codecs";
 import * as Y from "yjs";
 
 import type { LineageStore } from "../adapters/sqlite/lineage-store.ts";
@@ -24,6 +26,7 @@ import type { Session } from "../adapters/sqlite/sessions.ts";
 import type { DocSizeGuard } from "../domain/doc-size-guard.ts";
 import {
   type ContentConfigLookup,
+  docCodecForPath,
   type RegistryLookup,
   splitRoom,
   toDiskPath,
@@ -48,6 +51,10 @@ export interface CollabDeps {
   /** single-use ws tickets minted by the MCP-App widget's mint_ws_ticket tool
    * (application/ws-tickets.ts) — absent = the ticket path is off */
   wsTickets?: { redeem(ticket: string, room: string): { login: string; provider: string } | undefined };
+  /** the STRUCTURED lane's codec per room path (epic #118 step 8) — defaults
+   * to the registry resolution (domain/rooms.ts docCodecForPath: undefined
+   * for every shipped notation, the lane is dark); tests inject their own */
+  docCodec?: (path: string) => DocCodec | undefined;
 }
 
 export function makeCollabHooks(deps: CollabDeps) {
@@ -72,6 +79,11 @@ export function makeCollabHooks(deps: CollabDeps) {
    * the target exists, canonicalize it and re-check it stays inside the workspace
    * (realpath lives here in the application layer — the domain module stays pure).
    */
+  const codecOf = (documentName: string): DocCodec | undefined => {
+    const path = documentName.slice(splitRoom(documentName, registry).repo.fullName.length + 1);
+    return (deps.docCodec ?? docCodecForPath)(path);
+  };
+
   const resolveRoom = async (documentName: string): Promise<string> => {
     const disk = await toDiskPath(documentName, registry, workspaces, contentConfig);
     if (existsSync(disk)) {
@@ -124,7 +136,9 @@ export function makeCollabHooks(deps: CollabDeps) {
         // dropped here — the client history it anchors exists nowhere else.
         const seedDoc = new Y.Doc();
         Y.applyUpdate(seedDoc, new Uint8Array(stored));
-        if (seedDoc.getText(CONTENT_KEY).toString() !== (await readFile(disk, "utf8"))) {
+        const codec = codecOf(documentName);
+        const seedContent = codec ? codec.encode(readSnapshot(seedDoc)) : seedDoc.getText(CONTENT_KEY).toString();
+        if (seedContent !== (await readFile(disk, "utf8"))) {
           lineage.drop(documentName);
           stored = undefined;
           console.log(`stale seed dropped: ${documentName} (workspace file changed since the seed)`);
@@ -143,10 +157,15 @@ export function makeCollabHooks(deps: CollabDeps) {
         }
         console.log(`restored: ${documentName} (${document.getText(CONTENT_KEY).length} chars from live.db)`);
       } else {
+        const codec = codecOf(documentName);
         const ytext = document.getText(CONTENT_KEY);
-        if (ytext.length === 0) {
+        const unseeded = codec
+          ? document.getMap(ELEMENTS_KEY).size === 0 && document.getMap(META_KEY).size === 0
+          : ytext.length === 0;
+        if (unseeded) {
           const content = await readFile(disk, "utf8");
-          ytext.insert(0, content);
+          if (codec) reconcileSnapshot(document, codec.decode(content));
+          else ytext.insert(0, content);
           // Persist the seed EAGERLY, not only via the debounced onStoreDocument
           // (2s/10s): a host dying inside that window loses the row while every
           // connected client still holds the seed's history — the next start
@@ -158,7 +177,7 @@ export function makeCollabHooks(deps: CollabDeps) {
           const seeded = Y.encodeStateAsUpdate(document);
           if (seeded.length <= maxDocBytes) lineage.saveSeed(documentName, seeded);
           docGuard.load(documentName, seeded.length); // the blob IS the encoded size
-          console.log(`seeded: ${documentName} (${ytext.length} chars from workspace)`);
+          console.log(`seeded: ${documentName} (${content.length} chars from workspace)`);
         }
       }
       // track the room as live ONLY here: onAuthenticate has passed, splitRoom +
@@ -203,7 +222,8 @@ export function makeCollabHooks(deps: CollabDeps) {
         return;
       }
       lineage.save(documentName, update);
-      const content = document.getText(CONTENT_KEY).toString();
+      const codec = codecOf(documentName);
+      const content = codec ? codec.encode(readSnapshot(document)) : document.getText(CONTENT_KEY).toString();
       await writeFile(await resolveRoom(documentName), content);
       console.log(`write-through: ${documentName} (${content.length} chars)`);
     },
