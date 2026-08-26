@@ -298,3 +298,33 @@ test("beforeHandleMessage rejects when the guard rejects, passes small updates",
     /update rejected — document is at the 10B cap/,
   );
 });
+
+test("beforeHandleMessage passes AWARENESS traffic even on an at-cap doc (#115 — a cursor move must never close the session)", async () => {
+  const { hooks } = setup({ docGuard: new DocSizeGuard(10), maxDocBytes: 10 });
+  const doc = new Y.Doc();
+  // fill the guard to the cap with sync bytes …
+  await hooks.beforeHandleMessage({ documentName: ROOM, document: doc, update: new Uint8Array(10) });
+  // … an awareness-framed message (varString "" + type 1) still passes —
+  // Hocuspocus would CLOSE the connection on a rejection here, kicking even
+  // read-only viewers off an at-cap doc for moving the pointer
+  const awareness = new Uint8Array([0, 1, ...Array.from({ length: 60 }, (_, i) => i)]);
+  await hooks.beforeHandleMessage({ documentName: ROOM, document: doc, update: awareness });
+  // sync bytes past the cap still reject — the guard itself is untouched
+  await assert.rejects(
+    () => hooks.beforeHandleMessage({ documentName: ROOM, document: doc, update: new Uint8Array(50) }),
+    /update rejected — document is at the 10B cap/,
+  );
+});
+
+test("beforeHandleMessage caps EPHEMERAL messages on their own (awareness broadcast amplification)", async () => {
+  const { hooks } = setup();
+  const doc = new Y.Doc();
+  // awareness framing (varString "" + type 1) with an absurd payload — the
+  // doc-cap exemption must not become an unbounded broadcast/memory vector
+  const oversized = new Uint8Array(70_000);
+  oversized.set([0, 1], 0);
+  await assert.rejects(
+    () => hooks.beforeHandleMessage({ documentName: ROOM, document: doc, update: oversized }),
+    /ephemeral message rejected/,
+  );
+});

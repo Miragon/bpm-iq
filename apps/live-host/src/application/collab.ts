@@ -32,7 +32,12 @@ import {
   toDiskPath,
   type WorkspaceEnsure,
 } from "../domain/rooms.ts";
+import { growsDocument } from "../domain/sync-message.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
+
+/** per-message cap for doc-exempt (awareness/stateless) traffic — a real
+ *  cursor+selection state is < 2 KB, this is headroom, not a target */
+export const MAX_EPHEMERAL_BYTES = 64_000;
 
 export interface CollabDeps {
   lineage: Pick<LineageStore, "load" | "save" | "saveSeed" | "isSeed" | "drop">;
@@ -206,6 +211,19 @@ export function makeCollabHooks(deps: CollabDeps) {
       document: Y.Doc;
       update: Uint8Array;
     }) {
+      // awareness/ping/stateless traffic is never applied to the doc — with
+      // live cursors (#115) it is CONSTANT, and counting it would both bloat
+      // the guard's estimate and kill at-cap sessions on a pointer move. It
+      // still gets ITS OWN cap: awareness re-broadcasts to every peer and the
+      // server retains the last state per client, so an unbounded payload
+      // would be a memory/amplification vector. A real cursor+selection state
+      // is < 2 KB; 64 KB is generous headroom, not a workaround target.
+      if (!growsDocument(update)) {
+        if (update.length > MAX_EPHEMERAL_BYTES) {
+          throw new Error(`${documentName}: ephemeral message rejected — ${update.length}B > ${MAX_EPHEMERAL_BYTES}B`);
+        }
+        return;
+      }
       if (!docGuard.admit(documentName, update.length, () => Y.encodeStateAsUpdate(document).length)) {
         throw new Error(`${documentName}: update rejected — document is at the ${maxDocBytes}B cap`);
       }
