@@ -21,7 +21,8 @@ export interface CreateModelCopy {
   /** input id/htmlFor pair, e.g. "process-name" */
   inputId: string;
   placeholder: string;
-  extension: ".bpmn" | ".dmn";
+  /** primary extension of the created file (stem-preview suffix) */
+  extension: string;
   /** "Create process" */
   submitLabel: string;
 }

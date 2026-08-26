@@ -1,4 +1,6 @@
 import { byId } from "@bpmiq/notations";
+import { type NotationDescriptor, NOTATIONS } from "@bpmiq/notations";
+import { hasTemplate } from "@bpmiq/notations/templates";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import {
@@ -41,6 +43,7 @@ import { toast } from "sonner";
 import { AssistMenu } from "@/components/assist-menu";
 import { CreateDecisionDialog } from "@/components/create-decision-dialog";
 import { CreateFolderDialog } from "@/components/create-folder-dialog";
+import { CreateNotationModelDialog } from "@/components/create-notation-model-dialog";
 import { CreateProcessDialog } from "@/components/create-process-dialog";
 import { ReleaseDialog } from "@/components/release-dialog";
 import { SyncRepoDialog } from "@/components/sync-repo-dialog";
@@ -48,6 +51,10 @@ import { type ProcessInfo } from "@/lib/api";
 import { useDecisions, useFolders, useModels, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
 
 const route = getRouteApi("/r/$owner/$repo");
+
+/** notations the "New" menu offers GENERICALLY (#139): everything with a
+ *  blank template except bpmn/dmn, which keep their typed flows above */
+const CREATABLE_NOTATIONS = NOTATIONS.filter((n) => hasTemplate(n.id) && n.id !== "bpmn" && n.id !== "dmn");
 
 /**
  * The table features this route opts into — v9 ships nothing but the core, so
@@ -105,6 +112,7 @@ export function ProcessList() {
   const [folderOpen, setFolderOpen] = useState(false);
   const [processOpen, setProcessOpen] = useState(false);
   const [decisionOpen, setDecisionOpen] = useState(false);
+  const [modelNotation, setModelNotation] = useState<NotationDescriptor | null>(null);
   const [releaseOpen, setReleaseOpen] = useState(false);
 
   // models (processes AND decisions) with unreleased live edits the reset
@@ -326,6 +334,11 @@ export function ProcessList() {
                   <DropdownMenuItem onSelect={() => setTimeout(() => setDecisionOpen(true), 0)}>
                     <Table2 /> DMN decision
                   </DropdownMenuItem>
+                  {CREATABLE_NOTATIONS.map((n) => (
+                    <DropdownMenuItem key={n.id} onSelect={() => setTimeout(() => setModelNotation(n), 0)}>
+                      <Shapes /> {n.label}
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
@@ -577,6 +590,22 @@ export function ProcessList() {
           onCreated={(created) => {
             setDecisionOpen(false);
             toast.success(`Decision '${created.id}' created`);
+            void navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: created.path } });
+          }}
+        />
+      )}
+      {modelNotation && (
+        <CreateNotationModelDialog
+          repo={repo}
+          notation={modelNotation}
+          folder={dir}
+          onClose={() => setModelNotation(null)}
+          onCreated={(created) => {
+            const label = modelNotation.label;
+            setModelNotation(null);
+            toast.success(`${label} '${created.id}' created`, {
+              description: "Release it as a pull request when the model is ready.",
+            });
             void navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: created.path } });
           }}
         />

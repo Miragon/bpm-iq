@@ -108,10 +108,55 @@ export function newDmnXml(id: string, name: string): string {
 `;
 }
 
+/** one text line, whatever the input: control chars break line-oriented
+ *  formats (OWM) and JSON strings get their own escaping. U+2028/U+2029 are
+ *  LineTerminators for JS /m regexes — without them here, a pasted separator
+ *  would smuggle a second logical line into the "title-only" template. */
+function oneLine(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").trim();
+}
+
+/**
+ * The initial content of a new Wardley map — the OWM DSL is line-oriented and
+ * lenient; a lone title renders the empty evolution grid in the Miragon
+ * modeler and round-trips untouched.
+ */
+export function newOwmText(_id: string, name: string): string {
+  return `title ${oneLine(name)}\n`;
+}
+
+/**
+ * The initial content of a new Team Topology — EXACTLY the schema-model's
+ * canonical serialization (version 2, 2-space indent, no trailing newline):
+ * the modeler's first save re-serializes canonically, and a byte-identical
+ * template keeps that save from showing up as a phantom diff.
+ */
+export function newTtJson(_id: string, name: string): string {
+  return JSON.stringify({ version: 2, title: oneLine(name), nodes: [], interactions: [], flows: [] }, null, 2);
+}
+
+/** the initial content of a new markdown document — a heading with the title */
+export function newMarkdownText(_id: string, name: string): string {
+  return `# ${oneLine(name)}\n`;
+}
+
 const TEMPLATES: Record<string, (id: string, name: string) => string> = {
   bpmn: newBpmnXml,
   dmn: newDmnXml,
+  wardley: newOwmText,
+  "team-topology": newTtJson,
+  markdown: newMarkdownText,
 };
+
+/** whether a notation can be CREATED from the platform (drives the web
+ *  client's "New" menu and the generic create route) — false means its files
+ *  arrive via git only */
+export function hasTemplate(notation: string): boolean {
+  // Object.hasOwn, NOT `in`: "toString"/"constructor" must never count as
+  // template-capable (prototype chain — the bug class #126's review pinned)
+  return Object.hasOwn(TEMPLATES, notation);
+}
 
 /**
  * THE generic template dispatch: the blank-file content for a notation, or
@@ -119,5 +164,7 @@ const TEMPLATES: Record<string, (id: string, name: string) => string> = {
  * from the platform — its files arrive via git).
  */
 export function templateFor(notation: string, id: string, name: string): string | undefined {
-  return TEMPLATES[notation]?.(id, name);
+  // hasOwn-gated: a bare TEMPLATES[notation] would resolve prototype members —
+  // templateFor("toString", …) used to return "[object Object]" as a template
+  return Object.hasOwn(TEMPLATES, notation) ? TEMPLATES[notation]?.(id, name) : undefined;
 }

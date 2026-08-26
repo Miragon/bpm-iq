@@ -12,7 +12,13 @@ import { test } from "node:test";
 
 import { AppError } from "@bpmiq/http-kit";
 
-import { createDecision, createFolder, createProcess, listFolders } from "../src/application/scaffold.ts";
+import {
+  createDecision,
+  createFolder,
+  createNotationModel,
+  createProcess,
+  listFolders,
+} from "../src/application/scaffold.ts";
 import { escapeXml, newBpmnXml, xmlProcessId } from "../src/domain/bpmn-template.ts";
 import { newDmnXml } from "../src/domain/dmn-template.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
@@ -254,4 +260,60 @@ test("template: XML ids stay NCNames for digit-leading stems; title is escaped",
   const xml = newBpmnXml("2nd-level-support", `Tom & Jerry's "Support"`);
   assert.match(xml, /<bpmn:process id="p-2nd-level-support" name="Tom &amp; Jerry's &quot;Support&quot;"/);
   assert.match(xml, /processRef="p-2nd-level-support"/);
+});
+
+// ── createNotationModel (#139): the registry-generic create ─────────────────
+
+test("createNotationModel: creates a wardley map from the blank template, ModelInfo row, opens under the models root", async () => {
+  const ws = workspace();
+  const created = await createNotationModel(REPO, ws, {
+    notation: "wardley",
+    name: "Platform Landscape",
+    folder: "maps",
+  });
+  assert.equal(created.id, "platform-landscape");
+  assert.equal(created.notation, "wardley");
+  assert.equal(created.path, "processes/maps/platform-landscape.owm");
+  assert.equal(created.folder, "maps");
+  assert.equal(created.dirty, true);
+  assert.equal(readFileSync(join(ws, created.path), "utf8"), "title Platform Landscape\n");
+});
+
+test("createNotationModel: team topology template is valid JSON matching the modeler's canonical shape", async () => {
+  const ws = workspace();
+  const created = await createNotationModel(REPO, ws, { notation: "team-topology", name: "Team Landscape" });
+  assert.equal(created.path, "processes/team-landscape.tt");
+  const doc = JSON.parse(readFileSync(join(ws, created.path), "utf8")) as Record<string, unknown>;
+  assert.deepEqual(doc, { version: 2, title: "Team Landscape", nodes: [], interactions: [], flows: [] });
+});
+
+test("createNotationModel: stems are unique PER NOTATION — a wardley map may share a stem with a bpmn process", async () => {
+  const ws = workspace(); // workspace() already has processes/order.bpmn
+  const created = await createNotationModel(REPO, ws, { notation: "wardley", name: "Order" });
+  assert.equal(created.path, "processes/order.owm");
+  // …but a SECOND wardley 'order' in another folder is refused
+  await assert.rejects(
+    () => createNotationModel(REPO, ws, { notation: "wardley", name: "Order", folder: "maps" }),
+    rejectsWith("scaffold/model-exists", 409),
+  );
+});
+
+test("createNotationModel: unknown notation and template-less notation are 422s", async () => {
+  const ws = workspace();
+  await assert.rejects(
+    () => createNotationModel(REPO, ws, { notation: "uml", name: "Nope" }),
+    rejectsWith("scaffold/unknown-notation", 422),
+  );
+  // value-chain is registered but has NO template — git-only by design
+  await assert.rejects(
+    () => createNotationModel(REPO, ws, { notation: "value-chain", name: "Nope" }),
+    rejectsWith("scaffold/no-template", 422),
+  );
+});
+
+test("createNotationModel: markdown documents are creatable (a first-class notation)", async () => {
+  const ws = workspace();
+  const created = await createNotationModel(REPO, ws, { notation: "markdown", name: "Architecture Notes" });
+  assert.equal(created.path, "processes/architecture-notes.md");
+  assert.equal(readFileSync(join(ws, created.path), "utf8"), "# Architecture Notes\n");
 });

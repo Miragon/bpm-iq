@@ -20,15 +20,16 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
-import type { DecisionInfo, FolderListWire, ProcessInfo } from "@bpmiq/contracts/live-host";
+import type { DecisionInfo, FolderListWire, ModelInfo, ProcessInfo } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
-import { byExtension, processIdFromName } from "@bpmiq/notations";
-import { newBpmnXml, newDmnXml } from "@bpmiq/notations/templates";
+import { byExtension, byId, processIdFromName } from "@bpmiq/notations";
+import { newBpmnXml, newDmnXml, templateFor } from "@bpmiq/notations/templates";
 
 import {
   CONTENT_CONFIG_FILE,
   type ContentConfig,
   discoverDecisions,
+  discoverModels,
   discoverProcesses,
   loadContentConfig,
 } from "../repos/content.ts";
@@ -154,8 +155,8 @@ export async function createFolder(repo: ConnectedRepo, workspace: string, path:
 /** what a create needs to know about its model kind — the two creates were
  *  ~50-line token-swap twins (extension, template, wire code, noun) */
 interface CreateKindSpec {
-  extension: ".bpmn" | ".dmn";
-  noun: "process" | "decision";
+  extension: string;
+  noun: string;
   discover: (root: string, cfg: ContentConfig) => Promise<Array<{ id: string; path: string }>>;
   template: (id: string, name: string) => string;
   /** wire-pinned 409 code (scaffold/process-exists | scaffold/decision-exists) */
@@ -234,6 +235,52 @@ export async function createProcess(
     name: id,
     bpmn: repoPath,
     models: [{ notation: byExtension(repoPath)?.id ?? "text", path: repoPath }],
+    folder,
+    dirty: true, // brand-new — by definition not on origin yet
+    liveSessions: 0,
+  };
+}
+
+/**
+ * Create a model of ANY template-capable notation — the registry-generic
+ * sibling of createProcess/createDecision (#139): descriptor + template are
+ * one lookup each, the create core (uniqueness per notation, traversal/
+ * symlink guards, EEXIST → 409) is shared. A notation without a template is
+ * a 422 — its files arrive via git only. The typed twins above keep their
+ * wire-pinned richer rows; the web client's typed flows keep calling them.
+ */
+export async function createNotationModel(
+  repo: ConnectedRepo,
+  workspace: string,
+  body: { notation: string; name: string; folder?: string },
+): Promise<ModelInfo> {
+  const descriptor = byId(body.notation);
+  if (!descriptor) {
+    throw new AppError("scaffold/unknown-notation", `unknown notation '${body.notation}'`, {
+      status: 422,
+      expose: true,
+    });
+  }
+  if (templateFor(descriptor.id, "probe", "probe") === undefined) {
+    throw new AppError(
+      "scaffold/no-template",
+      `a ${descriptor.noun.singular} cannot be created from the platform — ${descriptor.label} files arrive via git`,
+      { status: 422, expose: true },
+    );
+  }
+  const { id, repoPath, folder } = await createModel(repo, workspace, body, {
+    extension: descriptor.extensions[0] ?? "",
+    noun: descriptor.noun.singular,
+    discover: async (root, cfg) => (await discoverModels(root, cfg)).filter((m) => m.notation === descriptor.id),
+    template: (modelId, name) => templateFor(descriptor.id, modelId, name) ?? "",
+    existsCode: "scaffold/model-exists",
+  });
+  return {
+    repo: repo.fullName,
+    id,
+    name: id,
+    path: repoPath,
+    notation: descriptor.id,
     folder,
     dirty: true, // brand-new — by definition not on origin yet
     liveSessions: 0,

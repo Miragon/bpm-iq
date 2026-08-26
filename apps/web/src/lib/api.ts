@@ -6,6 +6,7 @@ import type {
   ContentWire,
   CreateDecisionBody,
   CreateFolderBody,
+  CreateModelBody,
   CreateProcessBody,
   CreateTodoBody,
   DecisionInfo,
@@ -33,6 +34,7 @@ export type {
   ContentWire,
   CreateDecisionBody,
   CreateFolderBody,
+  CreateModelBody,
   CreateProcessBody,
   CreateTodoBody,
   DecisionInfo,
@@ -79,6 +81,14 @@ export const fetchProcesses = (repo: string): Promise<ProcessInfo[]> => api(`/ap
 /** create a new process from the blank template; response is its ProcessInfo row */
 export const createProcess = (repo: string, body: CreateProcessBody): Promise<ProcessInfo> =>
   api(`/api/repos/${repo}/processes`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+/** create a model of ANY template-capable notation (#139) — wardley, team
+ *  topology, markdown …; bpmn/dmn keep their typed creates above */
+export const createModel = (repo: string, body: CreateModelBody): Promise<ModelInfo> =>
+  api(`/api/repos/${repo}/models`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
