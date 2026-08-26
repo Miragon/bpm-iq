@@ -132,3 +132,22 @@ test("extractValueChain: defaults, label-over-name and conn-<i> ids are pinned",
     ],
   });
 });
+
+test("extractWardley: DIRECTIVE lines containing '->' are never dependency edges (#139 review)", () => {
+  // `evolution` is OWM syntax; a title with an arrow is platform-authorable
+  // via the create dialog ("As-Is -> To-Be") — neither is a dependency
+  const owm = [
+    "title As-Is -> To-Be",
+    "evolution Genesis->Custom->Product->Commodity",
+    "component A [0.5, 0.5]",
+    "component B [0.4, 0.6]",
+    "A -> B",
+  ].join("\n");
+  const graph = extractModelGraph("maps/x.owm", owm);
+  assert.ok(graph, "wardley extractor resolved");
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(graph.edges)),
+    [{ id: "dep-0", from: "A", to: "B", kind: "dependency" }],
+    "only the real dependency line survives",
+  );
+});

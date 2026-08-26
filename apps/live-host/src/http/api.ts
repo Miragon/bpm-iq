@@ -16,6 +16,7 @@
  *   POST /api/repos/:owner/:repo/processes       → create a process from the blank template (repo write required)
  *   GET  /api/repos/:owner/:repo/decisions       → decision (.dmn) list (repo write required)
  *   POST /api/repos/:owner/:repo/decisions       → create a decision from the blank template (repo write required)
+ *   POST /api/repos/:owner/:repo/models          → create a model of any template-capable notation (repo write required)
  *   GET  /api/repos/:owner/:repo/folders         → folders under the processes root (repo write required)
  *   POST /api/repos/:owner/:repo/folders         → create a folder   (repo write required)
  *   GET  /api/repos/:owner/:repo/changes         → files differing from origin (release selection pool)
@@ -50,6 +51,7 @@ import type {
   ContentWire,
   CreateDecisionBody,
   CreateFolderBody,
+  CreateModelBody,
   CreateProcessBody,
   CreateTodoBody,
   DecisionInfo,
@@ -58,6 +60,7 @@ import type {
   FolderListWire,
   FolderWire,
   Me,
+  ModelInfo,
   ProcessInfo,
   PutContentBody,
   PutContentResultWire,
@@ -86,7 +89,13 @@ import { authorizeRepo } from "../application/authz.ts";
 import { type DirectDoc, getContent, putContent } from "../application/content.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
 import { listAllModels, listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
-import { createDecision, createFolder, createProcess, listFolders } from "../application/scaffold.ts";
+import {
+  createDecision,
+  createFolder,
+  createNotationModel,
+  createProcess,
+  listFolders,
+} from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
@@ -629,11 +638,30 @@ export function startApi(port: number, opts: ApiOptions): Server {
           return send(res, 200, await listDecisions(opts, repo, workspace));
         }
         // every model file of ANY registered notation — the registry-wide
-        // superset of /processes and /decisions (read-only; creation stays
-        // with the typed routes)
+        // superset of /processes and /decisions. POST creates a model of any
+        // TEMPLATE-capable notation (#139); bpmn/dmn keep their typed routes
+        // (richer wire rows), everything else goes through here.
         if (repoRoute[2] === "models") {
-          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
           const workspace = await opts.workspaces.ensure(repo);
+          if (req.method === "POST") {
+            const body = await jsonBody<CreateModelBody>(req, res);
+            if (body === undefined) return;
+            if (typeof body?.notation !== "string" || body.notation.length === 0) {
+              return send(res, 400, { error: "notation must be a non-empty string" });
+            }
+            if (typeof body?.name !== "string" || body.name.trim().length === 0) {
+              return send(res, 400, { error: "name must be a non-empty string" });
+            }
+            if (body.folder !== undefined && typeof body.folder !== "string") {
+              return send(res, 400, { error: "folder must be a string" });
+            }
+            const created = await createNotationModel(repo, workspace, body);
+            console.log(
+              `model created in ${repo.fullName} by @${session.user.login}: ${created.path} (${created.notation})`,
+            );
+            return send(res, 201, created satisfies ModelInfo);
+          }
+          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
           return send(res, 200, await listAllModels(opts, repo, workspace));
         }
         if (repoRoute[2] === "folders") {

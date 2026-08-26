@@ -72,6 +72,20 @@ export interface CreateDecisionBody {
   folder?: string;
 }
 
+/** POST /api/repos/:fullName/models — create a model of ANY template-capable
+ * notation; response is the created ModelInfo. 422 for an unknown notation or
+ * one without a template (its files arrive via git only); the id (= file
+ * stem, slug of `name`) must be unique per notation repo-wide → 409. The
+ * typed /processes and /decisions creates stay (wire-pinned richer rows). */
+export interface CreateModelBody {
+  /** notation registry id (@bpmiq/notations), e.g. "wardley" */
+  notation: string;
+  /** human title — lands in the template; the file stem is its kebab-case slug */
+  name: string;
+  /** target folder relative to the models root ("" / absent = root) */
+  folder?: string;
+}
+
 /**
  * GET /api/repos/:fullName/models — one row per model file of ANY registered
  * notation under the repo's bpmiq.yml models folder (id = file stem, unique

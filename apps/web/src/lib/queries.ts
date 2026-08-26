@@ -7,6 +7,8 @@ import {
   createDecision,
   type CreateDecisionBody,
   createFolder,
+  createModel,
+  type CreateModelBody,
   createProcess,
   type CreateProcessBody,
   createTodo,
@@ -72,23 +74,36 @@ export function useCreateDecision(repo: string) {
   return useCreateModel(repo, "decisions", (body: CreateDecisionBody) => createDecision(repo, body));
 }
 
+/** create a model of ANY template-capable notation (#139) — same cache policy
+ *  against the registry-wide "models" list the repo view renders from */
+export function useCreateNotationModel(repo: string) {
+  return useCreateModel(repo, "models", (body: CreateModelBody) => createModel(repo, body));
+}
+
 /** the shared create-mutation cache policy: seed the kind's list, then refetch
  *  it, the folder tree (a brand-new folder) and the repo overview — decision
  *  creates used to SKIP the repos invalidation, which becomes real staleness
  *  now that RepoInfo carries decisionCount/dirty decisions */
-function useCreateModel<TBody, TInfo extends { id: string }>(
+function useCreateModel<TBody, TInfo extends { id: string; path?: string }>(
   repo: string,
-  key: "processes" | "decisions",
+  key: "processes" | "decisions" | "models",
   mutationFn: (body: TBody) => Promise<TInfo>,
 ) {
   const qc = useQueryClient();
+  // seed identity: the models list holds EVERY notation and its ids are only
+  // unique PER NOTATION (a wardley 'order' lives beside order.bpmn) — dedupe
+  // by path where the row carries one; process rows (no `path`) keep the id
+  const identity = (row: TInfo): string => row.path ?? row.id;
   return useMutation({
     mutationFn,
     onSuccess: (created) => {
       qc.setQueryData<TInfo[]>([key, repo], (old) =>
-        old ? (old.some((m) => m.id === created.id) ? old : [...old, created]) : [created],
+        old ? (old.some((m) => identity(m) === identity(created)) ? old : [...old, created]) : [created],
       );
       void qc.invalidateQueries({ queryKey: [key, repo] });
+      // the registry-wide models list contains EVERY kind — a typed create
+      // (process/decision) belongs in it too, so it must never stay stale
+      if (key !== "models") void qc.invalidateQueries({ queryKey: ["models", repo] });
       void qc.invalidateQueries({ queryKey: ["folders", repo] }); // the folder may be brand-new too
       void qc.invalidateQueries({ queryKey: ["repos"] }); // process/decision/dirty counts changed
     },

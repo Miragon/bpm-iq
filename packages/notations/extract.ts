@@ -408,8 +408,14 @@ function extractWardley(raw: string): ModelGraph {
       },
     });
   }
+  // an OWM DIRECTIVE line is never a dependency, even when it contains "->":
+  // `evolution Genesis->Custom->Product` is syntax, and a map TITLE with an
+  // arrow (platform-authorable via the create dialog, #139) is plain text
+  const directive =
+    /^(title|component|anchor|market|note|annotation|annotations|style|evolution|submap|url|pipeline)\b/;
   let i = 0;
   for (const m of raw.matchAll(/^([^\s>[\n][^>[\n]*?)\s*->\s*([^\n;]+)$/gm)) {
+    if (directive.test(m[0] ?? "")) continue;
     edges.push({ id: `dep-${i++}`, from: m[1]?.trim() ?? "", to: m[2]?.trim() ?? "", kind: "dependency" });
   }
   return { notation: "wardley", nodes, edges };
