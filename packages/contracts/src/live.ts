@@ -34,3 +34,29 @@ export const roomName = (repoFullName: string, path: string): string => `${repoF
 /** every room of one repo starts with this — the trailing slash keeps
  *  "acme/models-2" from ever matching "acme/models" */
 export const roomPrefix = (repoFullName: string): string => `${repoFullName}/`;
+
+// ── presence (awareness) — ephemeral, NEVER in the Y.Doc ─────────────────────
+// Awareness is scoped per room (a room IS one file), so no docPath rides in
+// the payload. y-monaco owns the awareness field "selection" — the canvas
+// presence uses its own key.
+
+export const AWARENESS_USER_KEY = "user";
+export const AWARENESS_CANVAS_KEY = "canvas";
+
+/** who a client is — the roster avatar and the cursor label */
+export interface PresenceUser {
+  name: string;
+  color: string;
+  avatarUrl?: string | null;
+  /** reserved for AI-participant presence — agents joining awareness declare
+   *  themselves so clients can render them distinctly */
+  kind?: "human" | "agent";
+}
+
+/** where a client is on the CANVAS — model coordinates (the space the DI
+ *  uses), zoom/pan-independent; null cursor = pointer off-canvas */
+export interface CanvasPresence {
+  cursor: { x: number; y: number } | null;
+  /** selected element ids */
+  selection: string[];
+}

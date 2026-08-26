@@ -59,12 +59,17 @@ export const config = {
   wsUrl:
     (import.meta.env.VITE_LIVE_URL as string | undefined) ??
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`,
-  color:
-    localStorage.getItem("bpm-live-color") ??
-    ["#fa8100", "#0aa2c0", "#7c4dff", "#2e7d32", "#c2185b"][Math.floor(Math.random() * 5)] ??
-    "#fa8100",
 };
-localStorage.setItem("bpm-live-color", config.color);
+
+/** presence color, DETERMINISTIC per login — the same person shows up in the
+ *  same color on every device and session (was: random + localStorage, which
+ *  gave one person a different color per browser) */
+export function presenceColor(login: string): string {
+  const palette = ["#fa8100", "#0aa2c0", "#7c4dff", "#2e7d32", "#c2185b", "#00695c", "#5d4037"] as const;
+  let hash = 0;
+  for (const ch of login) hash = (hash * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
+  return palette[hash % palette.length] ?? palette[0];
+}
 
 export const fetchConfig = (): Promise<AppConfig> => api("/api/config");
 export const fetchMe = (): Promise<Me> => api("/api/me");

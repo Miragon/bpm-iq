@@ -12,7 +12,7 @@
  * imperative — the mounted plugin / Monaco / Yjs live in refs inside one effect
  * whose cleanup tears the whole live session down (provider, sockets, bindings).
  */
-import { roomName } from "@bpmiq/contracts/live";
+import { type PresenceUser, roomName } from "@bpmiq/contracts/live";
 import { openLiveSession } from "@bpmiq/live-client";
 import { updateText } from "@bpmiq/live-client/text";
 import { byExtension } from "@bpmiq/notations";
@@ -39,17 +39,16 @@ import {
   fetchFileAtCommit,
   type FileCommitWire,
   type Me,
+  presenceColor,
   type TodoElementWire,
   type TodoWire,
 } from "@/lib/api";
+import type { PresenceSurface, RemotePresence } from "@/lib/presence-canvas";
+import { safeAvatarUrl, safePresenceColor } from "@/lib/presence-format";
 import { useFileHistory, useTodos } from "@/lib/queries";
+import { createRemoteCaretStyles } from "@/lib/remote-carets";
 import type { TodoCanvas } from "@/lib/todo-canvas";
 import { type MountedEditor, webPlugin } from "@/notations/registry";
-
-interface Presence {
-  name: string;
-  color: string;
-}
 
 function monacoLanguage(docPath: string): string {
   const notation = byExtension(docPath);
@@ -94,7 +93,7 @@ export function LiveEditor({
   const [status, setStatus] = useState<"connecting" | "slow" | "live" | "error">("connecting");
   const [error, setError] = useState<string | null>(null);
   const [showXml, setShowXml] = useState(!isVisual);
-  const [presence, setPresence] = useState<Presence[]>([]);
+  const [presence, setPresence] = useState<PresenceUser[]>([]);
   /** the mounted editor exposed an element surface (selection, reveal) */
   const [hasElements, setHasElements] = useState(false);
 
@@ -162,7 +161,40 @@ export function LiveEditor({
         setStatus("error");
       },
     });
-    session.setUser({ name: me.user.name || me.user.login, color: config.color });
+    session.setUser({
+      name: me.user.name || me.user.login,
+      color: presenceColor(me.user.login),
+      avatarUrl: me.user.avatarUrl,
+    });
+    // a doc-level CLOSE (e.g. an oversized update rejected server-side) kills
+    // the document WITHOUT a ws reconnect — surfaced, or the session would
+    // just silently stop syncing while looking live
+    const offDocClose = session.onDocClose(() => {
+      if (cancelled) return;
+      setStatus("error");
+      setError("The server closed this live document — reload the page to reconnect.");
+    });
+
+    // Presence fan-out (#115): ONE awareness subscription feeds the Monaco
+    // remote-caret styles AND whatever canvas controller the mounted engine
+    // attaches through ctx.presence. Peers without a user field haven't
+    // announced themselves yet — nothing to render for them.
+    const caretStyles = createRemoteCaretStyles();
+    const remoteListeners = new Set<(peers: RemotePresence[]) => void>();
+    let lastRemote: RemotePresence[] = [];
+    const presenceSurface: PresenceSurface = {
+      setLocal: (p) => session.setCanvasPresence(p),
+      onRemote: (cb) => {
+        remoteListeners.add(cb);
+        cb(lastRemote);
+        return () => remoteListeners.delete(cb);
+      },
+    };
+    const offAwareness = session.onAwarenessStates((peers) => {
+      lastRemote = peers.filter((p): p is RemotePresence => p.user !== undefined);
+      caretStyles.update(lastRemote);
+      for (const cb of remoteListeners) cb(lastRemote);
+    });
 
     let mounted: MountedEditor | undefined;
     let monacoBinding: MonacoBinding | undefined;
@@ -203,6 +235,7 @@ export function LiveEditor({
               setPanel("todos");
             },
             onSelectionChanged: setSelectedElements,
+            presence: presenceSurface,
           });
         } catch (e) {
           if (!cancelled) {
@@ -254,6 +287,9 @@ export function LiveEditor({
       clearTimeout(slow);
       offSynced();
       offPresence?.();
+      offAwareness();
+      offDocClose();
+      caretStyles.destroy();
       contentRef.current = null;
       todoCanvasRef.current = null;
       mounted?.destroy();
@@ -366,16 +402,32 @@ export function LiveEditor({
         {notation && !isBpmn && <Badge variant="outline">{notation.label}</Badge>}
         <div className="flex-1" />
         <div className="flex -space-x-1.5">
-          {presence.map((u, i) => (
-            <div
-              key={i}
-              className="border-background flex size-6 items-center justify-center rounded-full border-2 text-[10px] font-semibold text-white"
-              style={{ background: u.color }}
-              title={u.name}
-            >
-              {u.name.slice(0, 2).toUpperCase()}
-            </div>
-          ))}
+          {presence.map((u, i) => {
+            const avatar = safeAvatarUrl(u.avatarUrl);
+            // color is peer input landing in inline CSS — same guard as the
+            // canvas/caret render sites (url(...) would fetch on paint)
+            const background = safePresenceColor(u.color);
+            return avatar ? (
+              <img
+                key={i}
+                className="border-background size-6 rounded-full border-2"
+                src={avatar}
+                alt={u.name}
+                title={u.name}
+                referrerPolicy="no-referrer"
+                style={{ background }}
+              />
+            ) : (
+              <div
+                key={i}
+                className="border-background flex size-6 items-center justify-center rounded-full border-2 text-[10px] font-semibold text-white"
+                style={{ background }}
+                title={u.name}
+              >
+                {u.name.slice(0, 2).toUpperCase()}
+              </div>
+            );
+          })}
         </div>
         {isVisual && !structuredDoc && (
           <Button variant="outline" size="sm" onClick={() => setShowXml((v) => !v)}>

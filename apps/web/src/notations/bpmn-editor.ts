@@ -10,6 +10,7 @@
 import { bindBpmn } from "@bpmiq/live-client/bpmn-sync";
 import BpmnModeler from "bpmn-js/lib/Modeler";
 
+import { attachPresenceCanvas } from "@/lib/presence-canvas";
 import { attachTodoCanvas } from "@/lib/todo-canvas";
 
 import type { EditorContext, MountedEditor } from "./registry";
@@ -21,9 +22,11 @@ export function mountBpmnEditor(container: HTMLElement, ctx: EditorContext): Mou
     onBadgeClick: ctx.onBadgeClick,
     onSelectionChanged: ctx.onSelectionChanged,
   });
+  const presenceCanvas = ctx.presence ? attachPresenceCanvas(modeler as never, ctx.presence) : undefined;
   return {
     elements: todoCanvas,
     destroy: () => {
+      presenceCanvas?.destroy();
       todoCanvas.destroy();
       unbind();
       modeler.destroy();

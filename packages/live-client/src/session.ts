@@ -9,12 +9,19 @@
  * destroy() therefore always tears down provider AND socket; the extension's
  * old dispose path destroyed only providers and leaked the sockets.
  */
-import { CONTENT_KEY, roomName } from "@bpmiq/contracts/live";
+import {
+  AWARENESS_CANVAS_KEY,
+  AWARENESS_USER_KEY,
+  type CanvasPresence,
+  CONTENT_KEY,
+  type PresenceUser,
+  roomName,
+} from "@bpmiq/contracts/live";
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
 import type * as Y from "yjs";
 
 // re-exported so session consumers don't need a second import for the contract
-export { CONTENT_KEY, roomName };
+export { type CanvasPresence, CONTENT_KEY, type PresenceUser, roomName };
 
 export interface LiveSessionOptions {
   /** WebSocket URL of the Live Host */
@@ -27,13 +34,40 @@ export interface LiveSessionOptions {
   onAuthenticationFailed?: (reason: string) => void;
 }
 
-export interface PresenceUser {
-  name: string;
-  color: string;
-}
-
 /** the provider's awareness handle (y-protocols Awareness | null) */
 export type LiveAwareness = HocuspocusProvider["awareness"];
+
+/** one REMOTE client's awareness state */
+export interface AwarenessPeer {
+  clientId: number;
+  user?: PresenceUser;
+  canvas?: CanvasPresence;
+}
+
+// ── awareness payloads are PEER INPUT — shape-check at this boundary ────────
+// (a hostile or version-skewed client can put arbitrary JSON into its fields;
+// consumers must never see a malformed CanvasPresence)
+
+/** exported for tests — the session applies it to every peer state */
+export function sanitizeUser(raw: unknown): PresenceUser | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const u = raw as Record<string, unknown>;
+  if (typeof u.name !== "string" || typeof u.color !== "string") return undefined;
+  return u as unknown as PresenceUser;
+}
+
+/** exported for tests — the session applies it to every peer state */
+export function sanitizeCanvas(raw: unknown): CanvasPresence | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const c = raw as { cursor?: unknown; selection?: unknown };
+  const cur = c.cursor as { x?: unknown; y?: unknown } | null | undefined;
+  const cursor =
+    cur !== null && cur !== undefined && typeof cur === "object" && Number.isFinite(cur.x) && Number.isFinite(cur.y)
+      ? { x: cur.x as number, y: cur.y as number }
+      : null;
+  const selection = Array.isArray(c.selection) ? c.selection.filter((id): id is string => typeof id === "string") : [];
+  return { cursor, selection };
+}
 
 export interface LiveSession {
   readonly doc: Y.Doc;
@@ -52,8 +86,15 @@ export interface LiveSession {
   /** promise form — resolves on first sync, rejects on auth failure or timeout */
   whenSynced(timeoutMs?: number): Promise<void>;
   setUser(user: PresenceUser): void;
+  /** publish the local canvas presence (cursor + selection, model coords) —
+   *  its own awareness field, never colliding with y-monaco's "selection" */
+  setCanvasPresence(presence: CanvasPresence | null): void;
   /** presence roster (awareness "user" fields); calls back immediately, returns the unsubscribe */
   onPresence(cb: (users: PresenceUser[]) => void): () => void;
+  /** REMOTE awareness states (self excluded), clientId-keyed — the surface
+   *  cursors/selections render from; calls back immediately, returns the
+   *  unsubscribe */
+  onAwarenessStates(cb: (peers: AwarenessPeer[]) => void): () => void;
   /** tears down provider AND socket — always both */
   destroy(): void;
 }
@@ -117,13 +158,54 @@ export function openLiveSession(opts: LiveSessionOptions): LiveSession {
     },
 
     setUser(user: PresenceUser): void {
-      provider.setAwarenessField("user", user);
+      provider.setAwarenessField(AWARENESS_USER_KEY, user);
+    },
+
+    setCanvasPresence(presence: CanvasPresence | null): void {
+      provider.setAwarenessField(AWARENESS_CANVAS_KEY, presence);
     },
 
     onPresence(cb: (users: PresenceUser[]) => void): () => void {
+      // diff-gated: awareness "change" fires for EVERY field write — with live
+      // cursors that is ~30/s per moving pointer, and an un-gated callback
+      // would re-render a React consumer at that cadence for an unchanged
+      // roster. Only a genuine roster change reaches the callback.
+      let lastKey: string | undefined;
       const render = () => {
         const states = [...(provider.awareness?.getStates().values() ?? [])];
-        cb(states.map((s) => (s as { user?: PresenceUser }).user).filter((u): u is PresenceUser => !!u));
+        const users = states
+          .map((s) => sanitizeUser((s as { user?: unknown }).user))
+          .filter((u): u is PresenceUser => u !== undefined);
+        const key = JSON.stringify(users);
+        if (key === lastKey) return;
+        lastKey = key;
+        cb(users);
+      };
+      provider.awareness?.on("change", render);
+      render();
+      return () => provider.awareness?.off("change", render);
+    },
+
+    onAwarenessStates(cb: (peers: AwarenessPeer[]) => void): () => void {
+      // diff-gated like onPresence: our OWN cursor publishes fire "change"
+      // too, but self is excluded from the output — without the gate every
+      // local pointer move would re-run every consumer for identical data
+      let lastKey: string | undefined;
+      const render = () => {
+        const awareness = provider.awareness;
+        if (!awareness) return; // no awareness handle — nothing will ever fire
+        const peers: AwarenessPeer[] = [];
+        awareness.getStates().forEach((state, clientId) => {
+          if (clientId === awareness.clientID) return; // self renders live, not via echo
+          const s = state as { user?: unknown; canvas?: unknown };
+          const user = sanitizeUser(s.user);
+          const canvas = sanitizeCanvas(s.canvas);
+          peers.push({ clientId, ...(user ? { user } : {}), ...(canvas ? { canvas } : {}) });
+        });
+        const key = JSON.stringify(peers);
+        if (key === lastKey) return;
+        lastKey = key;
+        cb(peers);
       };
       provider.awareness?.on("change", render);
       render();

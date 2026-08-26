@@ -11,10 +11,11 @@ import { bindTeamTopology } from "@bpmiq/live-client/tt-sync";
 import { Modeler } from "@miragon/team-topologies-renderer";
 import { parseDocument, serializeDocument, type TtDocument } from "@miragon/team-topologies-schema-model";
 
+import { attachPresenceCanvas } from "@/lib/presence-canvas";
+
 import type { EditorContext, MountedEditor } from "./registry";
 
 export function mountTeamTopologyEditor(container: HTMLElement, ctx: EditorContext): MountedEditor {
-  // additionalModules: #115's awareness/cursor module mounts here
   const modeler = new Modeler({ container });
   const unbind = bindTeamTopology(
     modeler as never,
@@ -37,8 +38,10 @@ export function mountTeamTopologyEditor(container: HTMLElement, ctx: EditorConte
     ctx.onSyncError,
     ctx.onImportFailed,
   );
+  const presenceCanvas = ctx.presence ? attachPresenceCanvas(modeler as never, ctx.presence) : undefined;
   return {
     destroy: () => {
+      presenceCanvas?.destroy();
       unbind();
       modeler.destroy();
     },

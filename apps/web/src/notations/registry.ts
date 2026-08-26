@@ -14,6 +14,7 @@ import type { ComponentType, LazyExoticComponent } from "react";
 import type * as Y from "yjs";
 
 import type { TodoElementWire } from "@/lib/api";
+import type { PresenceSurface } from "@/lib/presence-canvas";
 import type { TodoCanvas } from "@/lib/todo-canvas";
 
 import { bpmnPlugin } from "./bpmn";
@@ -35,6 +36,11 @@ export interface EditorContext {
   onBadgeClick(elementId: string): void;
   /** canvas selection changed — feeds todo creation and the assist handoff */
   onSelectionChanged(elements: TodoElementWire[]): void;
+  /** live presence (#115) — publish the local cursor/selection, subscribe to
+   *  remote peers; the additive awareness surface promised on #124. Engines
+   *  hand it to attachPresenceCanvas; optional keeps them mountable without
+   *  a live session (tests, previews). */
+  presence?: PresenceSurface;
 }
 
 export interface MountedEditor {
