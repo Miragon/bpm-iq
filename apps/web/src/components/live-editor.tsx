@@ -506,7 +506,21 @@ export function LiveEditor({
         />
         {ActivePanel && (
           <Suspense fallback={null}>
-            <ActivePanel repo={repo} docPath={docPath} content={panelContent} onClose={closePanel} />
+            <ActivePanel
+              repo={repo}
+              docPath={docPath}
+              content={panelContent}
+              onRevealElement={
+                hasElements
+                  ? (elementId) => {
+                      const found = todoCanvasRef.current?.reveal(elementId) ?? false;
+                      if (found) setShowXml(false); // a reveal must be VISIBLE, not on the hidden canvas
+                      return found;
+                    }
+                  : undefined
+              }
+              onClose={closePanel}
+            />
           </Suspense>
         )}
         {panel === "history" && (
