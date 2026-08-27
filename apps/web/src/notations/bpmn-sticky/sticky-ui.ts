@@ -1,8 +1,8 @@
 /**
  * Sticky UI surfaces (#117): the palette entry that creates a sticky, the
  * context pad that recolors (kind) and deletes one, and the direct-editing
- * provider for inline text — plus the t.BPM gesture: double-click on empty
- * canvas drops a sticky right there and opens its text editor.
+ * provider for inline text — plus the miro gesture: pressing "n" (workshop
+ * mode) arms the create tool, the sticky follows the cursor, click places.
  */
 import {
   isSticky,
@@ -31,7 +31,9 @@ interface ElementFactoryLike {
   create(elementType: "shape", attrs: Record<string, unknown>): unknown;
 }
 interface CreateLike {
-  start(event: Event, shape: unknown): void;
+  /** null event = deferred activation: the tool arms and follows the next
+   *  mousemove (diagram-js Dragging handles both) */
+  start(event: Event | null, shape: unknown): void;
 }
 interface ModelingLike {
   updateModdleProperties(element: unknown, moddleElement: unknown, properties: Record<string, unknown>): void;
@@ -138,7 +140,7 @@ export class StickyContextPad {
   }
 }
 
-// ── direct editing + double-click-to-create ──────────────────────────────────
+// ── direct editing + n-key create ────────────────────────────────────────────
 
 interface CanvasLike {
   getRootElement(): unknown;
@@ -152,7 +154,17 @@ interface RegistryLike {
 }
 
 export class StickyEditing {
-  static $inject = ["directEditing", "eventBus", "canvas", "modeling", "elementFactory", "elementRegistry", "bpmnjs"];
+  static $inject = [
+    "directEditing",
+    "eventBus",
+    "canvas",
+    "modeling",
+    "elementFactory",
+    "elementRegistry",
+    "bpmnjs",
+    "keyboard",
+    "create",
+  ];
 
   private readonly _canvas: CanvasLike;
   private readonly _modeling: ModelingLike;
@@ -171,10 +183,32 @@ export class StickyEditing {
     elementFactory: ElementFactoryLike,
     elementRegistry: RegistryLike,
     bpmnjs: BpmnJsLike,
+    keyboard: {
+      addListener(listener: (context: { keyEvent: KeyboardEvent }) => boolean | undefined): void;
+      hasModifier(event: KeyboardEvent): boolean;
+      isKey(keys: string[], event: KeyboardEvent): boolean;
+    },
+    create: CreateLike,
   ) {
     this._canvas = canvas;
     this._modeling = modeling;
     directEditing.registerProvider(this);
+
+    // miro gesture: "n" arms the sticky create tool — the sticky follows the
+    // cursor, a click places it (identical to the lasso/hand key bindings:
+    // create.start without an event auto-activates on the next mousemove).
+    // The keyboard binds to the canvas SVG, so typing in the direct-editing
+    // textbox or any input never reaches this listener.
+    keyboard.addListener((context) => {
+      const event = context.keyEvent;
+      if (keyboard.hasModifier(event)) return;
+      if (!keyboard.isKey(["n", "N"], event)) return;
+      if (!isWorkshopMode(bpmnjs.getDefinitions())) return;
+      if (directEditing.isActive()) return;
+      const shape = elementFactory.create("shape", { type: STICKY_TYPE });
+      create.start(null, shape);
+      return true;
+    });
 
     // a REMOTE re-import tears the canvas down mid-edit — without this the
     // half-typed sticky text is silently discarded (review #117). Stash the
@@ -196,28 +230,6 @@ export class StickyEditing {
       if (!element || !isSticky(element)) return; // deleted remotely — remote wins
       const bo = (element as { businessObject: { text?: string } }).businessObject;
       if (bo.text !== text) modeling.updateModdleProperties(element, bo, { text });
-    });
-
-    // t.BPM gesture: double-click on EMPTY canvas creates a sticky there.
-    // Element double-clicks (incl. on stickies) go through the provider chain.
-    eventBus.on("element.dblclick", (event) => {
-      if (event.element !== canvas.getRootElement() || !event.originalEvent) return;
-      // sticky creation is a WORKSHOP gesture (bpmiq:mode)
-      if (!isWorkshopMode(bpmnjs.getDefinitions())) return;
-      // not on a drilldown plane: sticky coordinates are main-plane absolute
-      const rootBo = (event.element as { businessObject?: { $type?: string } }).businessObject;
-      if (rootBo?.$type === "bpmn:SubProcess") return;
-      const rect = canvas.getContainer().getBoundingClientRect();
-      const vb = canvas.viewbox();
-      const scale = vb.scale || 1;
-      const position = {
-        x: Math.round(vb.x + (event.originalEvent.clientX - rect.left) / scale),
-        y: Math.round(vb.y + (event.originalEvent.clientY - rect.top) / scale),
-      };
-      // stickies float above the diagram — the root is always the target
-      const shape = elementFactory.create("shape", { type: STICKY_TYPE });
-      const created = modeling.createShape(shape, position, canvas.getRootElement());
-      if (created) directEditing.activate(created);
     });
   }
 
