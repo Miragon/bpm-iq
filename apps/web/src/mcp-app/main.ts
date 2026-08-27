@@ -13,6 +13,8 @@ import { processDeepLink } from "@bpmiq/contracts/deep-link";
 import { roomName } from "@bpmiq/contracts/live";
 import { modelStem } from "@bpmiq/notations";
 
+import { tbpmToggleAction } from "@/notations/bpmn-sticky";
+
 import {
   bootConfig,
   claimDocument,
@@ -118,6 +120,9 @@ async function load(processRef: ProcessRef): Promise<void> {
       scheduleAutosave();
     });
     saveBtn.hidden = !modeler.editable;
+    // t.BPM switch (#117): same document-property flip as the web editor's
+    // header toggle — a facilitator can start a workshop from the widget
+    if (modeler.editable) mountTbpmSwitch(saveBtn, modeler);
     // bound BEFORE the first import: the canvas controller re-renders its
     // badges on every `import.done` (incl. the live re-imports)
     todos = mountTodos(app, modeler, { readonly: cfg.readonly });
@@ -446,3 +451,23 @@ wireApp(app, {
   hasLoaded: () => ref !== undefined,
   onToolArgs: (args) => load({ repo: args.repo, id: args.id, path: args.path }),
 });
+
+/** the widget-chrome twin of the web editor's t.BPM header switch */
+function mountTbpmSwitch(anchor: HTMLElement, handle: ModelerHandle): void {
+  const action = tbpmToggleAction(handle.raw as never);
+  const label = document.createElement("label");
+  label.id = "tbpm";
+  label.title = action.buttonTitle;
+  const text = document.createElement("span");
+  text.textContent = action.label;
+  const sw = document.createElement("button");
+  sw.type = "button";
+  sw.setAttribute("role", "switch");
+  sw.append(document.createElement("span"));
+  const sync = (): void => sw.setAttribute("aria-checked", String(action.isActive?.() ?? false));
+  sw.onclick = () => action.run();
+  action.onChanged?.(sync);
+  sync();
+  label.append(text, sw);
+  anchor.before(label);
+}

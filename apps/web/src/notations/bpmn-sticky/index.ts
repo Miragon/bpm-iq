@@ -6,6 +6,8 @@
  * Y.Text/bpmn-sync collab and are ignored by the derive/validator toolchain
  * (warn-only residue check aside).
  */
+import "./sticky.css";
+
 import { bpmiqModdle } from "./bpmiq-moddle";
 import { StickyElementFactory } from "./sticky-factory";
 import { StickyOrdering } from "./sticky-ordering";
@@ -35,4 +37,5 @@ export const bpmnStickyModule = {
 };
 
 export { bpmiqModdle };
+export { bpmnStickyViewModule } from "./sticky-view";
 export { tbpmToggleAction } from "./tbpm-action";

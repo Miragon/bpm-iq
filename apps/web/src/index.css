@@ -66,18 +66,3 @@
 .bpm-diff-viewer .bpm-diff-layout.djs-connection .djs-visual > path {
   stroke-dasharray: 6 3 !important;
 }
-
-/* bpmiq stickies (#117): the create tool draws via CSS mask in currentColor,
-   so it matches the font glyphs exactly — palette color AND hover blue */
-.djs-palette .entry.bpmiq-palette-sticky::before {
-  content: "";
-  display: inline-block;
-  width: 26px;
-  height: 26px;
-  vertical-align: middle;
-  background-color: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M3%203h18v13l-5%205H3z%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22/%3E%3Cpath%20d%3D%22M21%2016h-5v5%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M3%203h18v13l-5%205H3z%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22/%3E%3Cpath%20d%3D%22M21%2016h-5v5%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22/%3E%3C/svg%3E")
-    center / contain no-repeat;
-}

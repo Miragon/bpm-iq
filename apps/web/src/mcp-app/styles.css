@@ -182,3 +182,41 @@
   --bpm-todo-badge-bg: #bf8700;
   --bpm-todo-badge-fg: var(--bg);
 }
+
+/* t.BPM workshop switch (#117) — the widget twin of the web header toggle */
+#tbpm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+#tbpm button[role="switch"] {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #e7e7e7;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#tbpm button[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+#tbpm button[role="switch"] > span {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+#tbpm button[aria-checked="true"] > span {
+  transform: translateX(16px);
+}

@@ -15,8 +15,8 @@
  */
 import CommandInterceptor from "diagram-js/lib/command/CommandInterceptor";
 
-import { isSticky, type ModdleLike, processesOf, stickiesOf, type StickyModdle } from "./sticky-model";
-import { STICKY_SIZE, STICKY_TYPE } from "./sticky-model";
+import { isSticky, type ModdleLike, processesOf, type StickyModdle } from "./sticky-model";
+import { rebuildStickyShapes } from "./sticky-view";
 
 interface ShapeLike {
   id: string;
@@ -232,29 +232,15 @@ export class StickyPersistence extends CommandInterceptor {
     }
   }
 
-  /** importXML wiped the canvas — recreate sticky shapes from the tree.
-   *  canvas.addShape (no commands): an import must not dirty the undo stack. */
+  /** importXML wiped the canvas — recreate sticky shapes from the tree
+   *  (shared with the viewer module; canvas.addShape, no commands: an import
+   *  must not dirty the undo stack) */
   private _rebuild(): void {
-    const definitions = this._bpmnjs.getDefinitions();
-    if (!definitions) return;
-    const root = this._canvas.getRootElement();
-    for (const process of processesOf(definitions)) {
-      for (const sticky of stickiesOf(process)) {
-        // a malformed entry (hand-edited, remote mid-merge) renders nothing
-        // but STAYS in the XML — never destroy what we cannot draw
-        if (!Number.isFinite(sticky.x) || !Number.isFinite(sticky.y) || typeof sticky.id !== "string") continue;
-        if (this._registry.get(sticky.id)) continue; // defensive: never add twice
-        const shape = this._elementFactory.create("shape", {
-          type: STICKY_TYPE,
-          businessObject: sticky,
-          x: sticky.x,
-          y: sticky.y,
-          width: Number.isFinite(sticky.width) ? (sticky.width as number) : STICKY_SIZE.width,
-          height: Number.isFinite(sticky.height) ? (sticky.height as number) : STICKY_SIZE.height,
-        });
-        // stickies float above the diagram — always root children
-        this._canvas.addShape(shape, root);
-      }
-    }
+    rebuildStickyShapes({
+      bpmnjs: this._bpmnjs,
+      elementFactory: this._elementFactory,
+      canvas: this._canvas,
+      elementRegistry: this._registry,
+    });
   }
 }
