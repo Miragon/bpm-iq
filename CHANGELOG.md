@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.8.0](https://github.com/Miragon/bpm-iq/compare/v3.7.0...v3.8.0) (2026-08-27)
+
+
+### Features
+
+* bpmiq:sticky — the t.BPM discussion layer on the BPMN canvas ([#117](https://github.com/Miragon/bpm-iq/issues/117)) ([#141](https://github.com/Miragon/bpm-iq/issues/141)) ([ee77534](https://github.com/Miragon/bpm-iq/commit/ee775347f08b5464205a91c4d9c5b921af2cf133))
+* **contracts,live-client,web,live-host:** live canvas cursors + presence ([#115](https://github.com/Miragon/bpm-iq/issues/115)) ([#138](https://github.com/Miragon/bpm-iq/issues/138)) ([0312b48](https://github.com/Miragon/bpm-iq/commit/0312b489a184ba7cfbf02dd6d436e49f9e4b3793))
+* **contracts,notations,live-client,live-host,web:** the structured live-doc shape — dark launch ([#137](https://github.com/Miragon/bpm-iq/issues/137)) ([40e76ae](https://github.com/Miragon/bpm-iq/commit/40e76ae8960c5a34e4e2f831891e3c94d9ed64fa))
+* cross-notation reference meta-model — typed refs, RepoIndex, one dangling rule, ruleIds ([#122](https://github.com/Miragon/bpm-iq/issues/122)) ([#132](https://github.com/Miragon/bpm-iq/issues/132)) ([d1d7bcc](https://github.com/Miragon/bpm-iq/commit/d1d7bcc6c76683c9379a42993664c3016afd923e))
+* **mcp,live-host,notations:** registry-driven MCP tools — get_view, graphHints graph analyses, contribution hooks ([#133](https://github.com/Miragon/bpm-iq/issues/133)) ([b1ff979](https://github.com/Miragon/bpm-iq/commit/b1ff9796542efb271acf09df66855bde98cec97c))
+* **notations,contracts,live-host,web:** create models of ANY notation from the platform ([#139](https://github.com/Miragon/bpm-iq/issues/139)) ([#140](https://github.com/Miragon/bpm-iq/issues/140)) ([a202f18](https://github.com/Miragon/bpm-iq/commit/a202f1890c50ccb3fd469573aff4601277ad0fc3))
+* **notations,validator,live-host,mcp:** capability slots — data descriptor, deriveView/templateFor dispatch, one checkModel ([#131](https://github.com/Miragon/bpm-iq/issues/131)) ([fee9da0](https://github.com/Miragon/bpm-iq/commit/fee9da0f287cbd3e02165213c5bf8792321e90f3))
+* **notations,validator,live-host,web:** registry-driven discovery — every notation becomes visible ([#129](https://github.com/Miragon/bpm-iq/issues/129)) ([511cbb0](https://github.com/Miragon/bpm-iq/commit/511cbb0c730631e2e309ea0cedbb8d4291f01e2d))
+* **web,contracts:** editor plugin registry — lazy per-notation engines replace the isBpmn/isDmn branches ([#134](https://github.com/Miragon/bpm-iq/issues/134)) ([b5fde28](https://github.com/Miragon/bpm-iq/commit/b5fde28290452e1eafa71b2db6ca737bfd4f9a8b))
+* **web,live-client:** mount the Miragon wardley + team-topologies modelers as editor plugins ([#135](https://github.com/Miragon/bpm-iq/issues/135)) ([eb00784](https://github.com/Miragon/bpm-iq/commit/eb007849727910dd320eb108012ff29141ea5a60))
+* **web:** the t.BPM workshop mode — reduced suitcase palette + moderation panel ([#54](https://github.com/Miragon/bpm-iq/issues/54)) ([#142](https://github.com/Miragon/bpm-iq/issues/142)) ([1482269](https://github.com/Miragon/bpm-iq/commit/148226994da2517947052e8eb707bb2c4e7c0607))
+
 ## [3.7.0](https://github.com/Miragon/bpm-iq/compare/v3.6.0...v3.7.0) (2026-08-19)
 
 
