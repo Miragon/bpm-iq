@@ -110,6 +110,23 @@ export function checkBpmnXml(
   }
   checkXmlNamespaces(raw, (m) => err("bpmn/xml", m));
 
+  // #117: bpmiq:sticky extension elements are DISCUSSION artifacts — never
+  // process content (every checker below ignores extensionElements), but
+  // residue worth SURFACING before a release: warn-only, never blocks.
+  // The prefix is resolved from the namespace DECLARATION — a foreign tool
+  // may have re-bound the bpmiq URI to another alias.
+  const prefix = /xmlns:([A-Za-z_][\w.-]*)="https:\/\/bpmiq\.io\/schema\/1\.0\/bpmiq"/.exec(raw)?.[1] ?? "bpmiq";
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stickyCount = raw.match(new RegExp(`<${escaped}:sticky[\\s/>]`, "g"))?.length ?? 0;
+  if (stickyCount > 0) {
+    const questions = raw.match(new RegExp(`<${escaped}:sticky[^>]*\\bkind="question"`, "g"))?.length ?? 0;
+    warn(
+      "bpmn/workshop-residue",
+      `open discussion: ${stickyCount} ${stickyCount === 1 ? "sticky remains" : "stickies remain"}` +
+        (questions > 0 ? ` (${questions} open ${questions === 1 ? "question" : "questions"})` : ""),
+    );
+  }
+
   const defs = parseXml(raw).definitions;
   // collaborations have one <bpmn:process> per pool — always treat as a list
   const processes = asArray(defs?.process as Record<string, unknown>[]);

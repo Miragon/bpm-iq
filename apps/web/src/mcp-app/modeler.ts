@@ -6,6 +6,8 @@
 import Modeler from "bpmn-js/lib/Modeler";
 import NavigatedViewer from "bpmn-js/lib/NavigatedViewer";
 
+import { bpmiqModdle, bpmnStickyModule, bpmnStickyViewModule } from "@/notations/bpmn-sticky";
+
 export interface ModelerHandle {
   importXml(xml: string): Promise<void>;
   saveXml(): Promise<string>;
@@ -20,7 +22,21 @@ export interface ModelerHandle {
 }
 
 export function mountModeler(container: HTMLElement, readonly: boolean): ModelerHandle {
-  const instance = readonly ? new NavigatedViewer({ container }) : new Modeler({ container });
+  // stickies (#117): the editable widget gets the FULL module (workshop-
+  // gated palette, n-key, persistence — identical to the web editor), the
+  // viewer the render-only subset (the full set injects services a viewer
+  // does not register and would fail DI on mount)
+  const instance = readonly
+    ? new NavigatedViewer({
+        container,
+        additionalModules: [bpmnStickyViewModule],
+        moddleExtensions: { bpmiq: bpmiqModdle },
+      })
+    : new Modeler({
+        container,
+        additionalModules: [bpmnStickyModule],
+        moddleExtensions: { bpmiq: bpmiqModdle },
+      });
   const dirtyCbs: Array<() => void> = [];
   if (!readonly) {
     // fires on every applied/undone command — exactly the web editor's signal

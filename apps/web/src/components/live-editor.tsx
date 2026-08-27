@@ -48,7 +48,7 @@ import { safeAvatarUrl, safePresenceColor } from "@/lib/presence-format";
 import { useFileHistory, useTodos } from "@/lib/queries";
 import { createRemoteCaretStyles } from "@/lib/remote-carets";
 import type { TodoCanvas } from "@/lib/todo-canvas";
-import { type MountedEditor, webPlugin } from "@/notations/registry";
+import { type EditorToolbarAction, type MountedEditor, webPlugin } from "@/notations/registry";
 
 function monacoLanguage(docPath: string): string {
   const notation = byExtension(docPath);
@@ -96,6 +96,8 @@ export function LiveEditor({
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   /** the mounted editor exposed an element surface (selection, reveal) */
   const [hasElements, setHasElements] = useState(false);
+  /** header actions the mounted editor contributes (e.g. the t.BPM toggle) */
+  const [editorActions, setEditorActions] = useState<EditorToolbarAction[]>([]);
 
   // model-anchored todos — only for documents that belong to a process
   const hasTodos = processId.length > 0;
@@ -251,6 +253,7 @@ export function LiveEditor({
           return;
         }
         mounted = editor;
+        setEditorActions(editor?.actions ?? []);
         if (editor?.elements) {
           setHasElements(true);
           todoCanvasRef.current = editor.elements;
@@ -292,6 +295,7 @@ export function LiveEditor({
       caretStyles.destroy();
       contentRef.current = null;
       todoCanvasRef.current = null;
+      setEditorActions([]);
       mounted?.destroy();
       monacoBinding?.destroy();
       xmlEditor?.dispose();
@@ -429,6 +433,9 @@ export function LiveEditor({
             );
           })}
         </div>
+        {editorActions.map((action) => (
+          <EditorActionButton key={action.id} action={action} />
+        ))}
         {isVisual && !structuredDoc && (
           <Button variant="outline" size="sm" onClick={() => setShowXml((v) => !v)}>
             {notation?.mediaKind === "xml" ? "XML" : notation?.mediaKind === "json" ? "JSON" : "Text"}
@@ -553,5 +560,42 @@ export function LiveEditor({
       )}
       {releaseOpen && <ReleaseDialog repo={repo} preselect={[docPath]} onClose={() => setReleaseOpen(false)} />}
     </div>
+  );
+}
+
+/** a header control owned by the mounted editor ENGINE (MountedEditor.actions):
+ *  the engine holds state and behavior, this only mirrors isActive(). Actions
+ *  WITH state render as a real switch, stateless ones as a plain button. */
+function EditorActionButton({ action }: { action: EditorToolbarAction }) {
+  const [active, setActive] = useState(action.isActive?.() ?? false);
+  useEffect(() => action.onChanged?.(() => setActive(action.isActive?.() ?? false)), [action]);
+  if (!action.isActive) {
+    return (
+      <Button variant="outline" size="sm" title={action.buttonTitle} onClick={() => action.run()}>
+        {action.label}
+      </Button>
+    );
+  }
+  return (
+    <label className="flex cursor-pointer items-center gap-1.5" title={action.buttonTitle}>
+      <span className="text-xs font-medium">{action.label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={active}
+        onClick={() => action.run()}
+        className={cn(
+          "h-5 w-9 rounded-full border transition-colors",
+          active ? "bg-primary border-primary" : "bg-muted border-input",
+        )}
+      >
+        <span
+          className={cn(
+            "bg-background block size-4 rounded-full shadow transition-transform",
+            active ? "translate-x-[18px]" : "translate-x-0.5",
+          )}
+        />
+      </button>
+    </label>
   );
 }

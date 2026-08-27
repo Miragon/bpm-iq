@@ -13,10 +13,16 @@ import BpmnModeler from "bpmn-js/lib/Modeler";
 import { attachPresenceCanvas } from "@/lib/presence-canvas";
 import { attachTodoCanvas } from "@/lib/todo-canvas";
 
+import { bpmiqModdle, bpmnStickyModule, tbpmToggleAction } from "./bpmn-sticky";
 import type { EditorContext, MountedEditor } from "./registry";
 
 export function mountBpmnEditor(container: HTMLElement, ctx: EditorContext): MountedEditor {
-  const modeler = new BpmnModeler({ container });
+  const modeler = new BpmnModeler({
+    container,
+    // stickies (#117): discussion artifacts as bpmiq:sticky extension elements
+    additionalModules: [bpmnStickyModule],
+    moddleExtensions: { bpmiq: bpmiqModdle },
+  });
   const unbind = bindBpmn(modeler as never, ctx.ytext, ctx.doc, ctx.onSyncError);
   const todoCanvas = attachTodoCanvas(modeler as never, {
     onBadgeClick: ctx.onBadgeClick,
@@ -25,6 +31,7 @@ export function mountBpmnEditor(container: HTMLElement, ctx: EditorContext): Mou
   const presenceCanvas = ctx.presence ? attachPresenceCanvas(modeler as never, ctx.presence) : undefined;
   return {
     elements: todoCanvas,
+    actions: [tbpmToggleAction(modeler as never)],
     destroy: () => {
       presenceCanvas?.destroy();
       todoCanvas.destroy();
