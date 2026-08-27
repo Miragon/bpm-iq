@@ -43,6 +43,22 @@ interface ModelingLike {
 
 // ── palette ──────────────────────────────────────────────────────────────────
 
+/** the t.BPM suitcase (#54): what the WORKSHOP palette keeps of the default
+ *  bpmn set — participants model with real core tiles, stickies carry the
+ *  discussion; everything else is "one step further" away */
+const WORKSHOP_PALETTE = new Set([
+  "hand-tool",
+  "lasso-tool",
+  "space-tool",
+  "global-connect-tool",
+  "tool-separator",
+  "create.start-event",
+  "create.end-event",
+  "create.exclusive-gateway",
+  "create.task",
+  "create.participant-expanded",
+]);
+
 export class StickyPalette {
   static $inject = ["palette", "create", "elementFactory", "bpmnjs", "eventBus"];
 
@@ -69,32 +85,43 @@ export class StickyPalette {
       const workshop = isWorkshopMode(bpmnjs.getDefinitions());
       if (workshop === lastMode) return;
       lastMode = workshop;
+      // diagram-js caches the [data-group=tools] node ONCE for tool
+      // highlighting; _update() rebuilds the palette DOM and would leave the
+      // cache pointing at a detached subtree — every later tool highlight
+      // (hand/lasso/space) would silently die. Drop the cache first.
+      (palette as unknown as { _toolsContainer?: unknown })._toolsContainer = undefined;
       palette._update();
     };
     eventBus.on("import.done", maybeUpdate);
     eventBus.on("commandStack.changed", maybeUpdate);
   }
 
-  getPaletteEntries(): Record<string, unknown> {
-    // the t.BPM toggle lives in the SHELL header (tbpm-action.ts) — the
-    // palette only carries the create tool, and only in workshop mode
+  getPaletteEntries(): Record<string, unknown> | ((entries: Record<string, unknown>) => Record<string, unknown>) {
+    // full mode: the palette stays untouched (the t.BPM toggle lives in the
+    // SHELL header, tbpm-action.ts)
     if (!isWorkshopMode(this._bpmnjs.getDefinitions())) return {};
     const createSticky = (event: Event): void => {
       const shape = this._elementFactory.create("shape", { type: STICKY_TYPE });
       this._create.start(event, shape);
     };
-    return {
-      // an own SECTION at the end of the palette, separated by a rule —
-      // sticky tooling is workshop tooling, not a BPMN element
-      "bpmiq-separator": { group: "bpmiq", separator: true },
-      "create.bpmiq-sticky": {
+    // WORKSHOP mode (#54): reduce the palette to the physical t.BPM suitcase —
+    // core tiles + tools + the sticky section; everything else waits behind
+    // the "one step further" flip back to the full modeler
+    return (entries) => {
+      const reduced: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(entries)) {
+        if (WORKSHOP_PALETTE.has(key)) reduced[key] = entry;
+      }
+      reduced["bpmiq-separator"] = { group: "bpmiq", separator: true };
+      reduced["create.bpmiq-sticky"] = {
         group: "bpmiq",
-        title: "Create sticky note (discussion)",
+        title: "Create sticky note (discussion) — or press n",
         // className + CSS mask instead of an <img>: the glyph inherits the
         // palette entry color INCLUDING the hover blue, like the font icons
         className: "bpmiq-palette-sticky",
         action: { dragstart: createSticky, click: createSticky },
-      },
+      };
+      return reduced;
     };
   }
 }

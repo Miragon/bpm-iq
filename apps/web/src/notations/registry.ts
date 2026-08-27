@@ -74,6 +74,9 @@ export interface NotationPanelProps {
   docPath: string;
   /** the live document text, debounced (~300ms) while the panel is open */
   content: string;
+  /** select + scroll a canvas element into view; false when the id is not in
+   *  the diagram (absent when no visual editor with element identity is up) */
+  onRevealElement?(elementId: string): boolean;
   onClose(): void;
 }
 export interface PanelSpec {
