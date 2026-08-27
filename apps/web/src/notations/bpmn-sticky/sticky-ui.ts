@@ -23,11 +23,6 @@ function stickyIcon(fill: string, stroke: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-// the PALETTE stays neutral (outline only) — colors belong to the canvas and
-// the kind switcher, not the tool bar
-const NEUTRAL = "#71717a";
-const PALETTE_STICKY_ICON = stickyIcon("none", NEUTRAL);
-
 interface BpmnJsLike {
   getDefinitions(): ModdleLike | undefined;
 }
@@ -87,10 +82,15 @@ export class StickyPalette {
       this._create.start(event, shape);
     };
     return {
+      // an own SECTION at the end of the palette, separated by a rule —
+      // sticky tooling is workshop tooling, not a BPMN element
+      "bpmiq-separator": { group: "bpmiq", separator: true },
       "create.bpmiq-sticky": {
-        group: "artifact",
+        group: "bpmiq",
         title: "Create sticky note (discussion)",
-        imageUrl: PALETTE_STICKY_ICON,
+        // className + CSS mask instead of an <img>: the glyph inherits the
+        // palette entry color INCLUDING the hover blue, like the font icons
+        className: "bpmiq-palette-sticky",
         action: { dragstart: createSticky, click: createSticky },
       },
     };

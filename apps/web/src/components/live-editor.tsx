@@ -563,14 +563,39 @@ export function LiveEditor({
   );
 }
 
-/** a header button owned by the mounted editor ENGINE (MountedEditor.actions):
- *  the engine holds state and behavior, this only mirrors isActive() */
+/** a header control owned by the mounted editor ENGINE (MountedEditor.actions):
+ *  the engine holds state and behavior, this only mirrors isActive(). Actions
+ *  WITH state render as a real switch, stateless ones as a plain button. */
 function EditorActionButton({ action }: { action: EditorToolbarAction }) {
   const [active, setActive] = useState(action.isActive?.() ?? false);
   useEffect(() => action.onChanged?.(() => setActive(action.isActive?.() ?? false)), [action]);
+  if (!action.isActive) {
+    return (
+      <Button variant="outline" size="sm" title={action.buttonTitle} onClick={() => action.run()}>
+        {action.label}
+      </Button>
+    );
+  }
   return (
-    <Button variant={active ? "default" : "outline"} size="sm" title={action.buttonTitle} onClick={() => action.run()}>
-      {action.label}
-    </Button>
+    <label className="flex cursor-pointer items-center gap-1.5" title={action.buttonTitle}>
+      <span className="text-xs font-medium">{action.label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={active}
+        onClick={() => action.run()}
+        className={cn(
+          "h-5 w-9 rounded-full border transition-colors",
+          active ? "bg-primary border-primary" : "bg-muted border-input",
+        )}
+      >
+        <span
+          className={cn(
+            "bg-background block size-4 rounded-full shadow transition-transform",
+            active ? "translate-x-[18px]" : "translate-x-0.5",
+          )}
+        />
+      </button>
+    </label>
   );
 }
