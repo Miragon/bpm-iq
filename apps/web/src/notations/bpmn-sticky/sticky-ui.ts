@@ -28,13 +28,6 @@ function stickyIcon(fill: string, stroke: string): string {
 const NEUTRAL = "#71717a";
 const PALETTE_STICKY_ICON = stickyIcon("none", NEUTRAL);
 
-/** the t.BPM toggle glyph: a sticky square with a mode dot */
-const TBPM_ICON = `data:image/svg+xml,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
-    `<path d="M3 3h18v13l-5 5H3z" fill="none" stroke="${NEUTRAL}" stroke-width="1.6"/>` +
-    `<circle cx="9" cy="11" r="2.4" fill="${NEUTRAL}"/><circle cx="15" cy="11" r="2.4" fill="none" stroke="${NEUTRAL}" stroke-width="1.4"/></svg>`,
-)}`;
-
 interface BpmnJsLike {
   getDefinitions(): ModdleLike | undefined;
 }
@@ -54,28 +47,22 @@ interface ModelingLike {
 // ── palette ──────────────────────────────────────────────────────────────────
 
 export class StickyPalette {
-  static $inject = ["palette", "create", "elementFactory", "bpmnjs", "modeling", "canvas", "eventBus"];
+  static $inject = ["palette", "create", "elementFactory", "bpmnjs", "eventBus"];
 
   private readonly _create: CreateLike;
   private readonly _elementFactory: ElementFactoryLike;
   private readonly _bpmnjs: BpmnJsLike;
-  private readonly _modeling: ModelingLike;
-  private readonly _canvas: { getRootElement(): unknown };
 
   constructor(
     palette: { registerProvider(provider: unknown): void; _update(): void },
     create: CreateLike,
     elementFactory: ElementFactoryLike,
     bpmnjs: BpmnJsLike,
-    modeling: ModelingLike,
-    canvas: { getRootElement(): unknown },
     eventBus: { on(event: string, cb: () => void): void },
   ) {
     this._create = create;
     this._elementFactory = elementFactory;
     this._bpmnjs = bpmnjs;
-    this._modeling = modeling;
-    this._canvas = canvas;
     palette.registerProvider(this);
     // the entries depend on bpmiq:mode — refresh whenever it CHANGES, from
     // any direction: the toggle itself, its undo/redo (commandStack.changed)
@@ -92,40 +79,21 @@ export class StickyPalette {
   }
 
   getPaletteEntries(): Record<string, unknown> {
-    const definitions = this._bpmnjs.getDefinitions();
-    const workshop = isWorkshopMode(definitions);
-    const entries: Record<string, unknown> = {
-      // the t.BPM switch is a DOCUMENT property (bpmiq:mode) — flipping it
-      // syncs to every participant; #54 builds the full mode UX on top
-      "bpmiq-tbpm-toggle": {
-        group: "tools",
-        title: workshop ? "Leave t.BPM workshop mode" : "Enter t.BPM workshop mode (sticky notes)",
-        className: workshop ? "bpmiq-tbpm-active" : "",
-        imageUrl: TBPM_ICON,
-        action: {
-          click: () => {
-            const defs = this._bpmnjs.getDefinitions();
-            if (!defs) return;
-            this._modeling.updateModdleProperties(this._canvas.getRootElement(), defs, {
-              mode: isWorkshopMode(defs) ? undefined : "workshop",
-            }); // palette refresh rides the commandStack.changed listener
-          },
-        },
-      },
+    // the t.BPM toggle lives in the SHELL header (tbpm-action.ts) — the
+    // palette only carries the create tool, and only in workshop mode
+    if (!isWorkshopMode(this._bpmnjs.getDefinitions())) return {};
+    const createSticky = (event: Event): void => {
+      const shape = this._elementFactory.create("shape", { type: STICKY_TYPE });
+      this._create.start(event, shape);
     };
-    if (workshop) {
-      const createSticky = (event: Event): void => {
-        const shape = this._elementFactory.create("shape", { type: STICKY_TYPE });
-        this._create.start(event, shape);
-      };
-      entries["create.bpmiq-sticky"] = {
+    return {
+      "create.bpmiq-sticky": {
         group: "artifact",
         title: "Create sticky note (discussion)",
         imageUrl: PALETTE_STICKY_ICON,
         action: { dragstart: createSticky, click: createSticky },
-      };
-    }
-    return entries;
+      },
+    };
   }
 }
 

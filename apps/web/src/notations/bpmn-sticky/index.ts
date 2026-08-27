@@ -35,3 +35,4 @@ export const bpmnStickyModule = {
 };
 
 export { bpmiqModdle };
+export { tbpmToggleAction } from "./tbpm-action";

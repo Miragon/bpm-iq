@@ -13,7 +13,7 @@ import BpmnModeler from "bpmn-js/lib/Modeler";
 import { attachPresenceCanvas } from "@/lib/presence-canvas";
 import { attachTodoCanvas } from "@/lib/todo-canvas";
 
-import { bpmiqModdle, bpmnStickyModule } from "./bpmn-sticky";
+import { bpmiqModdle, bpmnStickyModule, tbpmToggleAction } from "./bpmn-sticky";
 import type { EditorContext, MountedEditor } from "./registry";
 
 export function mountBpmnEditor(container: HTMLElement, ctx: EditorContext): MountedEditor {
@@ -31,6 +31,7 @@ export function mountBpmnEditor(container: HTMLElement, ctx: EditorContext): Mou
   const presenceCanvas = ctx.presence ? attachPresenceCanvas(modeler as never, ctx.presence) : undefined;
   return {
     elements: todoCanvas,
+    actions: [tbpmToggleAction(modeler as never)],
     destroy: () => {
       presenceCanvas?.destroy();
       todoCanvas.destroy();

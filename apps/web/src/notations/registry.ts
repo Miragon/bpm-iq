@@ -43,10 +43,27 @@ export interface EditorContext {
   presence?: PresenceSurface;
 }
 
+/** a toolbar action the mounted editor contributes to the SHELL header
+ *  (e.g. the t.BPM workshop toggle) — imperative twin of PanelSpec: the
+ *  engine owns state and behavior, React only renders the button */
+export interface EditorToolbarAction {
+  id: string;
+  /** button label, e.g. "t.BPM" */
+  label: string;
+  buttonTitle: string;
+  /** current on/off state (toggle actions); absent = stateless action */
+  isActive?(): boolean;
+  /** subscribe to state changes; returns the unsubscribe */
+  onChanged?(cb: () => void): () => void;
+  run(): void;
+}
+
 export interface MountedEditor {
   /** element surface (reveal / badges / one-shot deep-link reveal) — the
    *  todo-canvas contract; absent = the notation has no element identity */
   elements?: TodoCanvas;
+  /** header actions this editor contributes (rendered by the shell) */
+  actions?: EditorToolbarAction[];
   destroy(): void;
 }
 

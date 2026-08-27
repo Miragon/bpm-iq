@@ -67,14 +67,10 @@
   stroke-dasharray: 6 3 !important;
 }
 
-/* bpmiq stickies (#117): compact, neutral palette entries; the active t.BPM
-   toggle gets the theme accent */
-.djs-palette .entry[data-action="create.bpmiq-sticky"] img,
-.djs-palette .entry[data-action="bpmiq-tbpm-toggle"] img {
-  width: 16px;
-  height: 16px;
-}
-.djs-palette .entry.bpmiq-tbpm-active {
-  background: var(--accent);
-  border-radius: 4px;
+/* bpmiq stickies (#117): the create tool's icon sized to match the 30px
+   font glyphs of the neighboring palette entries */
+.djs-palette .entry[data-action="create.bpmiq-sticky"] img {
+  width: 26px;
+  height: 26px;
+  vertical-align: middle;
 }
