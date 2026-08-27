@@ -27,7 +27,7 @@ function withStickies(xml: string, stickies: string): string {
 const STICKIES =
   `<bpmiq:sticky id="Sticky_a1" text="who owns this?" x="120" y="80" kind="question" />` +
   `<bpmiq:sticky id="Sticky_b2" text="ship v1 without refunds" x="340" y="80" kind="decision" />` +
-  `<bpmiq:sticky id="Sticky_c3" text="parked" x="500" y="80" kind="note" attachedTo="missing-element" />`;
+  `<bpmiq:sticky id="Sticky_c3" text="parked" x="500" y="80" width="180" height="140" kind="note" />`;
 
 test("stickies are a WARN (workshop residue), never an ERROR — and counts include open questions", () => {
   const xml = withStickies(fixture("order-to-cash/order-to-cash.bpmn"), STICKIES);

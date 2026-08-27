@@ -4,16 +4,39 @@
  * provider for inline text — plus the t.BPM gesture: double-click on empty
  * canvas drops a sticky right there and opens its text editor.
  */
-import { isSticky, STICKY_COLORS, STICKY_KINDS, type StickyKind } from "./sticky-model";
+import {
+  isSticky,
+  isWorkshopMode,
+  type ModdleLike,
+  STICKY_COLORS,
+  STICKY_KINDS,
+  type StickyKind,
+} from "./sticky-model";
 import { STICKY_TYPE } from "./sticky-model";
 
-/** inline SVG icon (data uri) — a colored square with a folded corner */
+/** inline SVG icon (data uri) — a sticky square with a folded corner */
 function stickyIcon(fill: string, stroke: string): string {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
     `<path d="M3 3h18v13l-5 5H3z" fill="${fill}" stroke="${stroke}" stroke-width="1.6"/>` +
     `<path d="M21 16h-5v5" fill="none" stroke="${stroke}" stroke-width="1.6"/></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+// the PALETTE stays neutral (outline only) — colors belong to the canvas and
+// the kind switcher, not the tool bar
+const NEUTRAL = "#71717a";
+const PALETTE_STICKY_ICON = stickyIcon("none", NEUTRAL);
+
+/** the t.BPM toggle glyph: a sticky square with a mode dot */
+const TBPM_ICON = `data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
+    `<path d="M3 3h18v13l-5 5H3z" fill="none" stroke="${NEUTRAL}" stroke-width="1.6"/>` +
+    `<circle cx="9" cy="11" r="2.4" fill="${NEUTRAL}"/><circle cx="15" cy="11" r="2.4" fill="none" stroke="${NEUTRAL}" stroke-width="1.4"/></svg>`,
+)}`;
+
+interface BpmnJsLike {
+  getDefinitions(): ModdleLike | undefined;
 }
 
 interface ElementFactoryLike {
@@ -31,34 +54,78 @@ interface ModelingLike {
 // ── palette ──────────────────────────────────────────────────────────────────
 
 export class StickyPalette {
-  static $inject = ["palette", "create", "elementFactory"];
+  static $inject = ["palette", "create", "elementFactory", "bpmnjs", "modeling", "canvas", "eventBus"];
 
   private readonly _create: CreateLike;
   private readonly _elementFactory: ElementFactoryLike;
+  private readonly _bpmnjs: BpmnJsLike;
+  private readonly _modeling: ModelingLike;
+  private readonly _canvas: { getRootElement(): unknown };
 
   constructor(
-    palette: { registerProvider(provider: unknown): void },
+    palette: { registerProvider(provider: unknown): void; _update(): void },
     create: CreateLike,
     elementFactory: ElementFactoryLike,
+    bpmnjs: BpmnJsLike,
+    modeling: ModelingLike,
+    canvas: { getRootElement(): unknown },
+    eventBus: { on(event: string, cb: () => void): void },
   ) {
     this._create = create;
     this._elementFactory = elementFactory;
+    this._bpmnjs = bpmnjs;
+    this._modeling = modeling;
+    this._canvas = canvas;
     palette.registerProvider(this);
+    // the entries depend on bpmiq:mode — refresh whenever it CHANGES, from
+    // any direction: the toggle itself, its undo/redo (commandStack.changed)
+    // or a remote flip (arrives via re-import)
+    let lastMode: boolean | undefined;
+    const maybeUpdate = (): void => {
+      const workshop = isWorkshopMode(bpmnjs.getDefinitions());
+      if (workshop === lastMode) return;
+      lastMode = workshop;
+      palette._update();
+    };
+    eventBus.on("import.done", maybeUpdate);
+    eventBus.on("commandStack.changed", maybeUpdate);
   }
 
   getPaletteEntries(): Record<string, unknown> {
-    const createSticky = (event: Event): void => {
-      const shape = this._elementFactory.create("shape", { type: STICKY_TYPE });
-      this._create.start(event, shape);
-    };
-    return {
-      "create.bpmiq-sticky": {
-        group: "artifact",
-        title: "Create sticky note (discussion)",
-        imageUrl: stickyIcon(STICKY_COLORS.note.fill, STICKY_COLORS.note.stroke),
-        action: { dragstart: createSticky, click: createSticky },
+    const definitions = this._bpmnjs.getDefinitions();
+    const workshop = isWorkshopMode(definitions);
+    const entries: Record<string, unknown> = {
+      // the t.BPM switch is a DOCUMENT property (bpmiq:mode) — flipping it
+      // syncs to every participant; #54 builds the full mode UX on top
+      "bpmiq-tbpm-toggle": {
+        group: "tools",
+        title: workshop ? "Leave t.BPM workshop mode" : "Enter t.BPM workshop mode (sticky notes)",
+        className: workshop ? "bpmiq-tbpm-active" : "",
+        imageUrl: TBPM_ICON,
+        action: {
+          click: () => {
+            const defs = this._bpmnjs.getDefinitions();
+            if (!defs) return;
+            this._modeling.updateModdleProperties(this._canvas.getRootElement(), defs, {
+              mode: isWorkshopMode(defs) ? undefined : "workshop",
+            }); // palette refresh rides the commandStack.changed listener
+          },
+        },
       },
     };
+    if (workshop) {
+      const createSticky = (event: Event): void => {
+        const shape = this._elementFactory.create("shape", { type: STICKY_TYPE });
+        this._create.start(event, shape);
+      };
+      entries["create.bpmiq-sticky"] = {
+        group: "artifact",
+        title: "Create sticky note (discussion)",
+        imageUrl: PALETTE_STICKY_ICON,
+        action: { dragstart: createSticky, click: createSticky },
+      };
+    }
+    return entries;
   }
 }
 
@@ -117,7 +184,7 @@ interface RegistryLike {
 }
 
 export class StickyEditing {
-  static $inject = ["directEditing", "eventBus", "canvas", "modeling", "elementFactory", "elementRegistry"];
+  static $inject = ["directEditing", "eventBus", "canvas", "modeling", "elementFactory", "elementRegistry", "bpmnjs"];
 
   private readonly _canvas: CanvasLike;
   private readonly _modeling: ModelingLike;
@@ -135,6 +202,7 @@ export class StickyEditing {
     modeling: ModelingLike,
     elementFactory: ElementFactoryLike,
     elementRegistry: RegistryLike,
+    bpmnjs: BpmnJsLike,
   ) {
     this._canvas = canvas;
     this._modeling = modeling;
@@ -166,6 +234,8 @@ export class StickyEditing {
     // Element double-clicks (incl. on stickies) go through the provider chain.
     eventBus.on("element.dblclick", (event) => {
       if (event.element !== canvas.getRootElement() || !event.originalEvent) return;
+      // sticky creation is a WORKSHOP gesture (bpmiq:mode)
+      if (!isWorkshopMode(bpmnjs.getDefinitions())) return;
       // not on a drilldown plane: sticky coordinates are main-plane absolute
       const rootBo = (event.element as { businessObject?: { $type?: string } }).businessObject;
       if (rootBo?.$type === "bpmn:SubProcess") return;
@@ -176,23 +246,9 @@ export class StickyEditing {
         x: Math.round(vb.x + (event.originalEvent.clientX - rect.left) / scale),
         y: Math.round(vb.y + (event.originalEvent.clientY - rect.top) / scale),
       };
-      // deepest lane/participant under the point becomes the parent — the
-      // rules allow those targets, the root is the fallback
-      const containers = elementRegistry.filter((el) => {
-        const e = el as { type?: string; businessObject?: { $type?: string } };
-        const type = e.businessObject?.$type;
-        return (
-          (type === "bpmn:Participant" || type === "bpmn:Lane") &&
-          position.x >= (el as never as { x: number }).x &&
-          position.y >= (el as never as { y: number }).y
-        );
-      });
-      const target =
-        containers
-          .filter((c) => position.x <= c.x + c.width && position.y <= c.y + c.height)
-          .sort((a, b) => a.width * a.height - b.width * b.height)[0] ?? canvas.getRootElement();
+      // stickies float above the diagram — the root is always the target
       const shape = elementFactory.create("shape", { type: STICKY_TYPE });
-      const created = modeling.createShape(shape, position, target);
+      const created = modeling.createShape(shape, position, canvas.getRootElement());
       if (created) directEditing.activate(created);
     });
   }

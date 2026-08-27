@@ -5,8 +5,8 @@
  *  - import.done  → rebuild sticky shapes from every process's
  *    extensionElements (importXML wipes the canvas; the extension elements
  *    ARE the truth, coordinates included — no BPMNDI involved)
- *  - shape.create/delete/move, spaceTool, updateAttachment → mirror into the
- *    extension elements INSIDE the same command transaction (postExecute):
+ *  - shape.create/delete/move/resize, spaceTool → mirror into the extension
+ *    elements INSIDE the same command transaction (postExecute):
  *    one user action = one command-stack entry = one bpmn-sync export, and
  *    undo reverts canvas AND XML atomically
  *
@@ -25,7 +25,6 @@ interface ShapeLike {
   width: number;
   height: number;
   parent?: ShapeLike;
-  host?: ShapeLike | null;
   businessObject?: ModdleLike;
 }
 
@@ -120,36 +119,26 @@ export class StickyPersistence extends CommandInterceptor {
       const shape = event.context.shape;
       if (shape && isSticky(shape)) this._persistDelete(shape);
     });
-    // every command that can move a sticky (directly, or carried by its lane/
-    // pool/host) — a cheap full sweep keeps x/y AND process ownership
-    // truthful without per-command bookkeeping
-    this.postExecute(["shape.move", "elements.move", "spaceTool"], () => this._syncStickies());
-    this.postExecute(
-      "element.updateAttachment",
-      (event: { context: { shape?: ShapeLike; newHost?: ShapeLike | null } }) => {
-        const { shape, newHost } = event.context;
-        if (!shape || !isSticky(shape)) return;
-        const hostId = newHost?.businessObject?.id;
-        this._modeling.updateModdleProperties(shape, shape.businessObject, {
-          attachedTo: typeof hostId === "string" ? hostId : undefined,
-        });
-      },
-    );
+    // deleting a POOL removes its process from the document — stickies are
+    // root children now (they never die with the pool), so any sticky whose
+    // owning process just left the tree is re-homed to a surviving process
+    // (or removed with it, when none survives)
+    this.postExecuted("shape.delete", (event: { context: { shape?: ShapeLike } }) => {
+      const bo = event.context.shape?.businessObject;
+      if (bo?.$type !== "bpmn:Participant") return;
+      this._rehomeOrphans();
+    });
+    // every command that can move or resize a sticky — a cheap full sweep
+    // keeps x/y/width/height truthful without per-command bookkeeping
+    this.postExecute(["shape.move", "elements.move", "shape.resize", "spaceTool"], () => this._syncStickies());
   }
 
-  /** the bpmn:Process whose extensionElements own a sticky at this canvas spot */
+  /** stickies FLOAT above the diagram (root children, StickyOrdering) — the
+   *  owning process is simply the canvas root's process, or the first one on
+   *  a collaboration */
   private _processFor(shape: ShapeLike): ModdleLike | undefined {
-    for (let el: ShapeLike | undefined = shape.parent; el; el = el.parent) {
-      const bo = el.businessObject;
-      if (!bo) continue;
-      if (bo.$type === "bpmn:Process") return bo;
-      if (bo.$type === "bpmn:Participant" && bo.processRef) return bo.processRef as ModdleLike;
-      if (bo.$type === "bpmn:Lane") {
-        // lane → laneSet → process
-        for (let p = bo.$parent; p; p = p.$parent) if (p.$type === "bpmn:Process") return p;
-      }
-    }
-    // free-floating on a collaboration canvas — fall back to the first process
+    const rootBo = (shape.parent ?? this._canvas.getRootElement()).businessObject;
+    if (rootBo?.$type === "bpmn:Process") return rootBo;
     const definitions = this._bpmnjs.getDefinitions();
     return definitions ? processesOf(definitions)[0] : undefined;
   }
@@ -191,6 +180,8 @@ export class StickyPersistence extends CommandInterceptor {
     this._modeling.updateModdleProperties(shape, bo, {
       x: Math.round(shape.x),
       y: Math.round(shape.y),
+      width: Math.round(shape.width),
+      height: Math.round(shape.height),
       kind: bo.kind ?? "note",
       text: bo.text ?? "",
     });
@@ -203,18 +194,40 @@ export class StickyPersistence extends CommandInterceptor {
     if (bo) this._removeFromOwner(this._canvas.getRootElement(), bo);
   }
 
+  /** true when the sticky's extension element still hangs off the document */
+  private _isInDocument(bo: StickyModdle): boolean {
+    for (let p = bo.$parent; p; p = p.$parent) if (p.$type === "bpmn:Definitions") return true;
+    return false;
+  }
+
+  private _rehomeOrphans(): void {
+    const definitions = this._bpmnjs.getDefinitions();
+    if (!definitions) return;
+    const survivor = processesOf(definitions)[0];
+    for (const shape of this._registry.filter((el) => isSticky(el))) {
+      const bo = shape.businessObject as StickyModdle;
+      if (this._isInDocument(bo)) continue;
+      if (survivor) {
+        bo.$parent = undefined; // detached with its old process — re-append
+        this._addToProcess(shape, bo, survivor);
+      } else {
+        // nothing left to persist to — the sticky dies with the last pool
+        (this._modeling as unknown as { removeElements(elements: unknown[]): void }).removeElements([shape]);
+      }
+    }
+  }
+
   private _syncStickies(): void {
     for (const shape of this._registry.filter((el) => isSticky(el))) {
       const bo = shape.businessObject as StickyModdle;
-      const x = Math.round(shape.x);
-      const y = Math.round(shape.y);
-      if (bo.x !== x || bo.y !== y) this._modeling.updateModdleProperties(shape, bo, { x, y });
-      // cross-pool move: the sticky now lives under ANOTHER process — re-home
-      // its extension element, or deleting the old pool would drop it
-      const process = this._processFor(shape);
-      if (process && bo.$parent && bo.$parent.$parent !== process) {
-        this._removeFromOwner(shape, bo);
-        this._addToProcess(shape, bo, process);
+      const next = {
+        x: Math.round(shape.x),
+        y: Math.round(shape.y),
+        width: Math.round(shape.width),
+        height: Math.round(shape.height),
+      };
+      if (bo.x !== next.x || bo.y !== next.y || bo.width !== next.width || bo.height !== next.height) {
+        this._modeling.updateModdleProperties(shape, bo, next);
       }
     }
   }
@@ -231,32 +244,17 @@ export class StickyPersistence extends CommandInterceptor {
         // but STAYS in the XML — never destroy what we cannot draw
         if (!Number.isFinite(sticky.x) || !Number.isFinite(sticky.y) || typeof sticky.id !== "string") continue;
         if (this._registry.get(sticky.id)) continue; // defensive: never add twice
-        const host = typeof sticky.attachedTo === "string" ? this._registry.get(sticky.attachedTo) : undefined;
-        const parent = host?.parent ?? this._containerAt(sticky.x as number, sticky.y as number) ?? root;
         const shape = this._elementFactory.create("shape", {
           type: STICKY_TYPE,
           businessObject: sticky,
           x: sticky.x,
           y: sticky.y,
-          ...STICKY_SIZE,
-          ...(host ? { host } : {}),
+          width: Number.isFinite(sticky.width) ? (sticky.width as number) : STICKY_SIZE.width,
+          height: Number.isFinite(sticky.height) ? (sticky.height as number) : STICKY_SIZE.height,
         });
-        this._canvas.addShape(shape, parent);
+        // stickies float above the diagram — always root children
+        this._canvas.addShape(shape, root);
       }
     }
-  }
-
-  /** deepest participant/lane whose bounds contain the sticky center — lane
-   *  parenting survives re-imports because it is derived, not persisted */
-  private _containerAt(x: number, y: number): ShapeLike | undefined {
-    const cx = x + STICKY_SIZE.width / 2;
-    const cy = y + STICKY_SIZE.height / 2;
-    return this._registry
-      .filter((el) => {
-        const type = el.businessObject?.$type;
-        if (type !== "bpmn:Participant" && type !== "bpmn:Lane") return false;
-        return cx >= el.x && cx <= el.x + el.width && cy >= el.y && cy <= el.y + el.height;
-      })
-      .sort((a, b) => a.width * a.height - b.width * b.height)[0];
   }
 }

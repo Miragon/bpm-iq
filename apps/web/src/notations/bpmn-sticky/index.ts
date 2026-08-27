@@ -8,6 +8,7 @@
  */
 import { bpmiqModdle } from "./bpmiq-moddle";
 import { StickyElementFactory } from "./sticky-factory";
+import { StickyOrdering } from "./sticky-ordering";
 import { StickyPersistence } from "./sticky-persistence";
 import { StickyRenderer } from "./sticky-renderer";
 import { StickyRules } from "./sticky-rules";
@@ -17,6 +18,7 @@ export const bpmnStickyModule = {
   __init__: [
     "stickyRenderer",
     "stickyRules",
+    "stickyOrdering",
     "stickyPalette",
     "stickyContextPad",
     "stickyEditing",
@@ -25,6 +27,7 @@ export const bpmnStickyModule = {
   elementFactory: ["type", StickyElementFactory],
   stickyRenderer: ["type", StickyRenderer],
   stickyRules: ["type", StickyRules],
+  stickyOrdering: ["type", StickyOrdering],
   stickyPalette: ["type", StickyPalette],
   stickyContextPad: ["type", StickyContextPad],
   stickyEditing: ["type", StickyEditing],

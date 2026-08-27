@@ -28,7 +28,7 @@ const BPMN = (extensions: string): string => `<?xml version="1.0" encoding="UTF-
 
 const STICKIES =
   `<bpmn:extensionElements>` +
-  `<bpmiq:sticky id="Sticky_a" text="really manual?" x="100" y="20" kind="question" attachedTo="Task_1" />` +
+  `<bpmiq:sticky id="Sticky_a" text="really manual?" x="100" y="20" width="140" height="120" kind="question" />` +
   `<bpmiq:sticky id="Sticky_b" text="v1 scope agreed" x="260" y="20" kind="decision" />` +
   `</bpmn:extensionElements>`;
 

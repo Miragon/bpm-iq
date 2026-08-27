@@ -53,7 +53,9 @@ export class StickyRenderer extends BaseRenderer {
       rx: 3,
       fill,
       stroke,
-      "stroke-width": 1.5,
+      "stroke-width": 1,
+      // a soft paper shadow (CSS filters apply to SVG) — the miro look
+      style: "filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.22))",
     });
     parentGfx.appendChild(rect);
     const label = this._textRenderer.createText(bo.text ?? "", {

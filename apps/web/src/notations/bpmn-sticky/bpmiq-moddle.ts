@@ -27,7 +27,8 @@ export const bpmiqModdle = {
         { name: "x", type: "Integer", isAttr: true },
         { name: "y", type: "Integer", isAttr: true },
         { name: "kind", type: "String", isAttr: true },
-        { name: "attachedTo", type: "String", isAttr: true },
+        { name: "width", type: "Integer", isAttr: true },
+        { name: "height", type: "Integer", isAttr: true },
       ],
     },
     {

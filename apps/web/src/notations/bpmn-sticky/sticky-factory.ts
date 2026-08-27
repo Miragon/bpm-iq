@@ -40,6 +40,10 @@ export class StickyElementFactory extends ElementFactory {
         id: businessObject.id,
         type: STICKY_TYPE,
         businessObject,
+        // order level 11 (> bpmn's max 10): BpmnOrderingProvider reads
+        // element.order first, so ITS index math (incl. the remove-before-
+        // reinsert compensation) slots every BPMN element below stickies
+        order: { level: 11 },
       });
     }
     return super.create(elementType as never, attrs as never) as never;
