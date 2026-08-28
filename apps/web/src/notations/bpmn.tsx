@@ -8,9 +8,7 @@ import { lazy } from "react";
 
 import type { WebNotationPlugin } from "./registry";
 
-const ModerationPanel = lazy(() =>
-  import("@/components/moderation-panel").then((m) => ({ default: m.ModerationPanel })),
-);
+const NotesPanel = lazy(() => import("@/components/notes-panel").then((m) => ({ default: m.NotesPanel })));
 
 export const bpmnPlugin: WebNotationPlugin = {
   id: "bpmn",
@@ -21,11 +19,12 @@ export const bpmnPlugin: WebNotationPlugin = {
   },
   panels: [
     {
-      id: "moderation",
-      label: "Moderation",
-      buttonTitle: "Stickies on this diagram, grouped by kind — the facilitator's t.BPM view",
+      id: "notes",
+      label: "Notes",
+      buttonTitle: "Stickies on this diagram, grouped by kind — the facilitator's view",
       icon: StickyNote,
-      component: ModerationPanel,
+      placement: "menu",
+      component: NotesPanel,
     },
   ],
   assistNotation: "bpmn",

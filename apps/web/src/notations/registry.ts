@@ -48,7 +48,7 @@ export interface EditorContext {
  *  engine owns state and behavior, React only renders the button */
 export interface EditorToolbarAction {
   id: string;
-  /** button label, e.g. "t.BPM" */
+  /** button label, e.g. "Design" */
   label: string;
   buttonTitle: string;
   /** current on/off state (toggle actions); absent = stateless action */
@@ -87,6 +87,10 @@ export interface PanelSpec {
   label: string;
   buttonTitle: string;
   icon: ComponentType<{ className?: string }>;
+  /** where the toggle lives: its own toolbar button (default) or an entry in
+   *  the toolbar's overflow menu — for panels a session needs occasionally,
+   *  not constantly (the Notes panel pattern) */
+  placement?: "toolbar" | "menu";
   /** lazy panel body — only whoever opens the panel pays for its deps */
   component: LazyExoticComponent<ComponentType<NotationPanelProps>>;
 }

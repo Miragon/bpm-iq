@@ -16,12 +16,9 @@ import { type PresenceUser, roomName } from "@bpmiq/contracts/live";
 import { openLiveSession } from "@bpmiq/live-client";
 import { updateText } from "@bpmiq/live-client/text";
 import { byExtension } from "@bpmiq/notations";
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
 import { useMutation } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { ArrowLeft, History, ListTodo, Loader2, Plus } from "lucide-react";
+import { History, ListTodo } from "lucide-react";
 import * as monaco from "monaco-editor";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -29,6 +26,7 @@ import { MonacoBinding } from "y-monaco";
 import type * as Y from "yjs";
 
 import { AssistMenu } from "@/components/assist-menu";
+import { EditorToolbar, type ToolbarPanelItem } from "@/components/editor-toolbar";
 import { HistoryDiffDialog } from "@/components/history-diff-dialog";
 import { HistoryPanel } from "@/components/history-panel";
 import { ReleaseDialog } from "@/components/release-dialog";
@@ -44,7 +42,6 @@ import {
   type TodoWire,
 } from "@/lib/api";
 import type { PresenceSurface, RemotePresence } from "@/lib/presence-canvas";
-import { safeAvatarUrl, safePresenceColor } from "@/lib/presence-format";
 import { useFileHistory, useTodos } from "@/lib/queries";
 import { createRemoteCaretStyles } from "@/lib/remote-carets";
 import type { TodoCanvas } from "@/lib/todo-canvas";
@@ -86,7 +83,6 @@ export function LiveEditor({
   // badge stays hidden and the title shows the process id alone
   const isBpmn = notation?.id === "bpmn";
   const fileName = docPath.split("/").pop() ?? docPath;
-  const [owner = "", name = ""] = repo.split("/");
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const xmlRef = useRef<HTMLDivElement>(null);
@@ -384,116 +380,75 @@ export function LiveEditor({
   const xmlActive = (showXml || !isVisual) && !structuredDoc;
   const ActivePanel = activePanelSpec?.component;
 
+  // the notation plugin's panels and the shell's own (todos, history) are the
+  // same KIND of thing to the user, so they render the same way and carry the
+  // same open/closed state — split only by PLACEMENT: everyday toggles keep
+  // their bar button, occasional ones (Notes, History) live in the ⋯ menu
+  const pluginPanels = (plugin?.panels ?? []).map((p) => ({
+    id: p.id,
+    label: p.label,
+    title: p.buttonTitle,
+    icon: p.icon,
+    placement: p.placement,
+  }));
+  const toolbarPanels: ToolbarPanelItem[] = [
+    ...pluginPanels.filter((p) => p.placement !== "menu"),
+    ...(hasTodos
+      ? [
+          {
+            id: "todos",
+            label: "Todos",
+            title: "Open todos for this process",
+            icon: ListTodo,
+            count: todoList?.length,
+          },
+        ]
+      : []),
+  ];
+  const menuPanels: ToolbarPanelItem[] = [
+    ...pluginPanels.filter((p) => p.placement === "menu"),
+    { id: "history", label: "History", title: "History of this file on the default branch", icon: History },
+  ];
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-2">
-        <Button asChild variant="ghost" size="icon" title="Back">
-          <Link to="/r/$owner/$repo" params={{ owner, repo: name }} search={backDir ? { dir: backDir } : {}}>
-            <ArrowLeft />
-          </Link>
-        </Button>
-        <span className="truncate text-sm font-medium">
-          {repo} · {processId || fileName}
-          {!isBpmn && processId ? ` · ${fileName}` : ""}
-        </span>
-        {status === "live" && <Badge variant="success">live</Badge>}
-        {(status === "connecting" || status === "slow") && (
-          <Badge variant="secondary">
-            <Loader2 className="animate-spin" /> {status === "slow" ? "connecting… (taking longer)" : "connecting…"}
-          </Badge>
-        )}
-        {status === "error" && <Badge variant="destructive">offline</Badge>}
-        {notation && !isBpmn && <Badge variant="outline">{notation.label}</Badge>}
-        <div className="flex-1" />
-        <div className="flex -space-x-1.5">
-          {presence.map((u, i) => {
-            const avatar = safeAvatarUrl(u.avatarUrl);
-            // color is peer input landing in inline CSS — same guard as the
-            // canvas/caret render sites (url(...) would fetch on paint)
-            const background = safePresenceColor(u.color);
-            return avatar ? (
-              <img
-                key={i}
-                className="border-background size-6 rounded-full border-2"
-                src={avatar}
-                alt={u.name}
-                title={u.name}
-                referrerPolicy="no-referrer"
-                style={{ background }}
-              />
-            ) : (
-              <div
-                key={i}
-                className="border-background flex size-6 items-center justify-center rounded-full border-2 text-[10px] font-semibold text-white"
-                style={{ background }}
-                title={u.name}
-              >
-                {u.name.slice(0, 2).toUpperCase()}
-              </div>
-            );
-          })}
-        </div>
-        {editorActions.map((action) => (
-          <EditorActionButton key={action.id} action={action} />
-        ))}
-        {isVisual && !structuredDoc && (
-          <Button variant="outline" size="sm" onClick={() => setShowXml((v) => !v)}>
-            {notation?.mediaKind === "xml" ? "XML" : notation?.mediaKind === "json" ? "JSON" : "Text"}
-          </Button>
-        )}
-        {plugin?.panels?.map((p) => (
-          <Button key={p.id} variant="outline" size="sm" title={p.buttonTitle} onClick={() => togglePanel(p.id)}>
-            <p.icon />
-            {p.label}
-          </Button>
-        ))}
-        <Button
-          variant="outline"
-          size="sm"
-          title="History of this file on the default branch"
-          onClick={() => togglePanel("history")}
-        >
-          <History />
-          History
-        </Button>
-        {hasTodos && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              title="Open todos for this process"
-              onClick={() => togglePanel("todos")}
-            >
-              <ListTodo />
-              Todos{todoList && todoList.length > 0 ? ` (${todoList.length})` : ""}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              title={
-                selectedElements.length > 0
-                  ? "Anchor a todo to the selection"
-                  : "Create a process-level todo (no element selected)"
+      <EditorToolbar
+        repo={repo}
+        title={processId || fileName}
+        subtitle={!isBpmn && processId ? fileName : undefined}
+        backDir={backDir}
+        notationLabel={notation && !isBpmn ? notation.label : undefined}
+        status={status}
+        presence={presence}
+        modeActions={editorActions}
+        view={
+          isVisual && !structuredDoc
+            ? {
+                sourceLabel: notation?.mediaKind === "xml" ? "XML" : notation?.mediaKind === "json" ? "JSON" : "Text",
+                showSource: showXml,
+                onChange: setShowXml,
               }
-              onClick={() => setTodoCreateOpen(true)}
-            >
-              <Plus />
-              Todo{selectedElements.length > 0 ? ` · ${selectedElements.length}` : ""}
-            </Button>
-          </>
-        )}
-        {plugin?.assistNotation && (
-          <AssistMenu
-            repo={repo}
-            path={docPath}
-            notation={plugin.assistNotation}
-            selection={hasElements ? selectedElements : undefined}
-          />
-        )}
-        <Button size="sm" onClick={() => setReleaseOpen(true)}>
-          Release → PR
-        </Button>
-      </div>
+            : undefined
+        }
+        panels={toolbarPanels}
+        menuPanels={menuPanels}
+        activePanel={panel}
+        onTogglePanel={togglePanel}
+        addTodo={
+          hasTodos ? { selectionCount: selectedElements.length, onAdd: () => setTodoCreateOpen(true) } : undefined
+        }
+        assist={
+          plugin?.assistNotation ? (
+            <AssistMenu
+              repo={repo}
+              path={docPath}
+              notation={plugin.assistNotation}
+              selection={hasElements ? selectedElements : undefined}
+            />
+          ) : undefined
+        }
+        onRelease={() => setReleaseOpen(true)}
+      />
       {error && <div className="bg-destructive/10 text-destructive border-b px-4 py-2 text-sm">{error}</div>}
       <div className="relative min-h-0 flex-1">
         <div
@@ -574,42 +529,5 @@ export function LiveEditor({
       )}
       {releaseOpen && <ReleaseDialog repo={repo} preselect={[docPath]} onClose={() => setReleaseOpen(false)} />}
     </div>
-  );
-}
-
-/** a header control owned by the mounted editor ENGINE (MountedEditor.actions):
- *  the engine holds state and behavior, this only mirrors isActive(). Actions
- *  WITH state render as a real switch, stateless ones as a plain button. */
-function EditorActionButton({ action }: { action: EditorToolbarAction }) {
-  const [active, setActive] = useState(action.isActive?.() ?? false);
-  useEffect(() => action.onChanged?.(() => setActive(action.isActive?.() ?? false)), [action]);
-  if (!action.isActive) {
-    return (
-      <Button variant="outline" size="sm" title={action.buttonTitle} onClick={() => action.run()}>
-        {action.label}
-      </Button>
-    );
-  }
-  return (
-    <label className="flex cursor-pointer items-center gap-1.5" title={action.buttonTitle}>
-      <span className="text-xs font-medium">{action.label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={active}
-        onClick={() => action.run()}
-        className={cn(
-          "h-5 w-9 rounded-full border transition-colors",
-          active ? "bg-primary border-primary" : "bg-muted border-input",
-        )}
-      >
-        <span
-          className={cn(
-            "bg-background block size-4 rounded-full shadow transition-transform",
-            active ? "translate-x-[18px]" : "translate-x-0.5",
-          )}
-        />
-      </button>
-    </label>
   );
 }

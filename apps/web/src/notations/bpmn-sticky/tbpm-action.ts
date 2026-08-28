@@ -25,9 +25,9 @@ export function tbpmToggleAction(modeler: ModelerLike): EditorToolbarAction {
   const canvas = modeler.get("canvas");
   return {
     id: "tbpm",
-    label: "t.BPM",
+    label: "Design",
     buttonTitle:
-      "t.BPM workshop mode: sticky-note discussion tooling — a document setting, every participant switches together",
+      "Design mode (t.BPM): sticky-note discussion tooling — a document setting, every participant switches together",
     isActive: () => isWorkshopMode(modeler.getDefinitions()),
     onChanged: (cb) => {
       // local flips + their undo/redo AND remote flips (arrive via re-import)
