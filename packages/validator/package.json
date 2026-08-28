@@ -44,7 +44,7 @@
   },
   "//": "fast-xml-parser stays a RUNTIME dependency although src/ no longer imports it directly: tsdown inlines @bpmiq/notations (whose extract.ts imports it) but keeps npm deps external, so the published dist/ resolves it from here. Removing it breaks the npm artifact at import time while the workspace keeps working.",
   "dependencies": {
-    "fast-xml-parser": "5.10.1",
+    "fast-xml-parser": "5.11.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {
