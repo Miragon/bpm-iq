@@ -99,10 +99,13 @@ export function AssistMenu({
           <Button
             variant="outline"
             size="sm"
+            aria-label="Analyse with AI"
             title="Open this model in an AI chat — the modeler widget renders in the conversation, live-synced with this editor"
           >
             <Sparkles />
-            Analyse with AI
+            {/* the editor toolbar collapses its tool labels as the bar narrows
+                (components/editor-toolbar.tsx) — this trigger travels with them */}
+            <span className="@max-7xl:hidden">Analyse with AI</span>
           </Button>
         ) : (
           // rows navigate on click — the trigger must not (same rule as the row's links)

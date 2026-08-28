@@ -28,16 +28,19 @@ import {
   ArrowLeft,
   ArrowUpDown,
   ArrowUpToLine,
+  ChartNetwork,
   ChevronDown,
   ChevronUp,
+  FileText,
   Folder,
   FolderPlus,
   Plus,
   Shapes,
   Table2,
+  Users,
   Workflow,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AssistMenu } from "@/components/assist-menu";
@@ -55,6 +58,15 @@ const route = getRouteApi("/r/$owner/$repo");
 /** notations the "New" menu offers GENERICALLY (#139): everything with a
  *  blank template except bpmn/dmn, which keep their typed flows above */
 const CREATABLE_NOTATIONS = NOTATIONS.filter((n) => hasTemplate(n.id) && n.id !== "bpmn" && n.id !== "dmn");
+
+/** each notation's menu icon — one a user can GUESS from the label. A notation
+ *  without an entry falls back to the neutral Shapes, so a new registry entry
+ *  never ships icon-less */
+const NOTATION_ICONS = new Map<string, ComponentType<{ className?: string }>>([
+  ["wardley", ChartNetwork],
+  ["team-topology", Users],
+  ["markdown", FileText],
+]);
 
 /**
  * The table features this route opts into — v9 ships nothing but the core, so
@@ -334,11 +346,14 @@ export function ProcessList() {
                   <DropdownMenuItem onSelect={() => setTimeout(() => setDecisionOpen(true), 0)}>
                     <Table2 /> DMN decision
                   </DropdownMenuItem>
-                  {CREATABLE_NOTATIONS.map((n) => (
-                    <DropdownMenuItem key={n.id} onSelect={() => setTimeout(() => setModelNotation(n), 0)}>
-                      <Shapes /> {n.label}
-                    </DropdownMenuItem>
-                  ))}
+                  {CREATABLE_NOTATIONS.map((n) => {
+                    const Icon = NOTATION_ICONS.get(n.id) ?? Shapes;
+                    return (
+                      <DropdownMenuItem key={n.id} onSelect={() => setTimeout(() => setModelNotation(n), 0)}>
+                        <Icon /> {n.label}
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
             </>

@@ -1,5 +1,5 @@
 /**
- * Moderation panel (#54) — the facilitator's view of a t.BPM session: every
+ * Notes panel (#54) — the facilitator's view of a t.BPM session: every
  * sticky on the diagram, grouped by kind (questions first — they are the open
  * ends a workshop must close), click reveals it on the canvas. Fed the
  * debounced live text like every notation panel, parsed with the browser's
@@ -57,7 +57,7 @@ function parseStickies(xml: string): StickyRow[] | undefined {
   return rows;
 }
 
-export function ModerationPanel({ content, onRevealElement, onClose }: NotationPanelProps) {
+export function NotesPanel({ content, onRevealElement, onClose }: NotationPanelProps) {
   const parsed = useMemo(() => parseStickies(content), [content]);
   // a mid-edit malformed document (someone typing in the XML tab) keeps the
   // previous list instead of flashing the empty state
@@ -80,7 +80,7 @@ export function ModerationPanel({ content, onRevealElement, onClose }: NotationP
   return (
     <SidePanel
       icon={StickyNote}
-      title="Moderation"
+      title="Notes"
       badge={
         total > 0 ? (
           <Badge variant={questions > 0 ? "warning" : "secondary"}>
@@ -94,8 +94,8 @@ export function ModerationPanel({ content, onRevealElement, onClose }: NotationP
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {total === 0 && (
           <p className="text-muted-foreground text-xs">
-            No stickies on this diagram yet. In t.BPM workshop mode, press <kbd>n</kbd> (or use the palette) to drop one
-            — notes, open questions, decisions and role remarks all live right in the model.
+            No stickies on this diagram yet. In Design mode, press <kbd>n</kbd> (or use the palette) to drop one —
+            notes, open questions, decisions and role remarks all live right in the model.
           </p>
         )}
         {groups.map(({ kind, rows }) => (
