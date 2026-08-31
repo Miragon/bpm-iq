@@ -275,7 +275,15 @@ export function LiveEditor({
       offPresence = session.onPresence(setPresence);
       setStatus("live");
     };
-    const offSynced = session.onSynced(() => void attach());
+    const offSynced = session.onSynced(() => {
+      if (cancelled) return;
+      if (!attached) return void attach();
+      // a RE-sync means the doc provably came back (transient ws drop, or a
+      // server restart after a doc close) — an error banner must not outlive
+      // a live session
+      setStatus("live");
+      setError(null);
+    });
     // still connecting after 10s → tell the user it's taking a while, keep waiting
     const slow = setTimeout(() => {
       if (!cancelled && !attached) setStatus("slow");

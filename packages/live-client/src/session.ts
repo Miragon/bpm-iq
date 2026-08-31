@@ -17,7 +17,7 @@ import {
   type PresenceUser,
   roomName,
 } from "@bpmiq/contracts/live";
-import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
+import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import type * as Y from "yjs";
 
 // re-exported so session consumers don't need a second import for the contract
@@ -81,7 +81,10 @@ export interface LiveSession {
   onDisconnect(cb: () => void): () => void;
   /** fires when the server closes THIS document over a still-open socket
    *  (doc-level CLOSE message, e.g. after rejecting an oversized update) —
-   *  the provider does NOT auto-reconnect after it; returns the unsubscribe */
+   *  the provider does NOT re-sync after it; returns the unsubscribe.
+   *  Plain ws drops never reach this callback (they auto-reconnect and
+   *  re-sync — that's onDisconnect's lane), even though the provider
+   *  re-emits them on the same underlying "close" event. */
   onDocClose(cb: () => void): () => void;
   /** promise form — resolves on first sync, rejects on auth failure or timeout */
   whenSynced(timeoutMs?: number): Promise<void>;
@@ -134,8 +137,17 @@ export function openLiveSession(opts: LiveSessionOptions): LiveSession {
     },
 
     onDocClose(cb: () => void): () => void {
-      provider.on("close", cb);
-      return () => provider.off("close", cb);
+      // the provider re-emits EVERY ws-level close on "close" too (forwardClose
+      // in @hocuspocus/provider 4.x) — after those the socket auto-reconnects
+      // and re-syncs, so surfacing them as a dead document is wrong. Gate on
+      // the socket status AT the event: a doc-level CLOSE is a received message
+      // (socket still Connected), a forwarded ws close runs after the socket's
+      // own handler already flipped it to Disconnected.
+      const docClosed = () => {
+        if (socket.status === WebSocketStatus.Connected) cb();
+      };
+      provider.on("close", docClosed);
+      return () => provider.off("close", docClosed);
     },
 
     whenSynced(timeoutMs = 10_000): Promise<void> {
