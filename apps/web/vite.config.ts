@@ -11,13 +11,22 @@ import { defineConfig } from "vite";
  * permanently re-theme the bpmn-js/dmn-js editors of the same session. Scope
  * them to their canvas hosts at build time; :root stays global (the custom
  * properties are namespaced --wardley-… and --cd-… and collide with nothing).
+ *
+ * Each renderer also adds its own root class (`vendorRoot`) to the SAME
+ * element that carries the scope class, so a descendant prefix would never
+ * match those selectors — they get the scope as a compound instead
+ * (.wardley-canvas.wardley-container …).
  */
-const scopeVendorCss = (file: RegExp, scope: string) =>
+const scopeVendorCss = (file: RegExp, scope: string, vendorRoot: string) =>
   prefixSelector({
     prefix: scope,
     includeFiles: [file],
-    transform: (prefix: string, selector: string, prefixed: string) =>
-      selector.startsWith(":root") ? selector : prefixed,
+    transform: (prefix: string, selector: string, prefixed: string) => {
+      if (selector.startsWith(":root")) return selector;
+      const rest = selector.slice(vendorRoot.length);
+      if (selector.startsWith(vendorRoot) && /^($|[ .:,>~+[])/.test(rest)) return prefix + selector;
+      return prefixed;
+    },
   });
 
 // API + OAuth routes proxy to the live host, so cookies stay same-origin in
@@ -27,8 +36,8 @@ export default defineConfig({
   css: {
     postcss: {
       plugins: [
-        scopeVendorCss(/@miragon[/+]wardley-renderer/, ".wardley-canvas"),
-        scopeVendorCss(/@miragon[/+]team-topologies-renderer/, ".tt-canvas"),
+        scopeVendorCss(/@miragon[/+]wardley-renderer/, ".wardley-canvas", ".wardley-container"),
+        scopeVendorCss(/@miragon[/+]team-topologies-renderer/, ".tt-canvas", ".tt-djs-container"),
       ],
     },
   },
