@@ -390,10 +390,15 @@ function ModeAction({ action }: { action: EditorToolbarAction }) {
         aria-hidden="true"
         className={cn("relative h-3.5 w-6 rounded-full transition-colors", active ? "bg-primary" : "bg-input")}
       >
+        {/* left-0.5 is load-bearing: a <button> carries the UA's
+            text-align:center, which the track inherits, and Blink resolves an
+            absolute child's static position from it — the knob started 12px in
+            and slid out of the track onto the label. Pin it, then travel the
+            10px the track actually has (24 − 2·2 − 10). */}
         <span
           className={cn(
-            "bg-background absolute top-0.5 size-2.5 rounded-full shadow-xs transition-transform",
-            active ? "translate-x-3" : "translate-x-0.5",
+            "bg-background absolute top-0.5 left-0.5 size-2.5 rounded-full shadow-xs transition-transform",
+            active ? "translate-x-2.5" : "translate-x-0",
           )}
         />
       </span>
