@@ -48,9 +48,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "fast-xml-parser": "5.11.0",
+    "fast-xml-parser": "5.11.1",
     "yaml": "2.9.0",
-    "zod": "4.4.3"
+    "zod": "4.5.2"
   },
   "devDependencies": {
     "@bpmiq/contracts": "workspace:*",
