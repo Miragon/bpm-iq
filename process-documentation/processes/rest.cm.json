@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "rest",
+  "contexts": [
+    {
+      "id": "ctx_EOxRw8I2",
+      "label": "Core Domain",
+      "position": {
+        "x": 401,
+        "y": 593
+      },
+      "size": {
+        "width": 200,
+        "height": 110
+      },
+      "subdomainType": "core"
+    }
+  ],
+  "relationships": []
+}
