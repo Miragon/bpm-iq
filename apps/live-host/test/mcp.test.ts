@@ -242,6 +242,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "list_processes",
     "list_repos",
     "mint_ws_ticket",
+    "open_context_map_modeler",
     "open_decision_modeler",
     "open_event_storming_modeler",
     "open_modeler",
@@ -274,6 +275,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "list_models",
     "list_processes",
     "list_repos",
+    "open_context_map_modeler",
     "open_decision_modeler",
     "open_event_storming_modeler",
     "open_modeler",
@@ -1078,6 +1080,7 @@ test("widgets: a bundle missing from the web dist drops exactly its tool; the ti
     "open_decision_modeler",
     "open_team_topology_modeler",
     "open_event_storming_modeler",
+    "open_context_map_modeler",
     "mint_ws_ticket",
   ]) {
     assert.ok(noWardley.includes(t), `${t} still registered`);
@@ -1115,6 +1118,7 @@ test("widgets: the generated open_<notation>_modeler tools serve their own bundl
   // fixtures for the two notations the workspace lacks — the create scaffolds
   await callJson("create_model", { repo: REPO.fullName, notation: "team-topology", name: "Teams" });
   await callJson("create_model", { repo: REPO.fullName, notation: "event-storming", name: "Order Storm" });
+  await callJson("create_model", { repo: REPO.fullName, notation: "context-map", name: "Conference" });
   const cases = [
     { tool: "open_wardley_modeler", notation: "wardley", id: "strategy", path: OWM_PATH, text: "component Platform" },
     {
@@ -1130,6 +1134,13 @@ test("widgets: the generated open_<notation>_modeler tools serve their own bundl
       id: "order-storm",
       path: "processes/order-storm.storm",
       text: "title Order Storm",
+    },
+    {
+      tool: "open_context_map_modeler",
+      notation: "context-map",
+      id: "conference",
+      path: "processes/conference.cm.json",
+      text: "version", // quote-free, and never a key of the derived stats
     },
   ];
   const tools = (await client.listTools()).tools;
@@ -1158,10 +1169,10 @@ test("widgets: the generated open_<notation>_modeler tools serve their own bundl
     assert.equal(typeof opened.summary.stats, "object");
     assert.ok(!JSON.stringify(opened).includes(c.text), "no model text in the tool result");
   }
-  // five widgets, five distinct resources
+  // one widget per registry row, one distinct resource each
   for (const t of ["open_modeler", "open_decision_modeler"])
     uris.add(uiMeta(tools.find((x) => x.name === t))!.resourceUri!);
-  assert.equal(uris.size, 5);
+  assert.equal(uris.size, WIDGET_FILES.length);
 
   // read-only mints a different uri whose bundle flags the viewer
   const ro = await connect(deps({ mcpReadOnly: true }));

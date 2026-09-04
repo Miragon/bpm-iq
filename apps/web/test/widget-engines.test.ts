@@ -267,3 +267,14 @@ test("mountJsonEngine: the post-import clear is SILENT, and a rejected parse nev
   handlers.get("commandStack.changed")?.forEach((cb) => cb());
   assert.equal(dirty, 1, "a real edit does");
 });
+
+test("cmCodec: lenient parse, rejected garbage, deterministic round-trip — the SPA and the widget share it", async () => {
+  const { cmCodec } = await import("../src/lib/cm-codec.ts");
+  const empty = cmCodec.parse("{}");
+  assert.ok(empty.ok, "an empty object migrates to a valid map");
+  assert.equal(cmCodec.parse("not json").ok, false);
+  const once = cmCodec.serialize(empty.ok ? empty.document : undefined);
+  const again = cmCodec.parse(once);
+  assert.ok(again.ok);
+  assert.equal(cmCodec.serialize(again.document), once);
+});

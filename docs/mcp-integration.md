@@ -133,6 +133,7 @@ call is gated by the caller's per-repo permission.
 | `open_wardley_modeler`        | read  | Open the embedded Wardley Map modeler widget (MCP App, the widget core).                 |
 | `open_team_topology_modeler`  | read  | Open the embedded Team Topology modeler widget.                                          |
 | `open_event_storming_modeler` | read  | Open the embedded Event Storming board widget.                                           |
+| `open_context_map_modeler`    | read  | Open the embedded Context Map modeler widget.                                            |
 | `create_model`                | write | Scaffold a model of ANY template-capable notation from its blank template.               |
 | `save_model_content`          | write | Validated, conflict-guarded save of ANY model's text into the live document.             |
 | `create_process`              | write | Scaffold a new process `.bpmn` in the live workspace.                                    |
@@ -148,7 +149,7 @@ call is gated by the caller's per-repo permission.
 
 `get_model_content`, `save_model_content`, `create_model` and `validate_model` are ONE tool
 set for the whole notation registry (`@bpmiq/notations`: bpmn, dmn, wardley, team-topology,
-event-storming, value-chain, markdown) beside the wire-pinned BPMN/DMN twins. They address a
+event-storming, context-map, value-chain, markdown) beside the wire-pinned BPMN/DMN twins. They address a
 model as `{repo, id | path, notation?}` — `id` is the file stem `list_models` shows; a stem
 shared across notations resolves bpmn-first unless `notation` picks another. The text travels
 as `content` in the notation's own format (XML, the OWM/`.storm` DSL, JSON, Markdown). The save
@@ -156,9 +157,9 @@ runs the same `checkModel` gate as `pnpm validate` and the REST PUT (ERROR findi
 save under the default `lint:"block"` and are reported under `"warn"`) and is compare-and-set
 like `save_bpmn_xml`: a stale `baseVersion` answers `{conflict: true, currentContent, baseVersion}`.
 `create_model` scaffolds every notation with a template (bpmn, dmn, wardley, team-topology,
-event-storming, markdown); a notation without one (value-chain) arrives via git only.
+event-storming, context-map, markdown); a notation without one (value-chain) arrives via git only.
 `LIVE_MCP_READONLY=1` keeps the two read tools and drops the writes. The embedded modelers'
-`mint_ws_ticket` takes the same ref, so the Wardley, Team Topology and Event Storming widgets
+`mint_ws_ticket` takes the same ref, so the Wardley, Team Topology, Event Storming and Context Map widgets
 (below) upgrade to live co-editing exactly like the BPMN one. (`mint_ws_ticket` itself is
 app-visible — hidden from agents — and registered when at least one live-capable widget is
 served AND the host is not read-only, bound to the first such widget's resource; absent under
@@ -283,10 +284,10 @@ runs the same per-(user, repo) authorization as the model tools.
 
 Every `open_*` tool is an [MCP App](https://modelcontextprotocol.io/specification/2026-01-26)
 (`io.modelcontextprotocol/ui`): in apps-capable clients (claude.ai, Claude Desktop) it
-renders the notation's modeler inline in the conversation. There are five single-file
+renders the notation's modeler inline in the conversation. There are six single-file
 bundles (`apps/web/dist/mcp-app*.html`, one `vite.mcp-app-*.config.ts` each), one per
 modeler, and ONE widget core behind the canvas ones (`apps/web/src/mcp-app/core/`): the
-BPMN, Wardley Map, Team Topology and Event Storming widgets share the load → autosave →
+BPMN, Wardley Map, Team Topology, Event Storming and Context Map widgets share the load → autosave →
 conflict → live-upgrade lifecycle and differ only in their engine adapter; the DMN
 widget (multi-view + simulator) keeps its own. A widget = engine adapter + build entry +
 one registry row in the Live Host; a web dist that lacks a bundle simply lacks its tool.
@@ -387,16 +388,16 @@ cannot disagree. Saving works like the BPMN widget (autosave, `lint:"warn"`,
 live upgrade — decision tables are edited cell by cell by one person at a time, and the
 conflict flow covers the rare collision honestly.
 
-### MCP Apps: Wardley Maps, Team Topologies and Event Storming boards
+### MCP Apps: Wardley Maps, Team Topologies, Event Storming boards and Context Maps
 
-`open_wardley_modeler`, `open_team_topology_modeler` and `open_event_storming_modeler`
-are generated from the notation registry (their names come from
+`open_wardley_modeler`, `open_team_topology_modeler`, `open_event_storming_modeler` and
+`open_context_map_modeler` are generated from the notation registry (their names come from
 `@bpmiq/contracts/mcp-app`, the same derivation the web app's "Analyse with AI" prompt
 uses). Each takes `{repo, id | path}` and forces its notation: a stem shared with a
 `.bpmn` twin opens THIS notation's file, and a `path` of another notation fails in the
 tool rather than inside the iframe. The widgets run the shared core on the Miragon
 renderers (`@miragon/wardley-renderer`, `team-topologies-renderer`,
-`event-storming-renderer`): the same CAS autosave through `save_model_content`, the same
+`event-storming-renderer`, `context-maps-renderer`): the same CAS autosave through `save_model_content`, the same
 conflict banner, the same live upgrade through `mint_ws_ticket`, a read-only viewer under
 `LIVE_MCP_READONLY=1`. What they do not have: todos and stickies (BPMN-only), and the
 `?element=` reveal — their "Open in bpmiq" link is the file route (`/f/<path>`). The

@@ -1,0 +1,7 @@
+/* Widget chrome + the renderer's stylesheet — everything inlines into the
+ * single-file build (vite-plugin-singlefile). The vendor sheet EMBEDS the
+ * diagram-js base rules and needs no scoping here: exactly ONE engine per
+ * emitted widget is the widgets' CSS scoping (the SPA's postcss step is
+ * deliberately absent). No icon font — this renderer draws inline SVG. */
+@import "@miragon/context-maps-renderer/assets/context-maps.css";
+@import "./chrome.css";

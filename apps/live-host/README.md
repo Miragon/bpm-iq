@@ -67,7 +67,7 @@ then the API returns a clear 403 explaining exactly that.
 tools over the **live** models: `list_repos`, `list_models`, `get_view`, `list_processes`,
 `get_process`, `get_bpmn_xml`, `validate_bpmn`, `list_changes`, the modeler widgets
 `open_modeler` / `open_decision_modeler` / `open_wardley_modeler` /
-`open_team_topology_modeler` / `open_event_storming_modeler` (+ their internal
+`open_team_topology_modeler` / `open_event_storming_modeler` / `open_context_map_modeler` (+ their internal
 `mint_ws_ticket` — see [apps/web/README.md](../web/README.md)), `create_process`,
 `save_bpmn_xml`, `release_process`, the
 notation-generic `get_model_content` / `validate_model` / `create_model` / `save_model_content` — plus

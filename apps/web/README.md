@@ -10,7 +10,7 @@ Desktop, ChatGPT).
 | Script                               | What it does                                                                                                                    |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm --filter @bpmiq/web dev`       | Vite dev server: the SPA, and every widget at `/mcp-app*.html` (raw boot marker → editable, this origin as the deep-link base). |
-| `pnpm --filter @bpmiq/web build`     | The SPA plus **one single-file bundle per widget** into `dist/` (six vite invocations, see below).                              |
+| `pnpm --filter @bpmiq/web build`     | The SPA plus **one single-file bundle per widget** into `dist/` (seven vite invocations, see below).                            |
 | `pnpm --filter @bpmiq/web test`      | `node --test test/*.test.ts` — the DOM-free widget-core suites (lifecycle, live upgrade, engines).                              |
 | `pnpm --filter @bpmiq/web typecheck` | `tsc --noEmit` over `src/` and `test/`.                                                                                         |
 
@@ -29,6 +29,7 @@ factory from a 3-line `vite.mcp-app-<notation>.config.ts`. The Live Host
 | `mcp-app-wardley.html`        | `open_wardley_modeler`        | `@miragon/wardley-renderer`             |
 | `mcp-app-team-topology.html`  | `open_team_topology_modeler`  | `@miragon/team-topologies-renderer`     |
 | `mcp-app-event-storming.html` | `open_event_storming_modeler` | `@miragon/event-storming-renderer`      |
+| `mcp-app-context-map.html`    | `open_context_map_modeler`    | `@miragon/context-maps-renderer`        |
 
 **One lifecycle.** The canvas widgets share `src/mcp-app/core/`: `lifecycle.ts`
 (tool input → load via `get_model_content` → engine → debounced CAS autosave via
