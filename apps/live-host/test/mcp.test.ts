@@ -1122,7 +1122,7 @@ test("widgets: the generated open_<notation>_modeler tools serve their own bundl
       notation: "team-topology",
       id: "teams",
       path: "processes/teams.tt",
-      text: '"version"',
+      text: "flows", // quote-free: JSON.stringify would escape a quoted probe
     },
     {
       tool: "open_event_storming_modeler",

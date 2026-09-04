@@ -203,3 +203,67 @@ test("mountJsonEngine read-only: no command-stack lookup on the viewer (the rend
   assert.deepEqual(imported, [{ text: "y" }, "clear:commandStack"], "the editable mount erases history silently");
   assert.equal(await editor.exportText(), '{"nodes":[]}');
 });
+
+test("mountDslEngine: a rejected importDSL releases the latch — later edits still count", async () => {
+  const r = fakeRenderer();
+  const fail = true;
+  r.renderer.importDSL = async () => {
+    if (fail) throw new Error("parse");
+  };
+  const engine = mountDslEngine({
+    readonly: false,
+    editor: () => r.renderer,
+    viewer: () => r.renderer,
+    changeEvents: ["commandStack.changed"],
+    bind: () => () => {},
+  });
+  let dirty = 0;
+  engine.onDirty(() => dirty++);
+  await assert.rejects(() => engine.importText("x"), /parse/);
+  r.emit("commandStack.changed");
+  assert.equal(dirty, 1, "edits after a failed import still count");
+});
+
+test("mountJsonEngine: the post-import clear is SILENT, and a rejected parse never reaches importDocument", async () => {
+  const { mountJsonEngine } = await import("../src/mcp-app/engines/tt.ts");
+  const handlers = new Map<string, Array<() => void>>();
+  const imported: unknown[] = [];
+  const renderer = {
+    get: (service: string) => {
+      if (service === "canvas") return { zoom: () => {} };
+      if (service === "commandStack") {
+        return {
+          // diagram-js: clear(emit) fires 'changed' unless emit === false
+          clear: (emit?: boolean) => {
+            if (emit !== false) handlers.get("commandStack.changed")?.forEach((cb) => cb());
+          },
+        };
+      }
+      throw new Error(`No provider for "${service}"!`);
+    },
+    on: (event: string, cb: () => void) => void (handlers.get(event) ?? handlers.set(event, []).get(event)!).push(cb),
+    off: () => {},
+    destroy: () => {},
+    importDocument: (doc: unknown) => void imported.push(doc),
+    exportDocument: () => ({}),
+  };
+  const engine = mountJsonEngine({
+    readonly: false,
+    noun: "team-topology",
+    editor: () => renderer,
+    viewer: () => renderer,
+    codec: {
+      parse: (text) => (text === "bad" ? { ok: false } : { ok: true, document: { text } }),
+      serialize: () => "",
+    },
+    bind: () => () => {},
+  });
+  let dirty = 0;
+  engine.onDirty(() => dirty++);
+  await engine.importText("ok");
+  assert.equal(dirty, 0, "engine invariant 1: the import (and its history erase) never dirties");
+  await assert.rejects(() => engine.importText("bad"));
+  assert.deepEqual(imported, [{ text: "ok" }], "a rejected parse never reached importDocument");
+  handlers.get("commandStack.changed")?.forEach((cb) => cb());
+  assert.equal(dirty, 1, "a real edit does");
+});

@@ -24,6 +24,15 @@
  *  - liveHooks gains onImportError (the DSL/JSON binds report it; bpmn never)
  *  - `cfg.readonly`, the deep link, the icon font and the button handlers
  *    live in widget.ts (the DOM composition)
+ * Four re-delivery hazards the old code carried are closed here (each pinned
+ * by a test): flushForLive is epoch-fenced, so a stale live upgrade never
+ * binds the previous document's room onto the canvas of a newer load; a
+ * re-load that found the previous upgrade still connecting re-attempts its
+ * own once that settles; the autosave timer of an edit racing a re-load's
+ * import is cleared when the import lands; and a re-delivery after a
+ * supersede is ignored. A load whose import rejects keeps the deep link
+ * (the read landed) and disables the Save button — the canvas it left is
+ * not the document it names.
  * Everything else is unchanged on purpose — latch names and order, every
  * `epoch !== liveEpoch || inactive` re-check after an await, clearTimeout
  * BEFORE the scheduleAutosave gate, autosavePaused + clearTimeout BEFORE the
@@ -180,8 +189,11 @@ export interface WidgetLifecycle<E extends WidgetEngine> {
   flushOnLeave(): void;
   /** true once tool input arrived (set at load START) — wireApp's no-input guard */
   hasLoaded(): boolean;
-  /** the document this widget owns — undefined until the load lands */
+  /** the document a save may PUT against — undefined until the load's import landed */
   document(): DocRef | undefined;
+  /** the document the widget shows or is loading — the deep-link target;
+   *  known from the bridge read on, i.e. before (and despite a failed) import */
+  linkTarget(): DocRef | undefined;
   engine(): E | undefined;
   state(): LifecycleState;
 }
@@ -199,7 +211,8 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
   let engine: E | undefined;
   let extras: WidgetExtras | undefined; // notation chrome (bpmn: todos) — absent for the others
   let input: ModelInput | undefined; // tool input arrived — set at load START (hasLoaded)
-  let ref: DocRef | undefined; // the document this load OWNS — cleared while a load is in flight
+  let loaded: DocRef | undefined; // what the bridge read resolved — the deep-link target
+  let ref: DocRef | undefined; // the document a save may PUT against — set once the import landed
   let baseVersion = "";
   let inactive = false; // superseded by a newer widget — stop all saving
   let live: LiveHandle | undefined; // Yjs session — when set, autosave is off
@@ -244,6 +257,9 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
     // — pending upgrades, banner actions, an OLDER load — bail out on it),
     // release the old claim (re-claiming without releasing supersedes OURSELVES
     // via the BroadcastChannel), and tear down live state, timers and banners.
+    // A superseded instance stays inactive: a re-delivery must not hide its
+    // banner or restart a load that could never save.
+    if (inactive) return;
     const epoch = ++liveEpoch;
     releaseClaim?.();
     releaseClaim = undefined;
@@ -254,14 +270,20 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
     autosavePaused = false;
     input = next;
     // `input` names the INCOMING document while the canvas still shows the old
-    // one — no deep link (and no flush, no save) until the load owns the widget
+    // one — no deep link (and no flush, no save) until the read lands
+    loaded = undefined;
     ref = undefined;
     chrome.setOpenVisible(false);
     chrome.setStatus(`Loading ${deps.noun}…`);
-    const loaded = await bridge.load(next);
+    const read = await bridge.load(next);
     if (epoch !== liveEpoch || inactive) return; // a newer load owns the widget
-    chrome.setTitle(`${next.repo} · ${loaded.path}`);
-    baseVersion = loaded.baseVersion;
+    loaded = { repo: next.repo, path: read.path };
+    chrome.setTitle(`${next.repo} · ${read.path}`);
+    // a read model has a web address — even for a later-superseded instance,
+    // and even when its import fails below, the deep link stays the most
+    // useful remaining control
+    chrome.setOpenVisible(true);
+    baseVersion = read.baseVersion;
     if (!engine) {
       engine = deps.mountEngine();
       engine.onDirty(() => {
@@ -275,18 +297,26 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
       // re-renders its badges on every `import.done`, incl. the live re-imports)
       extras = deps.extras?.(engine);
     }
-    await engine.importText(loaded.content);
+    try {
+      await engine.importText(read.content);
+    } catch (err) {
+      // the canvas still shows the PREVIOUS document (or nothing) while the
+      // title names the new one — no save may leave from here (ref stays
+      // unset), and the button must say so; the caller reports the failure
+      if (epoch === liveEpoch && !inactive) chrome.setSaveButton({ enabled: false });
+      throw err;
+    }
     if (epoch !== liveEpoch || inactive) return; // a newer load owns the widget
     // the load OWNS the widget from here: only now may a save PUT against this
-    // document (an edit racing the import above found no `ref` and bailed)
-    ref = { repo: next.repo, path: loaded.path };
-    // a loaded model has a web address — even for a later-superseded instance
-    // the deep link stays the most useful remaining control
-    chrome.setOpenVisible(true);
+    // document — an edit racing the import above found no `ref` and bailed,
+    // and its timer must not fire into the freshly landed canvas either
+    ref = loaded;
+    clearTimeout(autosaveTimer);
     setDirty(false);
+    chrome.setSaveButton({ visible: engine.editable, enabled: true });
     // the extras of THIS document — a failing/absent tracker never blocks the model
-    extras?.onDocument({ repo: next.repo, path: loaded.path }, next);
-    releaseClaim = deps.claim(roomName(next.repo, loaded.path), () => {
+    extras?.onDocument(loaded, next);
+    releaseClaim = deps.claim(roomName(next.repo, read.path), () => {
       inactive = true;
       clearTimeout(autosaveTimer);
       live?.destroy();
@@ -317,7 +347,7 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
     upgradingLive = true;
     const epoch = liveEpoch;
     try {
-      const handle = await deps.live(ref, engine as E & LiveEngine, liveHooks());
+      const handle = await deps.live(ref, engine as E & LiveEngine, liveHooks(epoch));
       if (!handle) return;
       if (inactive || epoch !== liveEpoch || live) {
         // superseded or re-loaded while connecting (the claim callback / the
@@ -332,33 +362,44 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
       chrome.setStatus("Live — co-editing enabled, changes sync instantly");
     } finally {
       upgradingLive = false;
+      // a re-load landed while this attempt was connecting and bailed on the
+      // single-flight guard — attempt it for the document that owns the
+      // widget now, or it would stay on autosave for good
+      if (epoch !== liveEpoch && !inactive && ref && !live) void upgradeToLive();
     }
   }
 
-  /** hooks shared by every live upgrade attempt (initial load + reconnects) */
-  function liveHooks(): LiveHooks {
+  /** hooks shared by every live upgrade attempt (initial load + reconnects);
+   *  `epoch` is the attempt's — the flush vetoes the bind once a re-load
+   *  superseded the attempt, however late the sync arrives */
+  function liveHooks(epoch: number): LiveHooks {
     return {
       onConflict: (msg) => chrome.setStatus(`Sync conflict: ${msg}`),
       onImportError: (msg) => chrome.setStatus(`Live import failed: ${msg}`),
-      beforeBind: flushForLive,
+      beforeBind: () => flushForLive(epoch),
       onDead: () => void onLiveDead(),
     };
   }
 
   /** the first Yjs import replaces the canvas — flush unsaved state through the
    *  normal CAS save first so nothing is lost; false aborts the upgrade */
-  async function flushForLive(): Promise<boolean> {
+  async function flushForLive(epoch: number): Promise<boolean> {
+    // epoch-fenced by the ATTEMPT's epoch: a re-load that landed while this
+    // upgrade was connecting must veto the bind — the room about to be bound
+    // belongs to the PREVIOUS document, and its first Yjs import would
+    // replace the new canvas
     const deadline = Date.now() + flushDeadlineMs;
-    while (!inactive && !autosavePaused && (saving || dirty)) {
+    while (epoch === liveEpoch && !inactive && !autosavePaused && (saving || dirty)) {
       if (Date.now() > deadline) {
-        // give up on the UPGRADE only — autosave keeps retrying the edit
-        scheduleAutosave();
+        // give up on the UPGRADE only — autosave keeps retrying the edit (a
+        // loop held up by a stale save alone has nothing to retry)
+        if (dirty) scheduleAutosave();
         return false;
       }
       if (!saving) await save();
       await new Promise((r) => setTimeout(r, flushPollMs));
     }
-    return !inactive && !autosavePaused;
+    return epoch === liveEpoch && !inactive && !autosavePaused;
   }
 
   /** the established live session died (any ws drop or doc-level close is
@@ -523,7 +564,7 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
       if (epoch === liveEpoch) chrome.setStatus(`Autosave failed: ${(err as Error).message} — retrying on next change`);
     } finally {
       saving = false;
-      chrome.setSaveButton({ enabled: true });
+      chrome.setSaveButton({ enabled: !inactive }); // a superseded instance stays disabled
       // an edit made while this save was in flight is NOT in the payload just
       // sent — its own timer may also have fired into the `saving` guard above,
       // so re-arm here or it would sit unsaved behind a false "Saved"
@@ -602,6 +643,7 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
     flushOnLeave,
     hasLoaded: () => input !== undefined,
     document: () => ref,
+    linkTarget: () => loaded,
     engine: () => engine,
     state: () => ({ dirty, live: live !== undefined, inactive, paused: autosavePaused, saving, baseVersion }),
   };

@@ -112,7 +112,7 @@ export function bootWidget<E extends WidgetEngine>(spec: WidgetSpec<E>): void {
   // — an await would burn the user activation the window.open fallback needs.
   // A still-unsaved edit follows via flushOnLeave in parallel (see lifecycle).
   openBtn.onclick = () => {
-    const doc = lc.document();
+    const doc = lc.linkTarget();
     const engine = lc.engine();
     if (!doc || !engine || !cfg.publicUrl) return;
     const url = (spec.deepLink ?? defaultDeepLink)(cfg.publicUrl, doc, engine);

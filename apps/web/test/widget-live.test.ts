@@ -182,3 +182,85 @@ test("authentication failure: before establish → undefined; after → one deat
   s2.failAuth();
   assert.equal(h.deaths, 1);
 });
+
+test("the flush runs BEFORE the bind, a refused flush never binds, and a doc close after establish is a death", async () => {
+  const s = fakeSession();
+  const engine = liveEngine();
+  const order: string[] = [];
+  const bind = engine.bindLive;
+  engine.bindLive = (ytext, doc, hooks) => {
+    order.push("bind");
+    return bind(ytext, doc, hooks);
+  };
+  const h = hooks({
+    beforeBind: async () => {
+      order.push("flush");
+      return true;
+    },
+  });
+  const p = tryLive(deps(s), engine, h.hooks);
+  await tick(1);
+  s.sync();
+  assert.ok(await p);
+  assert.deepEqual(order, ["flush", "bind"]);
+  s.close();
+  assert.equal(h.deaths, 1, "onDocClose after establish is the death");
+
+  const s2 = fakeSession();
+  const e2 = liveEngine();
+  let binds = 0;
+  e2.bindLive = () => {
+    binds++;
+    return () => {};
+  };
+  const p2 = tryLive(deps(s2), e2, hooks({ beforeBind: async () => false }).hooks);
+  await tick(1);
+  s2.sync();
+  assert.equal(await p2, undefined);
+  assert.equal(binds, 0);
+});
+
+test("an authentication failure DURING the flush: no bind, no phantom death", async () => {
+  const s = fakeSession();
+  const engine = liveEngine();
+  let binds = 0;
+  engine.bindLive = () => {
+    binds++;
+    return () => {};
+  };
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const h = hooks({
+    beforeBind: async () => {
+      await gate;
+      return true;
+    },
+  });
+  const p = tryLive(deps(s), engine, h.hooks);
+  await tick(1);
+  s.sync();
+  s.failAuth();
+  release();
+  assert.equal(await p, undefined);
+  await tick(1);
+  assert.equal(binds, 0);
+  s.drop();
+  assert.equal(h.deaths, 0);
+});
+
+test("a slow flush outlives the connect timeout, and a pre-sync drop is the provider's business", async () => {
+  const s = fakeSession();
+  const h = hooks({ beforeBind: async () => (await tick(80), true) });
+  const p = tryLive(deps(s, { syncTimeoutMs: 30 }), liveEngine(), h.hooks);
+  await tick(1);
+  s.sync();
+  assert.ok(await p, "the timer was cleared on sync — the flush may take longer");
+  assert.equal(s.destroyed, 0);
+
+  const s2 = fakeSession();
+  const p2 = tryLive(deps(s2), liveEngine(), hooks().hooks);
+  await tick(1);
+  s2.drop(); // the provider's normal retry dance before the first sync
+  s2.sync();
+  assert.ok(await p2);
+});

@@ -232,7 +232,8 @@ export function fakeLive(next: FakeLive["next"] = { handle: true }): FakeLive {
       if (!f.next.handle) return undefined;
       const state = { destroyed: 0, snapshot: f.next.snapshot ?? "v1" };
       f.handles.push(state);
-      engine.bindLive(undefined as never, undefined as never, {
+      // like tryLive: bind after the flush, unbind on destroy
+      const unbind = engine.bindLive(undefined as never, undefined as never, {
         onConflict: hooks.onConflict,
         onImportError: hooks.onImportError,
       });
@@ -240,6 +241,7 @@ export function fakeLive(next: FakeLive["next"] = { handle: true }): FakeLive {
         snapshot: () => state.snapshot,
         destroy: () => {
           state.destroyed++;
+          unbind();
         },
       };
       return handle;

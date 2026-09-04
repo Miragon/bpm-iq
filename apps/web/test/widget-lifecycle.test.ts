@@ -58,7 +58,7 @@ test("load: bridge read → engine mounted once → extras before the first impo
   assert.deepEqual(chrome.titles, [`${REPO} · processes/a.owm`]);
   assert.deepEqual(chrome.openVisible, [false, true]);
   assert.deepEqual(chrome.status, ["Loading model…", "Ready — changes save automatically"]);
-  assert.deepEqual(chrome.saveButton, [{ visible: true }]);
+  assert.deepEqual(chrome.saveButton, [{ visible: true }, { visible: true, enabled: true }]);
   assert.deepEqual(lc.document(), { repo: REPO, path: "processes/a.owm" });
   assert.equal(lc.hasLoaded(), true);
   assert.deepEqual(live?.calls, [{ repo: REPO, path: "processes/a.owm" }]);
@@ -71,7 +71,7 @@ test("load: bridge read → engine mounted once → extras before the first impo
 test("read-only: no save button, no live attempt, a second load re-imports without re-mounting", async () => {
   const { lc, engine, chrome, live } = setup({ readonly: true });
   await lc.load({ repo: REPO, id: "a" });
-  assert.deepEqual(chrome.saveButton, [{ visible: false }]);
+  assert.deepEqual(chrome.saveButton, [{ visible: false }, { visible: false, enabled: true }]);
   assert.equal(chrome.last(), "Read-only view");
   assert.equal(live?.calls.length, 0);
   await lc.load({ repo: REPO, id: "a" });
@@ -462,4 +462,310 @@ test("an edit racing a re-load's import never saves against the incoming documen
   await reload;
   assert.deepEqual(lc.document(), { repo: REPO, path: "processes/b.owm" });
   assert.equal(lc.state().dirty, false, "the landed load owns a clean canvas");
+});
+
+// ── mutation-driven pins: each case fails when one guard of the state machine
+// is dropped (the second review's mutation analysis named them) ───────────────
+
+test("a save in flight across a re-load never PUTs the old document nor adopts its token", async () => {
+  const { lc, engine, bridge } = setup();
+  await lc.load({ repo: REPO, id: "a" });
+  let releaseExport!: () => void;
+  const gate = new Promise<void>((r) => (releaseExport = r));
+  engine.exportText = async () => {
+    await gate;
+    return "canvas#old";
+  };
+  engine.fire.dirty();
+  await tick(TIMING.autosaveMs * 2);
+  assert.equal(lc.state().saving, true, "the export is in flight");
+  bridge.onLoad(async () => ({ path: "processes/b.owm", content: "B", baseVersion: "bB" }));
+  await lc.load({ repo: REPO, id: "b" });
+  releaseExport();
+  await tick(TIMING.autosaveMs * 2);
+  assert.equal(bridge.saves.length, 0, "the stale save bailed after its export");
+  assert.equal(lc.state().baseVersion, "bB");
+  assert.equal(lc.state().dirty, false);
+});
+
+test("a save whose RESULT arrives after a re-load touches neither the token nor the dot", async () => {
+  const { lc, engine, bridge } = setup();
+  await lc.load({ repo: REPO, id: "a" });
+  let releaseSave!: () => void;
+  const gate = new Promise<void>((r) => (releaseSave = r));
+  bridge.onSave(async () => {
+    await gate;
+    return { ok: true, path: "processes/a.owm", baseVersion: "stale-token", warnings: [] };
+  });
+  engine.fire.dirty();
+  await tick(TIMING.autosaveMs * 2);
+  assert.equal(bridge.saves.length, 1, "the PUT is in flight");
+  bridge.onLoad(async () => ({ path: "processes/b.owm", content: "B", baseVersion: "bB" }));
+  await lc.load({ repo: REPO, id: "b" });
+  releaseSave();
+  await tick(TIMING.autosaveMs);
+  assert.equal(lc.state().baseVersion, "bB", "the stale result did not overwrite the new token");
+  assert.equal(bridge.saved.length, 0, "no 'saved' notice for the orphaned save");
+});
+
+test("a re-load while live tears the old session down and re-upgrades the new document", async () => {
+  const live = fakeLive({ handle: true, snapshot: "v1" });
+  const { lc, engine } = setup({ live });
+  await lc.load({ repo: REPO, id: "a" });
+  assert.equal(live.handles.length, 1);
+  await lc.load({ repo: REPO, id: "a" });
+  assert.equal(live.handles[0]?.destroyed, 1, "the old session is torn down by the re-load");
+  assert.equal(live.handles.length, 2, "and the new document goes live again");
+  assert.equal(engine.unbound, 1);
+});
+
+test("a re-load under a conflict banner clears the banner and the pause — autosave works for the new document", async () => {
+  const { lc, engine, bridge, chrome } = setup();
+  bridge.onSave(async () => ({
+    ok: false,
+    conflict: true,
+    path: "p",
+    currentContent: "t",
+    baseVersion: "v",
+    message: "m",
+  }));
+  await lc.load({ repo: REPO, id: "a" });
+  engine.fire.dirty();
+  await tick(TIMING.autosaveMs * 3);
+  assert.equal(lc.state().paused, true);
+  bridge.onSave(async () => ({ ok: true, path: "processes/a.owm", baseVersion: "b2", warnings: [] }));
+  await lc.load({ repo: REPO, id: "a" });
+  assert.deepEqual(chrome.bannerLabels(), []);
+  assert.equal(lc.state().paused, false);
+  engine.fire.dirty();
+  await tick(TIMING.autosaveMs * 3);
+  assert.equal(bridge.saves.length, 2, "the new document autosaves again");
+});
+
+test("a live handle arriving after a supersede or a re-load is destroyed, never adopted", async () => {
+  // superseded while connecting
+  const liveA = fakeLive({ handle: true, delayMs: TIMING.autosaveMs * 3 });
+  const a = setup({ live: liveA });
+  const loadingA = a.lc.load({ repo: REPO, id: "a" });
+  await tick(TIMING.autosaveMs);
+  a.claim.supersede();
+  await loadingA;
+  assert.equal(a.lc.state().live, false);
+  assert.equal(liveA.handles.length, 0, "the epoch-fenced flush vetoed the bind");
+  // re-loaded while connecting: the stale attempt never binds, the new document upgrades
+  const liveB = fakeLive({ handle: true, delayMs: TIMING.autosaveMs * 3 });
+  const b = setup({ live: liveB });
+  const first = b.lc.load({ repo: REPO, id: "a" });
+  await tick(TIMING.autosaveMs);
+  b.bridge.onLoad(async () => ({ path: "processes/b.owm", content: "B", baseVersion: "bB" }));
+  liveB.next = { handle: true, snapshot: "B" };
+  await b.lc.load({ repo: REPO, id: "b" });
+  await first;
+  await tick(TIMING.autosaveMs * 5);
+  assert.deepEqual(liveB.calls, [
+    { repo: REPO, path: "processes/a.owm" },
+    { repo: REPO, path: "processes/b.owm" },
+  ]);
+  assert.equal(liveB.handles.length, 1, "exactly one bind — for the document that owns the widget");
+  assert.equal(b.lc.state().live, true);
+  assert.deepEqual(b.lc.document(), { repo: REPO, path: "processes/b.owm" });
+});
+
+test("overlapping loads: the newer one owns the widget even when the older import lands last", async () => {
+  const { lc, engine, bridge, claim } = setup();
+  const gates = new Map<string, () => void>();
+  engine.importText = async (text) => {
+    await new Promise<void>((r) => gates.set(text, r));
+    engine.imported.push(text);
+  };
+  let n = 0;
+  bridge.onLoad(async () =>
+    ++n === 1
+      ? { path: "processes/a.owm", content: "A", baseVersion: "bA" }
+      : { path: "processes/b.owm", content: "B", baseVersion: "bB" },
+  );
+  const a = lc.load({ repo: REPO, id: "a" });
+  await tick(1);
+  const b = lc.load({ repo: REPO, id: "b" });
+  await tick(1);
+  gates.get("B")!();
+  await tick(1);
+  gates.get("A")!();
+  await Promise.all([a, b]);
+  assert.deepEqual(lc.document(), { repo: REPO, path: "processes/b.owm" });
+  assert.deepEqual(claim.keys, [`${REPO}/processes/b.owm`], "the stale load took no claim");
+  assert.equal(lc.state().baseVersion, "bB");
+});
+
+test("a mid-flight edit keeps the dot on between the first result and the re-armed save", async () => {
+  const { lc, engine, bridge } = setup();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  bridge.onSave(async (n) => {
+    if (n === 1) await gate;
+    return { ok: true, path: "processes/a.owm", baseVersion: `v${n + 1}`, warnings: [] };
+  });
+  await lc.load({ repo: REPO, id: "a" });
+  engine.fire.dirty();
+  await tick(TIMING.autosaveMs * 2);
+  engine.fire.dirty();
+  release();
+  await tick(1);
+  assert.equal(bridge.saves.length, 1);
+  assert.equal(lc.state().dirty, true, "the unsent edit keeps the dot on");
+});
+
+test("'Overwrite anyway' replays the serialization it conflicted with — an edit made under the banner still saves afterwards", async () => {
+  const { lc, engine, bridge, chrome } = setup();
+  let conflict = true;
+  bridge.onSave(async (n) =>
+    conflict
+      ? {
+          ok: false,
+          conflict: true,
+          path: "processes/a.owm",
+          currentContent: "<theirs>",
+          baseVersion: "v9",
+          message: "m",
+        }
+      : { ok: true, path: "processes/a.owm", baseVersion: `v${n + 10}`, warnings: [] },
+  );
+  await lc.load({ repo: REPO, id: "a" });
+  engine.fire.dirty();
+  await tick(TIMING.autosaveMs * 3);
+  const myText = bridge.saves[0]!.content;
+  engine.fire.dirty(); // under the banner
+  conflict = false;
+  chrome.click("Overwrite anyway");
+  await tick(1);
+  assert.equal(bridge.saves.at(-1)?.content, myText, "the ORIGINAL serialization was replayed");
+  assert.equal(lc.state().dirty, true, "the later edit is not marked saved");
+  await tick(TIMING.autosaveMs * 3);
+  assert.equal(bridge.saves.length, 3, "and it follows in its own save");
+  assert.equal(bridge.saves.at(-1)?.content, "canvas#2");
+});
+
+test("a CAS conflict during the pre-bind flush leaves the widget on the banner, never bound", async () => {
+  const live = fakeLive({ handle: true, delayMs: TIMING.autosaveMs * 3 });
+  const { lc, engine, bridge, chrome } = setup({ live });
+  bridge.onSave(async () => ({
+    ok: false,
+    conflict: true,
+    path: "p",
+    currentContent: "t",
+    baseVersion: "v",
+    message: "m",
+  }));
+  const loading = lc.load({ repo: REPO, id: "a" });
+  await tick(TIMING.autosaveMs);
+  engine.fire.dirty();
+  await loading;
+  assert.equal(lc.state().live, false);
+  assert.equal(live.handles.length, 0, "the refused flush vetoed the bind");
+  assert.deepEqual(chrome.bannerLabels(), ["Load their version", "Overwrite anyway", "Keep editing"]);
+});
+
+test("onDead: an edit made during the reconcile read is neither overwritten nor left unsaved", async () => {
+  const live = fakeLive({ handle: true, snapshot: "v1" });
+  const { lc, engine, bridge } = setup({ live });
+  await lc.load({ repo: REPO, id: "a" });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  bridge.onLoad(async () => {
+    await gate;
+    return { path: "processes/a.owm", content: "v1", baseVersion: "b1" };
+  });
+  live.next = { handle: false };
+  live.hooks?.onDead();
+  await tick(1);
+  engine.fire.dirty(); // while the reconcile read is in flight (paused — no save yet)
+  release();
+  await tick(TIMING.autosaveMs * 3);
+  assert.equal(engine.imported.length, 1, "the dirty canvas was NOT reconciled over");
+  assert.equal(bridge.saves.length, 1, "the edit was flushed (by the re-upgrade's pre-bind flush) — never lost");
+  assert.equal(lc.state().dirty, false);
+  assert.equal(lc.state().live, false);
+});
+
+test("onDead: a re-load during the reconcile read orphans the reconcile — no banner, the new document's token", async () => {
+  const live = fakeLive({ handle: true, snapshot: "v1" });
+  const { lc, bridge, chrome } = setup({ live });
+  await lc.load({ repo: REPO, id: "a" });
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let n = 0;
+  bridge.onLoad(async () => {
+    if (++n === 1) {
+      await gate;
+      return { path: "processes/a.owm", content: "diverged", baseVersion: "b7" };
+    }
+    return { path: "processes/b.owm", content: "B", baseVersion: "bB" };
+  });
+  live.next = { handle: false };
+  live.hooks?.onDead();
+  await tick(1);
+  await lc.load({ repo: REPO, id: "b" });
+  release();
+  await tick(TIMING.autosaveMs);
+  assert.deepEqual(chrome.bannerLabels(), [], "the stale reconcile raised no banner");
+  assert.equal(lc.state().baseVersion, "bB");
+  assert.equal(lc.state().paused, false);
+});
+
+test("live mode: an edit never dirties and 'Save now' never PUTs", async () => {
+  const live = fakeLive({ handle: true, snapshot: "v1" });
+  const { lc, engine, bridge, chrome } = setup({ live });
+  await lc.load({ repo: REPO, id: "a" });
+  engine.fire.dirty();
+  assert.equal(lc.state().dirty, false);
+  assert.equal(chrome.dirty.at(-1), false);
+  await lc.save();
+  assert.equal(bridge.saves.length, 0);
+});
+
+test("a tool-input re-delivery after a supersede is ignored — banner and status stay", async () => {
+  const { lc, bridge, chrome, claim } = setup();
+  await lc.load({ repo: REPO, id: "a" });
+  claim.supersede();
+  const banners = chrome.banners.length;
+  const status = chrome.last();
+  await lc.load({ repo: REPO, id: "a" });
+  assert.equal(
+    chrome.hidden,
+    1,
+    "the inactive banner was not hidden (load() hid one banner: its own, on the first load)",
+  );
+  assert.equal(chrome.banners.length, banners);
+  assert.equal(chrome.last(), status);
+  assert.equal(bridge.loads.length, 1, "no second read");
+});
+
+test("a failed import keeps the deep link, disables Save, and a later load recovers the button", async () => {
+  let fail = true;
+  const engine = fakeEngine({ importFails: () => fail });
+  const { lc, chrome, claim } = setup({ engine });
+  await assert.rejects(() => lc.load({ repo: REPO, id: "a" }), /bad import/);
+  assert.deepEqual(lc.linkTarget(), { repo: REPO, path: "processes/a.owm" }, "the read landed — the link stays");
+  assert.equal(lc.document(), undefined, "but nothing may be saved");
+  assert.equal(chrome.openVisible.at(-1), true);
+  assert.deepEqual(chrome.saveButton.at(-1), { enabled: false });
+  assert.equal(claim.keys.length, 0);
+  fail = false;
+  await lc.load({ repo: REPO, id: "a" });
+  assert.deepEqual(chrome.saveButton.at(-1), { visible: true, enabled: true });
+  assert.deepEqual(lc.document(), { repo: REPO, path: "processes/a.owm" });
+});
+
+test("a re-load after a live session whose new upgrade fails shows the Save button again", async () => {
+  const live = fakeLive({ handle: true, snapshot: "v1" });
+  const { lc, chrome } = setup({ live });
+  await lc.load({ repo: REPO, id: "a" });
+  assert.ok(
+    chrome.saveButton.some((s) => s.visible === false),
+    "hidden while live",
+  );
+  live.next = { handle: false };
+  await lc.load({ repo: REPO, id: "a" });
+  assert.equal(lc.state().live, false);
+  assert.deepEqual(chrome.saveButton.at(-1), { visible: true, enabled: true });
 });
