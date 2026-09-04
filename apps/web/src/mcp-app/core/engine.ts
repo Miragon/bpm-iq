@@ -11,8 +11,8 @@
  *     would autosave a canonicalised file over the hand-authored one.
  *  2. bindLive is a CAPABILITY. Absent = the widget stays on CAS autosave —
  *     the DMN widget's deliberate mode, so DMN can ride this core later
- *     without an interface change; a renderer without a live-client binding
- *     (context-maps today) mounts the same way.
+ *     without an interface change; any renderer without a live-client
+ *     binding mounts the same way.
  *
  * Anything a notation's extras need beyond this (bpmn: the raw bpmn-js
  * instance for todos / t.BPM) rides on the concrete engine type, never here.
