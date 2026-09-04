@@ -13,3 +13,6 @@ minimumReleaseAgeExclude:
   - "@miragon/event-storming-dsl@0.2.1"
   - "@miragon/event-storming-renderer@0.2.1"
   - "@miragon/event-storming-schema-model@0.2.0"
+  # the context-maps modeler pair (#157) — 0.2.0 published minutes before the bump
+  - "@miragon/context-maps-renderer@0.2.0"
+  - "@miragon/context-maps-schema-model@0.2.0"
