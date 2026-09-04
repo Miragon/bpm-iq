@@ -13,7 +13,8 @@
     "./deep-link": "./src/deep-link.ts",
     "./live": "./src/live.ts",
     "./todo-anchor": "./src/todo-anchor.ts",
-    "./assist": "./src/assist.ts"
+    "./assist": "./src/assist.ts",
+    "./mcp-app": "./src/mcp-app.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

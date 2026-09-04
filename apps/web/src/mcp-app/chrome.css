@@ -3,8 +3,8 @@
  * primitives their side panels use. Notation-specific stylesheets (bpmn-js /
  * dmn-js) are imported by each widget's own entry stylesheet.
  *
- * Both widgets build to ONE self-contained HTML file, so everything here is
- * inlined twice — keep it small. */
+ * Every widget builds to ONE self-contained HTML file, so everything here is
+ * inlined into EVERY widget bundle (mcp-app*.html) — keep it small. */
 
 :root {
   --fg: #1f2328;

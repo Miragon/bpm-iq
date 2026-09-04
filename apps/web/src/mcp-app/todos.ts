@@ -30,7 +30,7 @@ import {
 } from "@/lib/todo-view";
 
 import { closeTodo, createTodo, isMissingTool, listTodos } from "./bridge";
-import type { ModelerHandle } from "./modeler";
+import type { BpmnEngine } from "./engines/bpmn";
 import { el, openExternal } from "./shell";
 import { implementPrompt, type PromptTarget } from "./todo-prompt";
 
@@ -40,7 +40,7 @@ export interface TodosHandle {
   destroy(): void;
 }
 
-export function mountTodos(app: App, modeler: ModelerHandle, opts: { readonly: boolean }): TodosHandle {
+export function mountTodos(app: App, modeler: BpmnEngine, opts: { readonly: boolean }): TodosHandle {
   const toggle = el<HTMLButtonElement>("todo-toggle");
   const panel = el<HTMLElement>("todos");
   const countEl = el<HTMLSpanElement>("todo-count");

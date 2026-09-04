@@ -8,9 +8,11 @@
  * helper in apps/live-host/src/http/mcp.ts) — parsed here, typed via the
  * shared wire contracts so server drift breaks the build, not the widget.
  *
- * Not every tool exists on every host: the todo tools are absent without a
- * configured tracker (and the write ones in read-only mode), exactly like
- * mint_ws_ticket. There is no tools/list over the app bridge, so absence is
+ * The canvas widgets (bpmn, wardley, team topology, event storming) read and
+ * save through the notation-generic get_model_content / save_model_content;
+ * the decision widget keeps the dmn pair. Not every tool exists on every
+ * host: the todo tools are absent without a configured tracker (and the write
+ * ones in read-only mode), exactly like mint_ws_ticket. There is no tools/list over the app bridge, so absence is
  * detected on the first call — `isMissingTool` separates "capability absent"
  * (hide the UI) from a real tracker error (show it; those messages are
  * actionable).
@@ -34,12 +36,14 @@ export interface ProcessRef {
   path?: string;
 }
 
-export interface ValidateResult {
-  ok: boolean;
-  findings: Array<{ severity: string; rule?: string; message: string }>;
+/** a model of ANY notation (the generic tools' ref): `notation` pins the
+ *  registry id so an `id` shared across notations resolves within the widget's
+ *  own — a widget never opens another notation's twin */
+export interface ModelRef extends ProcessRef {
+  notation?: string;
 }
 
-/** save_bpmn_xml's tool-level shape (mcp.ts wraps the use-case result — the
+/** the save tools' conflict shape (mcp.ts wraps the use-case result — the
  *  conflict is a retryable RESULT, not an error) */
 export interface SaveConflict {
   ok: false;
@@ -82,15 +86,21 @@ async function call<T>(app: App, name: string, args: Record<string, unknown>): P
   return unwrapToolResult<T>(await app.callServerTool({ name, arguments: args }), name);
 }
 
-export const getBpmnXml = (app: App, ref: ProcessRef): Promise<ContentWire> => call(app, "get_bpmn_xml", { ...ref });
+// ── the canvas widgets (core/widget.ts): the notation-generic tools ─────────
 
-export const validateBpmn = (app: App, xml: string, ref: ProcessRef): Promise<ValidateResult> =>
-  call(app, "validate_bpmn", { xml, repo: ref.repo, path: ref.path });
+/** the live text + baseVersion of a model of ANY notation */
+export const getModelContent = (app: App, ref: ModelRef): Promise<ContentWire> =>
+  call(app, "get_model_content", { ...ref });
 
 /** lint:"warn" — the widget autosaves like the live rooms do: findings inform,
  *  never block; the strict default stays for agent saves */
-export const saveBpmnXml = (app: App, ref: ProcessRef, xml: string, baseVersion: string): Promise<SaveResult> =>
-  call(app, "save_bpmn_xml", { repo: ref.repo, path: ref.path, xml, baseVersion, lint: "warn" });
+export const saveModelContent = (
+  app: App,
+  ref: { repo: string; path: string },
+  content: string,
+  baseVersion: string,
+): Promise<SaveResult> =>
+  call(app, "save_model_content", { repo: ref.repo, path: ref.path, content, baseVersion, lint: "warn" });
 
 // ── DMN decisions (the decision widget) ─────────────────────────────────────
 // The wire shapes below are the LIB's own types (@bpmiq/decisions, isomorphic —

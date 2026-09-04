@@ -10,7 +10,9 @@
  * Deliberately WITHOUT the Yjs live upgrade the BPMN widget does: a decision
  * table is edited cell by cell by one person at a time, and the CAS conflict
  * flow covers the rare collision honestly. The moment two people co-edit
- * tables in practice, tryLive() is reusable as-is.
+ * tables in practice, the widget core (core/lifecycle.ts, core/live.ts) is
+ * reusable as-is — DMN would ride it as an engine with the scenario in
+ * WidgetExtras.onDocument and openDecisionTable inside importText.
  *
  * What it adds instead: `open_decision_modeler` may carry a `scenario`, which
  * is played straight into the simulator — so an agent can say "here is the

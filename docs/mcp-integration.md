@@ -108,38 +108,41 @@ accessed server-side via a Hocuspocus direct connection. `repo` is a **tool argu
 (`owner/name`), not a URL segment — one endpoint serves every connected repo, and every
 call is gated by the caller's per-repo permission.
 
-| Tool                    | Kind  | What it does                                                                             |
-| ----------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `list_repos`            | read  | The connected repos the caller may work on.                                              |
-| `list_models`           | read  | EVERY model file of one repo, grouped by notation — the superset of the two lists below. |
-| `get_view`              | read  | The derived view of ANY live model (name, summary, stats, rich `detail`).                |
-| `get_model_content`     | read  | The live text of ANY model (`content`, own format) plus the `baseVersion` for a save.    |
-| `validate_model`        | read  | Dry-run the platform check on ANY notation's text — the same gate the save runs.         |
-| `list_processes`        | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).          |
-| `get_process`           | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.               |
-| `get_bpmn_xml`          | read  | The live BPMN XML plus the `baseVersion` for a later save.                               |
-| `validate_bpmn`         | read  | Dry-run the platform validator on submitted XML — check before saving.                   |
-| `list_decisions`        | read  | The DMN decisions of one repo (id = `.dmn` file stem, path, dirty, live sessions).       |
-| `get_decision`          | read  | The derived decision view (hit policy, columns, rules, DRD wiring) — see below.          |
-| `get_dmn_xml`           | read  | The live DMN XML plus the `baseVersion` for a later save.                                |
-| `simulate_decision`     | read  | Run one scenario and see which rules fired — live model or unsaved `xml`.                |
-| `analyze_decision`      | read  | Static checks (broken FEEL, dead rules, dead wiring) + test-value candidates.            |
-| `run_decision_tests`    | read  | Run the stored test suite (or cases passed inline) with rule coverage.                   |
-| `get_decision_tests`    | read  | The stored suite + the `baseVersion` a save needs.                                       |
-| `list_changes`          | read  | A repo's unreleased live changes.                                                        |
-| `list_todos`            | read  | Open model-anchored todos — whole repo, or narrowed to one process.                      |
-| `open_modeler`          | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                             |
-| `open_decision_modeler` | read  | Open the embedded DMN modeler + simulator, optionally with a scenario applied.           |
-| `create_model`          | write | Scaffold a model of ANY template-capable notation from its blank template.               |
-| `save_model_content`    | write | Validated, conflict-guarded save of ANY model's text into the live document.             |
-| `create_process`        | write | Scaffold a new process `.bpmn` in the live workspace.                                    |
-| `save_bpmn_xml`         | write | Validated, conflict-guarded save into the live document (requires `baseVersion`).        |
-| `create_decision`       | write | Scaffold a new decision `.dmn` from the blank template.                                  |
-| `save_dmn_xml`          | write | Conflict-guarded save of DMN XML into the live document (requires `baseVersion`).        |
-| `save_decision_tests`   | write | Write `<decision>.tests.yaml` next to the model (`record` freezes today's behaviour).    |
-| `create_todo`           | write | File a todo, anchored to the process and (optionally) concrete BPMN elements.            |
-| `close_todo`            | write | Complete a todo in the tracker (`todoId` from `list_todos`).                             |
-| `release_process`       | write | Open the release PR — merge rights stay at the git provider.                             |
+| Tool                          | Kind  | What it does                                                                             |
+| ----------------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `list_repos`                  | read  | The connected repos the caller may work on.                                              |
+| `list_models`                 | read  | EVERY model file of one repo, grouped by notation — the superset of the two lists below. |
+| `get_view`                    | read  | The derived view of ANY live model (name, summary, stats, rich `detail`).                |
+| `get_model_content`           | read  | The live text of ANY model (`content`, own format) plus the `baseVersion` for a save.    |
+| `validate_model`              | read  | Dry-run the platform check on ANY notation's text — the same gate the save runs.         |
+| `list_processes`              | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).          |
+| `get_process`                 | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.               |
+| `get_bpmn_xml`                | read  | The live BPMN XML plus the `baseVersion` for a later save.                               |
+| `validate_bpmn`               | read  | Dry-run the platform validator on submitted XML — check before saving.                   |
+| `list_decisions`              | read  | The DMN decisions of one repo (id = `.dmn` file stem, path, dirty, live sessions).       |
+| `get_decision`                | read  | The derived decision view (hit policy, columns, rules, DRD wiring) — see below.          |
+| `get_dmn_xml`                 | read  | The live DMN XML plus the `baseVersion` for a later save.                                |
+| `simulate_decision`           | read  | Run one scenario and see which rules fired — live model or unsaved `xml`.                |
+| `analyze_decision`            | read  | Static checks (broken FEEL, dead rules, dead wiring) + test-value candidates.            |
+| `run_decision_tests`          | read  | Run the stored test suite (or cases passed inline) with rule coverage.                   |
+| `get_decision_tests`          | read  | The stored suite + the `baseVersion` a save needs.                                       |
+| `list_changes`                | read  | A repo's unreleased live changes.                                                        |
+| `list_todos`                  | read  | Open model-anchored todos — whole repo, or narrowed to one process.                      |
+| `open_modeler`                | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                             |
+| `open_decision_modeler`       | read  | Open the embedded DMN modeler + simulator, optionally with a scenario applied.           |
+| `open_wardley_modeler`        | read  | Open the embedded Wardley Map modeler widget (MCP App, the widget core).                 |
+| `open_team_topology_modeler`  | read  | Open the embedded Team Topology modeler widget.                                          |
+| `open_event_storming_modeler` | read  | Open the embedded Event Storming board widget.                                           |
+| `create_model`                | write | Scaffold a model of ANY template-capable notation from its blank template.               |
+| `save_model_content`          | write | Validated, conflict-guarded save of ANY model's text into the live document.             |
+| `create_process`              | write | Scaffold a new process `.bpmn` in the live workspace.                                    |
+| `save_bpmn_xml`               | write | Validated, conflict-guarded save into the live document (requires `baseVersion`).        |
+| `create_decision`             | write | Scaffold a new decision `.dmn` from the blank template.                                  |
+| `save_dmn_xml`                | write | Conflict-guarded save of DMN XML into the live document (requires `baseVersion`).        |
+| `save_decision_tests`         | write | Write `<decision>.tests.yaml` next to the model (`record` freezes today's behaviour).    |
+| `create_todo`                 | write | File a todo, anchored to the process and (optionally) concrete BPMN elements.            |
+| `close_todo`                  | write | Complete a todo in the tracker (`todoId` from `list_todos`).                             |
+| `release_process`             | write | Open the release PR — merge rights stay at the git provider.                             |
 
 ### Any notation: the generic model tools
 
@@ -155,7 +158,11 @@ like `save_bpmn_xml`: a stale `baseVersion` answers `{conflict: true, currentCon
 `create_model` scaffolds every notation with a template (bpmn, dmn, wardley, team-topology,
 event-storming, markdown); a notation without one (value-chain) arrives via git only.
 `LIVE_MCP_READONLY=1` keeps the two read tools and drops the writes. The embedded modelers'
-`mint_ws_ticket` takes the same ref, so a widget for any notation can upgrade to live co-editing.
+`mint_ws_ticket` takes the same ref, so the Wardley, Team Topology and Event Storming widgets
+(below) upgrade to live co-editing exactly like the BPMN one. (`mint_ws_ticket` itself is
+app-visible — hidden from agents — and registered when at least one live-capable widget is
+served AND the host is not read-only, bound to the first such widget's resource; absent under
+`LIVE_MCP_READONLY=1`, absent for a DMN-only dist.)
 
 ### Decisions: DMN as a first-class model
 
@@ -272,15 +279,23 @@ no tools in `tools/list` (agents plan against reality instead of discovering it 
 Listing is a read and survives `LIVE_MCP_READONLY=1`; filing and closing do not. Every call
 runs the same per-(user, repo) authorization as the model tools.
 
-### MCP App: the embedded modeler
+### MCP Apps: the embedded modelers
 
-`open_modeler` is an [MCP App](https://modelcontextprotocol.io/specification/2026-01-26)
+Every `open_*` tool is an [MCP App](https://modelcontextprotocol.io/specification/2026-01-26)
 (`io.modelcontextprotocol/ui`): in apps-capable clients (claude.ai, Claude Desktop) it
-renders an interactive bpmn-js modeler inline in the conversation — pan/zoom, edit, and
-save through the same validated, `baseVersion`-guarded path as `save_bpmn_xml` (a
-concurrent save shows a conflict banner: load theirs, overwrite, or keep editing; a
-save tells the model to re-read instead of trusting stale XML). The widget is the
-single-file bundle `apps/web/dist/mcp-app.html` (built by
+renders the notation's modeler inline in the conversation. There are five single-file
+bundles (`apps/web/dist/mcp-app*.html`, one `vite.mcp-app-*.config.ts` each), one per
+modeler, and ONE widget core behind the canvas ones (`apps/web/src/mcp-app/core/`): the
+BPMN, Wardley Map, Team Topology and Event Storming widgets share the load → autosave →
+conflict → live-upgrade lifecycle and differ only in their engine adapter; the DMN
+widget (multi-view + simulator) keeps its own. A widget = engine adapter + build entry +
+one registry row in the Live Host; a web dist that lacks a bundle simply lacks its tool.
+
+`open_modeler` renders an interactive bpmn-js modeler — pan/zoom, edit, and save
+through the same validated, `baseVersion`-guarded path as `save_model_content`
+(`lint:"warn"`; a concurrent save shows a conflict banner: load theirs, overwrite, or
+keep editing; a save tells the model to re-read instead of trusting stale text). The
+widget is the single-file bundle `apps/web/dist/mcp-app.html` (built by
 `vite.mcp-app.config.ts`), served as a `ui://` resource; its tool calls ride the
 host's authenticated connection, so per-repo authorization applies per call exactly
 like agent calls.
@@ -290,7 +305,7 @@ editor uses (a single-use, room-bound ws ticket from `mint_ws_ticket`, 60s TTL �
 ADR 0005's 2026-08-04 amendment) — then edits sync instantly in both directions,
 co-editors included. If the host sandbox blocks the socket (claude.ai's
 `connectDomains` enforcement is partially buggy), it degrades to **autosave over the
-bridge**: a debounced `save_bpmn_xml` with `lint:"warn"`, where validator findings
+bridge**: a debounced `save_model_content` with `lint:"warn"`, where validator findings
 inform in the status line instead of blocking — the ws rooms' trust level, which never
 gated live edits. The status line shows which mode is active ("Live — co-editing
 enabled" vs "changes save automatically"). The hand-over is lossless in both
@@ -346,7 +361,8 @@ authenticated web surface.
 
 ### MCP App: the decision modeler and its simulator
 
-`open_decision_modeler` is the DMN sibling (`apps/web/dist/mcp-app-dmn.html`, its own
+`open_decision_modeler` is the one widget that does not ride the core — multi-view plus
+the simulator, deliberately without live mode (`apps/web/dist/mcp-app-dmn.html`, its own
 `ui://` resource): dmn-js — DRD, decision table, literal expression — with the
 [dmn-js-simulation](https://github.com/emaarco/dmn-js-simulation) add-on mounted into
 both views. Type values into the table and the matching rows light up; the rule the hit
@@ -371,6 +387,22 @@ cannot disagree. Saving works like the BPMN widget (autosave, `lint:"warn"`,
 live upgrade — decision tables are edited cell by cell by one person at a time, and the
 conflict flow covers the rare collision honestly.
 
+### MCP Apps: Wardley Maps, Team Topologies and Event Storming boards
+
+`open_wardley_modeler`, `open_team_topology_modeler` and `open_event_storming_modeler`
+are generated from the notation registry (their names come from
+`@bpmiq/contracts/mcp-app`, the same derivation the web app's "Analyse with AI" prompt
+uses). Each takes `{repo, id | path}` and forces its notation: a stem shared with a
+`.bpmn` twin opens THIS notation's file, and a `path` of another notation fails in the
+tool rather than inside the iframe. The widgets run the shared core on the Miragon
+renderers (`@miragon/wardley-renderer`, `team-topologies-renderer`,
+`event-storming-renderer`): the same CAS autosave through `save_model_content`, the same
+conflict banner, the same live upgrade through `mint_ws_ticket`, a read-only viewer under
+`LIVE_MCP_READONLY=1`. What they do not have: todos and stickies (BPMN-only), and the
+`?element=` reveal — their "Open in bpmiq" link is the file route (`/f/<path>`). The
+tool result is the lean `{opened: {repo, path, url}, summary: {name, summary, stats}}` —
+non-apps clients read `get_view` / `get_model_content` instead.
+
 ### Analyse with AI: the deep link into the widget
 
 The web editor's toolbar (and every process/decision row on the repo overview) carries
@@ -393,7 +425,7 @@ reviews and sends it; nothing runs on its own:
   is handled cannot be read from a browser, so a quiet miss softly offers the fallback.
 - **ChatGPT** — `https://chatgpt.com/?prompt=…` (undocumented; deliberately not `?q=`,
   which auto-submits). ChatGPT implements the open MCP Apps standard, so the same
-  widgets render there; the tools additionally carry ChatGPT's legacy
+  widgets render there; every `open_*` tool additionally carries ChatGPT's legacy
   `openai/outputTemplate` alias. Caveats: the connector must be added in developer
   mode, and full (write-capable) MCP is currently a Business/Enterprise/Edu beta —
   Pro is read-only. Register ChatGPT's redirect URIs at the IdP

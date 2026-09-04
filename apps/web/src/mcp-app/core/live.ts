@@ -1,8 +1,9 @@
 /**
  * The live upgrade: mint a single-use ws ticket over the bridge, open the
- * SAME Hocuspocus/Yjs session the web SPA uses (openLiveSession + bindBpmn),
- * and hand the modeler over to CRDT sync — remote edits appear live, local
- * edits persist continuously, no autosave round-trips.
+ * SAME Hocuspocus/Yjs session the web SPA uses (openLiveSession + the
+ * engine's own live-client binding), and hand the canvas over to CRDT sync —
+ * remote edits appear live, local edits persist continuously, no autosave
+ * round-trips.
  *
  * Strictly progressive: if the host CSP blocks the socket, the ticket tool is
  * absent (read-only host), or the sync never arrives, we resolve undefined and
@@ -14,47 +15,56 @@
  * post-upgrade death — the ticket is single-use, so the provider's automatic
  * reconnect re-sends a consumed token and can never re-authenticate; the
  * caller must re-mint a ticket or fall back to autosave.
+ *
+ * Moved from mcp-app/live.ts (#156): the App became an injected mint(), the
+ * session opener is injectable (the node --test suite fakes the socket), and
+ * the one bpmn-specific line — bindBpmn — became the engine's bindLive.
  */
 import { openLiveSession } from "@bpmiq/live-client";
-import { bindBpmn } from "@bpmiq/live-client/bpmn-sync";
-import type { App } from "@modelcontextprotocol/ext-apps";
 
-import { mintWsTicket, type ProcessRef } from "./bridge";
-import type { ModelerHandle } from "./modeler";
+import type { LiveEngine } from "./engine.ts";
+import type { LiveHandle, LiveHooks } from "./lifecycle.ts";
 
-const SYNC_TIMEOUT_MS = 6000;
+export const SYNC_TIMEOUT_MS = 6000;
 
-export interface LiveHandle {
-  destroy(): void;
-  /** the room state this session last knew (its local Y.Text replica) — the
-   *  caller's post-death reconcile compares it against a fresh bridge read */
-  snapshot(): string;
+export interface WsTicket {
+  ticket: string;
+  url: string;
+  room: string;
+  expiresInSeconds: number;
 }
 
-export interface TryLiveHooks {
-  /** overlapping concurrent edit — the remote change won (model-sync rule 4) */
-  onConflict(message: string): void;
-  /** runs after sync, before the first Yjs import replaces the canvas — flush
-   *  unsaved state through the bridge here; false aborts the upgrade */
-  beforeBind(): Promise<boolean>;
-  /** the ESTABLISHED session died: any ws drop is final, because the
-   *  auto-reconnect re-sends the consumed single-use ticket and can never
-   *  re-authenticate; fires at most once per session */
-  onDead(): void;
+/** what tryLive uses of a live-client session — the test fakes exactly this */
+export type LiveSessionLike = Pick<
+  ReturnType<typeof openLiveSession>,
+  "doc" | "content" | "onSynced" | "onDisconnect" | "onDocClose" | "destroy"
+>;
+
+export interface LiveDeps {
+  /** mint_ws_ticket over the bridge — a throw (tool absent on a read-only
+   *  host, denied) means "stay on autosave" */
+  mint(): Promise<WsTicket>;
+  /** openLiveSession — injectable so the tests fake the socket */
+  open?: (opts: Parameters<typeof openLiveSession>[0]) => LiveSessionLike;
+  /** default SYNC_TIMEOUT_MS */
+  syncTimeoutMs?: number;
 }
+
+export type TryLiveHooks = LiveHooks;
 
 export async function tryLive(
-  app: App,
-  ref: ProcessRef,
-  modeler: ModelerHandle,
+  deps: LiveDeps,
+  engine: LiveEngine,
   hooks: TryLiveHooks,
 ): Promise<LiveHandle | undefined> {
-  let ticket: Awaited<ReturnType<typeof mintWsTicket>>;
+  let ticket: WsTicket;
   try {
-    ticket = await mintWsTicket(app, ref);
+    ticket = await deps.mint();
   } catch {
     return undefined; // tool absent (read-only host) or denied — stay on autosave
   }
+  const open = deps.open ?? openLiveSession;
+  const syncTimeoutMs = deps.syncTimeoutMs ?? SYNC_TIMEOUT_MS;
   return new Promise((resolve) => {
     let settled = false;
     let established = false; // a handle was handed out — deaths go to onDead
@@ -73,7 +83,7 @@ export async function tryLive(
       if (established) die();
       else if (upgrading) brokenDuringUpgrade = true;
     }
-    const session = openLiveSession({
+    const session = open({
       url: ticket.url,
       room: ticket.room,
       token: ticket.ticket,
@@ -95,7 +105,7 @@ export async function tryLive(
     // it rejected an oversized update) — no reconnect follows, so it is a
     // death too, not a drop
     session.onDocClose(broke);
-    const timer = setTimeout(() => finish(undefined), SYNC_TIMEOUT_MS);
+    const timer = setTimeout(() => finish(undefined), syncTimeoutMs);
 
     function finish(handle: LiveHandle | undefined): void {
       if (settled) return;
@@ -118,9 +128,13 @@ export async function tryLive(
           finish(undefined);
           return;
         }
-        // the Y.Text is the source of truth from here on — bindBpmn imports it
-        // and keeps both directions in sync (the web SPA's exact mechanism)
-        const unbind = bindBpmn(modeler.raw as never, session.content, session.doc, hooks.onConflict);
+        // the Y.Text is the source of truth from here on — the engine's
+        // binding imports it and keeps both directions in sync (the web
+        // SPA's exact mechanism)
+        const unbind = engine.bindLive(session.content, session.doc, {
+          onConflict: hooks.onConflict,
+          onImportError: hooks.onImportError,
+        });
         established = true;
         finish({
           snapshot: () => session.content.toString(),

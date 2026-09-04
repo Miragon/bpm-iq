@@ -29,7 +29,7 @@ import { WsTicketStore } from "../src/application/ws-tickets.ts";
 import { newBpmnXml } from "../src/domain/bpmn-template.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
 import { type ApiOptions, startApi } from "../src/http/api.ts";
-import { createLiveMcpServer, type LiveToolContribution, type McpDeps } from "../src/http/mcp.ts";
+import { createLiveMcpServer, type LiveToolContribution, type McpDeps, WIDGET_FILES } from "../src/http/mcp.ts";
 import type { GitProvider } from "../src/ports/git-provider.ts";
 import type { IssueTracker, Todo, TodoInput } from "../src/ports/issue-tracker.ts";
 import { loadContentConfig } from "../src/repos/content.ts";
@@ -112,13 +112,13 @@ after(async () => {
 
 /** tmpdir content repo + real direct-connection openDoc + inline fakes for
  *  every other injected surface (the house style) */
-// the widget stub every deps() writes — loadModeler memoises module-wide, so
-// the content must be identical across tests (as it is in a real deployment)
-const WIDGET_STUB = '<html><head><script>window.BPMIQ_BOOT = "__BPMIQ_BOOT__";</script></head><body>stub</body></html>';
-const DMN_WIDGET_STUB =
-  '<html><head><script>window.BPMIQ_BOOT = "__BPMIQ_BOOT__";</script></head><body>dmn</body></html>';
+/** one stub per widget bundle — the body carries the file name so a resource
+ *  test can tell the bundles apart. loadWidget memoises per (dist, file,
+ *  boot): every deps() gets its own tmp dist, so a test may omit files freely. */
+const widgetStub = (file: string): string =>
+  `<html><head><script>window.BPMIQ_BOOT = "__BPMIQ_BOOT__";</script></head><body>${file}</body></html>`;
 
-function deps(over: Partial<McpDeps> = {}): McpDeps {
+function deps(over: Partial<McpDeps> = {}, widgets: readonly string[] = WIDGET_FILES): McpDeps {
   const ws = mkdtempSync(join(tmpdir(), "bpm-mcp-"));
   mkdirSync(join(ws, "processes"), { recursive: true });
   writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
@@ -127,8 +127,7 @@ function deps(over: Partial<McpDeps> = {}): McpDeps {
   writeFileSync(join(ws, USER_PATH), USER_BPMN);
   writeFileSync(join(ws, OWM_PATH), OWM);
   const webDist = mkdtempSync(join(tmpdir(), "bpm-webdist-"));
-  writeFileSync(join(webDist, "mcp-app.html"), WIDGET_STUB);
-  writeFileSync(join(webDist, "mcp-app-dmn.html"), DMN_WIDGET_STUB);
+  for (const file of widgets) writeFileSync(join(webDist, file), widgetStub(file));
   const registry = { get: (n: string) => (n.toLowerCase() === REPO.fullName ? REPO : undefined), list: () => [REPO] };
   const workspaces = {
     ensure: async () => ws,
@@ -244,7 +243,10 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "list_repos",
     "mint_ws_ticket",
     "open_decision_modeler",
+    "open_event_storming_modeler",
     "open_modeler",
+    "open_team_topology_modeler",
+    "open_wardley_modeler",
     "release_process",
     "run_decision_tests",
     "save_bpmn_xml",
@@ -273,7 +275,10 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "list_processes",
     "list_repos",
     "open_decision_modeler",
+    "open_event_storming_modeler",
     "open_modeler",
+    "open_team_topology_modeler",
+    "open_wardley_modeler",
     "run_decision_tests",
     "simulate_decision",
     "validate_bpmn",
@@ -430,7 +435,7 @@ test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario"
   assert.notEqual(uri, (other?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri);
 
   const doc = (await client.readResource({ uri: uri! })).contents[0] as { text?: string };
-  assert.match(doc.text ?? "", /<body>dmn<\/body>/);
+  assert.match(doc.text ?? "", /<body>mcp-app-dmn\.html<\/body>/);
   assert.ok(doc.text!.includes('\\"readonly\\":false'), "boot config injected");
   assert.ok(doc.text!.includes('\\"publicUrl\\":\\"http://live.test\\"'), "publicUrl injected");
 
@@ -1047,4 +1052,136 @@ test("generic model tools: get/save ANY notation with CAS, validate_model, creat
   // the widget's live ticket mints for any notation's room
   const ticket = await callJson("mint_ws_ticket", { repo: REPO.fullName, path: OWM_PATH });
   assert.match(ticket.room, /strategy\.owm$/);
+});
+
+// ── #156: the widget registry — one row per single-file bundle ───────────────
+
+const uiMeta = (tool: { _meta?: unknown } | undefined) =>
+  (tool?._meta as { ui?: { resourceUri?: string; visibility?: string[] } } | undefined)?.ui;
+
+test("widgets: a bundle missing from the web dist drops exactly its tool; the ticket follows the served set", async () => {
+  const names = async (d: McpDeps) => (await (await connect(d)).client.listTools()).tools.map((t) => t.name);
+  // every bundle present: one open tool per registry row (a drift guard)
+  const all = await names(deps());
+  assert.equal(all.filter((n) => n.startsWith("open_")).length, WIDGET_FILES.length);
+
+  // one bundle missing → exactly its tool is gone
+  const noWardley = await names(
+    deps(
+      {},
+      WIDGET_FILES.filter((f) => f !== "mcp-app-wardley.html"),
+    ),
+  );
+  assert.ok(!noWardley.includes("open_wardley_modeler"));
+  for (const t of [
+    "open_modeler",
+    "open_decision_modeler",
+    "open_team_topology_modeler",
+    "open_event_storming_modeler",
+    "mint_ws_ticket",
+  ]) {
+    assert.ok(noWardley.includes(t), `${t} still registered`);
+  }
+
+  // no bundle at all → no open tool and no ticket; everything else is there
+  const none = await names(deps({}, []));
+  assert.equal(none.filter((n) => n.startsWith("open_")).length, 0);
+  assert.ok(!none.includes("mint_ws_ticket"));
+  assert.ok(none.includes("get_model_content"));
+
+  // only the DMN bundle → its tool but NO ticket (the decision widget never mints)
+  const dmnOnly = await names(deps({}, ["mcp-app-dmn.html"]));
+  assert.ok(dmnOnly.includes("open_decision_modeler"));
+  assert.ok(!dmnOnly.includes("mint_ws_ticket"));
+
+  // only a non-bpmn bundle → its tool AND the ticket, bound to THAT widget
+  const only = (await (await connect(deps({}, ["mcp-app-wardley.html"]))).client.listTools()).tools;
+  const wardley = only.find((t) => t.name === "open_wardley_modeler");
+  const ticket = only.find((t) => t.name === "mint_ws_ticket");
+  assert.ok(wardley && ticket, "wardley widget + ticket");
+  assert.ok(!only.some((t) => t.name === "open_modeler"));
+  assert.deepEqual(uiMeta(ticket), { resourceUri: uiMeta(wardley)?.resourceUri, visibility: ["app"] });
+
+  // with every bundle the ticket binds to the bpmn widget — today's binding
+  const full = (await (await connect(deps())).client.listTools()).tools;
+  assert.equal(
+    uiMeta(full.find((t) => t.name === "mint_ws_ticket"))?.resourceUri,
+    uiMeta(full.find((t) => t.name === "open_modeler"))?.resourceUri,
+  );
+});
+
+test("widgets: the generated open_<notation>_modeler tools serve their own bundle and open the file route", async () => {
+  const { client, callJson } = await connect(deps());
+  // fixtures for the two notations the workspace lacks — the create scaffolds
+  await callJson("create_model", { repo: REPO.fullName, notation: "team-topology", name: "Teams" });
+  await callJson("create_model", { repo: REPO.fullName, notation: "event-storming", name: "Order Storm" });
+  const cases = [
+    { tool: "open_wardley_modeler", notation: "wardley", id: "strategy", path: OWM_PATH, text: "component Platform" },
+    {
+      tool: "open_team_topology_modeler",
+      notation: "team-topology",
+      id: "teams",
+      path: "processes/teams.tt",
+      text: "flows", // quote-free: JSON.stringify would escape a quoted probe
+    },
+    {
+      tool: "open_event_storming_modeler",
+      notation: "event-storming",
+      id: "order-storm",
+      path: "processes/order-storm.storm",
+      text: "title Order Storm",
+    },
+  ];
+  const tools = (await client.listTools()).tools;
+  const uris = new Set<string>();
+  for (const c of cases) {
+    const tool = tools.find((t) => t.name === c.tool);
+    assert.ok(tool, `${c.tool} registered`);
+    const meta = tool._meta as { "ui/resourceUri"?: string; "openai/outputTemplate"?: string };
+    const uri = uiMeta(tool)?.resourceUri;
+    assert.ok(uri?.startsWith(`ui://bpmiq/${c.notation}-modeler-`), `${c.tool} uri: ${uri}`);
+    assert.equal(meta["ui/resourceUri"], uri);
+    assert.equal(meta["openai/outputTemplate"], uri);
+    uris.add(uri!);
+    // its own bundle, boot marker replaced, viewer flag + deep-link base injected
+    const doc = (await client.readResource({ uri: uri! })).contents[0] as { mimeType?: string; text?: string };
+    assert.equal(doc.mimeType, "text/html;profile=mcp-app");
+    assert.ok(!doc.text!.includes("__BPMIQ_BOOT__"), "marker replaced");
+    assert.ok(doc.text!.includes('\\"readonly\\":false'), "boot config injected");
+    assert.ok(doc.text!.includes('\\"publicUrl\\":\\"http://live.test\\"'), "publicUrl injected");
+    assert.match(doc.text!, new RegExp(`<body>mcp-app-${c.notation}\\.html</body>`));
+    // the lean result: the file route + the derived summary, never the text
+    const opened = await callJson(c.tool, { repo: REPO.fullName, id: c.id });
+    assert.equal(opened.opened.path, c.path);
+    assert.equal(opened.opened.url, `http://live.test/r/acme/models/f/${c.path}`);
+    assert.equal(typeof opened.summary.summary, "string");
+    assert.equal(typeof opened.summary.stats, "object");
+    assert.ok(!JSON.stringify(opened).includes(c.text), "no model text in the tool result");
+  }
+  // five widgets, five distinct resources
+  for (const t of ["open_modeler", "open_decision_modeler"])
+    uris.add(uiMeta(tools.find((x) => x.name === t))!.resourceUri!);
+  assert.equal(uris.size, 5);
+
+  // read-only mints a different uri whose bundle flags the viewer
+  const ro = await connect(deps({ mcpReadOnly: true }));
+  const roUri = uiMeta((await ro.client.listTools()).tools.find((t) => t.name === "open_wardley_modeler"))?.resourceUri;
+  assert.ok(roUri && !uris.has(roUri), "a changed boot payload mints a new resource uri");
+  const roDoc = (await ro.client.readResource({ uri: roUri })).contents[0] as { text?: string };
+  assert.ok(roDoc.text!.includes('\\"readonly\\":true'));
+});
+
+test("widgets: a generated open tool forces its notation — shared stems, foreign paths, unknown ids", async () => {
+  const { call, callJson } = await connect(deps());
+  // processes/order.tt beside processes/order.bpmn — the same stem twice
+  await callJson("create_model", { repo: REPO.fullName, notation: "team-topology", name: "Order" });
+  const tt = await callJson("open_team_topology_modeler", { repo: REPO.fullName, id: "order" });
+  assert.equal(tt.opened.path, "processes/order.tt", "the tool's notation wins over bpmn-first");
+  const bpmn = await callJson("open_modeler", { repo: REPO.fullName, id: "order" });
+  assert.equal(bpmn.opened.path, PATH);
+  // a path of another notation fails in the tool, never inside the iframe
+  const foreign = await call("open_wardley_modeler", { repo: REPO.fullName, path: PATH });
+  assert.ok(foreign.isError && /not a wardley map/.test(foreign.text), foreign.text);
+  const unknown = await call("open_wardley_modeler", { repo: REPO.fullName, id: "nope" });
+  assert.ok(unknown.isError && /list_models/.test(unknown.text), unknown.text);
 });
