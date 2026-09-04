@@ -1,6 +1,6 @@
 # ADR 0005 — AI write access in-process: /mcp + content REST on the Live Host, OIDC resource server, no self-built AS
 
-- **Status:** accepted (2026-07-24), amended (2026-08-03 and 2026-08-04 — see below)
+- **Status:** accepted (2026-07-24), amended (2026-08-03, 2026-08-04 and 2026-09-04 — see below)
 - **Context:** adversarially reviewed against a fully built alternative (a
   separate broker-based MCP server); the review's confirmed findings drove this
   decision
@@ -185,3 +185,11 @@ reconciles over the bridge — server still byte-equal to the session's last
 replica: re-mint (the mint tool re-runs the write check) and resume live;
 diverged: a banner hands the choice to the user. The server never widens a
 ticket's lifetime to accommodate reconnects.
+
+_2026-09-04 (#156):_ the ticket tool is registered ONCE for the live-capable
+modeler widgets the web dist carries (bpmn, wardley, team-topology,
+event-storming — the DMN widget never mints), no longer inside the BPMN
+widget's block — bound, as before, to the first such widget's resource (bpmn
+when its bundle is present) — so a dist without the BPMN bundle still lets the
+other widgets go live. Still app-visibility, still absent under
+`LIVE_MCP_READONLY=1` and without a served live-capable widget.

@@ -11,7 +11,9 @@ import { viteSingleFile } from "vite-plugin-singlefile";
  * requests, so nothing may be shared between the emitted files. Runs AFTER
  * the SPA build (emptyOutDir: false) — `pnpm --filter @bpmiq/web build`
  * produces all bundles. Deliberately no react/tailwind: widgets are vanilla
- * TS + bpmn-js/dmn-js.
+ * TS + one engine each (bpmn-js, dmn-js, a Miragon renderer). Exactly ONE
+ * engine per emitted file is also the widgets' whole CSS scoping — the SPA's
+ * postcss vendor-CSS scoping is deliberately absent here.
  */
 export const widgetConfig = (htmlFile: string) =>
   defineConfig({

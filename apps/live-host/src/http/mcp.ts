@@ -31,11 +31,12 @@ import { join } from "node:path";
 import { fileDeepLink, processDeepLink } from "@bpmiq/contracts/deep-link";
 import { roomName } from "@bpmiq/contracts/live";
 import type { ContentConflictWire, TodoWire, WidgetBootWire } from "@bpmiq/contracts/live-host";
+import { mcpAppToolName } from "@bpmiq/contracts/mcp-app";
 import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
 import { parseTestSuite, type TestCase, testsPathFor } from "@bpmiq/decisions/tests";
 import { fail, ok, READ, safe, WRITE } from "@bpmiq/mcp-kit";
 import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
-import { modelStem, NOTATIONS } from "@bpmiq/notations";
+import { byExtension, byId, modelStem, NOTATIONS } from "@bpmiq/notations";
 import { deriveDecision, deriveProcess, deriveView, hasDeriver } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
 import { hasTemplate } from "@bpmiq/notations/templates";
@@ -79,8 +80,8 @@ export type McpDeps = OverviewDeps &
      * no credentials to act on the tracker; the todo tools then do not register */
     issues?: IssueTracker;
     mcpReadOnly?: boolean;
-    /** built web assets — the MCP-App widgets (mcp-app.html for BPMN,
-     *  mcp-app-dmn.html for decisions) are read from here */
+    /** built web assets — the MCP-App widgets (WIDGET_FILES, one single-file
+     *  bundle per modeler) are read from here */
     webDist: string;
     /** the host's public URL — the widget derives its ws endpoint from it */
     publicUrl: string;
@@ -93,8 +94,8 @@ export type McpDeps = OverviewDeps &
 // (validation findings, conflict guidance, authz denials)
 
 // ── MCP-App widgets (the embedded modelers) ──────────────────────────────────
-// The single-file HTML files built by apps/web (vite.mcp-app*.config.ts): the
-// BPMN modeler and the DMN decision modeler. Read once per process, memoised —
+// The single-file HTML files built by apps/web (vite.mcp-app*.config.ts), one
+// per WidgetSpec below (WIDGET_SPECS). Read once per process, memoised —
 // a fresh McpServer per request must not mean a disk read per POST. The hash
 // rides in the ui:// URI so a redeploy busts whatever cache the host keeps
 // (its cadence is undocumented).
@@ -108,7 +109,10 @@ const widgetCache = new Map<string, Widget | null>();
  *  the readonly flip) must mint a new uri or cached widgets keep booting with
  *  the stale payload until the web dist itself changes. */
 function loadWidget(webDist: string, file: string, name: string, configSalt: string): Widget | undefined {
-  const key = `${file}\0${configSalt}`;
+  // webDist is part of the key too: production has one dist per process, but
+  // the test suite hands every server its own tmp dist — a widget absent from
+  // one must never be answered from another's memo
+  const key = `${webDist}\0${file}\0${configSalt}`;
   const cached = widgetCache.get(key);
   if (cached !== undefined) return cached ?? undefined;
   let html: string;
@@ -153,6 +157,104 @@ const NOTATION_IDS = NOTATIONS.map((n) => n.id).join(", ");
 const CREATABLE_IDS = NOTATIONS.filter((n) => hasTemplate(n.id))
   .map((n) => n.id)
   .join(", ");
+
+// ── MCP-App widgets: the static half of a registry row — DATA, module-level,
+// so the test suite's stub list (WIDGET_FILES) derives from the SAME list the
+// server registers from (the tool-list pins there stay literal on purpose: a
+// new row must show up in a reviewed diff). The per-server half (how a call
+// resolves, links and summarises) lives inside createLiveMcpServer. ─────────
+interface WidgetSpec {
+  /** registry notation id — the generated rows resolve `id` WITH it
+   *  (findModelPath is bpmn-first without it) */
+  notation: string;
+  /** the widget upgrades to live co-editing (mint_ws_ticket is registered for
+   *  the served widgets that do; the DMN widget deliberately never mints) */
+  live: boolean;
+  /** apps/web/dist/<file> — apps/web/package.json's build chain emits it */
+  file: string;
+  /** `ui://bpmiq/<name>-<hash8>.html` (the tests pin the prefix) */
+  name: string;
+  /** open_modeler / open_decision_modeler are wire-pinned; the rest come from
+   *  mcpAppToolName (@bpmiq/contracts/mcp-app — the SPA's assist prompt
+   *  derives the same name) */
+  tool: string;
+  description: string;
+  /** processRef / decisionRef(+scenario) for the pinned twins (unchanged
+   *  wire), a noun-worded {repo, id?, path?} when generated */
+  inputSchema: z.ZodRawShape;
+}
+
+const BPMN_WIDGET: WidgetSpec = {
+  notation: "bpmn",
+  live: true,
+  file: "mcp-app.html",
+  name: "modeler",
+  tool: "open_modeler",
+  description:
+    "Open the interactive BPMN modeler widget for a process. Renders an embedded diagram " +
+    "editor in MCP-Apps-capable clients (claude.ai, Claude Desktop) — including the process's " +
+    "todos, with a badge on every anchored element; other clients get a " +
+    "text summary — use get_process/get_bpmn_xml there instead. The result's " +
+    "`opened.url` links the same model in the full bpmiq web modeler.",
+  inputSchema: processRef,
+};
+const DMN_WIDGET: WidgetSpec = {
+  notation: "dmn",
+  live: false,
+  file: "mcp-app-dmn.html",
+  name: "decision-modeler",
+  tool: "open_decision_modeler",
+  description:
+    "Open the interactive DMN decision modeler widget: the decision table plus a SIMULATOR — " +
+    "enter values, see which rules match. Pass `scenario` (variable → value, like " +
+    "simulate_decision's `given`) to open it with that case already applied and highlighted, " +
+    "which is how to SHOW someone a failing case instead of describing it. The widget also " +
+    "runs and captures the decision's test cases. Non-apps clients get a text summary — use " +
+    "get_decision / simulate_decision there. The result's `opened.url` links the same " +
+    "decision in the bpmiq web app.",
+  inputSchema: {
+    ...decisionRef,
+    scenario: z
+      .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+      .optional()
+      .describe("input values to pre-fill the simulator with, keyed by variable name"),
+  },
+};
+/** the notations whose widget rides the widget core (apps/web/src/mcp-app/core).
+ *  Adding one = this id + the engine adapter + the build entry in apps/web. */
+const GENERATED_WIDGET_NOTATIONS = ["wardley", "team-topology", "event-storming"] as const;
+/** a core-based widget: everything derives from the descriptor */
+const generatedWidget = (id: string): WidgetSpec => {
+  const n = byId(id);
+  // a typo here must fail the boot, not surface as a phantom tool at call time
+  if (!n) throw new Error(`widget registry: unknown notation '${id}'`);
+  const noun = n.noun.singular;
+  return {
+    notation: n.id,
+    live: true,
+    file: `mcp-app-${n.id}.html`,
+    name: `${n.id}-modeler`,
+    tool: mcpAppToolName(n.id),
+    description:
+      `Open the interactive ${n.label} modeler widget for a ${noun} (${n.extensions.join("/")}). Renders the ` +
+      "canvas inline in MCP-Apps-capable clients (claude.ai, Claude Desktop): edits save through the same " +
+      "validated, conflict-guarded path as save_model_content and upgrade to live co-editing where the host " +
+      "allows the socket. Other clients get a text summary — use get_view / get_model_content there. The " +
+      `result's \`opened.url\` links the same ${noun} in the bpmiq web app.`,
+    inputSchema: {
+      repo: repoArg,
+      id: z.string().optional().describe(`${noun} id = file stem (from list_models)`),
+      path: z.string().optional().describe(`repo-relative ${noun} path (alternative to id)`),
+    },
+  };
+};
+const WIDGET_SPECS: readonly WidgetSpec[] = [
+  BPMN_WIDGET,
+  DMN_WIDGET,
+  ...GENERATED_WIDGET_NOTATIONS.map(generatedWidget),
+];
+/** the dist files the widgets live in — test/mcp.test.ts writes its stubs from this list */
+export const WIDGET_FILES: readonly string[] = WIDGET_SPECS.map((w) => w.file);
 
 /** one test case of a decision suite — the wire shape of `<stem>.tests.yaml` */
 const testCaseSchema = z.object({
@@ -1081,8 +1183,11 @@ export function createLiveMcpServer(
     }
   }
 
-  // ── MCP Apps: the embedded modelers (registered in BOTH modes — opening is a
-  // read; the readonly marker switches the widget to a viewer) ───────────────
+  // ── MCP Apps: the embedded modelers — ONE registry row per single-file
+  // widget apps/web MAY have built (WIDGET_SPECS). Registered in BOTH modes:
+  // opening is a read; the readonly marker turns the widget into a viewer. A
+  // row whose dist file is missing (an older web build) registers nothing and
+  // never fails — /mcp works, just without that widget. ─────────────────────
   // the boot marker sits inside a quoted JS string in the HTML head; a double
   // stringify yields the correctly escaped string literal. `<` is escaped on
   // top: JSON never does, and a "</script>" inside a value (publicUrl is
@@ -1118,131 +1223,143 @@ export function createLiveMcpServer(
     );
   };
 
-  const modeler = loadWidget(opts.webDist, "mcp-app.html", "modeler", boot);
-  if (modeler) {
-    serveWidget(modeler);
+  /** the per-server half of a row: how a call resolves, links and summarises */
+  interface WidgetBehaviour {
+    resolve(r: ConnectedRepo, a: RefArgs): Promise<string>;
+    /** the same model in the web app — the link non-apps clients surface */
+    url(fullName: string, path: string): string;
+    /** LEAN on purpose: hosts cap tool results (~150k chars) and the widget
+     *  fetches the text itself via get_model_content — never the model text */
+    summary(path: string, content: string): unknown;
+  }
+  const behaviourOf = (spec: WidgetSpec): WidgetBehaviour => {
+    switch (spec.notation) {
+      case "bpmn":
+        return {
+          resolve: (r, a) => resolveBpmnPath(r, a.id, a.path),
+          // the process route — the widget adds the canvas selection as ?element=
+          url: (fullName, path) => processDeepLink(opts.publicUrl, fullName, processIdOf(path)),
+          summary: (path, content) => {
+            const graph = extractModelGraph(path, content);
+            const view = graph ? deriveProcess(graph) : undefined;
+            return view
+              ? { name: view.name, roles: view.roles, steps: view.steps.length }
+              : "modeler opened (no derivable view)";
+          },
+        };
+      case "dmn":
+        return {
+          resolve: (r, a) => resolveDmnPath(r, a.id, a.path),
+          // decisions open on the file-editor splat route (the repo overview's target)
+          url: (fullName, path) => fileDeepLink(opts.publicUrl, fullName, path),
+          summary: (path, content) => {
+            const view = decisionViewOf(path, content);
+            return {
+              name: view.name,
+              decisions: view.decisions.map((d) => ({
+                id: d.id,
+                hitPolicy: d.hitPolicy ?? null,
+                rules: d.rules.length,
+              })),
+            };
+          },
+        };
+      default: {
+        const n = byId(spec.notation)!; // generatedWidget already proved it exists
+        return {
+          resolve: async (r, a) => {
+            // the notation is fixed by the tool: a stem shared with a .bpmn twin
+            // opens THIS notation's file; and a `path` wins server-side, so a
+            // foreign file must fail HERE, not inside the single-engine iframe
+            const path = await resolveModelPath(r, { id: a.id, path: a.path, notation: n.id });
+            if (byExtension(path)?.id !== n.id) {
+              throw new Error(`not a ${n.noun.singular}: ${path} — pass a ${n.extensions.join(" / ")} file.`);
+            }
+            return path;
+          },
+          // every non-BPMN model opens on the file-editor splat route
+          url: (fullName, path) => fileDeepLink(opts.publicUrl, fullName, path),
+          summary: (path, content) => {
+            const graph = extractModelGraph(path, content);
+            const view = graph ? deriveView(graph) : undefined;
+            // `detail` stays out (timelines etc. — the agent has get_view for that)
+            return view
+              ? { name: view.name, summary: view.summary, stats: view.stats }
+              : "modeler opened (no derivable view)";
+          },
+        };
+      }
+    }
+  };
+
+  const served: Array<{ spec: WidgetSpec; widget: Widget }> = [];
+  for (const spec of WIDGET_SPECS) {
+    const widget = loadWidget(opts.webDist, spec.file, spec.name, boot);
+    if (!widget) continue; // older web dist without this bundle — tool absent, never failing
+    served.push({ spec, widget });
+    serveWidget(widget);
+    const b = behaviourOf(spec);
     registerAppTool(
       server,
-      "open_modeler",
+      spec.tool,
       {
-        description:
-          "Open the interactive BPMN modeler widget for a process. Renders an embedded diagram " +
-          "editor in MCP-Apps-capable clients (claude.ai, Claude Desktop) — including the process's " +
-          "todos, with a badge on every anchored element; other clients get a " +
-          "text summary — use get_process/get_bpmn_xml there instead. The result's " +
-          "`opened.url` links the same model in the full bpmiq web modeler.",
-        inputSchema: processRef,
+        description: spec.description,
+        inputSchema: spec.inputSchema,
         annotations: READ,
         // "openai/outputTemplate" is ChatGPT's compatibility alias for
         // ui.resourceUri — current builds read the MCP-Apps key, older ones
         // only the alias; registerAppTool passes extra _meta keys through
-        _meta: { ui: { resourceUri: modeler.uri }, "openai/outputTemplate": modeler.uri },
+        _meta: { ui: { resourceUri: widget.uri }, "openai/outputTemplate": widget.uri },
       },
+      // `scenario` (dmn) is never read here — it reaches the widget via ontoolinput.
+      // Lean result on purpose: hosts cap tool results (~150k chars) and the
+      // widget fetches the text itself — never send it here
       safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
         const r = await requireRepo(repo);
-        const bpmnPath = await resolveBpmnPath(r, id, path);
-        // lean result on purpose: hosts cap tool results (~150k chars) and the
-        // widget fetches the XML itself via get_bpmn_xml — never send it here
-        const content = await getContent(opts, r, bpmnPath);
-        const graph = extractModelGraph(content.path, content.content);
-        const view = graph ? deriveProcess(graph) : undefined;
+        const content = await getContent(opts, r, await b.resolve(r, { id, path }));
         return ok({
-          opened: {
-            repo: r.fullName,
-            path: content.path,
-            // the same model in the full web modeler — the link non-apps
-            // clients surface instead of the widget
-            url: processDeepLink(opts.publicUrl, r.fullName, processIdOf(content.path)),
-          },
-          summary: view
-            ? { name: view.name, roles: view.roles, steps: view.steps.length }
-            : "modeler opened (no derivable view)",
+          opened: { repo: r.fullName, path: content.path, url: b.url(r.fullName, content.path) },
+          summary: b.summary(content.path, content.content),
         });
       }),
     );
-
-    // live Yjs upgrade for the widget: a single-use, room-bound ws ticket.
-    // Write-gated like every repo tool (requireRepo) and absent in read-only
-    // mode — the viewer stays on bridge reads.
-    if (!opts.mcpReadOnly && opts.wsTickets) {
-      const wsTickets = opts.wsTickets;
-      registerAppTool(
-        server,
-        "mint_ws_ticket",
-        {
-          description:
-            "Mint a short-lived, single-use WebSocket ticket for the modeler widget's live " +
-            "co-editing connection (Hocuspocus/Yjs) to a model of ANY notation. Internal to the " +
-            "widget — agents edit via save_bpmn_xml / save_model_content instead.",
-          inputSchema: modelRef,
-          annotations: READ,
-          _meta: { ui: { resourceUri: modeler.uri, visibility: ["app"] } },
-        },
-        safe(async ({ repo, ...ref }: { repo: string } & RefArgs) => {
-          const r = await requireRepo(repo);
-          const room = roomName(r.fullName, await resolveModelPath(r, ref));
-          const ticket = wsTickets.issue(
-            { login: session.user.login, name: session.user.name, avatarUrl: null, provider: session.user.provider },
-            room,
-          );
-          return ok({ ticket, url: opts.publicUrl.replace(/^http/, "ws"), room, expiresInSeconds: 60 });
-        }),
-      );
-    }
   }
 
-  // ── MCP App: the decision modeler (dmn-js + the simulation add-on) ─────────
-  const decisionModeler = loadWidget(opts.webDist, "mcp-app-dmn.html", "decision-modeler", boot);
-  if (decisionModeler) {
-    serveWidget(decisionModeler);
+  // live Yjs upgrade for every served LIVE-capable widget — hoisted out of the
+  // bpmn block (#156): a dist with only the wardley bundle must still go live.
+  // Write-gated like every repo tool (requireRepo), absent in read-only mode
+  // (the viewers stay on bridge reads) and absent when no live-capable widget
+  // is served (a dmn-only dist never minted before either). The resource
+  // binding stays what it was: the FIRST such widget — bpmn when its bundle is
+  // present (today's exact _meta); an app-visibility tool binds to one
+  // resource and hosts are only verified against this shape.
+  const first = served.find((s) => s.spec.live)?.widget;
+  if (first && !opts.mcpReadOnly && opts.wsTickets) {
+    const wsTickets = opts.wsTickets;
     registerAppTool(
       server,
-      "open_decision_modeler",
+      "mint_ws_ticket",
       {
         description:
-          "Open the interactive DMN decision modeler widget: the decision table plus a SIMULATOR — " +
-          "enter values, see which rules match. Pass `scenario` (variable → value, like " +
-          "simulate_decision's `given`) to open it with that case already applied and highlighted, " +
-          "which is how to SHOW someone a failing case instead of describing it. The widget also " +
-          "runs and captures the decision's test cases. Non-apps clients get a text summary — use " +
-          "get_decision / simulate_decision there. The result's `opened.url` links the same " +
-          "decision in the bpmiq web app.",
-        inputSchema: {
-          ...decisionRef,
-          scenario: z
-            .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
-            .optional()
-            .describe("input values to pre-fill the simulator with, keyed by variable name"),
-        },
+          "Mint a short-lived, single-use WebSocket ticket for the modeler widgets' live " +
+          "co-editing connection (Hocuspocus/Yjs) to a model of ANY notation. Internal to the " +
+          "widgets — agents edit via save_bpmn_xml / save_model_content instead.",
+        inputSchema: modelRef,
         annotations: READ,
-        // same ChatGPT alias as open_modeler
-        _meta: { ui: { resourceUri: decisionModeler.uri }, "openai/outputTemplate": decisionModeler.uri },
+        _meta: { ui: { resourceUri: first.uri, visibility: ["app"] } },
       },
-      safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+      safe(async ({ repo, ...ref }: { repo: string } & RefArgs) => {
         const r = await requireRepo(repo);
-        const dmnPath = await resolveDmnPath(r, id, path);
-        // lean result on purpose (hosts cap tool results): the widget fetches
-        // the XML itself via get_dmn_xml — never send it here
-        const content = await getContent(opts, r, dmnPath);
-        const view = decisionViewOf(content.path, content.content);
-        return ok({
-          opened: {
-            repo: r.fullName,
-            path: content.path,
-            // decisions open on the file-editor splat route (the same target
-            // the repo overview links them to)
-            url: fileDeepLink(opts.publicUrl, r.fullName, content.path),
-          },
-          summary: {
-            name: view.name,
-            decisions: view.decisions.map((d) => ({ id: d.id, hitPolicy: d.hitPolicy ?? null, rules: d.rules.length })),
-          },
-        });
+        const room = roomName(r.fullName, await resolveModelPath(r, ref));
+        const ticket = wsTickets.issue(
+          { login: session.user.login, name: session.user.name, avatarUrl: null, provider: session.user.provider },
+          room,
+        );
+        return ok({ ticket, url: opts.publicUrl.replace(/^http/, "ws"), room, expiresInSeconds: 60 });
       }),
     );
   }
 
-  // per-capability contributions LAST — they see the fully registered core
   for (const contribute of contributions) contribute(server, opts, session);
 
   return server;

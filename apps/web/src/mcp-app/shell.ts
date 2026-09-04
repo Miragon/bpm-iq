@@ -1,16 +1,17 @@
 /**
- * The mechanical widget shell shared by the BPMN and DMN single-file bundles:
- * element lookup, the toolbar/banner/status chrome, and the App lifecycle
- * tail (tool-input guard, the no-input timeout, connect).
+ * The mechanical widget shell shared by every single-file bundle: element
+ * lookup, the toolbar/banner/status chrome, and the App lifecycle tail
+ * (tool-input guard, the no-input timeout, connect).
  *
- * The save LIFECYCLE stays per widget ON PURPOSE: the two mains look alike
- * but are fused to different latch sets (the BPMN widget's Yjs upgrade and
- * recovery paths touch its latches at ~15 sites; the DMN widget's setDirty
- * owns the save button) — a shared lifecycle would be a bag of nine
- * callbacks, worse than the twin code. Same for the CAS conflict banner:
- * statement-identical today, but every action body writes the widget's own
- * latches. Keep the twins in sync by hand; this file owns only what is
- * mechanically identical.
+ * The save LIFECYCLE used to stay per widget on purpose (two mains, two latch
+ * sets). #156 reversed that: a third fork was the tipping point, so the
+ * canvas widgets (bpmn, wardley, team topology, event storming) run ONE
+ * lifecycle — core/lifecycle.ts behind the ChromePort / ModelBridge /
+ * LiveUpgrade / ClaimDocument ports, composed in core/widget.ts. The
+ * decision widget (dmn-main.ts) is the one remaining hand-kept twin: its
+ * differences are real (multi-view, the simulator, the tests panel, no live)
+ * and stay so until a second such need appears. This file still owns only
+ * what is mechanically identical across all of them.
  */
 import type { App } from "@modelcontextprotocol/ext-apps";
 
@@ -33,12 +34,12 @@ export interface WidgetChrome {
   hideBanner: () => void;
 }
 
-/** the fixed widget chrome both HTML entries carry (mcp-app*.html) */
+/** the fixed widget chrome every HTML entry carries (mcp-app*.html) */
 export function mountChrome(): WidgetChrome {
   const banner = el<HTMLDivElement>("banner");
   const status = el<HTMLDivElement>("status");
-  // the brand mark rides in from lib/comet rather than sitting in both HTML
-  // entries — one geometry, not a path duplicated per widget
+  // the brand mark rides in from lib/comet rather than sitting in every HTML
+  // entry — one geometry, not a path duplicated per widget
   const title = el<HTMLSpanElement>("title");
   title.before(cometElement(9));
   return {

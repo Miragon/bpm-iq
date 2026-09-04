@@ -21,6 +21,7 @@
  * prompt that triggers tool calls gets a user review first. The URL shapes
  * live in ONE function so a provider-side change is a one-line fix.
  */
+import { mcpAppToolName } from "./mcp-app.ts";
 import type { TodoElement } from "./todo-anchor.ts";
 
 /** untrusted/model-derived text as an inert block: fenced one backtick longer
@@ -36,9 +37,9 @@ export interface AssistContext {
   repo: string;
   /** repo-relative model path */
   path: string;
-  /** notation registry id — the tool mapping below covers the notations with
-   *  a modeler widget; others have no assist surface yet (the menu only
-   *  renders for plugins that declare one) */
+  /** notation registry id — names the widget tool (mcp-app.ts); the menu
+   *  only renders for plugins that declare an assist surface, so a notation
+   *  without a widget never builds a prompt */
   notation: string;
   /** the Live Host's MCP endpoint (AppConfig.mcpUrl) — names the instance */
   mcpUrl: string;
@@ -76,7 +77,7 @@ function selectionBlock(selection: TodoElement[]): string {
 }
 
 export function buildAssistPrompt(ctx: AssistContext): string {
-  const tool = ctx.notation === "dmn" ? "open_decision_modeler" : "open_modeler";
+  const tool = mcpAppToolName(ctx.notation);
   // repo/path are repo-derived like the names: JSON.stringify keeps a quote,
   // backslash or newline in a committed filename INSIDE the quoted argument
   // instead of letting it rewrite the trusted first line

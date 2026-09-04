@@ -65,8 +65,11 @@ then the API returns a clear 403 explaining exactly that.
 
 `POST /mcp` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP) serves the
 tools over the **live** models: `list_repos`, `list_models`, `get_view`, `list_processes`,
-`get_process`, `get_bpmn_xml`, `validate_bpmn`, `list_changes`, `open_modeler` (+ its
-internal `mint_ws_ticket`), `create_process`, `save_bpmn_xml`, `release_process`, the
+`get_process`, `get_bpmn_xml`, `validate_bpmn`, `list_changes`, the modeler widgets
+`open_modeler` / `open_decision_modeler` / `open_wardley_modeler` /
+`open_team_topology_modeler` / `open_event_storming_modeler` (+ their internal
+`mint_ws_ticket` — see [apps/web/README.md](../web/README.md)), `create_process`,
+`save_bpmn_xml`, `release_process`, the
 notation-generic `get_model_content` / `validate_model` / `create_model` / `save_model_content` — plus
 `list_todos` / `create_todo` / `close_todo` **when a tracker is configured** (no
 credentials → absent from `tools/list`, never a call that fails). The repo is a **tool
@@ -255,15 +258,15 @@ client is open — watch the canvas follow the browser edits.
 
 ## What's in here
 
-| Path                    | What                                                                                                                                    |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/server.ts`         | The Live Host: Hocuspocus with `onAuthenticate`, `onLoadDocument` (seed from working tree), `onStoreDocument` (debounced write-through) |
-| `src/http/mcp.ts`       | `POST /mcp`: the MCP endpoint (official SDK) — nine tools over the live models, repo as a tool argument                                 |
-| `src/auth/oidc.ts`      | OIDC resource server: verifies audience-bound IdP JWTs for `/mcp` + the content routes                                                  |
-| `scripts/mcp-smoke.mjs` | Manual MCP smoke test against a running host (`SMOKE_TOKEN=…`)                                                                          |
-| `src/guest-test.ts`     | Two headless guests: connect, co-edit, measure, revert                                                                                  |
-| `../web/`               | Browser client: bpmn-js + Monaco + `HocuspocusProvider` + y-monaco (remote cursors via awareness)                                       |
-| `../vscode/`            | Thin extension skeleton: `bpm-live://` FileSystemProvider bound to the shared Y.Text                                                    |
+| Path                    | What                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/server.ts`         | The Live Host: Hocuspocus with `onAuthenticate`, `onLoadDocument` (seed from working tree), `onStoreDocument` (debounced write-through)                             |
+| `src/http/mcp.ts`       | `POST /mcp`: the MCP endpoint (official SDK) — the model, decision, todo and widget tools over the live models (see the MCP section above), repo as a tool argument |
+| `src/auth/oidc.ts`      | OIDC resource server: verifies audience-bound IdP JWTs for `/mcp` + the content routes                                                                              |
+| `scripts/mcp-smoke.mjs` | Manual MCP smoke test against a running host (`SMOKE_TOKEN=…`)                                                                                                      |
+| `src/guest-test.ts`     | Two headless guests: connect, co-edit, measure, revert                                                                                                              |
+| `../web/`               | Browser client: bpmn-js + Monaco + `HocuspocusProvider` + y-monaco (remote cursors via awareness)                                                                   |
+| `../vscode/`            | Thin extension skeleton: `bpm-live://` FileSystemProvider bound to the shared Y.Text                                                                                |
 
 ## Spike shortcuts (M1 turns these into the real thing)
 

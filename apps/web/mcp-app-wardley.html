@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bpmiq Wardley map modeler</title>
+    <!-- boot config injected by the Live Host when serving the ui:// resource
+         (apps/live-host/src/http/mcp.ts replaces the marker) -->
+    <script>
+      window.BPMIQ_BOOT = "__BPMIQ_BOOT__";
+    </script>
+  </head>
+  <body>
+    <!-- the shared widget chrome (mcp-app/shell.ts ids) — no todo panel: todos
+         are model-anchored to BPMN elements and stay a BPMN-widget feature -->
+    <div id="app">
+      <div id="toolbar">
+        <span id="title">Loading…</span>
+        <span id="dirty" hidden>●</span>
+        <span class="spacer"></span>
+        <button id="open" hidden>Open in bpmiq</button>
+        <button id="fullscreen" title="Open fullscreen">⛶</button>
+        <button id="save" hidden title="Changes save automatically — this forces it now">Save now</button>
+      </div>
+      <div id="banner" hidden></div>
+      <div id="main">
+        <div id="canvas"></div>
+      </div>
+      <div id="status"></div>
+    </div>
+    <script type="module" src="/src/mcp-app/wardley-main.ts"></script>
+  </body>
+</html>
