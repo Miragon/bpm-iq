@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.10.0](https://github.com/Miragon/bpm-iq/compare/v3.9.0...v3.10.0) (2026-09-04)
+
+
+### Features
+
+* **live-host:** generic MCP model tools for ANY notation — get/save content, create, validate, ws ticket ([#160](https://github.com/Miragon/bpm-iq/issues/160)) ([9b797ad](https://github.com/Miragon/bpm-iq/commit/9b797ad4e476f66b7af6d2ed3cad3f0b9c7bee03))
+* **notations,live-client,web:** mount the Miragon context-maps modeler as an editor plugin ([#162](https://github.com/Miragon/bpm-iq/issues/162)) ([e5a68a9](https://github.com/Miragon/bpm-iq/commit/e5a68a9a881390334bb4738b34696c4ba2b9620b))
+* **web,live-host:** MCP-App widget core — one lifecycle, per-notation widgets, generated open_&lt;notation&gt;_modeler tools ([#156](https://github.com/Miragon/bpm-iq/issues/156)) ([#163](https://github.com/Miragon/bpm-iq/issues/163)) ([241dbc5](https://github.com/Miragon/bpm-iq/commit/241dbc5db1af6e1b0c81927c5d3aa85cbd3fe372))
+* **web,live-host:** the Context Map modeler widget — open_context_map_modeler on the widget core ([#164](https://github.com/Miragon/bpm-iq/issues/164)) ([d098e01](https://github.com/Miragon/bpm-iq/commit/d098e013ee79200feca53fe7e7b85471162812e3))
+
 ## [3.9.0](https://github.com/Miragon/bpm-iq/compare/v3.8.0...v3.9.0) (2026-09-04)
 
 
