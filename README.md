@@ -7,8 +7,8 @@
 The collaborative BPM platform where git is the system of record: model together in real
 time, release as a pull request, and let AI agents query every process.
 
-- **Model live** — every model file (`.bpmn`, `.dmn`, `.owm`, `.tt`, `.storm`, `.vc.json`,
-  `.yaml`, `.md`) syncs as a shared Y.Text document; the web client and VS Code bind their editors to
+- **Model live** — every model file (`.bpmn`, `.dmn`, `.owm`, `.tt`, `.storm`, `.cm.json`,
+  `.vc.json`, `.yaml`, `.md`) syncs as a shared Y.Text document; the web client and VS Code bind their editors to
   it. Login authenticates, **repos authorize**: what you see and edit follows your git write
   permission.
 - **Release as PR** — one click cuts a branch from `origin/<default>`, pushes **as the

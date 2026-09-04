@@ -109,6 +109,77 @@ test("deriveView(wardley/tt/vc): node/edge stats from the shipped fixtures", () 
   assert.equal(vc?.summary, "Value chain with 3 elements, 2 connections");
 });
 
+test("deriveView(context-map): title as name, per-subdomain + per-pattern stats, contexts + relationships in detail", () => {
+  const cm = deriveView(extractModelGraph("maps/conference.cm.json", fixture("conference.cm.json")) as ModelGraph);
+  assert.equal(cm?.name, "Conference event planner — context map", "the document title is the model's own name");
+  assert.deepEqual(cm?.stats, {
+    contexts: 6,
+    relationships: 6,
+    core: 2,
+    supporting: 2,
+    generic: 2,
+    partnership: 0,
+    "shared-kernel": 1,
+    "customer-supplier": 1,
+    "upstream-downstream": 4,
+    "separate-ways": 0,
+  });
+  assert.equal(
+    cm?.summary,
+    "Context map with 6 contexts (2 core, 2 supporting, 2 generic), " +
+      "6 relationships (1 shared-kernel, 1 customer-supplier, 4 upstream-downstream)",
+  );
+  const detail = cm?.detail as {
+    contexts: Array<{ id: string; name: string | null; subdomainType: string | null; team: string | null }>;
+    relationships: Array<{
+      id: string;
+      from: string;
+      to: string;
+      pattern: string;
+      upstreamRoles: string[];
+      downstreamRoles: string[];
+      label: string | null;
+      implementationTechnology: string | null;
+    }>;
+  };
+  assert.deepEqual(
+    detail.contexts.map((c) => [c.id, c.subdomainType, c.team]),
+    [
+      ["ctx_auth", "generic", "Platform Team"],
+      ["ctx_cfp", "supporting", "Program Team"],
+      ["ctx_evaluation", "core", "Review Team"],
+      ["ctx_notification", "generic", "Platform Team"],
+      ["ctx_schedule", "core", "Program Team"],
+      ["ctx_submission", "supporting", "Program Team"],
+    ],
+  );
+  assert.deepEqual(detail.relationships[4], {
+    id: "rel_submission_evaluation",
+    from: "ctx_submission",
+    to: "ctx_evaluation",
+    pattern: "upstream-downstream",
+    upstreamRoles: ["OHS"],
+    downstreamRoles: ["ACL"],
+    label: "submissions API",
+    implementationTechnology: "RESTful HTTP",
+  });
+  // a symmetric relationship carries no roles; absent optionals read as null/[]
+  assert.deepEqual(detail.relationships[1], {
+    id: "rel_cfp_submission",
+    from: "ctx_cfp",
+    to: "ctx_submission",
+    pattern: "shared-kernel",
+    upstreamRoles: [],
+    downstreamRoles: [],
+    label: "proposal model",
+    implementationTechnology: null,
+  });
+  // an empty map reads without a breakdown
+  const blank = deriveView({ notation: "context-map", nodes: [], edges: [], meta: { title: "Blank" } });
+  assert.equal(blank?.summary, "Context map with 0 contexts, 0 relationships");
+  assert.equal(blank?.name, "Blank");
+});
+
 test("deriveView: a notation without a deriver yields undefined (the caller keeps the bare row)", () => {
   assert.equal(deriveView({ notation: "markdown", nodes: [], edges: [] }), undefined);
   assert.equal(deriveView({ notation: "no-such", nodes: [], edges: [] }), undefined);

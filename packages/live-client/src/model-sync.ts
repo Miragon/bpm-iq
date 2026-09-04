@@ -11,7 +11,8 @@
  *
  * What differs per notation (how change events are observed, how the view
  * state survives a re-import, what "renderable" means pre-import) lives in a
- * SyncAdapter; bpmn-sync, dmn-sync, tt-sync and the DSL pair wardley-sync +
+ * SyncAdapter; bpmn-sync, dmn-sync, the document pair tt-sync +
+ * context-map-sync (over document-sync) and the DSL pair wardley-sync +
  * event-storming-sync (over dsl-sync) are the adapters. Consumers import
  * those, never this module.
  */

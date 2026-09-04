@@ -339,6 +339,18 @@ function stormTimeline(graph: ModelGraph): Array<{ id: string; type: string; nam
     .map((n) => ({ id: n.id, type: n.type, name: n.name ?? null }));
 }
 
+/** the context-map vocabulary (@miragon/context-maps-schema-model
+ *  SUBDOMAIN_TYPES / RELATIONSHIP_PATTERNS), in the notation's own order —
+ *  mirrored here like the storm kinds so this eager module stays zero-dep */
+const CM_SUBDOMAIN_TYPES: readonly string[] = ["core", "supporting", "generic"];
+const CM_RELATIONSHIP_PATTERNS: readonly string[] = [
+  "partnership",
+  "shared-kernel",
+  "customer-supplier",
+  "upstream-downstream",
+  "separate-ways",
+];
+
 const DERIVERS: Record<string, (graph: ModelGraph) => DerivedView> = {
   bpmn: (graph) => {
     const d = deriveProcess(graph);
@@ -392,6 +404,46 @@ const DERIVERS: Record<string, (graph: ModelGraph) => DerivedView> = {
       summary: `Event storming board with ${Object.keys(present).length > 0 ? counted(present) : "no elements"}`,
       stats,
       detail: { level: graph.meta?.level ?? null, timeline: stormTimeline(graph) },
+    };
+  },
+  "context-map": (graph) => {
+    const stats: Record<string, number> = { contexts: graph.nodes.length, relationships: graph.edges.length };
+    for (const t of CM_SUBDOMAIN_TYPES) stats[t] = graph.nodes.filter((n) => n.type === t).length;
+    for (const p of CM_RELATIONSHIP_PATTERNS) stats[p] = graph.edges.filter((e) => e.kind === p).length;
+    // "6 contexts (2 core, 2 supporting, 2 generic), 6 relationships (4
+    // upstream-downstream, …)" — the breakdown lists only what is on the map,
+    // in the notation's own order; the ids stay as they are (no pluralizing)
+    const breakdown = (keys: readonly string[]): string => {
+      const present = keys.filter((k) => (stats[k] ?? 0) > 0).map((k) => `${stats[k]} ${k}`);
+      return present.length > 0 ? ` (${present.join(", ")})` : "";
+    };
+    const title = graph.meta?.title;
+    return {
+      notation: "context-map",
+      name: typeof title === "string" ? title : null,
+      summary:
+        `Context map with ${counted({ contexts: stats.contexts! })}${breakdown(CM_SUBDOMAIN_TYPES)}, ` +
+        `${counted({ relationships: stats.relationships! })}${breakdown(CM_RELATIONSHIP_PATTERNS)}`,
+      stats,
+      detail: {
+        contexts: graph.nodes.map((n) => ({
+          id: n.id,
+          name: n.name ?? null,
+          subdomainType: CM_SUBDOMAIN_TYPES.includes(n.type) ? n.type : null,
+          team: (n.extra?.team as string | undefined) ?? null,
+          description: (n.extra?.description as string | undefined) ?? null,
+        })),
+        relationships: graph.edges.map((e) => ({
+          id: e.id,
+          from: e.from,
+          to: e.to,
+          pattern: e.kind,
+          upstreamRoles: (e.extra?.upstreamRoles as string[] | undefined) ?? [],
+          downstreamRoles: (e.extra?.downstreamRoles as string[] | undefined) ?? [],
+          label: e.name ?? null,
+          implementationTechnology: (e.extra?.implementationTechnology as string | undefined) ?? null,
+        })),
+      },
     };
   },
   "value-chain": (graph) => {

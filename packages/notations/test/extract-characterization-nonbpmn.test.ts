@@ -1,13 +1,13 @@
 /**
  * CHARACTERIZATION of the wardley / team-topology / event-storming /
- * value-chain extractors —
+ * context-map / value-chain extractors —
  * pinned BEFORE registry-driven discovery makes them reachable (they are dead
  * code until then: no discovery path hands them a file, and nothing else
  * exercised them). The fixtures are the de-facto format spec: tea.owm,
- * sample.tt and order-checkout.storm are the shipped examples of the Miragon
- * modeler repos (wardley-maps-modeler, team-topologies-modeler,
- * event-storming-modeler), whose deterministic serializers define what real
- * files look like.
+ * sample.tt, order-checkout.storm and conference.cm.json are the shipped
+ * examples of the Miragon modeler repos (wardley-maps-modeler,
+ * team-topologies-modeler, event-storming-modeler, context-maps-modeler),
+ * whose deterministic serializers define what real files look like.
  *
  * Deliberately pinned quirks (documenting gaps, not endorsing them):
  *
@@ -218,6 +218,185 @@ test("extractEventStorming: suffixes, pinning, drawings, comments and arrow labe
     ],
     meta: { title: "As-Is -> To-Be", level: "process" },
   });
+});
+
+test("extractContextMap: the schema-model's SAMPLE_DOCUMENT is pinned — ids equal the renderer's", () => {
+  // conference.cm.json is serializeDocument(SAMPLE_DOCUMENT) of
+  // @miragon/context-maps-schema-model 0.1.0 (canonical: sorted by id) —
+  // every id below is what the renderer's importer registers as element id;
+  // the subdomain type is the node type, the pattern the edge kind, the
+  // integration roles ride in edge.extra
+  const graph = extractModelGraph("maps/conference.cm.json", fixture("conference.cm.json"));
+  assert.deepEqual(JSON.parse(JSON.stringify(graph)), {
+    notation: "context-map",
+    nodes: [
+      {
+        id: "ctx_auth",
+        type: "generic",
+        name: "User Access",
+        extra: {
+          team: "Platform Team",
+          description: "Registration and authentication for speakers and attendees.",
+          x: 40,
+          y: 300,
+          width: 200,
+          height: 110,
+        },
+      },
+      {
+        id: "ctx_cfp",
+        type: "supporting",
+        name: "CfP Management",
+        extra: {
+          team: "Program Team",
+          description: "Runs the call for papers and exposes the public submission API.",
+          x: 340,
+          y: 120,
+          width: 200,
+          height: 110,
+        },
+      },
+      {
+        id: "ctx_evaluation",
+        type: "core",
+        name: "Session Evaluation",
+        extra: {
+          team: "Review Team",
+          description: "Scoring and selection of submitted sessions.",
+          x: 960,
+          y: 140,
+          width: 200,
+          height: 110,
+        },
+      },
+      {
+        id: "ctx_notification",
+        type: "generic",
+        name: "Notification Handling",
+        extra: {
+          team: "Platform Team",
+          description: "Sends emails to speakers and attendees, conforming to the schedule events.",
+          x: 1280,
+          y: 580,
+          width: 200,
+          height: 110,
+        },
+      },
+      {
+        id: "ctx_schedule",
+        type: "core",
+        name: "Schedule Management",
+        extra: {
+          team: "Program Team",
+          description: "Builds and publishes the conference schedule.",
+          x: 960,
+          y: 440,
+          width: 200,
+          height: 110,
+        },
+      },
+      {
+        id: "ctx_submission",
+        type: "supporting",
+        name: "Submission Handling",
+        extra: {
+          team: "Program Team",
+          description: "Owns proposals once submitted; the hub other contexts integrate with.",
+          x: 640,
+          y: 300,
+          width: 200,
+          height: 110,
+        },
+      },
+    ],
+    edges: [
+      {
+        id: "rel_auth_cfp",
+        from: "ctx_auth",
+        to: "ctx_cfp",
+        kind: "upstream-downstream",
+        name: "identity",
+        extra: { upstreamRoles: ["OHS"], downstreamRoles: ["ACL"] },
+      },
+      {
+        id: "rel_cfp_submission",
+        from: "ctx_cfp",
+        to: "ctx_submission",
+        kind: "shared-kernel",
+        name: "proposal model",
+      },
+      {
+        id: "rel_evaluation_schedule",
+        from: "ctx_evaluation",
+        to: "ctx_schedule",
+        kind: "customer-supplier",
+        name: "accepted sessions",
+        extra: { upstreamRoles: ["PL"] },
+      },
+      {
+        id: "rel_schedule_notification",
+        from: "ctx_schedule",
+        to: "ctx_notification",
+        kind: "upstream-downstream",
+        name: "schedule events",
+        extra: { upstreamRoles: ["OHS", "PL"], downstreamRoles: ["CF"] },
+      },
+      {
+        id: "rel_submission_evaluation",
+        from: "ctx_submission",
+        to: "ctx_evaluation",
+        kind: "upstream-downstream",
+        name: "submissions API",
+        extra: { upstreamRoles: ["OHS"], downstreamRoles: ["ACL"], implementationTechnology: "RESTful HTTP" },
+      },
+      {
+        id: "rel_submission_schedule",
+        from: "ctx_submission",
+        to: "ctx_schedule",
+        kind: "upstream-downstream",
+        extra: { upstreamRoles: ["OHS"], downstreamRoles: ["ACL"] },
+      },
+    ],
+    meta: { title: "Conference event planner — context map" },
+  });
+});
+
+test("extractContextMap: lenient like the schema-model's migrate — missing containers, id-less contexts, rel-<i> ids", () => {
+  const raw = JSON.stringify({
+    title: 7, // not a string → no title
+    contexts: [
+      { id: "a", label: "A" }, // no geometry, no classification → plain "context" at 0/0
+      { label: "no id" }, // skipped: a context IS its id
+      null,
+      { id: "b", label: "B", subdomainType: "weird", team: "", position: { x: "1" } },
+    ],
+    relationships: [
+      { from: "a", to: "b", pattern: "partnership", upstreamRoles: ["OHS", 3] }, // id-less → rel-0; non-string roles dropped
+      { id: "r2", from: "a", to: "ghost", pattern: "separate-ways", implementationTechnology: "gRPC" }, // dangling endpoint kept — the canvas has it too
+      "junk",
+    ],
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(extractModelGraph("maps/x.cm.json", raw))), {
+    notation: "context-map",
+    nodes: [
+      { id: "a", type: "context", name: "A", extra: { x: 0, y: 0, width: 0, height: 0 } },
+      { id: "b", type: "context", name: "B", extra: { x: 0, y: 0, width: 0, height: 0 } },
+    ],
+    edges: [
+      { id: "rel-0", from: "a", to: "b", kind: "partnership", extra: { upstreamRoles: ["OHS"] } },
+      { id: "r2", from: "a", to: "ghost", kind: "separate-ways", extra: { implementationTechnology: "gRPC" } },
+    ],
+    meta: { title: null },
+  });
+  // a non-object document (parseable JSON, wrong shape) is an empty map, not a crash
+  for (const raw of ["[]", '"text"', "null", "42"]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(extractModelGraph("maps/x.cm.json", raw))), {
+      notation: "context-map",
+      nodes: [],
+      edges: [],
+      meta: { title: null },
+    });
+  }
 });
 
 test("extractValueChain: defaults, label-over-name and conn-<i> ids are pinned", () => {
