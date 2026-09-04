@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.9.0](https://github.com/Miragon/bpm-iq/compare/v3.8.0...v3.9.0) (2026-09-04)
+
+
+### Features
+
+* **notations,live-client,web:** mount the Miragon event-storming modeler as an editor plugin ([#152](https://github.com/Miragon/bpm-iq/issues/152)) ([1e53dc9](https://github.com/Miragon/bpm-iq/commit/1e53dc9a0bce063641eeb5e508863728e22464fc))
+* **web:** redesign the editor toolbar — grouped chrome, overflow menu, Design mode ([#144](https://github.com/Miragon/bpm-iq/issues/144)) ([9c75a49](https://github.com/Miragon/bpm-iq/commit/9c75a49f08502e04f3cbb02da57ad2a7054182e3))
+
+
+### Bug Fixes
+
+* **web:** don't surface transient ws drops as a dead live document ([#147](https://github.com/Miragon/bpm-iq/issues/147)) ([076b632](https://github.com/Miragon/bpm-iq/commit/076b632a0930f1c4709a0353fd2e47cc85fb87b8))
+* **web:** keep the Design switch's knob inside its track ([#148](https://github.com/Miragon/bpm-iq/issues/148)) ([965c0d1](https://github.com/Miragon/bpm-iq/commit/965c0d1f8206e45c0dcfe079676083231f5183ee))
+* **web:** scope vendor CSS onto the renderer root, not below it ([#146](https://github.com/Miragon/bpm-iq/issues/146)) ([0f99fe6](https://github.com/Miragon/bpm-iq/commit/0f99fe6d25cf5b44efd8270293dc04d6339e5b9a))
+
 ## [3.8.0](https://github.com/Miragon/bpm-iq/compare/v3.7.0...v3.8.0) (2026-08-27)
 
 
