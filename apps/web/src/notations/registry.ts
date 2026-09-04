@@ -6,7 +6,7 @@
  *
  * Boundary rule, mirrored from ADR 0006: a plugin MANIFEST (this module +
  * the per-notation manifests it imports) is light, eager data — the editor
- * ENGINES (bpmn-js, dmn-js, the differ) live behind the manifests' dynamic
+ * ENGINES (bpmn-js, dmn-js, the Miragon modelers, the differ) live behind the manifests' dynamic
  * imports, so the eager bundle never carries an engine and the repo overview
  * loads none of them.
  */
@@ -19,6 +19,7 @@ import type { TodoCanvas } from "@/lib/todo-canvas";
 
 import { bpmnPlugin } from "./bpmn";
 import { dmnPlugin } from "./dmn";
+import { eventStormingPlugin } from "./event-storming";
 import { teamTopologyPlugin } from "./team-topology";
 import { wardleyPlugin } from "./wardley";
 
@@ -128,6 +129,7 @@ const WEB_PLUGINS: Record<string, WebNotationPlugin> = {
   dmn: dmnPlugin,
   wardley: wardleyPlugin,
   "team-topology": teamTopologyPlugin,
+  "event-storming": eventStormingPlugin,
 };
 
 // the shell renders its own panels on these ids — a plugin colliding with them

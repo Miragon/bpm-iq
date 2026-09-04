@@ -71,7 +71,7 @@ test("reserved keys: attr 'id' never re-keys, a format-attr element survives, __
 });
 
 test("docCodecFor: the registry is EMPTY (dark launch) — no shipped notation is structured", () => {
-  for (const id of ["bpmn", "dmn", "wardley", "team-topology", "value-chain", "markdown"]) {
+  for (const id of ["bpmn", "dmn", "wardley", "team-topology", "event-storming", "value-chain", "markdown"]) {
     assert.equal(docCodecFor(id), undefined);
   }
 });

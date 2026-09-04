@@ -311,6 +311,34 @@ const counted = (stats: Record<string, number>): string =>
     .map(([k, v]) => `${v} ${v === 1 ? k.replace(/ies$/, "y").replace(/s$/, "") : k}`)
     .join(", ");
 
+/** the sticky kinds of an event storming board — the nodes with a place on
+ *  the timeline (notes and drawings are annotations). The .storm vocabulary,
+ *  mirrored here so this eager module stays free of extract.ts values */
+const STORM_STICKY_KINDS = new Set([
+  "event",
+  "command",
+  "actor",
+  "aggregate",
+  "policy",
+  "readmodel",
+  "external",
+  "hotspot",
+]);
+
+/** the board read the way a facilitator reads it — stickies left to right
+ *  (x, then y, then id: the schema-model's own sortByTimeline rule) */
+function stormTimeline(graph: ModelGraph): Array<{ id: string; type: string; name: string | null }> {
+  const pos = (n: ModelNode): [number, number] => [Number(n.extra?.x ?? 0), Number(n.extra?.y ?? 0)];
+  return graph.nodes
+    .filter((n) => STORM_STICKY_KINDS.has(n.type))
+    .sort((a, b) => {
+      const [ax, ay] = pos(a);
+      const [bx, by] = pos(b);
+      return ax - bx || ay - by || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    })
+    .map((n) => ({ id: n.id, type: n.type, name: n.name ?? null }));
+}
+
 const DERIVERS: Record<string, (graph: ModelGraph) => DerivedView> = {
   bpmn: (graph) => {
     const d = deriveProcess(graph);
@@ -339,6 +367,32 @@ const DERIVERS: Record<string, (graph: ModelGraph) => DerivedView> = {
   "team-topology": (graph) => {
     const stats = { teams: graph.nodes.length, interactions: graph.edges.length };
     return { notation: "team-topology", name: null, summary: `Team topology with ${counted(stats)}`, stats };
+  },
+  "event-storming": (graph) => {
+    const count = (type: string): number => graph.nodes.filter((n) => n.type === type).length;
+    const stats: Record<string, number> = {
+      events: count("event"),
+      commands: count("command"),
+      actors: count("actor"),
+      aggregates: count("aggregate"),
+      policies: count("policy"),
+      readmodels: count("readmodel"),
+      externals: count("external"),
+      hotspots: count("hotspot"),
+      notes: count("note"),
+      drawings: count("drawing"),
+      arrows: graph.edges.length,
+    };
+    // only what is on the board — an empty one would read "0 events, 0 commands, …"
+    const present = Object.fromEntries(Object.entries(stats).filter(([, v]) => v > 0));
+    const title = graph.meta?.title;
+    return {
+      notation: "event-storming",
+      name: typeof title === "string" ? title : null,
+      summary: `Event storming board with ${Object.keys(present).length > 0 ? counted(present) : "no elements"}`,
+      stats,
+      detail: { level: graph.meta?.level ?? null, timeline: stormTimeline(graph) },
+    };
   },
   "value-chain": (graph) => {
     const stats = { elements: graph.nodes.length, connections: graph.edges.length };

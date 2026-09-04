@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@bpmiq/http-kit": "workspace:*",
-    "@modelcontextprotocol/sdk": "1.30.0"
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "4.5.2"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

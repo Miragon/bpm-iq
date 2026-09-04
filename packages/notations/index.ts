@@ -89,6 +89,16 @@ export const NOTATIONS: readonly NotationDescriptor[] = [
     monacoLanguage: "json",
   },
   {
+    id: "event-storming",
+    label: "Event Storming",
+    noun: { singular: "event storming board", plural: "event storming boards" },
+    extensions: [".storm"],
+    mediaKind: "dsl",
+    docShape: "text",
+    monacoLanguage: "plaintext",
+    graphHints: { flowEdgeKinds: ["arrow"], entryNodeTypes: [] },
+  },
+  {
     id: "value-chain",
     label: "Value Chain",
     noun: { singular: "value chain", plural: "value chains" },
