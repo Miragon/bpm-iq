@@ -146,6 +146,17 @@ export function newStormText(_id: string, name: string): string {
   return `title ${oneLine(name)}\n`;
 }
 
+/**
+ * The initial content of a new Context Map — EXACTLY the schema-model's
+ * canonical serialization (version 1, 2-space indent, key order
+ * version/title/contexts/relationships, no trailing newline): the modeler's
+ * first save re-serializes canonically, and a byte-identical template keeps
+ * that save from showing up as a phantom diff (the team-topology rule).
+ */
+export function newCmJson(_id: string, name: string): string {
+  return JSON.stringify({ version: 1, title: oneLine(name), contexts: [], relationships: [] }, null, 2);
+}
+
 /** the initial content of a new markdown document — a heading with the title */
 export function newMarkdownText(_id: string, name: string): string {
   return `# ${oneLine(name)}\n`;
@@ -157,6 +168,7 @@ const TEMPLATES: Record<string, (id: string, name: string) => string> = {
   wardley: newOwmText,
   "team-topology": newTtJson,
   "event-storming": newStormText,
+  "context-map": newCmJson,
   markdown: newMarkdownText,
 };
 

@@ -295,6 +295,16 @@ test("createNotationModel: event storming board from the title-only .storm templ
   assert.equal(readFileSync(join(ws, created.path), "utf8"), "title Order Checkout\n");
 });
 
+test("createNotationModel: context map from the schema-model's canonical empty document", async () => {
+  const ws = workspace();
+  const created = await createNotationModel(REPO, ws, { notation: "context-map", name: "Conference Planner" });
+  assert.equal(created.path, "processes/conference-planner.cm.json");
+  assert.equal(created.notation, "context-map");
+  assert.equal(created.id, "conference-planner");
+  const doc = JSON.parse(readFileSync(join(ws, created.path), "utf8")) as Record<string, unknown>;
+  assert.deepEqual(doc, { version: 1, title: "Conference Planner", contexts: [], relationships: [] });
+});
+
 test("createNotationModel: stems are unique PER NOTATION — a wardley map may share a stem with a bpmn process", async () => {
   const ws = workspace(); // workspace() already has processes/order.bpmn
   const created = await createNotationModel(REPO, ws, { notation: "wardley", name: "Order" });

@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "title": "Conference event planner — context map",
+  "contexts": [
+    {
+      "id": "ctx_auth",
+      "label": "User Access",
+      "position": {
+        "x": 40,
+        "y": 300
+      },
+      "size": {
+        "width": 200,
+        "height": 110
+      },
+      "subdomainType": "generic",
+      "team": "Platform Team",
+      "description": "Registration and authentication for speakers and attendees."
+    },
+    {
+      "id": "ctx_cfp",
+      "label": "CfP Management",
+      "position": {
+        "x": 340,
+        "y": 120
+      },
+      "size": {
+        "width": 200,
+        "height": 110
+      },
+      "subdomainType": "supporting",
+      "team": "Program Team",
+      "description": "Runs the call for papers and exposes the public submission API."
+    },
+    {
+      "id": "ctx_evaluation",
+      "label": "Session Evaluation",
+      "position": {
+        "x": 960,
+        "y": 140
+      },
+      "size": {
+        "width": 200,
+        "height": 110
+      },
+      "subdomainType": "core",
+      "team": "Review Team",
+      "description": "Scoring and selection of submitted sessions."
+    },
+    {
+      "id": "ctx_notification",
+      "label": "Notification Handling",
+      "position": {
+        "x": 1280,
+        "y": 580
+      },
+      "size": {
+        "width": 200,
+        "height": 110
+      },
+      "subdomainType": "generic",
+      "team": "Platform Team",
+      "description": "Sends emails to speakers and attendees, conforming to the schedule events."
+    },
+    {
+      "id": "ctx_schedule",
+      "label": "Schedule Management",
+      "position": {
+        "x": 960,
+        "y": 440
+      },
+      "size": {
+        "width": 200,
+        "height": 110
+      },
+      "subdomainType": "core",
+      "team": "Program Team",
+      "description": "Builds and publishes the conference schedule."
+    },
+    {
+      "id": "ctx_submission",
+      "label": "Submission Handling",
+      "position": {
+        "x": 640,
+        "y": 300
+      },
+      "size": {
+        "width": 200,
+        "height": 110
+      },
+      "subdomainType": "supporting",
+      "team": "Program Team",
+      "description": "Owns proposals once submitted; the hub other contexts integrate with."
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel_auth_cfp",
+      "from": "ctx_auth",
+      "to": "ctx_cfp",
+      "pattern": "upstream-downstream",
+      "upstreamRoles": [
+        "OHS"
+      ],
+      "downstreamRoles": [
+        "ACL"
+      ],
+      "label": "identity"
+    },
+    {
+      "id": "rel_cfp_submission",
+      "from": "ctx_cfp",
+      "to": "ctx_submission",
+      "pattern": "shared-kernel",
+      "label": "proposal model"
+    },
+    {
+      "id": "rel_evaluation_schedule",
+      "from": "ctx_evaluation",
+      "to": "ctx_schedule",
+      "pattern": "customer-supplier",
+      "upstreamRoles": [
+        "PL"
+      ],
+      "label": "accepted sessions"
+    },
+    {
+      "id": "rel_schedule_notification",
+      "from": "ctx_schedule",
+      "to": "ctx_notification",
+      "pattern": "upstream-downstream",
+      "upstreamRoles": [
+        "OHS",
+        "PL"
+      ],
+      "downstreamRoles": [
+        "CF"
+      ],
+      "label": "schedule events"
+    },
+    {
+      "id": "rel_submission_evaluation",
+      "from": "ctx_submission",
+      "to": "ctx_evaluation",
+      "pattern": "upstream-downstream",
+      "upstreamRoles": [
+        "OHS"
+      ],
+      "downstreamRoles": [
+        "ACL"
+      ],
+      "label": "submissions API",
+      "implementationTechnology": "RESTful HTTP"
+    },
+    {
+      "id": "rel_submission_schedule",
+      "from": "ctx_submission",
+      "to": "ctx_schedule",
+      "pattern": "upstream-downstream",
+      "upstreamRoles": [
+        "OHS"
+      ],
+      "downstreamRoles": [
+        "ACL"
+      ]
+    }
+  ]
+}

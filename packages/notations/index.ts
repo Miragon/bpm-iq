@@ -99,6 +99,21 @@ export const NOTATIONS: readonly NotationDescriptor[] = [
     graphHints: { flowEdgeKinds: ["arrow"], entryNodeTypes: [] },
   },
   {
+    id: "context-map",
+    label: "Context Map",
+    noun: { singular: "context map", plural: "context maps" },
+    extensions: [".cm.json"],
+    mediaKind: "json",
+    docShape: "text",
+    monacoLanguage: "json",
+    // every relationship pattern is an edge kind; the asymmetric ones point
+    // upstream → downstream, the symmetric ones simply from → to
+    graphHints: {
+      flowEdgeKinds: ["partnership", "shared-kernel", "customer-supplier", "upstream-downstream", "separate-ways"],
+      entryNodeTypes: [],
+    },
+  },
+  {
     id: "value-chain",
     label: "Value Chain",
     noun: { singular: "value chain", plural: "value chains" },

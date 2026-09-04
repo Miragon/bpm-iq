@@ -17,6 +17,7 @@ test("modelStem: strips the FULL registered compound extension", () => {
   assert.equal(modelStem("processes/platform.ttm.json"), "platform");
   assert.equal(modelStem("maps/tea-shop.owm"), "tea-shop");
   assert.equal(modelStem("boards/order-checkout.storm"), "order-checkout");
+  assert.equal(modelStem("maps/conference.cm.json"), "conference");
 });
 
 test("modelStem: unknown extensions fall back to the final dot-suffix", () => {

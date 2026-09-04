@@ -13,6 +13,8 @@ import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { templateFor } from "@bpmiq/notations/templates";
+
 import { checkModelBaseline } from "../src/validate.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -48,6 +50,11 @@ test("checkModelBaseline: json parses or errors, dsl stays lenient", () => {
     checkModelBaseline("!!! not a board !!!\nevent Order Placed [1, 2]", { notation: "event-storming" }),
     [],
   );
+  // a context map is JSON: unparsable = ERROR, the blank template is baseline-clean
+  const cm = checkModelBaseline("{ nope", { file: "models/m.cm.json", notation: "context-map" });
+  assert.equal(cm[0]?.severity, "ERROR");
+  assert.match(cm[0]?.message ?? "", /not parseable as JSON/);
+  assert.deepEqual(checkModelBaseline(templateFor("context-map", "m", "M") ?? "", { notation: "context-map" }), []);
   // an unregistered notation id has no mediaKind — nothing to gate
   assert.deepEqual(checkModelBaseline("anything", { notation: "no-such" }), []);
   // the xml branch — unreachable from runCli today (bpmn/dmn have full

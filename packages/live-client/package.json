@@ -15,6 +15,7 @@
     "./wardley-sync": "./src/wardley-sync.ts",
     "./event-storming-sync": "./src/event-storming-sync.ts",
     "./tt-sync": "./src/tt-sync.ts",
+    "./context-map-sync": "./src/context-map-sync.ts",
     "./structured": "./src/structured.ts"
   },
   "scripts": {

@@ -16,6 +16,7 @@ node_modules
 **/*.owm
 **/*.tt
 **/*.vc.json
+**/*.cm.json
 
 # content repo data (owned by the modeling conventions, not the formatter)
 process-documentation/processes/

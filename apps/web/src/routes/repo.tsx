@@ -28,6 +28,7 @@ import {
   ArrowLeft,
   ArrowUpDown,
   ArrowUpToLine,
+  Boxes,
   ChartNetwork,
   ChevronDown,
   ChevronUp,
@@ -60,13 +61,16 @@ const route = getRouteApi("/r/$owner/$repo");
  *  blank template except bpmn/dmn, which keep their typed flows above */
 const CREATABLE_NOTATIONS = NOTATIONS.filter((n) => hasTemplate(n.id) && n.id !== "bpmn" && n.id !== "dmn");
 
-/** each notation's menu icon — one a user can GUESS from the label. A notation
- *  without an entry falls back to the neutral Shapes, so a new registry entry
- *  never ships icon-less */
+/** each notation's icon — one a user can GUESS from the label — shown in the
+ *  "New" menu AND on the model rows of the listing, so a file reads the same
+ *  where it is created and where it is found. A notation without an entry
+ *  falls back to the neutral Shapes, so a new registry entry never ships
+ *  icon-less */
 const NOTATION_ICONS = new Map<string, ComponentType<{ className?: string }>>([
   ["wardley", ChartNetwork],
   ["team-topology", Users],
   ["event-storming", StickyNote],
+  ["context-map", Boxes],
   ["markdown", FileText],
 ]);
 
@@ -519,42 +523,48 @@ export function ProcessList() {
                   </TableCell>
                 </TableRow>
               ))}
-              {visibleModels.map((m) => (
-                <TableRow
-                  key={`model:${m.path}`}
-                  className="cursor-pointer"
-                  onClick={() => navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: m.path } })}
-                >
-                  <TableCell>
-                    <Link
-                      to="/r/$owner/$repo/f/$"
-                      params={{ owner, repo: name, _splat: m.path }}
-                      className="flex items-center gap-2 font-medium hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Shapes className="text-muted-foreground size-4" />
-                      {m.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-muted-foreground font-mono text-xs">{m.path}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{byId(m.notation)?.label ?? m.notation}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {!m.dirty && m.liveSessions === 0 ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {m.dirty && <Badge variant="warning">live changes</Badge>}
-                        {m.liveSessions > 0 && <Badge>{m.liveSessions} active</Badge>}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell />
-                </TableRow>
-              ))}
+              {visibleModels.map((m) => {
+                // the same icon the "New" menu showed for this notation
+                const Icon = NOTATION_ICONS.get(m.notation) ?? Shapes;
+                return (
+                  <TableRow
+                    key={`model:${m.path}`}
+                    className="cursor-pointer"
+                    onClick={() =>
+                      navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: m.path } })
+                    }
+                  >
+                    <TableCell>
+                      <Link
+                        to="/r/$owner/$repo/f/$"
+                        params={{ owner, repo: name, _splat: m.path }}
+                        className="flex items-center gap-2 font-medium hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Icon className="text-muted-foreground size-4" />
+                        {m.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-muted-foreground font-mono text-xs">{m.path}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{byId(m.notation)?.label ?? m.notation}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {!m.dirty && m.liveSessions === 0 ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {m.dirty && <Badge variant="warning">live changes</Badge>}
+                          {m.liveSessions > 0 && <Badge>{m.liveSessions} active</Badge>}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

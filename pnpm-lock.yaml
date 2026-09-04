@@ -167,11 +167,11 @@ importers:
         specifier: 0.2.0
         version: 0.2.0(diagram-js@15.26.0)(dmn-js@17.10.2)(inferno@5.6.3)
       '@miragon/context-maps-renderer':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.2.0
+        version: 0.2.0
       '@miragon/context-maps-schema-model':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.2.0
+        version: 0.2.0
       '@miragon/event-storming-renderer':
         specifier: 0.2.1
         version: 0.2.1
@@ -884,11 +884,11 @@ packages:
   '@marijn/find-cluster-break@1.0.4':
     resolution: {integrity: sha512-Wy0V7+SGUjnF9/TkiM1hKVDPj7jKXduPNboMVtHTA8dySMURWqfg/JZ9E2Sq8JgSJmkl7k7Qe9FLeMSrSraWmQ==}
 
-  '@miragon/context-maps-renderer@0.1.0':
-    resolution: {integrity: sha512-MUPo7njhraX2WXalNjBZPd+FEMtvqMWMWpJ+LSAD1nAlQjZkzbu9qzV9AAeDxUYFjR/HtVK1BxRzAJRvd6cXLg==}
+  '@miragon/context-maps-renderer@0.2.0':
+    resolution: {integrity: sha512-vrQmuxf87/fbQU3+BMWP0FYmuZqAkoSdOkEbB1xQcOTIxuD2FN0IHVvoBneZE+N/KWxHFdCP0pRRQhcZOzLnMw==}
 
-  '@miragon/context-maps-schema-model@0.1.0':
-    resolution: {integrity: sha512-F+/utuXfMxH1p5HoK2bqxtZpOrgY5KnegVKvppu22wxrW90srHbsARGPm657NHZjv7N0fhfEOJvocqlwLGRI4Q==}
+  '@miragon/context-maps-schema-model@0.2.0':
+    resolution: {integrity: sha512-B+6ha1ZYM5oopz4YaRUKW7nqNnyeWkk5b7d4ms2rBERVcb6Zx7Zgx0o5r3hI/DvsFpPQWJvQn3NPxNRAtcqHFQ==}
 
   '@miragon/event-storming-dsl@0.2.1':
     resolution: {integrity: sha512-m6jXajThne38GB+k3E9ihehjcR8vFPpqnDYhSho2t6ekmMsAZsMeOE9Z62VSoUcaXqjBHpXwsFL49fCGiVTuIw==}
@@ -2072,6 +2072,9 @@ packages:
   diagram-js@15.23.0:
     resolution: {integrity: sha512-cCgL+4Ep0xrLe6TtdvRVgo6bWYjUbrQg+ES/9rpltqmTD2YaPoC+NYcRsKYw/fDO+1RN0q16NzErP1svVZhNQg==}
 
+  diagram-js@15.24.1:
+    resolution: {integrity: sha512-0zlPffk8pGdbUmt0RQH32N7dIbgYuLwkFlZTCi28kRSkb37GdEjONjXKs+NluZvWeLsY1hqSyq4le19ZeFE19Q==}
+
   diagram-js@15.26.0:
     resolution: {integrity: sha512-AxhMvXu7ctWyLKtnxTTLRpsLsDP+qtq8cRx8U1ETe++Gll7pA5YMD3P9oMLsJQNNBNSKS2diNCEqMk0mviVbkw==}
 
@@ -2850,8 +2853,8 @@ packages:
     engines: {node: ^18 || >=20}
     hasBin: true
 
-  nanoid@6.0.0:
-    resolution: {integrity: sha512-mkUH+rPkwU2qPadJ0oJZOjeZ5Mxn8Q1UhevwkTRWNuUZzyia3h4rhzK39hxaHTk0o2OxB8W2SQ6A8k23ZDi1pQ==}
+  nanoid@6.0.1:
+    resolution: {integrity: sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw==}
     engines: {node: ^22 || ^24 || >=26}
     hasBin: true
 
@@ -4012,18 +4015,19 @@ snapshots:
 
   '@marijn/find-cluster-break@1.0.4': {}
 
-  '@miragon/context-maps-renderer@0.1.0':
+  '@miragon/context-maps-renderer@0.2.0':
     dependencies:
-      '@miragon/context-maps-schema-model': 0.1.0
-      diagram-js: 15.23.0
+      '@miragon/context-maps-schema-model': 0.2.0
+      diagram-js: 15.24.1
+      diagram-js-direct-editing: 3.5.1(diagram-js@15.24.1)
       didi: 11.0.0
       tiny-svg: 4.1.4
     transitivePeerDependencies:
       - preact-render-to-string
 
-  '@miragon/context-maps-schema-model@0.1.0':
+  '@miragon/context-maps-schema-model@0.2.0':
     dependencies:
-      nanoid: 6.0.0
+      nanoid: 6.0.1
       zod: 4.4.3
 
   '@miragon/event-storming-dsl@0.2.1':
@@ -5046,6 +5050,12 @@ snapshots:
 
   detect-node-es@1.1.0: {}
 
+  diagram-js-direct-editing@3.5.1(diagram-js@15.24.1):
+    dependencies:
+      diagram-js: 15.24.1
+      min-dash: 5.1.0
+      min-dom: 5.3.0
+
   diagram-js-direct-editing@3.5.1(diagram-js@15.26.0):
     dependencies:
       diagram-js: 15.26.0
@@ -5067,6 +5077,20 @@ snapshots:
       - preact-render-to-string
 
   diagram-js@15.23.0:
+    dependencies:
+      '@bpmn-io/diagram-js-ui': 0.2.4
+      clsx: 2.1.1
+      didi: 11.0.0
+      inherits-browser: 0.1.0
+      min-dash: 5.1.0
+      min-dom: 5.3.0
+      object-refs: 0.4.0
+      path-intersection: 4.1.0
+      tiny-svg: 4.1.4
+    transitivePeerDependencies:
+      - preact-render-to-string
+
+  diagram-js@15.24.1:
     dependencies:
       '@bpmn-io/diagram-js-ui': 0.2.4
       clsx: 2.1.1
@@ -5873,7 +5897,7 @@ snapshots:
 
   nanoid@5.1.16: {}
 
-  nanoid@6.0.0: {}
+  nanoid@6.0.1: {}
 
   natural-compare@1.4.0: {}
 

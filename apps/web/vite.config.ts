@@ -41,6 +41,7 @@ export default defineConfig({
         scopeVendorCss(/@miragon[/+]wardley-renderer/, ".wardley-canvas", ".wardley-container"),
         scopeVendorCss(/@miragon[/+]team-topologies-renderer/, ".tt-canvas", ".tt-djs-container"),
         scopeVendorCss(/@miragon[/+]event-storming-renderer/, ".es-canvas", ".event-storming-container"),
+        scopeVendorCss(/@miragon[/+]context-maps-renderer/, ".cm-canvas", ".cm-djs-container"),
       ],
     },
   },

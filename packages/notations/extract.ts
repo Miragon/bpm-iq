@@ -33,6 +33,9 @@ export interface ModelEdge {
   /** e.g. "sequenceFlow", "messageFlow", "informationRequirement", "dependency", "connection" */
   kind: string;
   name?: string;
+  /** notation-level edge detail that is not identity/direction (integration
+   *  roles on a context-map relationship, …) — absent for most notations */
+  extra?: Record<string, unknown>;
 }
 
 export interface ModelGraph {
@@ -596,6 +599,78 @@ function extractEventStorming(raw: string): ModelGraph {
   return { notation: "event-storming", nodes, edges, meta: { title, level } };
 }
 
+// ── the .cm.json document (Miragon context-maps-modeler) ─────────────────────
+// One JSON object: `{ version, title, contexts, relationships }`
+// (@miragon/context-maps-schema-model CmDocument). A bounded context is a
+// box (`label`, `subdomainType` core/supporting/generic, `team`, geometry);
+// a relationship is an edge `from` → `to` carrying a context-mapping
+// `pattern` — for the asymmetric patterns (customer-supplier,
+// upstream-downstream) `from` is upstream and the integration roles
+// (`upstreamRoles` OHS/PL, `downstreamRoles` ACL/CF) decorate the ends.
+// Ids are the document's own — ModelGraph ids ARE the renderer's element
+// ids. Lenient like the schema-model's migrate(): a missing container is
+// empty, a context without an id is skipped, an edge without one gets
+// `rel-<index>`.
+
+const CM_SUBDOMAIN_TYPES = new Set(["core", "supporting", "generic"]);
+
+function extractContextMap(raw: string): ModelGraph {
+  const parsed: unknown = JSON.parse(raw);
+  const data = (parsed !== null && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
+  const contexts = (Array.isArray(data.contexts) ? data.contexts : []) as Array<Record<string, any>>;
+  const relationships = (Array.isArray(data.relationships) ? data.relationships : []) as Array<Record<string, any>>;
+  const text = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
+  const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+  const roles = (v: unknown): string[] => (Array.isArray(v) ? v.filter((r): r is string => typeof r === "string") : []);
+
+  const nodes: ModelNode[] = [];
+  for (const c of contexts) {
+    if (c === null || typeof c !== "object" || typeof c.id !== "string" || c.id === "") continue;
+    const subdomainType = text(c.subdomainType);
+    const team = text(c.team);
+    const description = text(c.description);
+    nodes.push({
+      id: c.id,
+      // the subdomain classification IS the palette's element kind (the
+      // box colour) — a context without one is a plain "context", like a
+      // team-topology node without a type is a plain "team"
+      type: subdomainType && CM_SUBDOMAIN_TYPES.has(subdomainType) ? subdomainType : "context",
+      name: text(c.label),
+      extra: {
+        ...(team ? { team } : {}),
+        ...(description ? { description } : {}),
+        x: num(c.position?.x) ?? 0,
+        y: num(c.position?.y) ?? 0,
+        width: num(c.size?.width) ?? 0,
+        height: num(c.size?.height) ?? 0,
+      },
+    });
+  }
+  const edges: ModelEdge[] = [];
+  for (const [i, r] of relationships.entries()) {
+    if (r === null || typeof r !== "object") continue;
+    const upstreamRoles = roles(r.upstreamRoles);
+    const downstreamRoles = roles(r.downstreamRoles);
+    const implementationTechnology = text(r.implementationTechnology);
+    const description = text(r.description);
+    const extra = {
+      ...(upstreamRoles.length > 0 ? { upstreamRoles } : {}),
+      ...(downstreamRoles.length > 0 ? { downstreamRoles } : {}),
+      ...(implementationTechnology ? { implementationTechnology } : {}),
+      ...(description ? { description } : {}),
+    };
+    edges.push({
+      id: text(r.id) ?? `rel-${i}`,
+      from: text(r.from) ?? "",
+      to: text(r.to) ?? "",
+      kind: text(r.pattern) ?? "relationship",
+      name: text(r.label),
+      ...(Object.keys(extra).length > 0 ? { extra } : {}),
+    });
+  }
+  return { notation: "context-map", nodes, edges, meta: { title: text(data.title) ?? null } };
+}
+
 function extractValueChain(raw: string): ModelGraph {
   const data = JSON.parse(raw) as { elements?: any[]; connections?: any[] };
   return {
@@ -620,6 +695,7 @@ const EXTRACTORS: Record<string, (raw: string) => ModelGraph> = {
   wardley: extractWardley,
   "team-topology": extractTeamTopology,
   "event-storming": extractEventStorming,
+  "context-map": extractContextMap,
   "value-chain": extractValueChain,
 };
 

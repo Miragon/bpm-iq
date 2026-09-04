@@ -9,6 +9,7 @@ import { test } from "node:test";
 import {
   hasTemplate,
   newBpmnXml,
+  newCmJson,
   newDmnXml,
   newMarkdownText,
   newOwmText,
@@ -23,6 +24,7 @@ test("templateFor: dispatches to the notation's builder, undefined without one",
   assert.equal(templateFor("wardley", "map", "Platform Map"), newOwmText("map", "Platform Map"));
   assert.equal(templateFor("team-topology", "teams", "Teams"), newTtJson("teams", "Teams"));
   assert.equal(templateFor("event-storming", "board", "Board"), newStormText("board", "Board"));
+  assert.equal(templateFor("context-map", "map", "Map"), newCmJson("map", "Map"));
   assert.equal(templateFor("markdown", "notes", "Notes"), newMarkdownText("notes", "Notes"));
   // value-chain stays git-only until it has a mounted editor (#139 decision)
   assert.equal(templateFor("value-chain", "x", "X"), undefined);
@@ -30,7 +32,7 @@ test("templateFor: dispatches to the notation's builder, undefined without one",
 });
 
 test("hasTemplate mirrors templateFor — it drives the New menu and the create route", () => {
-  for (const id of ["bpmn", "dmn", "wardley", "team-topology", "event-storming", "markdown"]) {
+  for (const id of ["bpmn", "dmn", "wardley", "team-topology", "event-storming", "context-map", "markdown"]) {
     assert.equal(hasTemplate(id), true, id);
   }
   for (const id of ["value-chain", "no-such"]) assert.equal(hasTemplate(id), false, id);
@@ -61,6 +63,16 @@ test("the team-topology template is the schema-model's CANONICAL empty document 
     text,
     '{\n  "version": 2,\n  "title": "Team Landscape",\n  "nodes": [],\n  "interactions": [],\n  "flows": []\n}',
   );
+});
+
+test("the context-map template is the schema-model's CANONICAL empty document (byte-stable first save)", () => {
+  // pinned against @miragon/context-maps-schema-model serializeDocument(emptyDocument(name)):
+  // version 1, 2-space indent, key order version/title/contexts/relationships, NO trailing newline
+  assert.equal(
+    newCmJson("conference", "Conference Planner"),
+    '{\n  "version": 1,\n  "title": "Conference Planner",\n  "contexts": [],\n  "relationships": []\n}',
+  );
+  assert.equal((JSON.parse(newCmJson("x", "A\nB")) as { title: string }).title, "A B");
 });
 
 test("template names are forced onto one line — control chars would break OWM and JSON alike", () => {

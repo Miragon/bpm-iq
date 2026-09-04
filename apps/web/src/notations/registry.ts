@@ -18,6 +18,7 @@ import type { PresenceSurface } from "@/lib/presence-canvas";
 import type { TodoCanvas } from "@/lib/todo-canvas";
 
 import { bpmnPlugin } from "./bpmn";
+import { contextMapPlugin } from "./context-map";
 import { dmnPlugin } from "./dmn";
 import { eventStormingPlugin } from "./event-storming";
 import { teamTopologyPlugin } from "./team-topology";
@@ -130,6 +131,7 @@ const WEB_PLUGINS: Record<string, WebNotationPlugin> = {
   wardley: wardleyPlugin,
   "team-topology": teamTopologyPlugin,
   "event-storming": eventStormingPlugin,
+  "context-map": contextMapPlugin,
 };
 
 // the shell renders its own panels on these ids — a plugin colliding with them
