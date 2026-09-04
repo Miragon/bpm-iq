@@ -38,6 +38,7 @@ import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
 import { modelStem, NOTATIONS } from "@bpmiq/notations";
 import { deriveDecision, deriveProcess, deriveView, hasDeriver } from "@bpmiq/notations/derive";
 import { extractModelGraph } from "@bpmiq/notations/extract";
+import { hasTemplate } from "@bpmiq/notations/templates";
 import { checkModel } from "@bpmiq/validator";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -47,7 +48,7 @@ import type { Session } from "../adapters/sqlite/sessions.ts";
 import { authorizeRepo } from "../application/authz.ts";
 import { type ContentDeps, getContent, putContent } from "../application/content.ts";
 import { readDecisionTests, runTestsFor, saveTestsFor } from "../application/decision-tests.ts";
-import { findDecisionPath, findProcessPath } from "../application/find-model.ts";
+import { findDecisionPath, findModelPath, findProcessPath } from "../application/find-model.ts";
 import {
   decisionUsers,
   listAllModels,
@@ -57,7 +58,7 @@ import {
   listRepos,
   type OverviewDeps,
 } from "../application/overview.ts";
-import { createDecision, createProcess } from "../application/scaffold.ts";
+import { createDecision, createNotationModel, createProcess } from "../application/scaffold.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
@@ -136,6 +137,22 @@ const decisionRef = {
   id: z.string().optional().describe("decision id = DMN file stem (from list_decisions)"),
   path: z.string().optional().describe("repo-relative DMN path (alternative to id)"),
 };
+/** a model of ANY notation: id (= file stem) or path, `notation` to pick one
+ *  when a stem is shared across notations (bpmn wins without it) */
+const modelRef = {
+  repo: repoArg,
+  id: z.string().optional().describe("model id = file stem (from list_models)"),
+  path: z.string().optional().describe("repo-relative model path (alternative to id)"),
+  notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
+};
+/** the id-or-path half of every ref shape (repo is resolved separately) */
+type RefArgs = { id?: string; path?: string; notation?: string };
+/** every notation id the registry knows — tool copy lists them from here */
+const NOTATION_IDS = NOTATIONS.map((n) => n.id).join(", ");
+/** the notations a blank model can be created for (templates.ts) */
+const CREATABLE_IDS = NOTATIONS.filter((n) => hasTemplate(n.id))
+  .map((n) => n.id)
+  .join(", ");
 
 /** one test case of a decision suite — the wire shape of `<stem>.tests.yaml` */
 const testCaseSchema = z.object({
@@ -207,6 +224,29 @@ export function createLiveMcpServer(
     return findDecisionPath(opts, repo, id);
   };
 
+  /** ANY notation: a path wins, an id resolves through the registry-wide
+   *  discovery (bpmn-first on a shared stem unless `notation` says otherwise) */
+  const resolveModelPath = async (repo: ConnectedRepo, a: RefArgs): Promise<string> => {
+    if (a.path) return a.path;
+    if (!a.id) throw new Error("provide either `id` or `path`.");
+    return findModelPath(opts, repo, a.id, a.notation);
+  };
+
+  /** repo-wide model ids per notation — the link-check context of checkModel
+   *  (the same aggregation the save gate runs); undefined without a repo */
+  const repoModelIds = async (repo?: string): Promise<Map<string, Set<string>> | undefined> => {
+    if (!repo) return undefined;
+    const r = await requireRepo(repo);
+    const workspace = await opts.workspaces.ensure(r);
+    const cfg = loadContentConfig(workspace);
+    if (!cfg) return undefined;
+    const modelIds = new Map<string, Set<string>>();
+    for (const m of await discoverModels(workspace, cfg)) {
+      (modelIds.get(m.notation) ?? modelIds.set(m.notation, new Set()).get(m.notation)!).add(m.id);
+    }
+    return modelIds;
+  };
+
   /** parse a .dmn into the decision view — one message for every "not DMN" case.
    *  A caller-supplied XML has no path (PROVIDED): address the extractor by
    *  notation id. A REAL path must still resolve to DMN by its extension, so a
@@ -252,31 +292,36 @@ export function createLiveMcpServer(
 
   /** the stale-baseVersion result every save tool answers — retryable data,
    *  not an error. `currentContent` is THE payload field (#154); the legacy key
-   *  (`currentXml` on the model saves, `currentYaml` on the sidecar save) rides
-   *  along as a deprecated alias for one release. */
-  const conflictResult = (c: ContentConflictWire, legacyKey: "currentXml" | "currentYaml" = "currentXml") =>
+   *  (`currentXml` on the bpmn/dmn saves, `currentYaml` on the sidecar save)
+   *  rides along as a deprecated alias for one release — the generic save was
+   *  born without one. */
+  const conflictResult = (c: ContentConflictWire, legacyKey?: "currentXml" | "currentYaml") =>
     ok({
       ok: false,
       conflict: true,
       path: c.path,
       currentContent: c.currentContent,
-      [legacyKey]: c.currentContent,
+      ...(legacyKey ? { [legacyKey]: c.currentContent } : {}),
       baseVersion: c.baseVersion,
       message: c.error,
     });
 
-  const registerGetXmlTool = (cfg: {
+  const registerGetContentTool = (cfg: {
     name: string;
     description: string;
-    ref: typeof processRef;
-    resolve: (r: ConnectedRepo, id?: string, path?: string) => Promise<string>;
+    ref: typeof processRef | typeof modelRef;
+    resolve: (r: ConnectedRepo, a: RefArgs) => Promise<string>;
+    /** the bpmn/dmn twins keep the deprecated `xml` alias on their result for
+     *  one release (#154); the generic tool never carried it */
+    legacyAlias: boolean;
   }): void => {
     server.registerTool(
       cfg.name,
       { description: cfg.description, inputSchema: cfg.ref, annotations: READ },
-      safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+      safe(async ({ repo, ...ref }: { repo: string } & RefArgs) => {
         const r = await requireRepo(repo);
-        return ok(await getContent(opts, r, await cfg.resolve(r, id, path)));
+        const { xml: _legacy, ...content } = await getContent(opts, r, await cfg.resolve(r, ref));
+        return ok(cfg.legacyAlias ? { ...content, xml: _legacy } : content);
       }),
     );
   };
@@ -313,10 +358,15 @@ export function createLiveMcpServer(
   const registerSaveTool = (cfg: {
     name: string;
     description: string;
-    ref: typeof processRef;
-    xmlDoc: string;
+    ref: typeof processRef | typeof modelRef;
+    /** the payload argument: `xml` on the wire-pinned bpmn/dmn twins, `content`
+     *  on the generic save (#154) */
+    payloadKey: "xml" | "content";
+    payloadDoc: string;
     baseVersionDoc: string;
-    resolve: (r: ConnectedRepo, id?: string, path?: string) => Promise<string>;
+    resolve: (r: ConnectedRepo, a: RefArgs) => Promise<string>;
+    /** deprecated conflict alias the twins still emit; none on the generic save */
+    legacyConflictKey?: "currentXml";
   }): void => {
     server.registerTool(
       cfg.name,
@@ -324,7 +374,7 @@ export function createLiveMcpServer(
         description: cfg.description,
         inputSchema: {
           ...cfg.ref,
-          xml: z.string().describe(cfg.xmlDoc),
+          [cfg.payloadKey]: z.string().describe(cfg.payloadDoc),
           baseVersion: z.string().describe(cfg.baseVersionDoc),
           lint: lintArg,
         },
@@ -333,22 +383,19 @@ export function createLiveMcpServer(
       safe(
         async ({
           repo,
-          id,
-          path,
-          xml,
           baseVersion,
           lint,
+          ...rest
         }: {
           repo: string;
-          id?: string;
-          path?: string;
-          xml: string;
           baseVersion: string;
           lint?: "block" | "warn";
-        }) => {
+        } & RefArgs &
+          Partial<Record<"xml" | "content", string>>) => {
           const r = await requireRepo(repo);
-          const out = await putContent(opts, r, await cfg.resolve(r, id, path), { content: xml, baseVersion, lint });
-          if (!out.ok) return conflictResult(out.conflict);
+          const text = rest[cfg.payloadKey] ?? "";
+          const out = await putContent(opts, r, await cfg.resolve(r, rest), { content: text, baseVersion, lint });
+          if (!out.ok) return conflictResult(out.conflict, cfg.legacyConflictKey);
           console.log(`content saved: ${r.fullName}/${out.result.path} by @${session.user.login} via mcp`);
           return ok({ ok: true, ...out.result });
         },
@@ -439,23 +486,7 @@ export function createLiveMcpServer(
     },
     safe(async ({ repo, id, path, notation }: { repo: string; id?: string; path?: string; notation?: string }) => {
       const r = await requireRepo(repo);
-      let target = path;
-      if (!target) {
-        if (!id) throw new Error("provide either `id` or `path`.");
-        const workspace = await opts.workspaces.ensure(r);
-        const cfg = loadContentConfig(workspace);
-        const matches = cfg
-          ? (await discoverModels(workspace, cfg)).filter((m) => m.id === id && (!notation || m.notation === notation))
-          : [];
-        // a stem shared across notations resolves bpmn-first (back-compat)
-        const m = matches.find((x) => x.notation === "bpmn") ?? matches[0];
-        if (!m) {
-          if (!cfg) throw new Error(`${r.fullName} has no bpmiq.yml — not a BPM content repo.`);
-          throw new Error(`unknown model '${id}' — list_models shows what exists.`);
-        }
-        target = m.path;
-      }
-      const content = await getContent(opts, r, target);
+      const content = await getContent(opts, r, await resolveModelPath(r, { id, path, notation }));
       const graph = extractModelGraph(content.path, content.content);
       const view = graph && deriveView(graph);
       if (!view) return fail(`no derived view for ${content.path} — the notation has no extract/derive capability.`);
@@ -465,13 +496,14 @@ export function createLiveMcpServer(
     }),
   );
 
-  registerGetXmlTool({
+  registerGetContentTool({
     name: "get_bpmn_xml",
     description:
       "The current LIVE BPMN XML of a process plus the baseVersion token save_bpmn_xml requires " +
       "for conflict-safe writes.",
     ref: processRef,
-    resolve: resolveBpmnPath,
+    resolve: (r, a) => resolveBpmnPath(r, a.id, a.path),
+    legacyAlias: true,
   });
 
   server.registerTool(
@@ -491,21 +523,73 @@ export function createLiveMcpServer(
     safe(async ({ xml, repo, path }: { xml: string; repo?: string; path?: string }) => {
       // THE one check dispatch (incl. the generic dangling-reference rule) —
       // the same path the CLI and the save gate run, so all three agree
-      let modelIds: Map<string, Set<string>> | undefined;
-      if (repo) {
-        const r = await requireRepo(repo);
-        const workspace = await opts.workspaces.ensure(r);
-        const cfg = loadContentConfig(workspace);
-        if (cfg) {
-          modelIds = new Map();
-          for (const m of await discoverModels(workspace, cfg)) {
-            (modelIds.get(m.notation) ?? modelIds.set(m.notation, new Set()).get(m.notation)!).add(m.id);
-          }
-        }
-      }
+      const modelIds = await repoModelIds(repo);
       const findings = checkModel(xml, { path: path ?? "<bpmn>", notation: "bpmn", modelIds }) ?? [];
       return ok({ ok: !findings.some((f) => f.severity === "ERROR"), findings });
     }),
+  );
+
+  // ── ANY notation: the generic model tools (#155). ONE set for the whole
+  // registry beside the wire-pinned bpmn/dmn twins — ids resolve registry-
+  // wide (bpmn-first on a shared stem, `notation` picks another); the text
+  // travels as `content` in the notation's own format. ───────────────────
+
+  registerGetContentTool({
+    name: "get_model_content",
+    description:
+      `The current LIVE text of a model of ANY notation (${NOTATION_IDS}) plus the baseVersion token ` +
+      "save_model_content requires for conflict-safe writes — the notation-agnostic sibling of " +
+      "get_bpmn_xml/get_dmn_xml. Read get_view first when you need the derived structure, not the source.",
+    ref: modelRef,
+    resolve: resolveModelPath,
+    legacyAlias: false,
+  });
+
+  server.registerTool(
+    "validate_model",
+    {
+      description:
+        "Dry-run the platform validator on the text of a model of ANY notation WITHOUT writing anything — " +
+        "the same check the save gate and `pnpm validate` run (structure + DI coverage for the XML " +
+        "notations, the baseline parse for the others, dangling references against the repo's models " +
+        "when `repo` is given). The notation comes from `path`'s extension or an explicit `notation`. " +
+        "Iterate here until ok before calling save_model_content.",
+      inputSchema: {
+        content: z.string().describe("the complete document text to check"),
+        repo: repoArg.optional(),
+        path: z
+          .string()
+          .optional()
+          .describe("repo-relative path — selects the notation by extension and labels findings"),
+        notation: z
+          .string()
+          .optional()
+          .describe(`registry notation id (${NOTATION_IDS}) — required when \`path\` has no registered extension`),
+      },
+      annotations: READ,
+    },
+    safe(
+      async ({
+        content,
+        repo,
+        path,
+        notation,
+      }: {
+        content: string;
+        repo?: string;
+        path?: string;
+        notation?: string;
+      }) => {
+        const modelIds = await repoModelIds(repo);
+        const findings = checkModel(content, { path: path ?? `<${notation ?? "model"}>`, notation, modelIds });
+        if (!findings) {
+          return fail(
+            `no registered notation for ${path ? `'${path}'` : "the payload"} — pass \`notation\` (one of: ${NOTATION_IDS}).`,
+          );
+        }
+        return ok({ ok: !findings.some((f) => f.severity === "ERROR"), findings });
+      },
+    ),
   );
 
   // ── DMN decisions: the .dmn sibling of the process tools. A decision IS a
@@ -552,13 +636,14 @@ export function createLiveMcpServer(
     }),
   );
 
-  registerGetXmlTool({
+  registerGetContentTool({
     name: "get_dmn_xml",
     description:
       "The current LIVE DMN XML of a decision plus the baseVersion token save_dmn_xml requires " +
       "for conflict-safe writes.",
     ref: decisionRef,
-    resolve: resolveDmnPath,
+    resolve: (r, a) => resolveDmnPath(r, a.id, a.path),
+    legacyAlias: true,
   });
 
   server.registerTool(
@@ -716,9 +801,11 @@ export function createLiveMcpServer(
         "baseVersion (from get_bpmn_xml) is REQUIRED; a stale one returns {conflict:true, currentContent} " +
         "instead of overwriting — re-derive your edit against currentContent and retry.",
       ref: processRef,
-      xmlDoc: "the complete BPMN XML (must include a full BPMNDI section)",
+      payloadKey: "xml",
+      payloadDoc: "the complete BPMN XML (must include a full BPMNDI section)",
       baseVersionDoc: "the baseVersion from a prior get_bpmn_xml — call that first",
-      resolve: resolveBpmnPath,
+      resolve: (r, a) => resolveBpmnPath(r, a.id, a.path),
+      legacyConflictKey: "currentXml",
     });
 
     registerCreateTool({
@@ -740,9 +827,56 @@ export function createLiveMcpServer(
         "section complete or the visual editor breaks. Structural validation runs here; for the " +
         "logic run analyze_decision / run_decision_tests before saving.",
       ref: decisionRef,
-      xmlDoc: "the complete DMN XML (must include the DMNDI section)",
+      payloadKey: "xml",
+      payloadDoc: "the complete DMN XML (must include the DMNDI section)",
       baseVersionDoc: "the baseVersion from a prior get_dmn_xml — call that first",
-      resolve: resolveDmnPath,
+      resolve: (r, a) => resolveDmnPath(r, a.id, a.path),
+      legacyConflictKey: "currentXml",
+    });
+
+    server.registerTool(
+      "create_model",
+      {
+        description:
+          `Create a new model of ANY template-capable notation (${CREATABLE_IDS}) from its blank template — ` +
+          "the registry-generic sibling of create_process/create_decision. Returns its ModelInfo incl. the " +
+          "path for get_model_content/save_model_content. A notation without a template answers with an " +
+          "error: its files arrive via git only.",
+        inputSchema: {
+          repo: repoArg,
+          notation: z.string().describe(`registry notation id — one of: ${CREATABLE_IDS}`),
+          name: z.string().describe("human title; the file stem is its kebab-case slug"),
+          folder: z.string().optional().describe("target folder relative to the models root"),
+        },
+        annotations: WRITE,
+      },
+      safe(
+        async ({ repo, notation, name, folder }: { repo: string; notation: string; name: string; folder?: string }) => {
+          const r = await requireRepo(repo);
+          const workspace = await opts.workspaces.ensure(r);
+          const created = await createNotationModel(r, workspace, { notation, name, folder });
+          console.log(
+            `${created.notation} model created in ${r.fullName} by @${session.user.login} via mcp: ${created.path}`,
+          );
+          return ok({ model: created });
+        },
+      ),
+    );
+
+    registerSaveTool({
+      name: "save_model_content",
+      description:
+        "Validate and save the complete text of a model of ANY notation into the LIVE document " +
+        "(co-editors see it immediately) — the notation-agnostic sibling of save_bpmn_xml/save_dmn_xml. " +
+        "The platform check gates it exactly like `pnpm validate` does (structure + DI for the XML " +
+        "notations, the baseline parse for the others, dangling references against the repo). " +
+        "baseVersion (from get_model_content) is REQUIRED; a stale one returns {conflict:true, " +
+        "currentContent} instead of overwriting — re-derive your edit against currentContent and retry.",
+      ref: modelRef,
+      payloadKey: "content",
+      payloadDoc: "the complete document text in the notation's own format (XML, DSL, JSON, …)",
+      baseVersionDoc: "the baseVersion from a prior get_model_content — call that first",
+      resolve: resolveModelPath,
     });
 
     server.registerTool(
@@ -1038,16 +1172,15 @@ export function createLiveMcpServer(
         {
           description:
             "Mint a short-lived, single-use WebSocket ticket for the modeler widget's live " +
-            "co-editing connection (Hocuspocus/Yjs). Internal to the widget — agents edit via " +
-            "save_bpmn_xml instead.",
-          inputSchema: processRef,
+            "co-editing connection (Hocuspocus/Yjs) to a model of ANY notation. Internal to the " +
+            "widget — agents edit via save_bpmn_xml / save_model_content instead.",
+          inputSchema: modelRef,
           annotations: READ,
           _meta: { ui: { resourceUri: modeler.uri, visibility: ["app"] } },
         },
-        safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
+        safe(async ({ repo, ...ref }: { repo: string } & RefArgs) => {
           const r = await requireRepo(repo);
-          const bpmnPath = await resolveBpmnPath(r, id, path);
-          const room = roomName(r.fullName, bpmnPath);
+          const room = roomName(r.fullName, await resolveModelPath(r, ref));
           const ticket = wsTickets.issue(
             { login: session.user.login, name: session.user.name, avatarUrl: null, provider: session.user.provider },
             room,

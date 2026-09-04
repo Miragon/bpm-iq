@@ -113,6 +113,8 @@ call is gated by the caller's per-repo permission.
 | `list_repos`            | read  | The connected repos the caller may work on.                                              |
 | `list_models`           | read  | EVERY model file of one repo, grouped by notation — the superset of the two lists below. |
 | `get_view`              | read  | The derived view of ANY live model (name, summary, stats, rich `detail`).                |
+| `get_model_content`     | read  | The live text of ANY model (`content`, own format) plus the `baseVersion` for a save.    |
+| `validate_model`        | read  | Dry-run the platform check on ANY notation's text — the same gate the save runs.         |
 | `list_processes`        | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).          |
 | `get_process`           | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.               |
 | `get_bpmn_xml`          | read  | The live BPMN XML plus the `baseVersion` for a later save.                               |
@@ -128,6 +130,8 @@ call is gated by the caller's per-repo permission.
 | `list_todos`            | read  | Open model-anchored todos — whole repo, or narrowed to one process.                      |
 | `open_modeler`          | read  | Open the embedded BPMN modeler widget (MCP App) — see below.                             |
 | `open_decision_modeler` | read  | Open the embedded DMN modeler + simulator, optionally with a scenario applied.           |
+| `create_model`          | write | Scaffold a model of ANY template-capable notation from its blank template.               |
+| `save_model_content`    | write | Validated, conflict-guarded save of ANY model's text into the live document.             |
 | `create_process`        | write | Scaffold a new process `.bpmn` in the live workspace.                                    |
 | `save_bpmn_xml`         | write | Validated, conflict-guarded save into the live document (requires `baseVersion`).        |
 | `create_decision`       | write | Scaffold a new decision `.dmn` from the blank template.                                  |
@@ -136,6 +140,22 @@ call is gated by the caller's per-repo permission.
 | `create_todo`           | write | File a todo, anchored to the process and (optionally) concrete BPMN elements.            |
 | `close_todo`            | write | Complete a todo in the tracker (`todoId` from `list_todos`).                             |
 | `release_process`       | write | Open the release PR — merge rights stay at the git provider.                             |
+
+### Any notation: the generic model tools
+
+`get_model_content`, `save_model_content`, `create_model` and `validate_model` are ONE tool
+set for the whole notation registry (`@bpmiq/notations`: bpmn, dmn, wardley, team-topology,
+event-storming, value-chain, markdown) beside the wire-pinned BPMN/DMN twins. They address a
+model as `{repo, id | path, notation?}` — `id` is the file stem `list_models` shows; a stem
+shared across notations resolves bpmn-first unless `notation` picks another. The text travels
+as `content` in the notation's own format (XML, the OWM/`.storm` DSL, JSON, Markdown). The save
+runs the same `checkModel` gate as `pnpm validate` and the REST PUT (ERROR findings refuse the
+save under the default `lint:"block"` and are reported under `"warn"`) and is compare-and-set
+like `save_bpmn_xml`: a stale `baseVersion` answers `{conflict: true, currentContent, baseVersion}`.
+`create_model` scaffolds every notation with a template (bpmn, dmn, wardley, team-topology,
+event-storming, markdown); a notation without one (value-chain) arrives via git only.
+`LIVE_MCP_READONLY=1` keeps the two read tools and drops the writes. The embedded modelers'
+`mint_ws_ticket` takes the same ref, so a widget for any notation can upgrade to live co-editing.
 
 ### Decisions: DMN as a first-class model
 
