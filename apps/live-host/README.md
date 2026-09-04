@@ -66,7 +66,8 @@ then the API returns a clear 403 explaining exactly that.
 `POST /mcp` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP) serves the
 tools over the **live** models: `list_repos`, `list_models`, `get_view`, `list_processes`,
 `get_process`, `get_bpmn_xml`, `validate_bpmn`, `list_changes`, `open_modeler` (+ its
-internal `mint_ws_ticket`), `create_process`, `save_bpmn_xml`, `release_process` — plus
+internal `mint_ws_ticket`), `create_process`, `save_bpmn_xml`, `release_process`, the
+notation-generic `get_model_content` / `validate_model` / `create_model` / `save_model_content` — plus
 `list_todos` / `create_todo` / `close_todo` **when a tracker is configured** (no
 credentials → absent from `tools/list`, never a call that fails). The repo is a **tool
 argument**, not a URL segment; every call runs

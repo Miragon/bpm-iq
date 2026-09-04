@@ -228,11 +228,13 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
   assert.deepEqual((await full.client.listTools()).tools.map((t) => t.name).sort(), [
     "analyze_decision",
     "create_decision",
+    "create_model",
     "create_process",
     "get_bpmn_xml",
     "get_decision",
     "get_decision_tests",
     "get_dmn_xml",
+    "get_model_content",
     "get_process",
     "get_view",
     "list_changes",
@@ -248,8 +250,10 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "save_bpmn_xml",
     "save_decision_tests",
     "save_dmn_xml",
+    "save_model_content",
     "simulate_decision",
     "validate_bpmn",
+    "validate_model",
   ]);
   // open_modeler stays in read-only mode (opening is a read; the widget's
   // readonly marker turns it into a viewer)
@@ -260,6 +264,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_decision",
     "get_decision_tests",
     "get_dmn_xml",
+    "get_model_content",
     "get_process",
     "get_view",
     "list_changes",
@@ -272,6 +277,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "run_decision_tests",
     "simulate_decision",
     "validate_bpmn",
+    "validate_model",
   ]);
 });
 
@@ -935,4 +941,110 @@ test("/mcp over HTTP: stateless JSON, 405 on GET, 401 + RFC-9728 challenge, -327
   assert.equal(garbage.status, 400);
   const err = (await garbage.json()) as { error: { code: number } };
   assert.equal(err.error.code, -32700);
+});
+
+// ── #155: the generic model tools — ONE set for every notation in the registry ─
+
+test("generic model tools: get/save ANY notation with CAS, validate_model, create_model, registry-wide ids", async () => {
+  const { call, callJson } = await connect(deps());
+
+  // read: the live text of a wardley map — `content`, born without the `xml` alias
+  const got = await callJson("get_model_content", { repo: REPO.fullName, id: "strategy" });
+  assert.equal(got.path, OWM_PATH);
+  assert.equal(got.content, OWM);
+  assert.ok(!("xml" in got), "the generic tool never carried the deprecated alias");
+
+  // save: a stale token conflicts with currentContent (and only that key) — the retry lands
+  const OWM_V2 = `${OWM}component Billing [0.5, 0.2]\n`;
+  const stale = await callJson("save_model_content", {
+    repo: REPO.fullName,
+    id: "strategy",
+    content: OWM_V2,
+    baseVersion: "bogus.token",
+  });
+  assert.equal(stale.conflict, true);
+  assert.equal(stale.currentContent, OWM);
+  assert.ok(!("currentXml" in stale), "no legacy alias on the generic conflict");
+  const saved = await callJson("save_model_content", {
+    repo: REPO.fullName,
+    id: "strategy",
+    content: OWM_V2,
+    baseVersion: stale.baseVersion,
+  });
+  assert.equal(saved.ok, true);
+  assert.equal((await callJson("get_model_content", { repo: REPO.fullName, path: OWM_PATH })).content, OWM_V2);
+
+  // create: a template-capable notation becomes a live model; git-only and unknown notations answer errors
+  const created = await callJson("create_model", {
+    repo: REPO.fullName,
+    notation: "event-storming",
+    name: "Order Storm",
+  });
+  assert.equal(created.model.path, "processes/order-storm.storm");
+  assert.equal(created.model.notation, "event-storming");
+  const storm = await callJson("get_model_content", { repo: REPO.fullName, id: "order-storm" });
+  assert.equal(storm.content, "title Order Storm\n");
+  const stormSaved = await callJson("save_model_content", {
+    repo: REPO.fullName,
+    path: created.model.path,
+    content: "title Order Storm v2\n",
+    baseVersion: storm.baseVersion,
+  });
+  assert.equal(stormSaved.ok, true);
+  const gitOnly = await call("create_model", { repo: REPO.fullName, notation: "value-chain", name: "Chain" });
+  assert.ok(gitOnly.isError && /arrive via git/.test(gitOnly.text), gitOnly.text);
+  const bogus = await call("create_model", { repo: REPO.fullName, notation: "nope", name: "X" });
+  assert.ok(bogus.isError && /unknown notation/.test(bogus.text), bogus.text);
+
+  // a stem shared across notations: bpmn wins, `notation` picks the other; an unknown id names list_models
+  const tt = await callJson("create_model", { repo: REPO.fullName, notation: "team-topology", name: "Order" });
+  assert.equal(tt.model.path, "processes/order.tt");
+  assert.equal((await callJson("get_model_content", { repo: REPO.fullName, id: "order" })).path, PATH);
+  assert.equal(
+    (await callJson("get_model_content", { repo: REPO.fullName, id: "order", notation: "team-topology" })).path,
+    tt.model.path,
+  );
+  const missing = await call("get_model_content", { repo: REPO.fullName, id: "nope" });
+  assert.ok(missing.isError && /unknown model 'nope'.*list_models/.test(missing.text), missing.text);
+
+  // the save gate IS checkModel: a broken .tt is refused like `pnpm validate` errors it; lint:"warn" reports
+  const ttGot = await callJson("get_model_content", { repo: REPO.fullName, path: tt.model.path });
+  const refused = await call("save_model_content", {
+    repo: REPO.fullName,
+    path: tt.model.path,
+    content: "{ broken",
+    baseVersion: ttGot.baseVersion,
+  });
+  assert.ok(refused.isError && /validation failed/.test(refused.text), refused.text);
+  const warned = await callJson("save_model_content", {
+    repo: REPO.fullName,
+    path: tt.model.path,
+    content: "{ broken",
+    baseVersion: ttGot.baseVersion,
+    lint: "warn",
+  });
+  assert.equal(warned.ok, true);
+  assert.ok(warned.errors.length > 0);
+
+  // validate_model: notation by extension, by explicit id, the repo link check, and the no-notation error
+  const bad = await callJson("validate_model", { content: "{ broken", path: "processes/teams.tt" });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.findings.some((f: { severity: string }) => f.severity === "ERROR"));
+  const good = await callJson("validate_model", { content: OWM, notation: "wardley" });
+  assert.equal(good.ok, true);
+  const dangling = await callJson("validate_model", {
+    repo: REPO.fullName,
+    content: USER_BPMN.replace('calledDecision="rabatt"', 'calledDecision="nope"'),
+    path: USER_PATH,
+  });
+  assert.ok(
+    dangling.findings.some((f: { message: string }) => /'nope'/.test(f.message)),
+    JSON.stringify(dangling.findings),
+  );
+  const unknown = await call("validate_model", { content: "x", path: "notes.txt" });
+  assert.ok(unknown.isError && /pass `notation`/.test(unknown.text), unknown.text);
+
+  // the widget's live ticket mints for any notation's room
+  const ticket = await callJson("mint_ws_ticket", { repo: REPO.fullName, path: OWM_PATH });
+  assert.match(ticket.room, /strategy\.owm$/);
 });
