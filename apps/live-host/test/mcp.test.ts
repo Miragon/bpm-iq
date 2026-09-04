@@ -502,7 +502,8 @@ test("get→save round-trip incl. the conflict retry loop (stale token never ove
   assert.equal(procs.processes[0].id, "order");
 
   const got = await callJson("get_bpmn_xml", { repo: REPO.fullName, id: "order" });
-  assert.equal(got.xml, VALID);
+  assert.equal(got.content, VALID);
+  assert.equal(got.xml, VALID, "deprecated alias (#154) still on the tool result");
 
   // stale token → retryable conflict RESULT (not a protocol error)
   const stale = await callJson("save_bpmn_xml", {
@@ -513,9 +514,10 @@ test("get→save round-trip incl. the conflict retry loop (stale token never ove
   });
   assert.equal(stale.ok, false);
   assert.equal(stale.conflict, true);
-  assert.equal(stale.currentXml, VALID);
+  assert.equal(stale.currentContent, VALID);
+  assert.equal(stale.currentXml, VALID, "deprecated alias (#154) still on the conflict result");
 
-  // the agent retry: re-derive against currentXml, use the fresh token
+  // the agent retry: re-derive against currentContent, use the fresh token
   const saved = await callJson("save_bpmn_xml", {
     repo: REPO.fullName,
     id: "order",
@@ -565,7 +567,7 @@ test("decisions: list → get_decision (derived table) → save_dmn_xml round-tr
 
   // save with the token from the XML read; a stale one conflicts instead of overwriting
   const got = await callJson("get_dmn_xml", { repo: REPO.fullName, id: "rabatt" });
-  assert.equal(got.xml, DMN);
+  assert.equal(got.content, DMN);
   const stale = await callJson("save_dmn_xml", {
     repo: REPO.fullName,
     id: "rabatt",
@@ -819,7 +821,8 @@ test("validate_bpmn dry-runs the platform validator without writing", async () =
   assert.equal(good.ok, true);
   // dry-run: the live content is untouched
   const got = await callJson("get_bpmn_xml", { repo: REPO.fullName, id: "order" });
-  assert.equal(got.xml, VALID);
+  assert.equal(got.content, VALID);
+  assert.equal(got.xml, VALID, "deprecated alias (#154) still on the tool result");
 });
 
 test("per-call authz: a session without write access is denied on every repo tool", async () => {

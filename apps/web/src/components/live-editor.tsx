@@ -85,10 +85,10 @@ export function LiveEditor({
   const fileName = docPath.split("/").pop() ?? docPath;
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const xmlRef = useRef<HTMLDivElement>(null);
+  const sourceRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"connecting" | "slow" | "live" | "error">("connecting");
   const [error, setError] = useState<string | null>(null);
-  const [showXml, setShowXml] = useState(!isVisual);
+  const [showSource, setShowSource] = useState(!isVisual);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   /** the mounted editor exposed an element surface (selection, reveal) */
   const [hasElements, setHasElements] = useState(false);
@@ -196,8 +196,8 @@ export function LiveEditor({
 
     let mounted: MountedEditor | undefined;
     let monacoBinding: MonacoBinding | undefined;
-    let xmlEditor: monaco.editor.IStandaloneCodeEditor | undefined;
-    let xmlModel: monaco.editor.ITextModel | undefined;
+    let sourceEditor: monaco.editor.IStandaloneCodeEditor | undefined;
+    let sourceModel: monaco.editor.ITextModel | undefined;
     let offPresence: (() => void) | undefined;
     let attached = false;
 
@@ -226,7 +226,7 @@ export function LiveEditor({
             onImportFailed: (msg) => {
               if (cancelled) return; // an in-flight first import can settle after unmount
               toast.error(`${notation?.label ?? "Model"} import failed: ${msg}`);
-              setShowXml(true);
+              setShowSource(true);
             },
             onBadgeClick: (elementId) => {
               setTodoFilter(elementId);
@@ -240,7 +240,7 @@ export function LiveEditor({
             toast.error(
               `${notation?.label ?? "Model"} editor failed to load (${e instanceof Error ? e.message : String(e)}) — falling back to the text view.`,
             );
-            setShowXml(true);
+            setShowSource(true);
           }
         }
         if (cancelled) {
@@ -262,15 +262,15 @@ export function LiveEditor({
         }
       }
       if (cancelled) return;
-      if (xmlRef.current && !structuredDoc) {
-        xmlModel = monaco.editor.createModel(ytext.toString(), monacoLanguage(docPath));
-        xmlEditor = monaco.editor.create(xmlRef.current, {
-          model: xmlModel,
+      if (sourceRef.current && !structuredDoc) {
+        sourceModel = monaco.editor.createModel(ytext.toString(), monacoLanguage(docPath));
+        sourceEditor = monaco.editor.create(sourceRef.current, {
+          model: sourceModel,
           automaticLayout: true,
           minimap: { enabled: false },
           fontSize: 12,
         });
-        monacoBinding = new MonacoBinding(ytext, xmlModel, new Set([xmlEditor]), session.awareness ?? undefined);
+        monacoBinding = new MonacoBinding(ytext, sourceModel, new Set([sourceEditor]), session.awareness ?? undefined);
       }
       offPresence = session.onPresence(setPresence);
       setStatus("live");
@@ -302,8 +302,8 @@ export function LiveEditor({
       setEditorActions([]);
       mounted?.destroy();
       monacoBinding?.destroy();
-      xmlEditor?.dispose();
-      xmlModel?.dispose();
+      sourceEditor?.dispose();
+      sourceModel?.dispose();
       session.destroy(); // provider AND socket
     };
   }, [repo, docPath, me.wsToken]);
@@ -385,7 +385,7 @@ export function LiveEditor({
       ? (restore.variables?.sha ?? null)
       : null;
 
-  const xmlActive = (showXml || !isVisual) && !structuredDoc;
+  const sourceActive = (showSource || !isVisual) && !structuredDoc;
   const ActivePanel = activePanelSpec?.component;
 
   // the notation plugin's panels and the shell's own (todos, history) are the
@@ -433,8 +433,8 @@ export function LiveEditor({
           isVisual && !structuredDoc
             ? {
                 sourceLabel: notation?.mediaKind === "xml" ? "XML" : notation?.mediaKind === "json" ? "JSON" : "Text",
-                showSource: showXml,
-                onChange: setShowXml,
+                showSource: showSource,
+                onChange: setShowSource,
               }
             : undefined
         }
@@ -461,11 +461,11 @@ export function LiveEditor({
       <div className="relative min-h-0 flex-1">
         <div
           ref={canvasRef}
-          className={cn(plugin?.canvasClassName, "absolute inset-0", xmlActive && "pointer-events-none opacity-0")}
+          className={cn(plugin?.canvasClassName, "absolute inset-0", sourceActive && "pointer-events-none opacity-0")}
         />
         <div
-          ref={xmlRef}
-          className={cn("monaco-host absolute inset-0", !xmlActive && "pointer-events-none opacity-0")}
+          ref={sourceRef}
+          className={cn("monaco-host absolute inset-0", !sourceActive && "pointer-events-none opacity-0")}
         />
         {ActivePanel && (
           <Suspense fallback={null}>
@@ -477,7 +477,7 @@ export function LiveEditor({
                 hasElements
                   ? (elementId) => {
                       const found = todoCanvasRef.current?.reveal(elementId) ?? false;
-                      if (found) setShowXml(false); // a reveal must be VISIBLE, not on the hidden canvas
+                      if (found) setShowSource(false); // a reveal must be VISIBLE, not on the hidden canvas
                       return found;
                     }
                   : undefined

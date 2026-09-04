@@ -8,7 +8,8 @@
  *     synced viewers with semantic change markers). If it reports itself
  *     unavailable (invalid intermediate content), the dialog falls back to
  *     the text view with a notice.
- *   xml — Monaco text diff (the only view for notations without a DiffSpec)
+ *   text — Monaco diff of the document source (the only view for notations
+ *     without a DiffSpec; labelled XML/JSON/Text after the document language)
  *
  * Mounted on open, so state resets by unmounting (todo-create-dialog
  * precedent). "Restore" needs the same two-click confirm as the panel — it
@@ -46,12 +47,12 @@ export function HistoryDiffDialog({
   onClose: () => void;
 }) {
   const monacoHostRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<"diagram" | "xml">(diagramDiff ? "diagram" : "xml");
+  const [view, setView] = useState<"diagram" | "text">(diagramDiff ? "diagram" : "text");
   /** the plugin's diff could not render this pair (invalid intermediate content) */
   const [diagramFailed, setDiagramFailed] = useState(false);
   const onDiagramUnavailable = useCallback(() => {
     setDiagramFailed(true);
-    setView("xml");
+    setView("text");
   }, []);
   // restore overwrites live edits for everyone — same two-click confirm as the panel
   const [confirmRestore, setConfirmRestore] = useState(false);
@@ -64,9 +65,9 @@ export function HistoryDiffDialog({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  // xml view — Monaco text diff
+  // text view — Monaco diff of the document source
   useEffect(() => {
-    if (view !== "xml" || !monacoHostRef.current) return;
+    if (view !== "text" || !monacoHostRef.current) return;
     const original = monaco.editor.createModel(historical, language);
     const modified = monaco.editor.createModel(current, language);
     const editor = monaco.editor.createDiffEditor(monacoHostRef.current, {
@@ -111,9 +112,9 @@ export function HistoryDiffDialog({
                 variant={showDiagram ? "ghost" : "secondary"}
                 size="sm"
                 className="h-7 rounded-l-none text-xs"
-                onClick={() => setView("xml")}
+                onClick={() => setView("text")}
               >
-                XML
+                {language === "xml" ? "XML" : language === "json" ? "JSON" : "Text"}
               </Button>
             </div>
           )}

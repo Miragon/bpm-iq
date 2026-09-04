@@ -180,7 +180,7 @@ test("a stale UNEDITED structured seed re-seeds from the changed file", async ()
 test("REST: getContent serves the canonical text; putContent CAS-gates and reconciles element-wise", async () => {
   const { deps, hp } = setup();
   const got = await getContent(deps, REPO, PATH);
-  assert.equal(got.xml, CANONICAL);
+  assert.equal(got.content, CANONICAL);
 
   // a co-editor moves e2 AFTER the read — the agent's token is now stale
   const conn = await openPeer(hp, ROOM);
@@ -189,20 +189,20 @@ test("REST: getContent serves the canonical text; putContent CAS-gates and recon
   });
   await conn.disconnect();
   const stale = await putContent(deps, REPO, PATH, {
-    xml: codec.encode({ ...BOARD, meta: { title: "Stale write" } }),
+    content: codec.encode({ ...BOARD, meta: { title: "Stale write" } }),
     baseVersion: got.baseVersion,
   });
   assert.ok(!stale.ok, "a stale token must conflict");
-  assert.match(stale.ok ? "" : stale.conflict.currentXml, /"x":500/, "the conflict carries the current canonical");
+  assert.match(stale.ok ? "" : stale.conflict.currentContent, /"x":500/, "the conflict carries the current canonical");
 
   // fresh read → whole-board save that renames e1: reconcile touches ONLY e1
   const fresh = await getContent(deps, REPO, PATH);
-  const renamed = codec.decode(fresh.xml);
+  const renamed = codec.decode(fresh.content);
   renamed.elements.e1 = { ...renamed.elements.e1, text: "Submit order" };
-  const saved = await putContent(deps, REPO, PATH, { xml: codec.encode(renamed), baseVersion: fresh.baseVersion });
+  const saved = await putContent(deps, REPO, PATH, { content: codec.encode(renamed), baseVersion: fresh.baseVersion });
   assert.ok(saved.ok);
   const after = await getContent(deps, REPO, PATH);
-  const snapshot = codec.decode(after.xml);
+  const snapshot = codec.decode(after.content);
   assert.equal(snapshot.elements.e1?.text, "Submit order");
   assert.equal(snapshot.elements.e2?.x, 500, "the co-editor's move survived the whole-board save");
   assert.equal(after.baseVersion, saved.ok ? saved.result.baseVersion : "", "the returned token matches the doc");
@@ -213,9 +213,9 @@ test("a non-canonical (but decodable) payload normalizes — token matches the c
   const got = await getContent(deps, REPO, PATH);
   // same board, scrambled key order and a garbage line — decode is total
   const messy = `garbage line\n{"meta":{"title":"Order flow"},"version":1,"format":"bpmiq-structured"}\n{"x":20,"id":"e1","text":"Place order","type":"command"}\n{"id":"e2","type":"event","text":"Order placed","x":100}\n`;
-  const saved = await putContent(deps, REPO, PATH, { xml: messy, baseVersion: got.baseVersion });
+  const saved = await putContent(deps, REPO, PATH, { content: messy, baseVersion: got.baseVersion });
   assert.ok(saved.ok);
   const after = await getContent(deps, REPO, PATH);
-  assert.equal(after.xml, CANONICAL, "the doc holds the canonical form, not the messy payload");
+  assert.equal(after.content, CANONICAL, "the doc holds the canonical form, not the messy payload");
   assert.equal(saved.ok ? saved.result.baseVersion : "", after.baseVersion);
 });

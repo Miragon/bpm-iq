@@ -128,27 +128,32 @@ const put = (path: string, body: unknown, headers: Record<string, string> = AUTH
     body: JSON.stringify(body),
   });
 
-test("GET + PUT content round-trip over HTTP (CAS enforced, conflict carries the current XML)", async () => {
+test("GET + PUT content round-trip over HTTP (CAS enforced, conflict carries the current content)", async () => {
   const r1 = await get(`/api/repos/acme/models/content?path=${encodeURIComponent(PATH)}`);
   assert.equal(r1.status, 200);
   const got = (await r1.json()) as ContentWire;
-  assert.equal(got.xml, VALID);
+  assert.equal(got.content, VALID);
+  assert.equal(got.xml, VALID, "deprecated alias (#154) still emitted");
 
-  const stale = await put(`/api/repos/acme/models/content?path=${PATH}`, { xml: VALID_V2, baseVersion: "wrong.token" });
+  const stale = await put(`/api/repos/acme/models/content?path=${PATH}`, {
+    content: VALID_V2,
+    baseVersion: "wrong.token",
+  });
   assert.equal(stale.status, 409);
   const conflict = (await stale.json()) as ContentConflictWire;
   assert.equal(conflict.code, "content/conflict");
-  assert.equal(conflict.currentXml, VALID);
+  assert.equal(conflict.currentContent, VALID);
+  assert.equal(conflict.currentXml, VALID, "deprecated alias (#154) still emitted");
 
   const okRes = await put(`/api/repos/acme/models/content?path=${PATH}`, {
-    xml: VALID_V2,
+    content: VALID_V2,
     baseVersion: got.baseVersion,
   });
   assert.equal(okRes.status, 200);
   const saved = (await okRes.json()) as PutContentResultWire;
   assert.notEqual(saved.baseVersion, got.baseVersion);
 
-  const missingVersion = await put(`/api/repos/acme/models/content?path=${PATH}`, { xml: VALID });
+  const missingVersion = await put(`/api/repos/acme/models/content?path=${PATH}`, { content: VALID });
   assert.equal(missingVersion.status, 400);
 });
 
@@ -215,11 +220,11 @@ test("content PUT writes through to the workspace file before responding", async
   const r = await get(`/api/repos/acme/order-history/content?path=${PATH}`);
   const got = (await r.json()) as ContentWire;
   const saved = await put(`/api/repos/acme/order-history/content?path=${PATH}`, {
-    xml: VALID_V2,
+    content: VALID_V2,
     baseVersion: got.baseVersion,
   });
   assert.equal(saved.status, 200);
   // find the workspace file through a fresh GET (same doc) AND the disk
   const again = await get(`/api/repos/acme/order-history/content?path=${PATH}`);
-  assert.equal(((await again.json()) as ContentWire).xml, VALID_V2);
+  assert.equal(((await again.json()) as ContentWire).content, VALID_V2);
 });

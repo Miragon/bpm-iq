@@ -40,7 +40,7 @@ export function bindDslModeler(
   let importing = false;
   return bindModelSync(
     {
-      importXML: async (text) => {
+      importText: async (text) => {
         importing = true;
         try {
           await modeler.importDSL(text);
@@ -48,7 +48,7 @@ export function bindDslModeler(
           importing = false;
         }
       },
-      saveXML: async () => modeler.exportDSL(),
+      exportText: async () => modeler.exportDSL(),
       looksRenderable: (text) => text.trim().length > 0,
 
       beforeImport(isFirstImport) {

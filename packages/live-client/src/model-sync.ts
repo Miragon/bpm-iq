@@ -6,7 +6,7 @@
  *  2. minimal diffs into Y.Text, never replace-all (common prefix/suffix trim)
  *  3. debounced re-import of remote changes with view-state restore and echo
  *     suppression (Yjs transaction origin + last-export equality)
- *  4. validate merged XML before import; keep rendering the last good state on
+ *  4. gate the merged text before import; keep rendering the last good state on
  *     rare invalid interleavings — the next update usually heals the document
  *
  * What differs per notation (how change events are observed, how the view
@@ -23,17 +23,22 @@ import { diffRegion } from "./text-diff.ts";
 export const CANVAS_ORIGIN = "bpm-canvas";
 
 export interface SyncAdapter {
-  /** parse + render `xml`; a rejection keeps the last good state (rule 4) */
-  importXML(xml: string): Promise<unknown>;
-  /** serialize the current model, formatted */
-  saveXML(): Promise<string | undefined>;
+  /** parse + render the document text (the notation's own format: XML, a
+   *  line DSL, JSON); a rejection keeps the last good state (rule 4) */
+  importText(text: string): Promise<unknown>;
+  /** serialize the current model in that format, deterministically */
+  exportText(): Promise<string | undefined>;
   /**
-   * rule-4 pre-gate: is this text worth an import attempt at all? Default is
-   * XML well-formedness (bpmn/dmn); text-DSL/JSON notations override it —
-   * their parser (importXML) stays the real judge, rejections keep the last
-   * good state either way
+   * rule-4 pre-gate: is this text worth an import attempt at all? The XML
+   * notations pass well-formedness (looksWellFormedXml), text-DSL/JSON
+   * notations their own cheap check — the parser (importText) stays the real
+   * judge, rejections keep the last good state either way. Explicit per
+   * adapter: the engine assumes NO file format.
    */
-  looksRenderable?(text: string): boolean;
+  looksRenderable(text: string): boolean;
+  /** what to report when a document that never rendered fails the gate —
+   *  defaults to a format-agnostic message */
+  unrenderableReason?: string;
   /**
    * snapshot the view state right before an import; returns the restore to
    * run after the import succeeded
@@ -42,6 +47,12 @@ export interface SyncAdapter {
   /** subscribe to local model-change events; returns the unsubscribe */
   observeModel(onChanged: () => void): () => void;
 }
+
+/** XML well-formedness — the looksRenderable gate of the XML notations (bpmn, dmn) */
+export const looksWellFormedXml = (s: string): boolean =>
+  s.trim().length > 0 &&
+  new DOMParser().parseFromString(s, "application/xml").getElementsByTagName("parsererror").length === 0;
+export const NOT_WELL_FORMED_XML = "the document is not well-formed XML";
 
 export function bindModelSync(
   adapter: SyncAdapter,
@@ -64,10 +75,6 @@ export function bindModelSync(
   let importErrorReported = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const looksValidXml = (s: string): boolean =>
-    s.trim().length > 0 &&
-    new DOMParser().parseFromString(s, "application/xml").getElementsByTagName("parsererror").length === 0;
-
   // a document that never rendered has no fallback view — surface that once
   const reportFirstImportFailure = (message: string): void => {
     if (lastExport !== "" || importErrorReported) return;
@@ -76,39 +83,35 @@ export function bindModelSync(
   };
 
   async function importFromY(): Promise<void> {
-    // Local edits win: importXML replaces the whole canvas, so an in-flight user
+    // Local edits win: importText replaces the whole canvas, so an in-flight user
     // edit would be lost. Wait for a short quiet period — the local edit exports
     // into ytext first, and the next observer round imports the merged state.
     if (Date.now() - lastLocalEdit < 600) {
       scheduleImport();
       return;
     }
-    const xml = ytext.toString();
-    if (xml === lastExport) {
+    const text = ytext.toString();
+    if (text === lastExport) {
       // both empty = a 0-byte document, not an echo — there is nothing to render
-      if (xml === "") reportFirstImportFailure("the document is empty");
+      if (text === "") reportFirstImportFailure("the document is empty");
       return;
     }
-    if (!(adapter.looksRenderable ?? looksValidXml)(xml)) {
+    if (!adapter.looksRenderable(text)) {
       // rule 4: keep last good canvas, wait for next update — but a document
       // that is broken from the START has no last good canvas to keep
-      reportFirstImportFailure(
-        adapter.looksRenderable
-          ? "the document is not renderable in its current state"
-          : "the document is not well-formed XML",
-      );
+      reportFirstImportFailure(adapter.unrenderableReason ?? "the document is not renderable in its current state");
       return;
     }
     importing = true;
     try {
       const isFirstImport = lastExport === "";
       const restoreView = adapter.beforeImport(isFirstImport);
-      await adapter.importXML(xml);
+      await adapter.importText(text);
       restoreView();
-      lastExport = xml;
+      lastExport = text;
       importErrorReported = false;
     } catch (err) {
-      console.warn("[bpm-live] remote XML not importable, keeping last good state", err);
+      console.warn("[bpm-live] remote document not importable, keeping last good state", err);
       reportFirstImportFailure(err instanceof Error ? err.message : String(err));
     } finally {
       importing = false;
@@ -133,18 +136,18 @@ export function bindModelSync(
 
   const onModelChanged = async (): Promise<void> => {
     if (importing) {
-      // fires for the commandStack 'clear' of our own importXML (harmless no-op
+      // fires for the commandStack 'clear' of our own importText (harmless no-op
       // on re-run) AND for real user edits racing the import. Known limit of
-      // text-level sync: an edit landing inside the ~10ms importXML window is
+      // text-level sync: an edit landing inside the ~10ms import window is
       // replaced along with the model (v2 operation-level sync removes this).
       pendingLocalExport = true;
       lastLocalEdit = Date.now();
       return;
     }
     lastLocalEdit = Date.now();
-    const xml = await adapter.saveXML();
-    if (!xml || xml === lastExport) return;
-    applyLocalEdit(xml);
+    const text = await adapter.exportText();
+    if (!text || text === lastExport) return;
+    applyLocalEdit(text);
   };
   const unobserveModel = adapter.observeModel(() => void onModelChanged());
 

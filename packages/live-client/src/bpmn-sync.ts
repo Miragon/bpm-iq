@@ -6,7 +6,7 @@
  */
 import type * as Y from "yjs";
 
-import { bindModelSync } from "./model-sync.ts";
+import { bindModelSync, looksWellFormedXml, NOT_WELL_FORMED_XML } from "./model-sync.ts";
 
 interface ModelerLike {
   get(service: string): any;
@@ -24,8 +24,10 @@ export function bindBpmn(
 ): () => void {
   return bindModelSync(
     {
-      importXML: (xml) => modeler.importXML(xml),
-      saveXML: async () => (await modeler.saveXML({ format: true })).xml,
+      importText: (xml) => modeler.importXML(xml),
+      exportText: async () => (await modeler.saveXML({ format: true })).xml,
+      looksRenderable: looksWellFormedXml,
+      unrenderableReason: NOT_WELL_FORMED_XML,
 
       beforeImport(isFirstImport) {
         const canvas = modeler.get("canvas");

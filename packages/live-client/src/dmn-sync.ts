@@ -14,7 +14,7 @@
  */
 import type * as Y from "yjs";
 
-import { bindModelSync } from "./model-sync.ts";
+import { bindModelSync, looksWellFormedXml, NOT_WELL_FORMED_XML } from "./model-sync.ts";
 
 interface DrdViewbox {
   x: number;
@@ -73,7 +73,7 @@ export function bindDmn(
 
   return bindModelSync(
     {
-      importXML: async (xml) => {
+      importText: async (xml) => {
         // the failing import nulls the active view BEFORE parsing, so the
         // recovery import would fall back to the default view — capture the
         // user's view now and re-open it after the recovery render
@@ -98,7 +98,9 @@ export function bindDmn(
           throw err;
         }
       },
-      saveXML: async () => (await modeler.saveXML({ format: true })).xml,
+      exportText: async () => (await modeler.saveXML({ format: true })).xml,
+      looksRenderable: looksWellFormedXml,
+      unrenderableReason: NOT_WELL_FORMED_XML,
 
       beforeImport(isFirstImport) {
         let viewbox: DrdViewbox | undefined;

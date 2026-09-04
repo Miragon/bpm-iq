@@ -36,7 +36,7 @@ export function bindTeamTopology(
 ): () => void {
   return bindModelSync(
     {
-      importXML: async (text) => {
+      importText: async (text) => {
         const parsed = codec.parse(text);
         if (!parsed.ok) throw new Error(`not a team-topology document: ${String(parsed.error ?? "parse failed")}`);
         modeler.importDocument(parsed.document);
@@ -46,7 +46,7 @@ export function bindTeamTopology(
         // history like bpmn-js does on import, silently (no 'changed' echo).
         modeler.get("commandStack").clear(false);
       },
-      saveXML: async () => codec.serialize(modeler.exportDocument()),
+      exportText: async () => codec.serialize(modeler.exportDocument()),
       // rule-4 pre-gate: the codec's Zod parse IS the gate — run it cheaply
       // here so a half-typed JSON keeps the last good canvas without an
       // import round-trip

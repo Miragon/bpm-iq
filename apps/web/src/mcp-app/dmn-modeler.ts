@@ -50,8 +50,10 @@ export interface CapturedScenario {
 }
 
 export interface DmnModelerHandle {
-  importXml(xml: string): Promise<void>;
-  saveXml(): Promise<string>;
+  /** parse + render the document text (DMN XML for this engine) */
+  importText(text: string): Promise<void>;
+  /** serialize the current model, formatted */
+  exportText(): Promise<string>;
   editable: boolean;
   onDirty(cb: () => void): void;
   /** the values currently entered in the table simulator, keyed by variable */
@@ -109,10 +111,10 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
 
   return {
     editable: !readonly,
-    async importXml(xml: string): Promise<void> {
+    async importText(xml: string): Promise<void> {
       await instance.importXML(xml);
     },
-    async saveXml(): Promise<string> {
+    async exportText(): Promise<string> {
       if (readonly) throw new Error("read-only view");
       const { xml } = await (instance as DmnModeler).saveXML({ format: true });
       if (!xml) throw new Error("empty model");

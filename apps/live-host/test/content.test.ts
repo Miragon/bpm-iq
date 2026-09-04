@@ -110,7 +110,7 @@ test("getContent seeds from disk, returns a stable token, and unloads the doc (l
   writeFileSync(join(ws, PATH), VALID);
 
   const a = await getContent(deps, REPO, PATH);
-  assert.equal(a.xml, VALID);
+  assert.equal(a.content, VALID);
   assert.equal(a.repo, REPO.fullName);
   assert.equal(a.path, PATH);
   assert.ok(a.baseVersion.length > 20, "opaque content-derived token");
@@ -145,7 +145,7 @@ test("putContent with a fresh token writes through to disk BEFORE returning (dis
   writeFileSync(join(ws, PATH), VALID);
 
   const got = await getContent(deps, REPO, PATH);
-  const out = await putContent(deps, REPO, PATH, { xml: VALID_V2, baseVersion: got.baseVersion });
+  const out = await putContent(deps, REPO, PATH, { content: VALID_V2, baseVersion: got.baseVersion });
   assert.ok(out.ok);
   assert.notEqual(out.result.baseVersion, got.baseVersion, "token moved");
   assert.deepEqual(out.result.warnings, []);
@@ -159,14 +159,14 @@ test("putContent with a stale token conflicts and writes NOTHING", async () => {
   writeFileSync(join(ws, PATH), VALID);
 
   const got = await getContent(deps, REPO, PATH);
-  const first = await putContent(deps, REPO, PATH, { xml: VALID_V2, baseVersion: got.baseVersion });
+  const first = await putContent(deps, REPO, PATH, { content: VALID_V2, baseVersion: got.baseVersion });
   assert.ok(first.ok);
 
   // retry with the CONSUMED token → conflict carrying the current content
-  const stale = await putContent(deps, REPO, PATH, { xml: VALID, baseVersion: got.baseVersion });
+  const stale = await putContent(deps, REPO, PATH, { content: VALID, baseVersion: got.baseVersion });
   assert.ok(!stale.ok);
   assert.equal(stale.conflict.code, "content/conflict");
-  assert.equal(stale.conflict.currentXml, VALID_V2);
+  assert.equal(stale.conflict.currentContent, VALID_V2);
   assert.equal(await readFile(join(ws, PATH), "utf8"), VALID_V2, "no write on conflict");
 });
 
@@ -183,9 +183,9 @@ test("REGRESSION: a DELETE-ONLY remote edit invalidates the token (a state-vecto
   });
   await peer.disconnect();
 
-  const put = await putContent(deps, REPO, PATH, { xml: VALID_V2, baseVersion: got.baseVersion });
+  const put = await putContent(deps, REPO, PATH, { content: VALID_V2, baseVersion: got.baseVersion });
   assert.ok(!put.ok, "stale read must NOT overwrite the deletion");
-  assert.equal(put.conflict.currentXml, VALID.slice(10));
+  assert.equal(put.conflict.currentContent, VALID.slice(10));
 });
 
 test("putContent broadcasts into a shared live doc and keeps a co-holder's room alive", async () => {
@@ -198,7 +198,7 @@ test("putContent broadcasts into a shared live doc and keeps a co-holder's room 
   // Hocuspocus' async unload — a lifecycle the product paths never enter.)
   const peer = await openPeer(hp, ROOM);
   const got = await getContent(deps, REPO, PATH);
-  const out = await putContent(deps, REPO, PATH, { xml: VALID_V2, baseVersion: got.baseVersion });
+  const out = await putContent(deps, REPO, PATH, { content: VALID_V2, baseVersion: got.baseVersion });
   assert.ok(out.ok);
   // the peer sees the edit in the SAME doc, and its hold keeps the room live
   let seen = "";
@@ -219,18 +219,18 @@ test("putContent gates: baseVersion required, validation 422 (BPMN and DMN), siz
   const got = await getContent(deps, REPO, PATH);
 
   await assert.rejects(
-    () => putContent(deps, REPO, PATH, { xml: VALID_V2 } as never),
+    () => putContent(deps, REPO, PATH, { content: VALID_V2 } as never),
     (e: AppError) => e.code === "content/base-version-required" && e.status === 400,
   );
   await assert.rejects(
-    () => putContent(deps, REPO, PATH, { xml: "<not-bpmn/>", baseVersion: got.baseVersion }),
+    () => putContent(deps, REPO, PATH, { content: "<not-bpmn/>", baseVersion: got.baseVersion }),
     (e: AppError) => e.code === "content/invalid-model" && e.status === 422 && /validation failed/.test(e.message),
   );
   assert.equal(await readFile(join(ws, PATH), "utf8"), VALID, "rejected writes never touch the doc");
 
   const capped = { ...deps, maxDocBytes: 50 };
   await assert.rejects(
-    () => putContent(capped, REPO, PATH, { xml: VALID_V2, baseVersion: got.baseVersion }),
+    () => putContent(capped, REPO, PATH, { content: VALID_V2, baseVersion: got.baseVersion }),
     (e: AppError) => e.code === "content/too-large" && e.status === 413,
   );
 
@@ -238,11 +238,11 @@ test("putContent gates: baseVersion required, validation 422 (BPMN and DMN), siz
   writeFileSync(join(ws, "processes", "price.dmn"), VALID_DMN);
   const dmn = await getContent(deps, REPO, "processes/price.dmn");
   await assert.rejects(
-    () => putContent(deps, REPO, "processes/price.dmn", { xml: "<definitions/>", baseVersion: dmn.baseVersion }),
+    () => putContent(deps, REPO, "processes/price.dmn", { content: "<definitions/>", baseVersion: dmn.baseVersion }),
     (e: AppError) => e.code === "content/invalid-model" && /no <decision> element/.test(e.message),
   );
   const saved = await putContent(deps, REPO, "processes/price.dmn", {
-    xml: VALID_DMN.replace('name="Price"', 'name="Price v2"'),
+    content: VALID_DMN.replace('name="Price"', 'name="Price v2"'),
     baseVersion: dmn.baseVersion,
   });
   assert.ok(saved.ok);
@@ -252,7 +252,7 @@ test("putContent gates: baseVersion required, validation 422 (BPMN and DMN), siz
   // returns [] and the save passes through untouched
   writeFileSync(join(ws, "processes", "notes.md"), "# notes");
   const md = await getContent(deps, REPO, "processes/notes.md");
-  const note = await putContent(deps, REPO, "processes/notes.md", { xml: "# more", baseVersion: md.baseVersion });
+  const note = await putContent(deps, REPO, "processes/notes.md", { content: "# more", baseVersion: md.baseVersion });
   assert.ok(note.ok);
 });
 
@@ -262,11 +262,11 @@ test("putContent gates EVERY notation through checkModel — the save path and `
   writeFileSync(join(ws, "processes", "teams.tt"), "{}");
   const tt = await getContent(deps, REPO, "processes/teams.tt");
   await assert.rejects(
-    () => putContent(deps, REPO, "processes/teams.tt", { xml: "{ broken", baseVersion: tt.baseVersion }),
+    () => putContent(deps, REPO, "processes/teams.tt", { content: "{ broken", baseVersion: tt.baseVersion }),
     (e: AppError) => e.code === "content/invalid-model" && /not parseable as JSON/.test(e.message),
   );
   const ttOk = await putContent(deps, REPO, "processes/teams.tt", {
-    xml: '{"nodes": []}',
+    content: '{"nodes": []}',
     baseVersion: tt.baseVersion,
   });
   assert.ok(ttOk.ok);
@@ -280,7 +280,7 @@ test("putContent gates EVERY notation through checkModel — the save path and `
   );
   writeFileSync(join(ws, PATH), VALID);
   const got = await getContent(deps, REPO, PATH);
-  const saved = await putContent(deps, REPO, PATH, { xml: CALLER, baseVersion: got.baseVersion, lint: "warn" });
+  const saved = await putContent(deps, REPO, PATH, { content: CALLER, baseVersion: got.baseVersion, lint: "warn" });
   assert.ok(saved.ok);
   assert.ok(
     saved.result.errors?.some((m) => /calls 'no-such-process'/.test(m)) ||
@@ -297,7 +297,7 @@ test("putContent lint:'warn' saves an invalid model and reports the errors inste
   // the same XML the strict gate refuses with 422 saves under lint:"warn" —
   // the widget-autosave trust level equals the ws rooms, which never gated
   const saved = await putContent(deps, REPO, PATH, {
-    xml: "<not-bpmn/>",
+    content: "<not-bpmn/>",
     baseVersion: got.baseVersion,
     lint: "warn",
   });
@@ -306,6 +306,46 @@ test("putContent lint:'warn' saves an invalid model and reports the errors inste
 
   // the write really landed (and minted a new token)
   const after = await getContent(deps, REPO, PATH);
-  assert.equal(after.xml, "<not-bpmn/>");
+  assert.equal(after.content, "<not-bpmn/>");
   assert.notEqual(after.baseVersion, got.baseVersion);
+});
+
+// ── #154: the neutral wire — `content` is the field, `xml` a deprecated alias ─
+
+test("the content wire is notation-neutral: `content` on GET/409, `xml` only as the deprecated alias; PUT accepts both", async () => {
+  const { ws, deps } = setup();
+  writeFileSync(join(ws, PATH), VALID);
+
+  // GET: the alias mirrors `content` byte for byte (one release, #154)
+  const got = await getContent(deps, REPO, PATH);
+  assert.equal(got.content, VALID);
+  assert.equal(got.xml, got.content, "deprecated alias mirrors content");
+
+  // PUT: a pre-#154 client still saves through `xml` …
+  const legacy = await putContent(deps, REPO, PATH, { xml: VALID_V2, baseVersion: got.baseVersion });
+  assert.ok(legacy.ok);
+  assert.equal(await readFile(join(ws, PATH), "utf8"), VALID_V2);
+
+  // … `content` wins when a body carries both …
+  const fresh = await getContent(deps, REPO, PATH);
+  const both = await putContent(deps, REPO, PATH, {
+    content: VALID,
+    xml: "<ignored/>",
+    baseVersion: fresh.baseVersion,
+  } as never);
+  assert.ok(both.ok);
+  assert.equal(await readFile(join(ws, PATH), "utf8"), VALID);
+
+  // … and a body with neither is the neutral 400
+  await assert.rejects(
+    () => putContent(deps, REPO, PATH, { baseVersion: fresh.baseVersion } as never),
+    (e: AppError) => e.code === "content/body-required" && e.status === 400,
+  );
+
+  // 409: both keys carry the current document (the token is content-derived —
+  // `fresh` named VALID_V2, the doc holds VALID again, so it is stale now)
+  const stale = await putContent(deps, REPO, PATH, { content: VALID_V2, baseVersion: fresh.baseVersion });
+  assert.ok(!stale.ok);
+  assert.equal(stale.conflict.currentContent, VALID);
+  assert.equal(stale.conflict.currentXml, stale.conflict.currentContent, "deprecated alias mirrors currentContent");
 });
