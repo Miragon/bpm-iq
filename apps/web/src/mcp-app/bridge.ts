@@ -46,7 +46,7 @@ export interface SaveConflict {
   conflict: true;
   path: string;
   /** re-derive the edit against this and retry with the fresh baseVersion */
-  currentXml: string;
+  currentContent: string;
   baseVersion: string;
   message: string;
 }

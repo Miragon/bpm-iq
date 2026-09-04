@@ -98,14 +98,14 @@ async function load(decisionRef: ProcessRef, scenario?: Scenario): Promise<void>
   // one — no deep link (and no flush) until the load owns the widget
   openBtn.hidden = true;
   setStatus("Loading decision…");
-  const content = await getDmnXml(app, decisionRef);
+  const loaded = await getDmnXml(app, decisionRef);
   if (epoch !== loadEpoch || inactive) return;
-  ref = { repo: decisionRef.repo, path: content.path };
-  toolbar.title.textContent = `${decisionRef.repo} · ${content.path}`;
+  ref = { repo: decisionRef.repo, path: loaded.path };
+  toolbar.title.textContent = `${decisionRef.repo} · ${loaded.path}`;
   // a loaded decision has a web address (the file-editor route — the same
   // target the repo overview links decisions to)
   openBtn.hidden = !cfg.publicUrl;
-  baseVersion = content.baseVersion;
+  baseVersion = loaded.baseVersion;
   if (!modeler) {
     modeler = mountDmnModeler(el<HTMLDivElement>("canvas"), cfg.readonly);
     modeler.onDirty(() => {
@@ -117,7 +117,7 @@ async function load(decisionRef: ProcessRef, scenario?: Scenario): Promise<void>
     tests = mountTests(app, modeler, { readonly: cfg.readonly, onStatus: setStatus });
     setDirty(false);
   }
-  await modeler.importXml(content.xml);
+  await modeler.importText(loaded.content);
   if (epoch !== loadEpoch || inactive) return;
   // dmn-js opens the DRD whenever the model has DMNDI, but a one-decision file
   // IS its table — and the simulator only exists in the table view. Open it, or
@@ -126,7 +126,7 @@ async function load(decisionRef: ProcessRef, scenario?: Scenario): Promise<void>
   if (epoch !== loadEpoch || inactive) return;
   setDirty(false);
   tests?.load(ref);
-  releaseClaim = claimDocument(roomName(decisionRef.repo, content.path), () => {
+  releaseClaim = claimDocument(roomName(decisionRef.repo, loaded.path), () => {
     inactive = true;
     clearTimeout(autosaveTimer);
     tests?.destroy();
@@ -154,7 +154,7 @@ async function playScenario(scenario: Scenario, epoch: number): Promise<void> {
   setStatus("Open the decision table view to see the scenario");
 }
 
-async function save(xmlOverride?: string, versionOverride?: string, seqOverride?: number): Promise<void> {
+async function save(textOverride?: string, versionOverride?: string, seqOverride?: number): Promise<void> {
   if (!modeler || !ref || inactive || saving || autosavePaused || !modeler.editable) return;
   saving = true;
   clearTimeout(autosaveTimer);
@@ -162,15 +162,15 @@ async function save(xmlOverride?: string, versionOverride?: string, seqOverride?
   const seq = seqOverride ?? editSeq;
   const epoch = loadEpoch;
   try {
-    const xml = xmlOverride ?? (await modeler.saveXml());
+    const text = textOverride ?? (await modeler.exportText());
     if (epoch !== loadEpoch) return;
     setStatus("Saving…");
-    const result = await saveDmnXml(app, ref, xml, versionOverride ?? baseVersion);
+    const result = await saveDmnXml(app, ref, text, versionOverride ?? baseVersion);
     if (epoch !== loadEpoch) return;
     if (!result.ok) {
       autosavePaused = true;
       clearTimeout(autosaveTimer);
-      onConflict(result, xml, seq);
+      onConflict(result, text, seq);
       return;
     }
     baseVersion = result.baseVersion;
@@ -190,7 +190,7 @@ async function save(xmlOverride?: string, versionOverride?: string, seqOverride?
   }
 }
 
-function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void {
+function onConflict(conflict: SaveConflict, myText: string, mySeq: number): void {
   const epoch = loadEpoch;
   setStatus("Conflict — autosave paused");
   showBanner("Someone saved this decision in the meantime.", [
@@ -201,10 +201,10 @@ function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void 
         void (async () => {
           hideBanner();
           try {
-            await modeler?.importXml(conflict.currentXml);
+            await modeler?.importText(conflict.currentContent);
           } catch {
             if (epoch !== loadEpoch || inactive) return;
-            onConflict(conflict, myXml, mySeq);
+            onConflict(conflict, myText, mySeq);
             return;
           }
           if (epoch !== loadEpoch || inactive) return;
@@ -222,7 +222,7 @@ function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void 
         if (epoch !== loadEpoch || inactive) return;
         hideBanner();
         autosavePaused = false;
-        void save(myXml, conflict.baseVersion, mySeq);
+        void save(myText, conflict.baseVersion, mySeq);
       },
     },
     {

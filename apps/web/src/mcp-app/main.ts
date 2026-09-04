@@ -1,5 +1,5 @@
 /**
- * Widget wiring: App handshake → tool input → load the live XML → modeler,
+ * Widget wiring: App handshake → tool input → load the live document → modeler,
  * plus the save lifecycle with the baseVersion CAS conflict flow (the same
  * GET→edit→PUT-CAS dance every AI client does — deliberately NOT the Yjs path).
  *
@@ -103,14 +103,14 @@ async function load(processRef: ProcessRef): Promise<void> {
   // one — no deep link (and no flush) until the load owns the widget
   openBtn.hidden = true;
   setStatus("Loading model…");
-  const content = await getBpmnXml(app, processRef);
+  const loaded = await getBpmnXml(app, processRef);
   if (epoch !== liveEpoch || inactive) return; // a newer load owns the widget
-  ref = { repo: processRef.repo, path: content.path };
-  toolbar.title.textContent = `${processRef.repo} · ${content.path}`;
+  ref = { repo: processRef.repo, path: loaded.path };
+  toolbar.title.textContent = `${processRef.repo} · ${loaded.path}`;
   // a loaded model has a web address — even for a later-superseded instance
   // the deep link stays the most useful remaining control
   openBtn.hidden = !cfg.publicUrl;
-  baseVersion = content.baseVersion;
+  baseVersion = loaded.baseVersion;
   if (!modeler) {
     modeler = mountModeler(el<HTMLDivElement>("canvas"), cfg.readonly);
     modeler.onDirty(() => {
@@ -127,12 +127,12 @@ async function load(processRef: ProcessRef): Promise<void> {
     // badges on every `import.done` (incl. the live re-imports)
     todos = mountTodos(app, modeler, { readonly: cfg.readonly });
   }
-  await modeler.importXml(content.xml);
+  await modeler.importText(loaded.content);
   if (epoch !== liveEpoch || inactive) return; // a newer load owns the widget
   setDirty(false);
   // the todos of THIS document — a failing/absent tracker never blocks the model
-  todos?.load({ repo: processRef.repo, path: content.path });
-  releaseClaim = claimDocument(roomName(processRef.repo, content.path), () => {
+  todos?.load({ repo: processRef.repo, path: loaded.path });
+  releaseClaim = claimDocument(roomName(processRef.repo, loaded.path), () => {
     inactive = true;
     clearTimeout(autosaveTimer);
     live?.destroy();
@@ -236,7 +236,7 @@ async function onLiveDead(): Promise<void> {
     return;
   }
   if (epoch !== liveEpoch || inactive) return;
-  if (fresh.xml === replica) {
+  if (fresh.content === replica) {
     // the server holds exactly what this session last knew — nothing is
     // unsaved in either direction (shared byte lineage, so formatting can't
     // false-positive), and a fresh ticket resumes live seamlessly
@@ -256,7 +256,7 @@ async function onLiveDead(): Promise<void> {
       // model-sync import-window race.)
       if (!dirty && baseVersion === fresh.baseVersion) {
         try {
-          await modeler.importXml(fresh.xml);
+          await modeler.importText(fresh.content);
         } catch {
           // unimportable snapshot — let the user decide instead of guessing
           if (epoch !== liveEpoch || inactive) return;
@@ -284,7 +284,7 @@ async function onLiveDead(): Promise<void> {
 
 /** post-outage divergence banner — mirrors the CAS conflict flow: the banner
  *  owns the next step, autosavePaused until a choice is made */
-function onLiveInterrupted(fresh: { xml: string; baseVersion: string }): void {
+function onLiveInterrupted(fresh: { content: string; baseVersion: string }): void {
   const epoch = liveEpoch; // a re-load invalidates these closures wholesale
   setStatus("Live sync interrupted");
   showBanner("Live sync was interrupted and the server state differs from this canvas.", [
@@ -295,7 +295,7 @@ function onLiveInterrupted(fresh: { xml: string; baseVersion: string }): void {
         void (async () => {
           hideBanner();
           try {
-            await modeler?.importXml(fresh.xml);
+            await modeler?.importText(fresh.content);
           } catch {
             // the server snapshot didn't import — keep MY canvas and re-ask
             if (epoch !== liveEpoch || inactive) return;
@@ -328,7 +328,7 @@ function onLiveInterrupted(fresh: { xml: string; baseVersion: string }): void {
   ]);
 }
 
-async function save(xmlOverride?: string, versionOverride?: string, seqOverride?: number): Promise<void> {
+async function save(textOverride?: string, versionOverride?: string, seqOverride?: number): Promise<void> {
   if (!modeler || !ref || inactive || saving || live || autosavePaused) return;
   saving = true;
   clearTimeout(autosaveTimer);
@@ -338,19 +338,19 @@ async function save(xmlOverride?: string, versionOverride?: string, seqOverride?
   const seq = seqOverride ?? editSeq;
   const epoch = liveEpoch; // a re-load mid-flight orphans this save entirely
   try {
-    const xml = xmlOverride ?? (await modeler.saveXml());
+    const text = textOverride ?? (await modeler.exportText());
     // re-loaded during the serialization: `ref` now names the NEW document —
     // never PUT the old canvas there
     if (epoch !== liveEpoch) return;
     setStatus("Saving…");
     // no validate preflight: lint:"warn" saves like a live room and reports
     // findings on the result — one round-trip, nothing blocks
-    const result = await saveBpmnXml(app, ref, xml, versionOverride ?? baseVersion);
+    const result = await saveBpmnXml(app, ref, text, versionOverride ?? baseVersion);
     if (epoch !== liveEpoch) return; // stale result — the new load owns state
     if (!result.ok) {
       autosavePaused = true; // the banner owns the next step — no timer racing it
       clearTimeout(autosaveTimer); // incl. one armed by a mid-flight edit
-      onConflict(result, xml, seq);
+      onConflict(result, text, seq);
       return;
     }
     baseVersion = result.baseVersion;
@@ -373,7 +373,7 @@ async function save(xmlOverride?: string, versionOverride?: string, seqOverride?
   }
 }
 
-function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void {
+function onConflict(conflict: SaveConflict, myText: string, mySeq: number): void {
   const epoch = liveEpoch; // a re-load invalidates these closures wholesale
   setStatus("Conflict — autosave paused");
   showBanner("Someone saved this model in the meantime.", [
@@ -384,12 +384,12 @@ function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void 
         void (async () => {
           hideBanner();
           try {
-            await modeler?.importXml(conflict.currentXml);
+            await modeler?.importText(conflict.currentContent);
           } catch {
             // their snapshot didn't import (e.g. transiently invalid mid-edit
             // XML) — keep MY canvas and hand the decision back
             if (epoch !== liveEpoch || inactive) return;
-            onConflict(conflict, myXml, mySeq);
+            onConflict(conflict, myText, mySeq);
             return;
           }
           if (epoch !== liveEpoch || inactive) return;
@@ -403,14 +403,14 @@ function onConflict(conflict: SaveConflict, myXml: string, mySeq: number): void 
     {
       label: "Overwrite anyway",
       danger: true,
-      // resend MY xml against the FRESH token — CAS passes, their edit loses.
-      // mySeq travels along: an edit made after myXml was serialized keeps
+      // resend MY text against the FRESH token — CAS passes, their edit loses.
+      // mySeq travels along: an edit made after myText was serialized keeps
       // the dirty dot and re-arms autosave instead of being marked saved.
       run: () => {
         if (epoch !== liveEpoch || inactive) return;
         hideBanner();
         autosavePaused = false;
-        void save(myXml, conflict.baseVersion, mySeq);
+        void save(myText, conflict.baseVersion, mySeq);
       },
     },
     {

@@ -66,7 +66,7 @@ export function implementPrompt(todo: TodoWire, target: PromptTarget): string {
     `3. Check it: validate_bpmn({xml, ${args}}) until no ERROR findings remain. ` +
       "The BPMNDI section must stay complete for every flow node, lane, pool and edge.",
     `4. Save it: save_bpmn_xml({${args}, xml, baseVersion}). The document is LIVE — co-editors see the change ` +
-      "immediately. On {conflict: true}, re-derive your edit against currentXml and retry with the fresh baseVersion.",
+      "immediately. On {conflict: true}, re-derive your edit against currentContent and retry with the fresh baseVersion.",
     `5. Close it: close_todo({repo: "${target.repo}", todoId: "${todo.id}"}) — only after the save succeeded.`,
     "",
     "Then tell me in one or two sentences what you changed.",

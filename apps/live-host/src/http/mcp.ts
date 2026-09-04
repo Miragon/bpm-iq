@@ -30,7 +30,7 @@ import { join } from "node:path";
 
 import { fileDeepLink, processDeepLink } from "@bpmiq/contracts/deep-link";
 import { roomName } from "@bpmiq/contracts/live";
-import type { TodoWire, WidgetBootWire } from "@bpmiq/contracts/live-host";
+import type { ContentConflictWire, TodoWire, WidgetBootWire } from "@bpmiq/contracts/live-host";
 import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
 import { parseTestSuite, type TestCase, testsPathFor } from "@bpmiq/decisions/tests";
 import { fail, ok, READ, safe, WRITE } from "@bpmiq/mcp-kit";
@@ -233,7 +233,7 @@ export function createLiveMcpServer(
     const r = await requireRepo(repo);
     const content = await getContent(opts, r, await resolveDmnPath(r, id, path));
     return {
-      view: decisionViewOf(content.path, content.xml),
+      view: decisionViewOf(content.path, content.content),
       at: { path: content.path, baseVersion: content.baseVersion },
     };
   };
@@ -251,12 +251,19 @@ export function createLiveMcpServer(
     );
 
   /** the stale-baseVersion result every save tool answers — retryable data,
-   *  not an error (the sidecar save renames the payload key: it carries YAML) */
-  const conflictResult = (
-    c: { path: string; currentXml: string; baseVersion: string; error: string },
-    key: "currentXml" | "currentYaml" = "currentXml",
-  ) =>
-    ok({ ok: false, conflict: true, path: c.path, [key]: c.currentXml, baseVersion: c.baseVersion, message: c.error });
+   *  not an error. `currentContent` is THE payload field (#154); the legacy key
+   *  (`currentXml` on the model saves, `currentYaml` on the sidecar save) rides
+   *  along as a deprecated alias for one release. */
+  const conflictResult = (c: ContentConflictWire, legacyKey: "currentXml" | "currentYaml" = "currentXml") =>
+    ok({
+      ok: false,
+      conflict: true,
+      path: c.path,
+      currentContent: c.currentContent,
+      [legacyKey]: c.currentContent,
+      baseVersion: c.baseVersion,
+      message: c.error,
+    });
 
   const registerGetXmlTool = (cfg: {
     name: string;
@@ -340,7 +347,7 @@ export function createLiveMcpServer(
           lint?: "block" | "warn";
         }) => {
           const r = await requireRepo(repo);
-          const out = await putContent(opts, r, await cfg.resolve(r, id, path), { xml, baseVersion, lint });
+          const out = await putContent(opts, r, await cfg.resolve(r, id, path), { content: xml, baseVersion, lint });
           if (!out.ok) return conflictResult(out.conflict);
           console.log(`content saved: ${r.fullName}/${out.result.path} by @${session.user.login} via mcp`);
           return ok({ ok: true, ...out.result });
@@ -406,7 +413,7 @@ export function createLiveMcpServer(
       const r = await requireRepo(repo);
       const bpmnPath = await resolveBpmnPath(r, id, path);
       const content = await getContent(opts, r, bpmnPath);
-      const graph = extractModelGraph(content.path, content.xml);
+      const graph = extractModelGraph(content.path, content.content);
       if (!graph) return fail(`could not derive a process view from ${content.path}.`);
       return ok({ id: id ?? null, path: content.path, baseVersion: content.baseVersion, ...deriveProcess(graph) });
     }),
@@ -449,7 +456,7 @@ export function createLiveMcpServer(
         target = m.path;
       }
       const content = await getContent(opts, r, target);
-      const graph = extractModelGraph(content.path, content.xml);
+      const graph = extractModelGraph(content.path, content.content);
       const view = graph && deriveView(graph);
       if (!view) return fail(`no derived view for ${content.path} — the notation has no extract/derive capability.`);
       // id from the RESOLVED path — a caller-supplied id must not ride along
@@ -538,7 +545,7 @@ export function createLiveMcpServer(
         id: decisionId,
         path: content.path,
         baseVersion: content.baseVersion,
-        ...decisionViewOf(content.path, content.xml),
+        ...decisionViewOf(content.path, content.content),
         // the impact side: which processes delegate to this decision
         usedBy: await decisionUsers(workspace, decisionId),
       });
@@ -706,8 +713,8 @@ export function createLiveMcpServer(
       name: "save_bpmn_xml",
       description:
         "Validate and save complete BPMN XML into the LIVE document (co-editors see it immediately). " +
-        "baseVersion (from get_bpmn_xml) is REQUIRED; a stale one returns {conflict:true, currentXml} " +
-        "instead of overwriting — re-derive your edit against currentXml and retry.",
+        "baseVersion (from get_bpmn_xml) is REQUIRED; a stale one returns {conflict:true, currentContent} " +
+        "instead of overwriting — re-derive your edit against currentContent and retry.",
       ref: processRef,
       xmlDoc: "the complete BPMN XML (must include a full BPMNDI section)",
       baseVersionDoc: "the baseVersion from a prior get_bpmn_xml — call that first",
@@ -728,8 +735,8 @@ export function createLiveMcpServer(
       name: "save_dmn_xml",
       description:
         "Validate and save complete DMN XML into the LIVE document (co-editors see it immediately). " +
-        "baseVersion (from get_dmn_xml) is REQUIRED; a stale one returns {conflict:true, currentXml} " +
-        "instead of overwriting — re-derive your edit against currentXml and retry. Keep the DMNDI " +
+        "baseVersion (from get_dmn_xml) is REQUIRED; a stale one returns {conflict:true, currentContent} " +
+        "instead of overwriting — re-derive your edit against currentContent and retry. Keep the DMNDI " +
         "section complete or the visual editor breaks. Structural validation runs here; for the " +
         "logic run analyze_decision / run_decision_tests before saving.",
       ref: decisionRef,
@@ -774,7 +781,7 @@ export function createLiveMcpServer(
           const r = await requireRepo(repo);
           const dmnPath = await resolveDmnPath(r, id, path);
           const content = await getContent(opts, r, dmnPath);
-          const view = decisionViewOf(content.path, content.xml);
+          const view = decisionViewOf(content.path, content.content);
           const out = await saveTestsFor(
             opts,
             r,
@@ -1003,7 +1010,7 @@ export function createLiveMcpServer(
         // lean result on purpose: hosts cap tool results (~150k chars) and the
         // widget fetches the XML itself via get_bpmn_xml — never send it here
         const content = await getContent(opts, r, bpmnPath);
-        const graph = extractModelGraph(content.path, content.xml);
+        const graph = extractModelGraph(content.path, content.content);
         const view = graph ? deriveProcess(graph) : undefined;
         return ok({
           opened: {
@@ -1084,7 +1091,7 @@ export function createLiveMcpServer(
         // lean result on purpose (hosts cap tool results): the widget fetches
         // the XML itself via get_dmn_xml — never send it here
         const content = await getContent(opts, r, dmnPath);
-        const view = decisionViewOf(content.path, content.xml);
+        const view = decisionViewOf(content.path, content.content);
         return ok({
           opened: {
             repo: r.fullName,

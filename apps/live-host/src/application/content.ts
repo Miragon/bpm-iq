@@ -29,7 +29,7 @@ import { CONTENT_KEY, roomName } from "@bpmiq/contracts/live";
 import type {
   ContentConflictWire,
   ContentWire,
-  PutContentBody,
+  PutContentRequest,
   PutContentResultWire,
 } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
@@ -86,12 +86,21 @@ export async function getContent(opts: ContentDeps, repo: ConnectedRepo, path: s
     await conn.transact((doc) => {
       // structured rooms (epic #118 step 8) read as their CANONICAL encoding —
       // the same text git, history and the validator see
-      const xml = codec ? codec.encode(readSnapshot(doc)) : doc.getText(CONTENT_KEY).toString();
-      out = { repo: repo.fullName, path: safePath, xml, baseVersion: baseVersionOf(xml) };
+      const content = codec ? codec.encode(readSnapshot(doc)) : doc.getText(CONTENT_KEY).toString();
+      // `xml` is the deprecated alias of `content` (#154) — emitted for one release
+      out = { repo: repo.fullName, path: safePath, content, xml: content, baseVersion: baseVersionOf(content) };
     });
   });
   if (!out) throw new Error(`read produced no content: ${safePath}`); // unreachable
   return out;
+}
+
+/** the document text of a PUT body: `content`, or the deprecated `xml` alias
+ *  (#154) — `content` wins when both are present; undefined = malformed body */
+function bodyText(body: PutContentRequest | undefined): string | undefined {
+  const b = body as { content?: unknown; xml?: unknown } | undefined;
+  if (typeof b?.content === "string") return b.content;
+  return typeof b?.xml === "string" ? b.xml : undefined;
 }
 
 /** validate + compare-and-set the live document. Never writes on a stale token. */
@@ -99,11 +108,12 @@ export async function putContent(
   opts: ContentDeps,
   repo: ConnectedRepo,
   path: string,
-  body: PutContentBody,
+  body: PutContentRequest,
 ): Promise<PutOutcome> {
   const safePath = modelPath(opts.registry, repo, path, "content/invalid-path");
-  if (typeof body?.xml !== "string") {
-    throw new AppError("content/xml-required", "body.xml must be a string", { status: 400, expose: true });
+  const text = bodyText(body);
+  if (text === undefined) {
+    throw new AppError("content/body-required", "body.content must be a string", { status: 400, expose: true });
   }
   if (typeof body.baseVersion !== "string" || body.baseVersion.length === 0) {
     throw new AppError(
@@ -114,7 +124,7 @@ export async function putContent(
   }
   // size cap FIRST: a CRDT can't shrink after the fact, and the ws-side ingest
   // guard (beforeHandleMessage) does not run for direct connections
-  if (Buffer.byteLength(body.xml, "utf8") > opts.maxDocBytes) {
+  if (Buffer.byteLength(text, "utf8") > opts.maxDocBytes) {
     throw new AppError("content/too-large", `content exceeds the ${opts.maxDocBytes}-byte document cap`, {
       status: 413,
       expose: true,
@@ -122,16 +132,17 @@ export async function putContent(
   }
   const workspace = await assertOnDisk(opts, repo, safePath);
 
-  // full platform validation per notation: BPMN (structure + BPMNDI coverage +
-  // callActivity links) and DMN (table/DMNDI/requirement integrity — the FEEL
-  // semantics live in the analyze_decision tool, not on the write path).
-  // Everything else passes through unvalidated.
+  // full platform validation per notation — checkModel, the one dispatch the
+  // CLI runs too (BPMN structure + BPMNDI coverage + links, DMN table/DMNDI/
+  // requirement integrity, the baseline parse of every other notation; the
+  // FEEL semantics live in the analyze_decision tool, not on the write path).
+  // A path that is no registered notation (a YAML sidecar) passes unvalidated.
   // lint:"warn" reports ERRORs on the result instead of refusing — the modeler
   // widget's autosave path; the ws rooms have never gated live edits, so this
   // is the same trust level, not a new one. Default stays "block" (REST + agents).
   let warnings: string[] = [];
   let lintErrors: string[] = [];
-  const findings = await lintModel(workspace, safePath, body.xml);
+  const findings = await lintModel(workspace, safePath, text);
   if (findings) {
     const errors = findings.filter((f) => f.severity === "ERROR");
     if (errors.length > 0 && body.lint !== "warn") {
@@ -152,7 +163,7 @@ export async function putContent(
   const codec = (opts.docCodec ?? docCodecForPath)(safePath);
   // a structured save normalizes: the doc's state after the write is the
   // canonical encoding of the DECODED payload — the returned token must match
-  const canonicalNext = codec ? codec.encode(codec.decode(body.xml)) : body.xml;
+  const canonicalNext = codec ? codec.encode(codec.decode(text)) : text;
   await withDoc(opts, repo, safePath, async (conn) => {
     // CAS + write inside ONE synchronous transact callback — atomic on the event
     // loop, so no remote update can land between the compare and the write
@@ -164,10 +175,11 @@ export async function putContent(
         outcome = {
           ok: false,
           conflict: {
-            error: "the document changed since your last read — re-derive your edit against currentXml and retry",
+            error: "the document changed since your last read — re-derive your edit against currentContent and retry",
             code: "content/conflict",
             path: safePath,
-            currentXml: current,
+            currentContent: current,
+            currentXml: current, // deprecated alias (#154)
             baseVersion: currentVersion,
           },
         };
@@ -177,11 +189,11 @@ export async function putContent(
         // structured lane: element-/attribute-wise reconcile — a whole-board
         // agent save touches only what differs, so co-editors' concurrent
         // work on other elements merges instead of being replaced
-        reconcileSnapshot(doc, codec.decode(body.xml));
+        reconcileSnapshot(doc, codec.decode(text));
       } else {
         // minimal diff (shared writer with web/vscode) — co-editors see an
         // incremental update, not a replace-all
-        updateText(ytext, body.xml);
+        updateText(ytext, text);
       }
       outcome = {
         ok: true,

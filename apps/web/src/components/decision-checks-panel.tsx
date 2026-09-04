@@ -216,7 +216,7 @@ export function DecisionChecksPanel({
     queryKey: ["decision-tests", repo, testsPath],
     queryFn: async () => {
       try {
-        return parseTestSuite((await fetchContent(repo, testsPath)).xml, testsPath);
+        return parseTestSuite((await fetchContent(repo, testsPath)).content, testsPath);
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) return null; // no suite yet
         throw e;

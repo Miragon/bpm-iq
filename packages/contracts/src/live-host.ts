@@ -270,11 +270,17 @@ export interface CreateTodoBody {
 }
 
 /** GET /api/repos/:fullName/content?path=<model path> — the LIVE document content
- *  (the same Y.Text the collaborative rooms edit, read server-side) */
+ *  (the same Y.Text the collaborative rooms edit, read server-side). One route
+ *  for EVERY editable document: a notation's file text in its own format (XML
+ *  for bpmn/dmn, the OWM/.storm DSL, JSON) and the YAML sidecars next to it. */
 export interface ContentWire {
   repo: string;
   /** content-relative model path (the room path) */
   path: string;
+  /** the complete document text, whatever the notation's format is */
+  content: string;
+  /** @deprecated alias of `content` (#154) — kept for one release so clients
+   *  written against the XML-named wire keep working; read `content` */
   xml: string;
   /** opaque optimistic-concurrency token — changes on ANY edit (incl. delete-only) */
   baseVersion: string;
@@ -283,7 +289,8 @@ export interface ContentWire {
 /** PUT /api/repos/:fullName/content?path=… — request body. baseVersion is REQUIRED
  *  (from a prior GET); a stale one returns 409 ContentConflictWire instead of overwriting. */
 export interface PutContentBody {
-  xml: string;
+  /** the complete document text, whatever the notation's format is */
+  content: string;
   baseVersion: string;
   /** "block" (default): ERROR findings refuse the save (422). "warn": findings
    * come back on the result instead — the modeler widget's autosave uses this,
@@ -291,12 +298,17 @@ export interface PutContentBody {
   lint?: "block" | "warn";
 }
 
+/** the PUT body as accepted ON THE WIRE: `content`, or the pre-#154 `xml` alias
+ *  (deprecated, one release). `content` wins when both are present. */
+export type PutContentRequest = PutContentBody | (Omit<PutContentBody, "content"> & { /** @deprecated */ xml: string });
+
 /** PUT success response */
 export interface PutContentResultWire {
   path: string;
   /** the new token to continue editing against */
   baseVersion: string;
-  /** validator WARN findings (non-blocking; [] for non-.bpmn files) */
+  /** validator WARN findings of the notation's platform check (non-blocking;
+   *  [] when the path is no registered notation, e.g. a YAML sidecar) */
   warnings: string[];
   /** validator ERROR findings — only present on lint:"warn" saves, where they
    * inform instead of refusing */
@@ -309,6 +321,8 @@ export interface ContentConflictWire {
   code: "content/conflict";
   path: string;
   /** re-derive the edit against this and retry with the fresh baseVersion */
+  currentContent: string;
+  /** @deprecated alias of `currentContent` (#154, one release) */
   currentXml: string;
   baseVersion: string;
 }

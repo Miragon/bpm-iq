@@ -62,7 +62,7 @@ import type {
   Me,
   ModelInfo,
   ProcessInfo,
-  PutContentBody,
+  PutContentRequest,
   PutContentResultWire,
   ReleaseFilesBody,
   ReleaseResult,
@@ -701,8 +701,8 @@ export function startApi(port: number, opts: ApiOptions): Server {
             return send(res, 200, (await getContent(opts, repo, path)) satisfies ContentWire);
           }
           if (req.method === "PUT") {
-            // JSON-escape inflation of an at-cap XML stays well under 2x + slack
-            const body = await jsonBody<PutContentBody>(req, res, opts.maxDocBytes * 2 + 65_536);
+            // JSON-escape inflation of an at-cap document stays well under 2x + slack
+            const body = await jsonBody<PutContentRequest>(req, res, opts.maxDocBytes * 2 + 65_536);
             if (body === undefined) return;
             const out = await putContent(opts, repo, path, body);
             if (!out.ok) return send(res, 409, out.conflict satisfies ContentConflictWire);

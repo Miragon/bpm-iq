@@ -48,7 +48,7 @@ export async function readDecisionTests(
   // existence first: getContent would 404, and "no tests yet" is a normal state
   if (!existsSync(join(workspace, path))) return undefined;
   const content = await getContent(opts, repo, path);
-  return { path, raw: content.xml, baseVersion: content.baseVersion };
+  return { path, raw: content.content, baseVersion: content.baseVersion };
 }
 
 export interface RunTestsResult extends SuiteOutcome {
@@ -139,7 +139,7 @@ export async function saveTestsFor(
       { status: 400, expose: true },
     );
   }
-  const out = await putContent(opts, repo, path, { xml: yaml, baseVersion: opt.baseVersion });
+  const out = await putContent(opts, repo, path, { content: yaml, baseVersion: opt.baseVersion });
   if (!out.ok) return { conflict: out.conflict };
   return { path, baseVersion: out.result.baseVersion, created: false, outcome };
 }

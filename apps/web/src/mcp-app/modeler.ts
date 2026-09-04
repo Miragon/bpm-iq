@@ -9,8 +9,10 @@ import NavigatedViewer from "bpmn-js/lib/NavigatedViewer";
 import { bpmiqModdle, bpmnStickyModule, bpmnStickyViewModule } from "@/notations/bpmn-sticky";
 
 export interface ModelerHandle {
-  importXml(xml: string): Promise<void>;
-  saveXml(): Promise<string>;
+  /** parse + render the document text (BPMN XML for this engine) */
+  importText(text: string): Promise<void>;
+  /** serialize the current model, formatted */
+  exportText(): Promise<string>;
   editable: boolean;
   onDirty(cb: () => void): void;
   /** the single selected element's id (labels resolve to their target), or
@@ -47,12 +49,12 @@ export function mountModeler(container: HTMLElement, readonly: boolean): Modeler
   return {
     raw: instance,
     editable: !readonly,
-    async importXml(xml: string): Promise<void> {
+    async importText(xml: string): Promise<void> {
       await instance.importXML(xml);
       const canvas = instance.get("canvas") as { zoom: (mode: string) => void };
       canvas.zoom("fit-viewport");
     },
-    async saveXml(): Promise<string> {
+    async exportText(): Promise<string> {
       const { xml } = await (instance as Modeler).saveXML({ format: true });
       if (!xml) throw new Error("empty model");
       return xml;

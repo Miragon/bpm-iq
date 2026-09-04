@@ -388,7 +388,7 @@ with the literal tool call is the lever, honest UI copy is the promise.
 
 `save_bpmn_xml` is compare-and-set: the caller passes the `baseVersion` from a prior
 `get_bpmn_xml`, and if the live document moved in between, the save is refused with a
-retryable `{conflict: true, currentXml}` — re-read (or rebase onto `currentXml`) and retry;
+retryable `{conflict: true, currentContent}` — re-read (or rebase onto `currentContent`) and retry;
 nothing is overwritten. Saves are validation-gated (`@bpmiq/validator`: ERROR findings
 refuse the save, WARN findings come back as warnings) and land in the live Yjs state —
 every open editor sees them instantly, exactly like a keystroke.
