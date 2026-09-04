@@ -59,6 +59,51 @@ test("deriveView(wardley/tt/vc): node/edge stats from the shipped fixtures", () 
   const tt = deriveView(extractModelGraph("teams/sample.tt", fixture("sample.tt")) as ModelGraph);
   assert.deepEqual(tt?.stats, { teams: 5, interactions: 0 });
 
+  const es = deriveView(
+    extractModelGraph("boards/order-checkout.storm", fixture("order-checkout.storm")) as ModelGraph,
+  );
+  assert.equal(es?.name, "Order Checkout", "the board title is the model's own name");
+  assert.deepEqual(es?.stats, {
+    events: 2,
+    commands: 2,
+    actors: 1,
+    aggregates: 2,
+    policies: 1,
+    readmodels: 1,
+    externals: 1,
+    hotspots: 1,
+    notes: 1,
+    drawings: 0,
+    arrows: 9,
+  });
+  assert.equal(
+    es?.summary,
+    "Event storming board with 2 events, 2 commands, 1 actor, 2 aggregates, 1 policy, 1 readmodel, 1 external, 1 hotspot, 1 note, 9 arrows",
+  );
+  // the timeline reads the board left to right — the facilitator's story
+  assert.deepEqual(
+    (es?.detail as { level: string | null; timeline: Array<{ name: string | null }> }).timeline.map((n) => n.name),
+    [
+      "Customer",
+      "Place Order",
+      "Order",
+      "Payment Provider",
+      "Order Status",
+      "Order Placed",
+      "Double payment on retry?",
+      "When order placed, ship it",
+      "Ship Order",
+      "Order",
+      "Order Shipped",
+    ],
+  );
+  assert.equal((es?.detail as { level: string | null }).level, null);
+  assert.equal(
+    deriveView({ notation: "event-storming", nodes: [], edges: [], meta: { title: "Blank", level: "process" } })
+      ?.summary,
+    "Event storming board with no elements",
+  );
+
   const vc = deriveView(extractModelGraph("chains/supply.vc.json", fixture("supply.vc.json")) as ModelGraph);
   assert.deepEqual(vc?.stats, { elements: 3, connections: 2 });
   assert.equal(vc?.summary, "Value chain with 3 elements, 2 connections");

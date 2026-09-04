@@ -13,6 +13,7 @@
     "./bpmn-sync": "./src/bpmn-sync.ts",
     "./dmn-sync": "./src/dmn-sync.ts",
     "./wardley-sync": "./src/wardley-sync.ts",
+    "./event-storming-sync": "./src/event-storming-sync.ts",
     "./tt-sync": "./src/tt-sync.ts",
     "./structured": "./src/structured.ts"
   },

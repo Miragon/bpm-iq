@@ -36,6 +36,7 @@ import {
   FolderPlus,
   Plus,
   Shapes,
+  StickyNote,
   Table2,
   Users,
   Workflow,
@@ -65,6 +66,7 @@ const CREATABLE_NOTATIONS = NOTATIONS.filter((n) => hasTemplate(n.id) && n.id !=
 const NOTATION_ICONS = new Map<string, ComponentType<{ className?: string }>>([
   ["wardley", ChartNetwork],
   ["team-topology", Users],
+  ["event-storming", StickyNote],
   ["markdown", FileText],
 ]);
 

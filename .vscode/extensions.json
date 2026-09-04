@@ -4,6 +4,7 @@
     "miragon-gmbh.wardley-mapping-modeler",
     "miragon-gmbh.value-chain-modeler",
     "miragon-gmbh.team-topologies-modeler",
+    "miragon-gmbh.event-storming-modeler",
     "anthropic.claude-code"
   ]
 }

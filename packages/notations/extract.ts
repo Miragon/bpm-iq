@@ -440,6 +440,162 @@ function extractTeamTopology(raw: string): ModelGraph {
   };
 }
 
+// ── the .storm DSL (Miragon event-storming-modeler) ──────────────────────────
+// One statement per line: `title …` / `style …` / `level …` config lines,
+// `<kind> <Label> [x, y] (suffixes)` stickies (kinds: event command actor
+// aggregate policy readmodel external hotspot), `note <Text> [x, y]`,
+// `line [[x, y], …]` freeform drawings and `A -> B; label` arrows that
+// reference stickies by NAME or `#id`; `//` and `/* */` comments. Ids mirror
+// the DSL parser's allocation (`<prefix>_<slug>`, `_2` on collision, an
+// explicit `(id …)` suffix wins) so ModelGraph ids equal the renderer's
+// element ids. Lenient like the DSL itself: an uninterpretable line is
+// skipped and an unresolved arrow dropped — the canvas has no such edge.
+
+const STORM_ID_PREFIX: Record<string, string> = {
+  event: "event",
+  command: "cmd",
+  actor: "actor",
+  aggregate: "agg",
+  policy: "policy",
+  readmodel: "read",
+  external: "ext",
+  hotspot: "hot",
+};
+/** stickies that can carry a pinned actor/hotspot/note — `(on <Host>)` */
+const STORM_HOST_KINDS = new Set(["event", "command", "aggregate", "policy", "readmodel", "external"]);
+const STORM_ATTACHABLE_KINDS = new Set(["actor", "hotspot", "note"]);
+const STORM_COORDS = /\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]/;
+const STORM_POINTS = /\[\s*(\[[^[\]]*\](?:\s*,\s*\[[^[\]]*\])+)\s*\]/;
+
+const stormSlug = (label: string): string =>
+  label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_/, "")
+    .replace(/_$/, "") || "x";
+
+/** the `(on <Host>)` / `(id <id>)` / `(color <c>)` suffixes of a sticky line;
+ *  `rest` is the text with EVERY parenthesised suffix removed (size/align are
+ *  note layout — irrelevant to the graph) */
+function stormSuffixes(text: string): { host?: string; id?: string; color?: string; rest: string } {
+  let host: string | undefined;
+  let rest = text;
+  const on = /\(\s*on\s+/i.exec(text);
+  if (on) {
+    // the DSL reads the host up to the LAST closing paren of the line
+    const start = on.index + on[0].length;
+    const close = text.lastIndexOf(")");
+    if (close >= start && text.slice(start, close).trim()) {
+      host = text.slice(start, close).trim();
+      rest = `${text.slice(0, on.index)} ${text.slice(close + 1)}`;
+    }
+  }
+  const id = /\(\s*id\s+([A-Za-z0-9_-]+)\s*\)/i.exec(rest)?.[1];
+  const color = /\(\s*color\s+(#[0-9a-fA-F]{3,8}|[a-zA-Z][\w-]*)\s*\)/i.exec(rest)?.[1];
+  return { host, id, color, rest: rest.replace(/\([^)]*\)/g, " ") };
+}
+
+function extractEventStorming(raw: string): ModelGraph {
+  const nodes: ModelNode[] = [];
+  const edges: ModelEdge[] = [];
+  let title: string | null = null;
+  let level: string | null = null;
+  const used = new Set<string>();
+  const nameToId = new Map<string, string>();
+  const claim = (id: string | undefined): string | undefined => {
+    if (!id || used.has(id)) return undefined;
+    used.add(id);
+    return id;
+  };
+  const alloc = (prefix: string, label: string): string => {
+    const base = `${prefix}_${stormSlug(label)}`;
+    let id = base;
+    for (let i = 2; used.has(id); i++) id = `${base}_${i}`;
+    used.add(id);
+    return id;
+  };
+  const decode = (name: string): string => name.replace(/\\n/g, "\n");
+  const arrows: Array<{ from: string; to: string; label?: string }> = [];
+  const pins: Array<{ node: ModelNode; host: string }> = [];
+
+  for (const source of raw.replace(/\/\*[\s\S]*?\*\//g, " ").split(/\r?\n/)) {
+    const line = source.replace(/(?<!:)\/\/.*$/, "").trim();
+    if (!line) continue;
+    const kw = (/^[A-Za-z][\w-]*/.exec(line)?.[0] ?? "").toLowerCase();
+    const after = line.slice(kw.length).trim();
+    const semi = line.indexOf(";");
+    const core = (semi >= 0 ? line.slice(0, semi) : line).trim();
+    const arrowAt = core.indexOf("->");
+    // the DSL's own precedence: a coordinate-free `A -> B` line is an arrow
+    // whatever its first word — except `title`, which is only an arrow when
+    // its left side names a sticky already on the board
+    if (arrowAt > 0 && !STORM_COORDS.test(core)) {
+      const from = core.slice(0, arrowAt).trim();
+      const to = core.slice(arrowAt + 2).trim();
+      if (from && to && (kw !== "title" || nameToId.has(decode(from)))) {
+        const label = semi >= 0 ? line.slice(semi + 1).trim() : "";
+        arrows.push({ from, to, ...(label ? { label } : {}) });
+        continue;
+      }
+    }
+    if (kw === "title") {
+      title = after;
+    } else if (kw === "level") {
+      const value = after.toLowerCase();
+      if (["big-picture", "process", "design"].includes(value)) level = value;
+    } else if (Object.hasOwn(STORM_ID_PREFIX, kw) || kw === "note") {
+      const at = STORM_COORDS.exec(after);
+      if (!at && after.includes("[")) continue; // malformed coordinates
+      const x = at ? Number(at[1]) : 0;
+      const y = at ? Number(at[2]) : 0;
+      if (Number.isNaN(x) || Number.isNaN(y)) continue;
+      // with coordinates the name is everything before them (suffixes come
+      // after); without, the suffixes are stripped out of the name
+      const name = decode(at ? after.slice(0, at.index).trim() : stormSuffixes(after).rest.trim());
+      const { host, id: explicit, color } = stormSuffixes(at ? after.slice(at.index + at[0].length) : after);
+      if (kw !== "note" && !name) continue;
+      const id = kw === "note" ? alloc("note", name || "note") : (claim(explicit) ?? alloc(STORM_ID_PREFIX[kw]!, name));
+      const node: ModelNode = { id, type: kw, name, extra: { x, y, ...(color ? { color } : {}) } };
+      nodes.push(node);
+      if (kw !== "note" && !nameToId.has(name)) nameToId.set(name, id);
+      if (host && STORM_ATTACHABLE_KINDS.has(kw)) pins.push({ node, host });
+    } else if (kw === "line") {
+      const points = STORM_POINTS.exec(after)?.[1];
+      const tuples = points ? [...points.matchAll(/\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]/g)] : [];
+      if (tuples.length < 2) continue;
+      nodes.push({
+        id: alloc("draw", "line"),
+        type: "drawing",
+        extra: { x: Number(tuples[0]![1]), y: Number(tuples[0]![2]), points: tuples.length },
+      });
+    }
+    // anything else (`style`, unknown lines) is passthrough — not graph-shaped
+  }
+
+  const resolve = (token: string): ModelNode | undefined => {
+    const id = token.startsWith("#") ? token.slice(1) : nameToId.get(decode(token));
+    return id === undefined ? undefined : nodes.find((n) => n.id === id);
+  };
+  for (const { node, host } of pins) {
+    const target = resolve(host);
+    if (target && STORM_HOST_KINDS.has(target.type)) node.extra = { ...node.extra, attachedTo: target.id };
+  }
+  let n = 0;
+  for (const arrow of arrows) {
+    const from = resolve(arrow.from);
+    const to = resolve(arrow.to);
+    // arrows connect STICKIES — a note or drawing endpoint is no edge
+    if (!from || !to || !Object.hasOwn(STORM_ID_PREFIX, from.type) || !Object.hasOwn(STORM_ID_PREFIX, to.type)) {
+      continue;
+    }
+    let id = `arrow_${++n}`;
+    while (used.has(id)) id = `arrow_${++n}`;
+    edges.push({ id, from: from.id, to: to.id, kind: "arrow", name: arrow.label });
+  }
+  return { notation: "event-storming", nodes, edges, meta: { title, level } };
+}
+
 function extractValueChain(raw: string): ModelGraph {
   const data = JSON.parse(raw) as { elements?: any[]; connections?: any[] };
   return {
@@ -463,6 +619,7 @@ const EXTRACTORS: Record<string, (raw: string) => ModelGraph> = {
   dmn: extractDmn,
   wardley: extractWardley,
   "team-topology": extractTeamTopology,
+  "event-storming": extractEventStorming,
   "value-chain": extractValueChain,
 };
 

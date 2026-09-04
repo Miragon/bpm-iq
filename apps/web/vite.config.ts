@@ -10,7 +10,9 @@ import { defineConfig } from "vite";
  * (.djs-palette etc.) — loaded once via a lazy editor chunk they would
  * permanently re-theme the bpmn-js/dmn-js editors of the same session. Scope
  * them to their canvas hosts at build time; :root stays global (the custom
- * properties are namespaced --wardley-… and --cd-… and collide with nothing).
+ * properties are namespaced --wardley-… and --cd-… and collide with nothing;
+ * the event-storming sheet sets diagram-js' own --color-… tokens on
+ * .djs-parent, which the prefix scopes like any other rule).
  *
  * Each renderer also adds its own root class (`vendorRoot`) to the SAME
  * element that carries the scope class, so a descendant prefix would never
@@ -38,6 +40,7 @@ export default defineConfig({
       plugins: [
         scopeVendorCss(/@miragon[/+]wardley-renderer/, ".wardley-canvas", ".wardley-container"),
         scopeVendorCss(/@miragon[/+]team-topologies-renderer/, ".tt-canvas", ".tt-djs-container"),
+        scopeVendorCss(/@miragon[/+]event-storming-renderer/, ".es-canvas", ".event-storming-container"),
       ],
     },
   },

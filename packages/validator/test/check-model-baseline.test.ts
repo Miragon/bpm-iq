@@ -43,6 +43,11 @@ test("checkModelBaseline: json parses or errors, dsl stays lenient", () => {
   assert.match(broken[0]?.message ?? "", /not parseable as JSON/);
   // wardley's regex parser ignores garbage lines — no throw, no finding
   assert.deepEqual(checkModelBaseline("!!! not a map !!!", { notation: "wardley" }), []);
+  // same for the .storm DSL — uninterpretable lines are passthrough there too
+  assert.deepEqual(
+    checkModelBaseline("!!! not a board !!!\nevent Order Placed [1, 2]", { notation: "event-storming" }),
+    [],
+  );
   // an unregistered notation id has no mediaKind — nothing to gate
   assert.deepEqual(checkModelBaseline("anything", { notation: "no-such" }), []);
   // the xml branch — unreachable from runCli today (bpmn/dmn have full

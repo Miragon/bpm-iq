@@ -287,6 +287,14 @@ test("createNotationModel: team topology template is valid JSON matching the mod
   assert.deepEqual(doc, { version: 2, title: "Team Landscape", nodes: [], interactions: [], flows: [] });
 });
 
+test("createNotationModel: event storming board from the title-only .storm template", async () => {
+  const ws = workspace();
+  const created = await createNotationModel(REPO, ws, { notation: "event-storming", name: "Order Checkout" });
+  assert.equal(created.path, "processes/order-checkout.storm");
+  assert.equal(created.notation, "event-storming");
+  assert.equal(readFileSync(join(ws, created.path), "utf8"), "title Order Checkout\n");
+});
+
 test("createNotationModel: stems are unique PER NOTATION — a wardley map may share a stem with a bpmn process", async () => {
   const ws = workspace(); // workspace() already has processes/order.bpmn
   const created = await createNotationModel(REPO, ws, { notation: "wardley", name: "Order" });

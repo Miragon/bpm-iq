@@ -136,6 +136,16 @@ export function newTtJson(_id: string, name: string): string {
   return JSON.stringify({ version: 2, title: oneLine(name), nodes: [], interactions: [], flows: [] }, null, 2);
 }
 
+/**
+ * The initial content of a new Event Storming board — EXACTLY what the
+ * Miragon modeler's serializer emits for a board holding only a title, so
+ * the first canvas save never shows up as a phantom diff. The .storm DSL is
+ * line-oriented and lenient like OWM.
+ */
+export function newStormText(_id: string, name: string): string {
+  return `title ${oneLine(name)}\n`;
+}
+
 /** the initial content of a new markdown document — a heading with the title */
 export function newMarkdownText(_id: string, name: string): string {
   return `# ${oneLine(name)}\n`;
@@ -146,6 +156,7 @@ const TEMPLATES: Record<string, (id: string, name: string) => string> = {
   dmn: newDmnXml,
   wardley: newOwmText,
   "team-topology": newTtJson,
+  "event-storming": newStormText,
   markdown: newMarkdownText,
 };
 

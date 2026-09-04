@@ -108,6 +108,7 @@ test("discoverModels: every registry notation, id = modelStem, per-notation name
   writeFileSync(join(w, "models", "order.dmn"), "<d/>");
   writeFileSync(join(w, "models", "tea-shop.owm"), "component Tea [0.5, 0.5]");
   writeFileSync(join(w, "models", "teams.tt"), "{}");
+  writeFileSync(join(w, "models", "checkout.storm"), "title Checkout");
   // compound extension: the id is the FULL-extension stem
   writeFileSync(join(w, "models", "sub", "supply.vc.json"), "{}");
   // markdown IS a registered notation (epic #118 step 3) — docs are models
@@ -115,6 +116,7 @@ test("discoverModels: every registry notation, id = modelStem, per-notation name
   // not a registered notation — invisible to discovery
   writeFileSync(join(w, "models", "cases.tests.yaml"), "cases: []");
   assert.deepEqual(await discoverModels(w, cfg("models")), [
+    { id: "checkout", path: "models/checkout.storm", notation: "event-storming" },
     { id: "notes", path: "models/notes.md", notation: "markdown" },
     { id: "order", path: "models/order.bpmn", notation: "bpmn" },
     { id: "order", path: "models/order.dmn", notation: "dmn" },
