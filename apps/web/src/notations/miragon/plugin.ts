@@ -14,5 +14,9 @@ export function miragonPlugin(spec: MiragonRendererSpec): WebNotationPlugin {
       const [{ mountMiragonEditor }, renderer] = await Promise.all([import("./editor"), spec.load()]);
       return mountMiragonEditor(renderer, container, ctx);
     },
+    // every Miragon renderer is a served MCP-App widget by construction (the
+    // registration contract in ./index.ts pairs each spec with the Live Host's
+    // widget list), so its `open_<id>_modeler` tool exists for the handoff
+    assistNotation: spec.id,
   };
 }
