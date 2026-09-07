@@ -1,20 +1,19 @@
 /**
- * Headless tests for the two external-renderer adapters (src/wardley-sync.ts,
- * src/tt-sync.ts). The critical difference to bpmn/dmn: their text lanes are
- * NOT XML — the adapters override the rule-4 pre-gate (looksRenderable), so
- * OWM DSL and TT JSON import at all, and invalid text keeps the last good
- * canvas exactly like an invalid XML interleaving does for bpmn.
+ * Headless tests for the Miragon-renderer adapter (src/miragon-sync.ts), one
+ * per text lane. The critical difference to bpmn/dmn: the text lanes are NOT
+ * XML — the adapter overrides the rule-4 pre-gate (looksRenderable), so OWM /
+ * .storm DSL and TT / CM JSON import at all, and invalid text keeps the last
+ * good canvas exactly like an invalid XML interleaving does for bpmn.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import * as Y from "yjs";
 
-import { bindTeamTopology } from "../src/tt-sync.ts";
-import { bindWardley } from "../src/wardley-sync.ts";
+import { bindMiragon, type MiragonLane } from "../src/miragon-sync.ts";
 
-// the DEFAULT gate would call DOMParser; these adapters must never touch it —
-// a throwing stub proves they don't
+// the DEFAULT gate would call DOMParser; this adapter must never touch it —
+// a throwing stub proves it doesn't
 (globalThis as Record<string, unknown>).DOMParser = class {
   parseFromString(): never {
     throw new Error("DOMParser must not be used by non-XML adapters");
@@ -23,13 +22,17 @@ import { bindWardley } from "../src/wardley-sync.ts";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// ── the DSL lane (wardley OWM, event storming .storm) ────────────────────────
+
 const OWM = "component Tea [0.5, 0.5]\ncomponent Cup [0.7, 0.8]\nTea -> Cup\n";
+const STORM =
+  "title Order Checkout\ncommand Place Order [240, 300]\nevent Order Placed [620, 300]\nPlace Order -> Order Placed\n";
 
 /** the fake reproduces the two REAL renderer traits the sync must survive:
  *  importDSL fires commandStack.changed (importMap's commandStack.clear()
  *  emits, unlike bpmn-js), and exportDSL NORMALIZES (the serializer reorders
  *  hand-authored files — not a byte fixpoint) */
-function makeFakeWardley(initial: string) {
+function makeFakeDslModeler(initial: string) {
   let dsl = initial;
   const handlers: Record<string, Array<() => void>> = {};
   const imports: string[] = [];
@@ -55,12 +58,15 @@ function makeFakeWardley(initial: string) {
   };
 }
 
-test("wardley: OWM text imports (non-XML!), edits round-trip through both change events", async () => {
+const WARDLEY: MiragonLane = { kind: "dsl", changeEvents: ["commandStack.changed", "wardley.config.changed"] };
+const EVENT_STORMING: MiragonLane = { kind: "dsl", changeEvents: ["commandStack.changed"] };
+
+test("dsl lane: OWM text imports (non-XML!), edits round-trip through every configured change event", async () => {
   const doc = new Y.Doc();
   const ytext = doc.getText("content");
   ytext.insert(0, OWM);
-  const modeler = makeFakeWardley(OWM);
-  const unbind = bindWardley(modeler as never, ytext, doc);
+  const modeler = makeFakeDslModeler(OWM);
+  const unbind = bindMiragon(modeler, WARDLEY, ytext, doc);
   await wait(700);
   assert.deepEqual(modeler.imports, [OWM], "the initial import ran despite the text not being XML");
   // THE echo-suppression pin: importDSL fired commandStack.changed, and the
@@ -82,12 +88,32 @@ test("wardley: OWM text imports (non-XML!), edits round-trip through both change
   unbind();
 });
 
-test("wardley: emptied text keeps the last good canvas (lenient DSL, non-empty gate)", async () => {
+test("dsl lane: only the configured events count — a .storm board re-exports on commandStack.changed alone", async () => {
+  const doc = new Y.Doc();
+  const ytext = doc.getText("content");
+  ytext.insert(0, STORM);
+  const modeler = makeFakeDslModeler(STORM);
+  const unbind = bindMiragon(modeler, EVENT_STORMING, ytext, doc);
+  await wait(700);
+  assert.deepEqual(modeler.imports, [STORM]);
+  assert.equal(ytext.toString(), STORM, "opening a hand-authored board must not rewrite it");
+
+  modeler.setDsl(`${STORM}actor Customer [80, 300]\n`);
+  modeler.fire("wardley.config.changed"); // not one of this lane's events
+  await wait(100);
+  assert.doesNotMatch(ytext.toString(), /actor Customer/, "an unconfigured event never exports");
+  modeler.fire("commandStack.changed");
+  await wait(100);
+  assert.match(ytext.toString(), /actor Customer/);
+  unbind();
+});
+
+test("dsl lane: emptied text keeps the last good canvas (lenient DSL, non-empty gate)", async () => {
   const doc = new Y.Doc();
   const ytext = doc.getText("content");
   ytext.insert(0, OWM);
-  const modeler = makeFakeWardley(OWM);
-  const unbind = bindWardley(modeler as never, ytext, doc);
+  const modeler = makeFakeDslModeler(OWM);
+  const unbind = bindMiragon(modeler, WARDLEY, ytext, doc);
   await wait(700);
   ytext.delete(0, ytext.length); // a co-editor wipes the text mid-edit
   await wait(700);
@@ -95,15 +121,18 @@ test("wardley: emptied text keeps the last good canvas (lenient DSL, non-empty g
   unbind();
 });
 
+// ── the document lane (team topology .tt, context map .cm.json) ─────────────
+
 const TT_DOC = JSON.stringify({ version: 2, title: "T", nodes: [], interactions: [], flows: [] });
 
-function makeFakeTt() {
+function makeFakeDocumentModeler(initial: string) {
   const handlers: Record<string, Array<() => void>> = {};
   const imports: unknown[] = [];
   const cleared: boolean[] = [];
-  let current: unknown = { version: 2, title: "T", nodes: [], interactions: [], flows: [] };
+  let current: unknown = JSON.parse(initial);
   return {
     imports,
+    cleared,
     setDocument: (d: unknown) => {
       current = d;
     },
@@ -122,7 +151,6 @@ function makeFakeTt() {
       return { warnings: [] };
     },
     exportDocument: () => current,
-    cleared,
   };
 }
 
@@ -138,19 +166,21 @@ const codec = {
   },
   serialize: (document: unknown) => JSON.stringify(document),
 };
+const TEAM_TOPOLOGY: MiragonLane = { kind: "document", notation: "team-topology", codec };
 
-test("team-topology: the injected codec gates imports — parsed documents in, broken JSON keeps last good", async () => {
+test("document lane: the injected codec gates imports — parsed documents in, broken JSON keeps last good", async () => {
   const doc = new Y.Doc();
   const ytext = doc.getText("content");
   ytext.insert(0, TT_DOC);
-  const modeler = makeFakeTt();
-  const unbind = bindTeamTopology(modeler as never, codec, ytext, doc);
+  const modeler = makeFakeDocumentModeler(TT_DOC);
+  const unbind = bindMiragon(modeler as never, TEAM_TOPOLOGY, ytext, doc);
   await wait(700);
-  assert.equal(modeler.imports.length, 1);
-  assert.deepEqual((modeler.imports[0] as { version: number }).version, 2, "the PARSED document reaches the modeler");
+  assert.equal(modeler.imports.length, 1, "the initial import ran despite the text not being XML");
+  assert.equal((modeler.imports[0] as { version: number }).version, 2, "the PARSED document reaches the modeler");
   // the renderer's importDocument leaves undo history on stale shapes — the
   // adapter must erase it, SILENTLY (no 'changed' echo)
   assert.deepEqual(modeler.cleared, [false], "commandStack.clear(false) after the import");
+  assert.equal(ytext.toString(), TT_DOC, "opening a document must not rewrite it");
 
   // a co-editor's half-typed JSON must not reach the canvas
   ytext.insert(ytext.length, "{ broken");
@@ -165,17 +195,31 @@ test("team-topology: the injected codec gates imports — parsed documents in, b
   await wait(700);
   assert.equal(modeler.imports.length, 2);
   unbind();
+});
 
-  // a canvas edit serializes through the codec into ytext
-  const doc2 = new Y.Doc();
-  const ytext2 = doc2.getText("content");
-  ytext2.insert(0, TT_DOC);
-  const m2 = makeFakeTt();
-  const unbind2 = bindTeamTopology(m2 as never, codec, ytext2, doc2);
+test("document lane: a canvas edit serializes through the codec into ytext (commandStack.changed)", async () => {
+  const doc = new Y.Doc();
+  const ytext = doc.getText("content");
+  ytext.insert(0, TT_DOC);
+  const modeler = makeFakeDocumentModeler(TT_DOC);
+  const unbind = bindMiragon(modeler as never, TEAM_TOPOLOGY, ytext, doc);
   await wait(700);
-  m2.setDocument({ version: 2, title: "Renamed", nodes: [], interactions: [], flows: [] });
-  m2.fire("commandStack.changed");
+  modeler.setDocument({ version: 2, title: "Renamed", nodes: [], interactions: [], flows: [] });
+  modeler.fire("commandStack.changed");
   await wait(100);
-  assert.match(ytext2.toString(), /Renamed/);
-  unbind2();
+  assert.match(ytext.toString(), /Renamed/);
+  unbind();
+});
+
+test("a lane/renderer mismatch fails at bind time with a readable message", () => {
+  const doc = new Y.Doc();
+  const ytext = doc.getText("content");
+  assert.throws(
+    () => bindMiragon(makeFakeDocumentModeler(TT_DOC) as never, WARDLEY, ytext, doc),
+    /lane 'dsl' needs a renderer with importDSL/,
+  );
+  assert.throws(
+    () => bindMiragon(makeFakeDslModeler(OWM) as never, TEAM_TOPOLOGY, ytext, doc),
+    /lane 'document' needs a renderer with importDocument/,
+  );
 });

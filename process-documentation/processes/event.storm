@@ -1,0 +1,10 @@
+title event
+event Domain Event [666, 306] (id event_1)
+policy Policy [925, 306]
+command Command [1182, 306]
+aggregate Aggregate [1460, 306]
+event Domain Event [1669, 306] (id event_5)
+#event_1 -> Policy
+Policy -> Command
+Command -> Aggregate
+Aggregate -> #event_5

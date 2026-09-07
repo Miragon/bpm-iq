@@ -11,10 +11,9 @@
  *
  * What differs per notation (how change events are observed, how the view
  * state survives a re-import, what "renderable" means pre-import) lives in a
- * SyncAdapter; bpmn-sync, dmn-sync, the document pair tt-sync +
- * context-map-sync (over document-sync) and the DSL pair wardley-sync +
- * event-storming-sync (over dsl-sync) are the adapters. Consumers import
- * those, never this module.
+ * SyncAdapter; bpmn-sync, dmn-sync and miragon-sync (ONE adapter for every
+ * Miragon renderer, parameterised by its text lane) are the adapters.
+ * Consumers import those, never this module.
  */
 import type * as Y from "yjs";
 
@@ -54,6 +53,27 @@ export const looksWellFormedXml = (s: string): boolean =>
   s.trim().length > 0 &&
   new DOMParser().parseFromString(s, "application/xml").getElementsByTagName("parsererror").length === 0;
 export const NOT_WELL_FORMED_XML = "the document is not well-formed XML";
+
+/**
+ * The diagram-js view-state recipe every single-canvas modeler shares
+ * (bpmn-js and the Miragon renderers): snapshot the canvas viewbox before an
+ * import, restore it after a RE-import, fit the viewport on the first one.
+ */
+export function keepDiagramViewbox(modeler: { get(service: string): any }): SyncAdapter["beforeImport"] {
+  return (isFirstImport) => {
+    const canvas = modeler.get("canvas");
+    let viewbox: { x: number; y: number; width: number; height: number } | undefined;
+    try {
+      viewbox = canvas.viewbox();
+    } catch {
+      /* first import: no viewbox yet */
+    }
+    return () => {
+      if (viewbox && viewbox.width > 0 && !isFirstImport) canvas.viewbox(viewbox);
+      else canvas.zoom("fit-viewport");
+    };
+  };
+}
 
 export function bindModelSync(
   adapter: SyncAdapter,

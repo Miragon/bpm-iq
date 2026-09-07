@@ -285,19 +285,21 @@ runs the same per-(user, repo) authorization as the model tools.
 Every `open_*` tool is an [MCP App](https://modelcontextprotocol.io/specification/2026-01-26)
 (`io.modelcontextprotocol/ui`): in apps-capable clients (claude.ai, Claude Desktop) it
 renders the notation's modeler inline in the conversation. There are six single-file
-bundles (`apps/web/dist/mcp-app*.html`, one `vite.mcp-app-*.config.ts` each), one per
-modeler, and ONE widget core behind the canvas ones (`apps/web/src/mcp-app/core/`): the
-BPMN, Wardley Map, Team Topology, Event Storming and Context Map widgets share the load → autosave →
-conflict → live-upgrade lifecycle and differ only in their engine adapter; the DMN
-widget (multi-view + simulator) keeps its own. A widget = engine adapter + build entry +
-one registry row in the Live Host; a web dist that lacks a bundle simply lacks its tool.
+bundles (`apps/web/dist/mcp-app*.html`, built by `apps/web/scripts/build-widgets.ts`),
+one per modeler, and ONE widget core behind all of them (`apps/web/src/mcp-app/core/`):
+every widget shares the load → autosave → conflict → live-upgrade lifecycle and
+differs only in its engine adapter (the DMN engine, multi-view + simulator, has no
+live binding and stays on autosave). The four Miragon-renderer widgets are one
+template + one entry built once per renderer spec (`apps/web/src/notations/miragon/`).
+A widget = engine adapter (or a renderer spec) + one registry row in the Live Host; a
+web dist that lacks a bundle simply lacks its tool.
 
 `open_modeler` renders an interactive bpmn-js modeler — pan/zoom, edit, and save
 through the same validated, `baseVersion`-guarded path as `save_model_content`
 (`lint:"warn"`; a concurrent save shows a conflict banner: load theirs, overwrite, or
 keep editing; a save tells the model to re-read instead of trusting stale text). The
 widget is the single-file bundle `apps/web/dist/mcp-app.html` (built by
-`vite.mcp-app.config.ts`), served as a `ui://` resource; its tool calls ride the
+`scripts/build-widgets.ts`), served as a `ui://` resource; its tool calls ride the
 host's authenticated connection, so per-repo authorization applies per call exactly
 like agent calls.
 

@@ -7,15 +7,15 @@
  *  1. importText never fires onDirty. The Miragon DSL renderers run
  *     commandStack.clear() inside importDSL, which EMITS 'commandStack.changed'
  *     (bpmn-js clears silently) — an adapter suppresses that echo exactly like
- *     live-client's dsl-sync does, or every load and every conflict reload
+ *     live-client's miragon-sync does, or every load and every conflict reload
  *     would autosave a canonicalised file over the hand-authored one.
  *  2. bindLive is a CAPABILITY. Absent = the widget stays on CAS autosave —
- *     the DMN widget's deliberate mode, so DMN can ride this core later
- *     without an interface change; any renderer without a live-client
- *     binding mounts the same way.
+ *     the DMN widget's deliberate mode (engines/dmn.ts); any renderer without
+ *     a live-client binding mounts the same way.
  *
  * Anything a notation's extras need beyond this (bpmn: the raw bpmn-js
- * instance for todos / t.BPM) rides on the concrete engine type, never here.
+ * instance for todos / t.BPM; dmn: the simulator surface) rides on the
+ * concrete engine type, never here.
  * Pure types: this module is imported by the node --test suites, so it must
  * never pull DOM-bound code.
  */

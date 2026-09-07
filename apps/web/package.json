@@ -2,10 +2,10 @@
   "name": "@bpmiq/web",
   "private": true,
   "type": "module",
-  "description": "bpmiq web client: collaborative BPMN modeler (bpmn-js + Monaco on a shared Y.Text), repo overview, release-as-PR.",
+  "description": "bpmiq web client: collaborative modelers (bpmn-js / dmn-js / the Miragon renderers + Monaco on a shared Y.Text), repo overview, release-as-PR, and the MCP-App widgets.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && vite build --config vite.mcp-app.config.ts && vite build --config vite.mcp-app-dmn.config.ts && vite build --config vite.mcp-app-wardley.config.ts && vite build --config vite.mcp-app-team-topology.config.ts && vite build --config vite.mcp-app-event-storming.config.ts && vite build --config vite.mcp-app-context-map.config.ts",
+    "build": "vite build && node scripts/build-widgets.ts",
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -4,14 +4,12 @@
  * (tool-input guard, the no-input timeout, connect).
  *
  * The save LIFECYCLE used to stay per widget on purpose (two mains, two latch
- * sets). #156 reversed that: a third fork was the tipping point, so the
- * canvas widgets (bpmn, wardley, team topology, event storming) run ONE
- * lifecycle — core/lifecycle.ts behind the ChromePort / ModelBridge /
- * LiveUpgrade / ClaimDocument ports, composed in core/widget.ts. The
- * decision widget (dmn-main.ts) is the one remaining hand-kept twin: its
- * differences are real (multi-view, the simulator, the tests panel, no live)
- * and stay so until a second such need appears. This file still owns only
- * what is mechanically identical across all of them.
+ * sets). #156 reversed that: a third fork was the tipping point, so EVERY
+ * widget runs ONE lifecycle — core/lifecycle.ts behind the ChromePort /
+ * ModelBridge / LiveUpgrade / ClaimDocument ports, composed in
+ * core/widget.ts; what is DMN about the decision widget (multi-view, the
+ * simulator, the tests panel, no live) lives in its engine and its extras.
+ * This file owns only what is mechanically identical across all of them.
  */
 import type { App } from "@modelcontextprotocol/ext-apps";
 

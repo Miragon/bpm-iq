@@ -220,8 +220,9 @@ const DMN_WIDGET: WidgetSpec = {
       .describe("input values to pre-fill the simulator with, keyed by variable name"),
   },
 };
-/** the notations whose widget rides the widget core (apps/web/src/mcp-app/core).
- *  Adding one = this id + the engine adapter + the build entry in apps/web. */
+/** the notations whose widget is a Miragon renderer on the widget core
+ *  (apps/web/src/mcp-app/miragon-main.ts). Adding one = this id + its renderer
+ *  spec in apps/web/src/notations/miragon (the build derives the bundle). */
 const GENERATED_WIDGET_NOTATIONS = ["wardley", "team-topology", "event-storming", "context-map"] as const;
 /** a core-based widget: everything derives from the descriptor */
 const generatedWidget = (id: string): WidgetSpec => {
