@@ -408,11 +408,13 @@ non-apps clients read `get_view` / `get_model_content` instead.
 
 ### Analyse with AI: the deep link into the widget
 
-The web editor's toolbar (and every process/decision row on the repo overview) carries
-an **"Analyse with AI"** dropdown — the doorway in the opposite direction: one click
-opens an AI chat whose first move is `open_modeler` / `open_decision_modeler` for
-exactly the model on screen, so the widget comes up live-synced with the editor the
-user just left. The menu only picks the destination — Claude Desktop, ChatGPT, or the
+The web editor's toolbar (and every model row on the repo overview) carries an
+**"Analyse with AI"** dropdown — the doorway in the opposite direction: one click
+opens an AI chat whose first move is the model's widget tool (`open_modeler` /
+`open_decision_modeler`, or the generated `open_<notation>_modeler` of a Miragon
+renderer) for exactly the model on screen, so the widget comes up live-synced with
+the editor the user just left. The menu appears wherever a widget is served — every
+notation the platform renders today. The menu only picks the destination — Claude Desktop, ChatGPT, or the
 clipboard. The prompt is a work order built by `@bpmiq/contracts/assist`: the literal
 tool call with repo and path inlined, the Live Host's MCP URL named (a connector
 pointed at a _different_ instance then fails as a recognizable "wrong instance", not a

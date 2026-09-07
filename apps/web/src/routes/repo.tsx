@@ -54,6 +54,7 @@ import { ReleaseDialog } from "@/components/release-dialog";
 import { SyncRepoDialog } from "@/components/sync-repo-dialog";
 import { type ProcessInfo } from "@/lib/api";
 import { useDecisions, useFolders, useModels, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
+import { webPlugin } from "@/notations/registry";
 
 const route = getRouteApi("/r/$owner/$repo");
 
@@ -526,6 +527,9 @@ export function ProcessList() {
               {visibleModels.map((m) => {
                 // the same icon the "New" menu showed for this notation
                 const Icon = NOTATION_ICONS.get(m.notation) ?? Shapes;
+                // the same gate as the editor toolbar: a notation without a
+                // widget never offers the handoff
+                const assistNotation = webPlugin(m.notation)?.assistNotation;
                 return (
                   <TableRow
                     key={`model:${m.path}`}
@@ -561,7 +565,11 @@ export function ProcessList() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell />
+                    <TableCell>
+                      {assistNotation && (
+                        <AssistMenu repo={repo} path={m.path} notation={assistNotation} variant="row" />
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}

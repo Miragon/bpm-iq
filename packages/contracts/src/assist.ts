@@ -2,7 +2,8 @@
  * "Analyse with AI" deep links — the doorway from a bpmiq surface (the web
  * app, later the VS Code extension) into an AI chat whose FIRST move is this
  * connector's modeler widget: `open_modeler` (BPMN) / `open_decision_modeler`
- * (DMN). The prompt and the URL shapes are a cross-surface contract, pinned
+ * (DMN) / the generated `open_<notation>_modeler` of every Miragon renderer.
+ * The prompt and the URL shapes are a cross-surface contract, pinned
  * here like the wire types: the tool names must match the Live Host's `/mcp`
  * registrations, and every consumer must build the same handover.
  *
