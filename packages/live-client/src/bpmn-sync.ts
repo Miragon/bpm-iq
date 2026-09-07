@@ -6,7 +6,7 @@
  */
 import type * as Y from "yjs";
 
-import { bindModelSync, looksWellFormedXml, NOT_WELL_FORMED_XML } from "./model-sync.ts";
+import { bindModelSync, keepDiagramViewbox, looksWellFormedXml, NOT_WELL_FORMED_XML } from "./model-sync.ts";
 
 interface ModelerLike {
   get(service: string): any;
@@ -29,19 +29,7 @@ export function bindBpmn(
       looksRenderable: looksWellFormedXml,
       unrenderableReason: NOT_WELL_FORMED_XML,
 
-      beforeImport(isFirstImport) {
-        const canvas = modeler.get("canvas");
-        let viewbox: { x: number; y: number; width: number; height: number } | undefined;
-        try {
-          viewbox = canvas.viewbox();
-        } catch {
-          /* first import: no viewbox yet */
-        }
-        return () => {
-          if (viewbox && viewbox.width > 0 && !isFirstImport) canvas.viewbox(viewbox);
-          else canvas.zoom("fit-viewport");
-        };
-      },
+      beforeImport: keepDiagramViewbox(modeler),
 
       observeModel(onChanged) {
         modeler.on("commandStack.changed", onChanged);

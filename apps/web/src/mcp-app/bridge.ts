@@ -8,14 +8,14 @@
  * helper in apps/live-host/src/http/mcp.ts) — parsed here, typed via the
  * shared wire contracts so server drift breaks the build, not the widget.
  *
- * The canvas widgets (bpmn, wardley, team topology, event storming) read and
- * save through the notation-generic get_model_content / save_model_content;
- * the decision widget keeps the dmn pair. Not every tool exists on every
- * host: the todo tools are absent without a configured tracker (and the write
- * ones in read-only mode), exactly like mint_ws_ticket. There is no tools/list over the app bridge, so absence is
- * detected on the first call — `isMissingTool` separates "capability absent"
- * (hide the UI) from a real tracker error (show it; those messages are
- * actionable).
+ * Every widget reads and saves through the notation-generic
+ * get_model_content / save_model_content (the widget core, core/widget.ts);
+ * the decision widget adds the test-suite tools. Not every tool exists on
+ * every host: the todo tools are absent without a configured tracker (and the
+ * write ones in read-only mode), exactly like mint_ws_ticket. There is no
+ * tools/list over the app bridge, so absence is detected on the first call —
+ * `isMissingTool` separates "capability absent" (hide the UI) from a real
+ * tracker error (show it; those messages are actionable).
  */
 import type {
   ContentWire,
@@ -86,7 +86,7 @@ async function call<T>(app: App, name: string, args: Record<string, unknown>): P
   return unwrapToolResult<T>(await app.callServerTool({ name, arguments: args }), name);
 }
 
-// ── the canvas widgets (core/widget.ts): the notation-generic tools ─────────
+// ── the widget core (core/widget.ts): the notation-generic tools ────────────
 
 /** the live text + baseVersion of a model of ANY notation */
 export const getModelContent = (app: App, ref: ModelRef): Promise<ContentWire> =>
@@ -102,17 +102,11 @@ export const saveModelContent = (
 ): Promise<SaveResult> =>
   call(app, "save_model_content", { repo: ref.repo, path: ref.path, content, baseVersion, lint: "warn" });
 
-// ── DMN decisions (the decision widget) ─────────────────────────────────────
+// ── DMN decision tests (the decision widget's tests panel) ──────────────────
 // The wire shapes below are the LIB's own types (@bpmiq/decisions, isomorphic —
 // the widget runs the very same module the Live Host answers with), so a server
 // change breaks the build here instead of drifting silently. Only the tool
 // envelope (`exists`, `path`) is local: it belongs to mcp.ts, not to the suite.
-
-export const getDmnXml = (app: App, ref: ProcessRef): Promise<ContentWire> => call(app, "get_dmn_xml", { ...ref });
-
-/** lint:"warn" — same autosave trust level as the BPMN widget */
-export const saveDmnXml = (app: App, ref: ProcessRef, xml: string, baseVersion: string): Promise<SaveResult> =>
-  call(app, "save_dmn_xml", { repo: ref.repo, path: ref.path, xml, baseVersion, lint: "warn" });
 
 /** one case of `<decision>.tests.yaml` */
 export type DecisionTestCase = TestCase;

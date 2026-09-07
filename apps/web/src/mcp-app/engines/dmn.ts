@@ -1,7 +1,8 @@
 /**
- * dmn-js wrapper for the decision widget — the modeler PLUS the simulation
- * add-on (@emaarco/dmn-js-simulation), mounted into both views through the
- * wiring the live editor uses too (lib/dmn-simulation.ts):
+ * The DMN widget engine: dmn-js Modeler (editable) or Viewer (readonly / the
+ * LIVE_MCP_READONLY surface) PLUS the simulation add-on
+ * (@emaarco/dmn-js-simulation), mounted into both views through the wiring
+ * the live editor uses too (lib/dmn-simulation.ts):
  *
  *   drd            → run the whole decision requirements diagram
  *   decisionTable  → enter values, see which rows light up
@@ -10,21 +11,38 @@
  * engine (`feelin`) the Live Host evaluates with server-side, so a scenario a
  * human clicks here and one an agent simulates cannot disagree.
  *
- * The wrapper exposes the two things the widget needs on top of editing: read
- * the values currently entered in the table simulator (to turn them into a
- * test case), and write values into it (to replay a stored case on the canvas).
+ * Behind the widget-core engine contract — deliberately WITHOUT bindLive: a
+ * decision table is edited cell by cell by one person at a time, and the CAS
+ * conflict flow covers the rare collision honestly; the core keeps such an
+ * engine on autosave (engine invariant 2). The moment two people co-edit
+ * tables in practice, live-client's bindDmn is the one line to add.
  *
- * Both crossings go through `variableOf` from the shared library rather than a
- * local guess, because the two sides do NOT hold the same thing: the simulator
- * holds a column's value (what the input expression computed), a scenario holds
- * a variable's value (what the model reads). They coincide for a plain read and
- * for nothing else — see the note on variableOf in @bpmiq/decisions.
+ * What it adds beyond the contract is the simulator surface (DmnSimulator)
+ * the tests panel (dmn-tests.ts) and the scenario replay (dmn-main.ts) need:
+ * read the values currently entered in the table simulator (to turn them
+ * into a test case), write values into it (to replay a stored case on the
+ * canvas), switch to a decision-table view (the simulator only exists there).
+ *
+ * Both value crossings go through `variableOf` from the shared library rather
+ * than a local guess, because the two sides do NOT hold the same thing: the
+ * simulator holds a column's value (what the input expression computed), a
+ * scenario holds a variable's value (what the model reads). They coincide for
+ * a plain read and for nothing else — see the note on variableOf in
+ * @bpmiq/decisions.
+ *
+ * Edit tracking: dmn-js does NOT re-emit editing events on the manager —
+ * every view is its own viewer with its own command stack, and an inactive
+ * viewer's stack never fires. So subscribe per viewer, for its lifetime (the
+ * same shape live-client/dmn-sync.ts uses for the web editor). Whatever a
+ * view switch or an import raises is muted (engine invariant 1).
  */
 import { type Scenario, variableOf } from "@bpmiq/decisions";
 import DmnModeler from "dmn-js/lib/Modeler";
 import DmnViewer from "dmn-js/lib/Viewer";
 
 import { dmnSimulationViews } from "@/lib/dmn-simulation";
+
+import type { EngineFactory, WidgetEngine } from "../core/engine.ts";
 
 /** the simulation store of the ACTIVE decision-table view (add-on internals we
  *  depend on deliberately — its published surface, see SimulationStore.d.ts) */
@@ -49,13 +67,8 @@ export interface CapturedScenario {
   unmappable: string[];
 }
 
-export interface DmnModelerHandle {
-  /** parse + render the document text (DMN XML for this engine) */
-  importText(text: string): Promise<void>;
-  /** serialize the current model, formatted */
-  exportText(): Promise<string>;
-  editable: boolean;
-  onDirty(cb: () => void): void;
+/** the simulator surface the DMN extras (tests panel, scenario replay) drive */
+export interface DmnSimulator {
   /** the values currently entered in the table simulator, keyed by variable */
   currentScenario(): CapturedScenario | undefined;
   /** load a scenario into the table simulator and evaluate it */
@@ -68,14 +81,26 @@ export interface DmnModelerHandle {
    * the only table, if the model has exactly one.
    */
   openDecisionTable(decisionId?: string): Promise<boolean>;
-  destroy(): void;
 }
 
-export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnModelerHandle {
+export interface DmnEngine extends WidgetEngine, DmnSimulator {}
+
+export const mountDmnEngine: EngineFactory<DmnEngine> = (container, readonly) => {
   const options = { container, ...dmnSimulationViews };
   const instance = readonly ? new DmnViewer(options) : new DmnModeler(options);
 
-  const dirtyCbs: Array<() => void> = [];
+  const dirtyCbs = new Set<() => void>();
+  // > 0 while an import or a view switch runs — whatever a viewer's stack
+  // raises in that window is engine housekeeping, never a user edit
+  let quiet = 0;
+  const muted = async <T>(run: () => Promise<T>): Promise<T> => {
+    quiet++;
+    try {
+      return await run();
+    } finally {
+      quiet--;
+    }
+  };
 
   /** the active view's simulation store, when the active view is a table.
    *  Read on demand rather than cached — each view is its own injector, so the
@@ -89,12 +114,9 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
     }
   };
 
-  // Edit tracking: dmn-js does NOT re-emit editing events on the manager —
-  // every view is its own viewer with its own command stack, and an inactive
-  // viewer's stack never fires. So subscribe per viewer, for its lifetime
-  // (the same shape live-client/dmn-sync.ts uses for the web editor).
   const subscribed = new Set<{ on(e: string, cb: () => void): void; off(e: string, cb: () => void): void }>();
   const onChanged = (): void => {
+    if (quiet > 0) return;
     for (const cb of dirtyCbs) cb();
   };
   if (!readonly) {
@@ -111,17 +133,19 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
 
   return {
     editable: !readonly,
-    async importText(xml: string): Promise<void> {
-      await instance.importXML(xml);
-    },
+    importText: (xml) =>
+      muted(async () => {
+        await instance.importXML(xml);
+      }),
     async exportText(): Promise<string> {
       if (readonly) throw new Error("read-only view");
       const { xml } = await (instance as DmnModeler).saveXML({ format: true });
       if (!xml) throw new Error("empty model");
       return xml;
     },
-    onDirty(cb) {
-      dirtyCbs.push(cb);
+    onDirty(cb: () => void): () => void {
+      dirtyCbs.add(cb);
+      return () => dirtyCbs.delete(cb);
     },
     currentScenario(): CapturedScenario | undefined {
       const active = store();
@@ -146,13 +170,14 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
     simulatorReady(): boolean {
       return store()?.getModel() != null;
     },
-    async openDecisionTable(decisionId?: string): Promise<boolean> {
-      const tables = instance.getViews().filter((v) => v.type === "decisionTable");
-      const target = decisionId ? tables.find((v) => v.element?.id === decisionId) : tables.length === 1 && tables[0];
-      if (!target) return false;
-      await instance.open(target);
-      return true;
-    },
+    openDecisionTable: (decisionId) =>
+      muted(async () => {
+        const tables = instance.getViews().filter((v) => v.type === "decisionTable");
+        const target = decisionId ? tables.find((v) => v.element?.id === decisionId) : tables.length === 1 && tables[0];
+        if (!target) return false;
+        await instance.open(target);
+        return true;
+      }),
     applyScenario(scenario: Scenario): boolean {
       const active = store();
       const model = active?.getModel();
@@ -174,4 +199,4 @@ export function mountDmnModeler(container: HTMLElement, readonly: boolean): DmnM
       instance.destroy();
     },
   };
-}
+};

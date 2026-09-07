@@ -7,7 +7,8 @@
  * handshake are wired. A WidgetSpec is everything a notation adds: its
  * engine, its noun for the status copy, an optional deep-link builder
  * (bpmn: the process route + ?element=), an optional inlined icon font and
- * optional extras (bpmn: todos + the t.BPM switch).
+ * optional extras (bpmn: todos + the t.BPM switch; dmn: the tests panel +
+ * the scenario replay).
  *
  * Data path is ontoolinput + an app-initiated get_model_content — never the
  * tool result (Claude Desktop strips structuredContent, ext-apps #696), and

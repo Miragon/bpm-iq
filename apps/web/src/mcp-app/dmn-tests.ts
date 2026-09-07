@@ -29,7 +29,7 @@ import {
   saveDecisionTests,
   type SuiteRunWire,
 } from "./bridge";
-import type { DmnModelerHandle, Scenario } from "./dmn-modeler";
+import type { DmnSimulator, Scenario } from "./engines/dmn";
 import { el } from "./shell";
 
 export interface TestsHandle {
@@ -40,7 +40,7 @@ export interface TestsHandle {
 
 export function mountTests(
   app: App,
-  modeler: DmnModelerHandle,
+  modeler: DmnSimulator,
   opts: { readonly: boolean; onStatus: (text: string) => void },
 ): TestsHandle {
   const panel = el<HTMLElement>("tests");

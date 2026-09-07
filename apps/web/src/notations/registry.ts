@@ -6,9 +6,11 @@
  *
  * Boundary rule, mirrored from ADR 0006: a plugin MANIFEST (this module +
  * the per-notation manifests it imports) is light, eager data — the editor
- * ENGINES (bpmn-js, dmn-js, the Miragon modelers, the differ) live behind the manifests' dynamic
- * imports, so the eager bundle never carries an engine and the repo overview
- * loads none of them.
+ * ENGINES (bpmn-js, dmn-js, the Miragon renderers, the differ) live behind
+ * the manifests' dynamic imports, so the eager bundle never carries an engine
+ * and the repo overview loads none of them. The Miragon renderers are not
+ * hand-written manifests: ./miragon holds ONE spec per renderer, and
+ * miragonPlugin derives the manifest from it.
  */
 import type { ComponentType, LazyExoticComponent } from "react";
 import type * as Y from "yjs";
@@ -18,11 +20,9 @@ import type { PresenceSurface } from "@/lib/presence-canvas";
 import type { TodoCanvas } from "@/lib/todo-canvas";
 
 import { bpmnPlugin } from "./bpmn";
-import { contextMapPlugin } from "./context-map";
 import { dmnPlugin } from "./dmn";
-import { eventStormingPlugin } from "./event-storming";
-import { teamTopologyPlugin } from "./team-topology";
-import { wardleyPlugin } from "./wardley";
+import { MIRAGON_RENDERERS } from "./miragon";
+import { miragonPlugin } from "./miragon/plugin";
 
 /** what the shell hands a mounting editor engine */
 export interface EditorContext {
@@ -125,13 +125,12 @@ export interface WebNotationPlugin {
   diff?: DiffSpec;
 }
 
+// bpmn and dmn are bespoke plugins (stickies, todos, the differ; the Checks
+// panel); every Miragon renderer derives its plugin from its spec
 const WEB_PLUGINS: Record<string, WebNotationPlugin> = {
   bpmn: bpmnPlugin,
   dmn: dmnPlugin,
-  wardley: wardleyPlugin,
-  "team-topology": teamTopologyPlugin,
-  "event-storming": eventStormingPlugin,
-  "context-map": contextMapPlugin,
+  ...Object.fromEntries(MIRAGON_RENDERERS.map((spec) => [spec.id, miragonPlugin(spec)])),
 };
 
 // the shell renders its own panels on these ids — a plugin colliding with them
