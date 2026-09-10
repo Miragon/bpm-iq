@@ -7,9 +7,14 @@ every other notation opens as text.
 
 ## Run it (development)
 
+Open the monorepo (or `apps/vscode`) in VS Code and press **F5** — "Run BPM Live
+Extension" compiles the bundle (with sourcemaps, so breakpoints land in the
+`.ts` sources) and starts an Extension Development Host with your normal
+extensions, the Miragon modeler included. Without the debugger:
+
 ```
 pnpm --filter bpm-live compile
-code --extensionDevelopmentPath=$PWD/apps/vscode      # or open apps/vscode and press F5
+code --extensionDevelopmentPath=$PWD/apps/vscode
 ```
 
 Settings (`bpmLive.*`):
