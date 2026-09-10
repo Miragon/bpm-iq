@@ -30,7 +30,7 @@ import { join } from "node:path";
 
 import { fileDeepLink, processDeepLink } from "@bpmiq/contracts/deep-link";
 import { type CanvasPresence, presenceColor, roomName } from "@bpmiq/contracts/live";
-import type { ContentConflictWire, TodoWire, WidgetBootWire } from "@bpmiq/contracts/live-host";
+import type { ContentConflictWire, RoomPresenceWire, TodoWire, WidgetBootWire } from "@bpmiq/contracts/live-host";
 import { mcpAppToolName } from "@bpmiq/contracts/mcp-app";
 import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
 import { parseTestSuite, type TestCase, testsPathFor } from "@bpmiq/decisions/tests";
@@ -60,6 +60,7 @@ import {
   listRepos,
   type OverviewDeps,
 } from "../application/overview.ts";
+import { roomPresence, type RoomPresenceDeps } from "../application/room-presence.ts";
 import { createDecision, createNotationModel, createProcess } from "../application/scaffold.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
@@ -75,7 +76,8 @@ import type { ConnectedRepo } from "../repos/registry.ts";
  *  import cycle */
 export type McpDeps = OverviewDeps &
   ContentDeps &
-  ReleaseDeps & {
+  ReleaseDeps &
+  RoomPresenceDeps & {
     providers: Map<string, GitProvider>;
     github: GitProvider;
     /** issue-tracker seam (model-anchored todos) — absent when the platform has
@@ -635,6 +637,26 @@ export function createLiveMcpServer(
       // id from the RESOLVED path — a caller-supplied id must not ride along
       // verbatim when a conflicting `path` won the resolution
       return ok({ id: modelStem(content.path), path: content.path, baseVersion: content.baseVersion, ...view });
+    }),
+  );
+
+  server.registerTool(
+    "get_presence",
+    {
+      description:
+        "Who is in a model's live room RIGHT NOW: every person with the model open — name, the " +
+        "element ids they have selected, their pointer in model coordinates — and the AI clients " +
+        "acting in it (kind 'agent'). `you` marks the caller's own presence, i.e. the person you act " +
+        "for: 'the element I selected' resolves to that peer's `selection`. Empty when nobody has " +
+        "the model open. A read; it announces nothing itself.",
+      inputSchema: modelRef,
+      annotations: READ,
+    },
+    safe(async ({ repo, ...ref }: { repo: string } & RefArgs) => {
+      const r = await requireRepo(repo);
+      const path = await resolveModelPath(r, ref);
+      const peers = roomPresence(opts, roomName(r.fullName, path), session.user.login);
+      return ok({ repo: r.fullName, path, peers } satisfies RoomPresenceWire);
     }),
   );
 

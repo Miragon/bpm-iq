@@ -22,7 +22,9 @@
  */
 import type { CanvasPresence, PresenceUser } from "@bpmiq/contracts/live";
 
-import { safePresenceColor, safePresenceLabel } from "@/lib/presence-format";
+// relative on purpose: the MCP-App engines import this controller and the
+// node --test suites import THEM — no vite alias there
+import { safePresenceColor, safePresenceLabel } from "./presence-format.ts";
 
 /** a remote peer as the shell surfaces it — user always present (peers that
  *  have not announced themselves yet are filtered out upstream) */

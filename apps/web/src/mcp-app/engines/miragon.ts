@@ -36,6 +36,7 @@ import {
 } from "@bpmiq/live-client/miragon-sync";
 import type * as Y from "yjs";
 
+import { attachPresenceCanvas } from "../../lib/presence-canvas.ts";
 import type { LoadedMiragonRenderer, MiragonRendererLike } from "../../notations/miragon/spec.ts";
 import type { LiveBindHooks, WidgetEngine } from "../core/engine.ts";
 import { fitViewport, selectedElementOf, viewerCommandStackShim } from "./diagram-js.ts";
@@ -91,7 +92,14 @@ export function mountMiragonEngine(
     },
     selectedElementId: () => selectedElementOf(instance),
     bindLive(ytext: Y.Text, doc: Y.Doc, hooks: LiveBindHooks): () => void {
-      return bindMiragon(instance, lane, ytext, doc, hooks.onConflict, hooks.onImportError);
+      const unbind = bindMiragon(instance, lane, ytext, doc, hooks.onConflict, hooks.onImportError);
+      // every Miragon renderer is diagram-js — the SPA's presence controller
+      // attaches unchanged (notations/miragon/editor.ts does the same)
+      const presence = hooks.presence ? attachPresenceCanvas(instance as never, hooks.presence) : undefined;
+      return () => {
+        presence?.destroy();
+        unbind();
+      };
     },
     destroy(): void {
       instance.destroy();

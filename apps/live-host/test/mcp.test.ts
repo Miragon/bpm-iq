@@ -235,6 +235,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_decision_tests",
     "get_dmn_xml",
     "get_model_content",
+    "get_presence",
     "get_process",
     "get_view",
     "list_changes",
@@ -269,6 +270,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_decision_tests",
     "get_dmn_xml",
     "get_model_content",
+    "get_presence",
     "get_process",
     "get_view",
     "list_changes",
@@ -801,6 +803,51 @@ test("agent presence: reads announce the caller's agent in the room, a save adds
   await callJson("list_processes", { repo: REPO.fullName });
   await callJson("validate_bpmn", { xml: VALID });
   assert.equal(touches.length, before);
+});
+
+test("get_presence: who is in the room — `you` is the caller's own human presence, agents ride along", async () => {
+  const room = `${REPO.fullName}/${PATH}`;
+  const d = deps({
+    peersOf: (r) =>
+      r !== room
+        ? []
+        : [
+            {
+              clientId: 1,
+              login: "petra",
+              state: {
+                user: { name: "Petra", color: "#fa8100" },
+                canvas: { cursor: { x: 240, y: 180 }, selection: ["StartEvent_1"] },
+              },
+            },
+            {
+              clientId: 2,
+              login: "kai",
+              state: { user: { name: "Kai", color: "#0aa2c0", kind: "human" }, canvas: null },
+            },
+            {
+              clientId: 3,
+              state: {
+                user: { name: "AI · Kai", color: "#7c4dff", kind: "agent" },
+                canvas: { cursor: null, selection: ["EndEvent_1"] },
+              },
+            },
+            { clientId: 4, login: "mia", state: { selection: { anchor: 3 } } }, // y-monaco only — not announced yet
+          ],
+  });
+  const { callJson } = await connect(d, session("petra"));
+  const out = await callJson("get_presence", { repo: REPO.fullName, id: "order" });
+  assert.equal(out.path, PATH);
+  assert.deepEqual(out.peers, [
+    { name: "Petra", kind: "human", you: true, selection: ["StartEvent_1"], cursor: { x: 240, y: 180 } },
+    { name: "Kai", kind: "human", you: false, selection: [], cursor: null },
+    { name: "AI · Kai", kind: "agent", you: false, selection: ["EndEvent_1"], cursor: null },
+  ]);
+  // a room nobody has open — and a deps without the port at all — answer empty
+  const other = await callJson("get_presence", { repo: REPO.fullName, path: OWM_PATH });
+  assert.deepEqual(other.peers, []);
+  const dark = await connect(deps());
+  assert.deepEqual((await dark.callJson("get_presence", { repo: REPO.fullName, id: "order" })).peers, []);
 });
 
 test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, room-bound", async () => {

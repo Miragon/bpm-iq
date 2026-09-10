@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import type { AwarenessPeer } from "@bpmiq/live-client";
 import * as Y from "yjs";
 
 import type { LiveEngine } from "../src/mcp-app/core/engine.ts";
@@ -24,10 +25,17 @@ function fakeSession() {
   const s = {
     destroyed: 0,
     users: [] as Array<{ name: string; color: string }>,
+    published: [] as unknown[],
+    peers: undefined as ((peers: AwarenessPeer[]) => void) | undefined,
     session: {
       doc,
       content,
       setUser: (user: { name: string; color: string }) => void s.users.push(user),
+      setCanvasPresence: (p: unknown) => void s.published.push(p),
+      onAwarenessStates: (cb: (peers: AwarenessPeer[]) => void) => {
+        s.peers = cb;
+        return () => {};
+      },
       onSynced: (cb: () => void) => {
         synced.push(cb);
         return () => {};
@@ -118,6 +126,31 @@ test("the ticket's user is announced on the session (the web roster shows the wi
   s2.sync();
   assert.ok(await p2);
   assert.deepEqual(s2.users, []);
+});
+
+test("the engine is bound WITH a presence surface riding the session's awareness", async () => {
+  const s = fakeSession();
+  const engine = liveEngine();
+  const p = tryLive(deps(s), engine, hooks().hooks);
+  await tick(1);
+  s.sync();
+  assert.ok(await p);
+  const presence = engine.bound?.presence;
+  assert.ok(presence, "bindLive received the presence surface");
+  presence.setLocal({ cursor: { x: 1, y: 2 }, selection: ["Task_1"] });
+  assert.deepEqual(s.published, [{ cursor: { x: 1, y: 2 }, selection: ["Task_1"] }]);
+  const seen: unknown[][] = [];
+  presence.onRemote((peers) => void seen.push(peers));
+  // peers without a user field have not announced themselves — filtered
+  s.peers?.([
+    { clientId: 1, user: { name: "petra", color: "#fff" }, canvas: { cursor: null, selection: [] } },
+    { clientId: 2, canvas: { cursor: null, selection: [] } },
+  ]);
+  assert.equal(seen.length, 1);
+  assert.deepEqual(
+    seen[0]!.map((p) => (p as { clientId: number }).clientId),
+    [1],
+  );
 });
 
 test("no sync within the timeout → undefined and the session is destroyed", async () => {

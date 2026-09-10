@@ -16,6 +16,7 @@ import Modeler from "bpmn-js/lib/Modeler";
 import NavigatedViewer from "bpmn-js/lib/NavigatedViewer";
 import type * as Y from "yjs";
 
+import { attachPresenceCanvas } from "../../lib/presence-canvas.ts";
 import { bpmiqModdle, bpmnStickyModule, bpmnStickyViewModule } from "../../notations/bpmn-sticky/index.ts";
 import type { EngineFactory, LiveBindHooks, WidgetEngine } from "../core/engine.ts";
 import { fitViewport, selectedElementOf } from "./diagram-js.ts";
@@ -66,7 +67,13 @@ export const mountBpmnEngine: EngineFactory<BpmnEngine> = (container, readonly) 
     // bindBpmn reports no import errors (bpmn-js keeps its old canvas on a
     // failed re-import) — the hook stays unused here by design
     bindLive(ytext: Y.Text, doc: Y.Doc, hooks: LiveBindHooks): () => void {
-      return bindBpmn(instance as never, ytext, doc, hooks.onConflict);
+      const unbind = bindBpmn(instance as never, ytext, doc, hooks.onConflict);
+      // live cursors + selection outlines, the SPA's controller unchanged
+      const presence = hooks.presence ? attachPresenceCanvas(instance as never, hooks.presence) : undefined;
+      return () => {
+        presence?.destroy();
+        unbind();
+      };
     },
     destroy(): void {
       instance.destroy();

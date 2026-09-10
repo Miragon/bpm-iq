@@ -22,6 +22,7 @@
  */
 import { openLiveSession } from "@bpmiq/live-client";
 
+import type { PresenceSurface, RemotePresence } from "../../lib/presence-canvas.ts";
 import type { LiveEngine } from "./engine.ts";
 import type { LiveHandle, LiveHooks } from "./lifecycle.ts";
 
@@ -40,7 +41,15 @@ export interface WsTicket {
 /** what tryLive uses of a live-client session — the test fakes exactly this */
 export type LiveSessionLike = Pick<
   ReturnType<typeof openLiveSession>,
-  "doc" | "content" | "onSynced" | "onDisconnect" | "onDocClose" | "destroy" | "setUser"
+  | "doc"
+  | "content"
+  | "onSynced"
+  | "onDisconnect"
+  | "onDocClose"
+  | "destroy"
+  | "setUser"
+  | "setCanvasPresence"
+  | "onAwarenessStates"
 >;
 
 export interface LiveDeps {
@@ -138,9 +147,19 @@ export async function tryLive(
         // the Y.Text is the source of truth from here on — the engine's
         // binding imports it and keeps both directions in sync (the web
         // SPA's exact mechanism)
+        // presence rides the same session: the human's pointer/selection for
+        // the web co-editors, theirs (and the agents') on this canvas — the
+        // web shell's exact fan-out (live-editor.tsx), peers without a user
+        // field have not announced themselves yet
+        const presence: PresenceSurface = {
+          setLocal: (p) => session.setCanvasPresence(p),
+          onRemote: (cb) =>
+            session.onAwarenessStates((peers) => cb(peers.filter((p): p is RemotePresence => p.user !== undefined))),
+        };
         const unbind = engine.bindLive(session.content, session.doc, {
           onConflict: hooks.onConflict,
           onImportError: hooks.onImportError,
+          presence,
         });
         established = true;
         finish({
