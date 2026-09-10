@@ -141,6 +141,8 @@ export interface WsTicket {
   url: string;
   room: string;
   expiresInSeconds: number;
+  /** the presence the widget announces once live (core/live.ts) */
+  user?: { name: string; color: string };
 }
 
 /** single-use ticket for the live Yjs connection — write-gated at mint time */

@@ -48,10 +48,24 @@ export interface PresenceUser {
   name: string;
   color: string;
   avatarUrl?: string | null;
-  /** reserved for AI-participant presence — agents joining awareness declare
-   *  themselves so clients can render them distinctly */
+  /** "agent" = an AI client acting through the Live Host's /mcp on behalf of
+   *  a person (the name says whom). SERVER-ASSERTED: the Live Host stamps it
+   *  on the presence it publishes for agents and strips it from every
+   *  ws-originated state, so a browser peer can never pose as one. Absent =
+   *  human. */
   kind?: "human" | "agent";
 }
+
+/** presence color, DETERMINISTIC per principal — the same person shows up in
+ *  the same color on every device, session and client (web, VS Code, the
+ *  Live Host's agent presence). Erasable-syntax-safe on purpose: the
+ *  type-stripped backend calls it at runtime. */
+export const presenceColor = (principal: string): string => {
+  const palette = ["#fa8100", "#0aa2c0", "#7c4dff", "#2e7d32", "#c2185b", "#00695c", "#5d4037"] as const;
+  let hash = 0;
+  for (const ch of principal) hash = (hash * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
+  return palette[hash % palette.length] ?? palette[0];
+};
 
 /** where a client is on the CANVAS — model coordinates (the space the DI
  *  uses), zoom/pan-independent; null cursor = pointer off-canvas */

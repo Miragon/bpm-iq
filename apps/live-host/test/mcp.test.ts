@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 
+import { presenceColor } from "@bpmiq/contracts/live";
 import { toolText } from "@bpmiq/mcp-kit/testing";
 import { Server as HocuspocusServer } from "@hocuspocus/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -234,6 +235,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_decision_tests",
     "get_dmn_xml",
     "get_model_content",
+    "get_presence",
     "get_process",
     "get_view",
     "list_changes",
@@ -268,6 +270,7 @@ test("registration: every tool; read-only mode drops the write tools AND the ws 
     "get_decision_tests",
     "get_dmn_xml",
     "get_model_content",
+    "get_presence",
     "get_process",
     "get_view",
     "list_changes",
@@ -757,6 +760,96 @@ test("save_decision_tests keeps the suite's own `decision:` key — callers only
   assert.equal(after.suite.cases.length, 2);
 });
 
+test("agent presence: reads announce the caller's agent in the room, a save adds the elements it changed", async () => {
+  const touches: Array<{ room: string; login: string; name: string; selection?: string[] }> = [];
+  const d = deps({
+    presence: {
+      touch: (room, principal, canvas) => {
+        const c = canvas?.();
+        touches.push({ room, ...principal, ...(c ? { selection: c.selection } : {}) });
+      },
+    },
+  });
+  const { callJson } = await connect(d, session("petra"));
+  const room = `${REPO.fullName}/${PATH}`;
+
+  const got = await callJson("get_bpmn_xml", { repo: REPO.fullName, id: "order" });
+  assert.deepEqual(touches, [{ room, login: "petra", name: "petra" }], "a read: presence, no selection");
+
+  // rename the start event only — the diff must single it out
+  const edited = VALID.replace('name="Process started"', 'name="Order received"');
+  const saved = await callJson("save_bpmn_xml", {
+    repo: REPO.fullName,
+    id: "order",
+    xml: edited,
+    baseVersion: got.baseVersion,
+  });
+  assert.equal(saved.ok, true);
+  assert.deepEqual(touches.at(-1), { room, login: "petra", name: "petra", selection: ["StartEvent_1"] });
+
+  // the non-BPMN notations ride the same seam (the wardley extractor)
+  const owm = await callJson("get_model_content", { repo: REPO.fullName, path: OWM_PATH });
+  await callJson("save_model_content", {
+    repo: REPO.fullName,
+    path: OWM_PATH,
+    content: OWM.replace("Checkout [0.8, 0.6]", "Checkout [0.9, 0.6]"),
+    baseVersion: owm.baseVersion,
+  });
+  assert.equal(touches.at(-1)!.room, `${REPO.fullName}/${OWM_PATH}`);
+  assert.deepEqual(touches.at(-1)!.selection, ["Checkout"]);
+
+  // list/validate tools touch no room
+  const before = touches.length;
+  await callJson("list_processes", { repo: REPO.fullName });
+  await callJson("validate_bpmn", { xml: VALID });
+  assert.equal(touches.length, before);
+});
+
+test("get_presence: who is in the room — `you` is the caller's own human presence, agents ride along", async () => {
+  const room = `${REPO.fullName}/${PATH}`;
+  const d = deps({
+    peersOf: (r) =>
+      r !== room
+        ? []
+        : [
+            {
+              clientId: 1,
+              login: "petra",
+              state: {
+                user: { name: "Petra", color: "#fa8100" },
+                canvas: { cursor: { x: 240, y: 180 }, selection: ["StartEvent_1"] },
+              },
+            },
+            {
+              clientId: 2,
+              login: "kai",
+              state: { user: { name: "Kai", color: "#0aa2c0", kind: "human" }, canvas: null },
+            },
+            {
+              clientId: 3,
+              state: {
+                user: { name: "AI · Kai", color: "#7c4dff", kind: "agent" },
+                canvas: { cursor: null, selection: ["EndEvent_1"] },
+              },
+            },
+            { clientId: 4, login: "mia", state: { selection: { anchor: 3 } } }, // y-monaco only — not announced yet
+          ],
+  });
+  const { callJson } = await connect(d, session("petra"));
+  const out = await callJson("get_presence", { repo: REPO.fullName, id: "order" });
+  assert.equal(out.path, PATH);
+  assert.deepEqual(out.peers, [
+    { name: "Petra", kind: "human", you: true, selection: ["StartEvent_1"], cursor: { x: 240, y: 180 } },
+    { name: "Kai", kind: "human", you: false, selection: [], cursor: null },
+    { name: "AI · Kai", kind: "agent", you: false, selection: ["EndEvent_1"], cursor: null },
+  ]);
+  // a room nobody has open — and a deps without the port at all — answer empty
+  const other = await callJson("get_presence", { repo: REPO.fullName, path: OWM_PATH });
+  assert.deepEqual(other.peers, []);
+  const dark = await connect(deps());
+  assert.deepEqual((await dark.callJson("get_presence", { repo: REPO.fullName, id: "order" })).peers, []);
+});
+
 test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, room-bound", async () => {
   const wsTickets = new WsTicketStore();
   const d = deps({ wsTickets });
@@ -766,6 +859,8 @@ test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, 
   assert.equal(minted.url, "ws://live.test");
   assert.equal(minted.room, `${REPO.fullName}/${PATH}`);
   assert.equal(minted.expiresInSeconds, 60);
+  // the presence the widget announces: the human, as the web app shows them
+  assert.deepEqual(minted.user, { name: "petra", color: presenceColor("petra") });
 
   // the ticket passes the REAL ws gate — makeCollabHooks with the same store
   const hooks = makeCollabHooks({

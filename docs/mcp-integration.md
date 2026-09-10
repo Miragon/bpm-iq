@@ -114,6 +114,7 @@ call is gated by the caller's per-repo permission.
 | `list_models`                 | read  | EVERY model file of one repo, grouped by notation — the superset of the two lists below. |
 | `get_view`                    | read  | The derived view of ANY live model (name, summary, stats, rich `detail`).                |
 | `get_model_content`           | read  | The live text of ANY model (`content`, own format) plus the `baseVersion` for a save.    |
+| `get_presence`                | read  | Who is in a model's live room right now: name, selection, pointer; `you` = the caller.   |
 | `validate_model`              | read  | Dry-run the platform check on ANY notation's text — the same gate the save runs.         |
 | `list_processes`              | read  | The processes of one repo (id, `bpmn` path, folder, dirty flag, live sessions).          |
 | `get_process`                 | read  | The derived view (name, roles, steps, flow, calls) from the **live** BPMN.               |
@@ -164,6 +165,27 @@ event-storming, context-map, markdown); a notation without one (value-chain) arr
 app-visible — hidden from agents — and registered when at least one live-capable widget is
 served AND the host is not read-only, bound to the first such widget's resource; absent under
 `LIVE_MCP_READONLY=1`, absent for a DMN-only dist.)
+
+### Agent presence: the AI shows up like a co-editor
+
+Every tool call that touches a model announces the caller's agent in that model's live room
+for a while (60 s after the last call, renewed by every call). People who have the model open
+see an **"AI · <name>"** avatar in the roster (named after the person the agent acts for), and
+after a save the elements the agent changed are outlined on the canvas in the agent's color,
+with its name pill on the first one — the agent's cursor. Nothing is written into the document:
+the presence is an awareness state the Live Host publishes into a LOADED room
+(`application/agent-presence.ts`); an unloaded room has nobody to show it to and is never pinned
+for it. `kind: "agent"` is server-asserted — a browser peer claiming it is downgraded on the way
+in (`collab.ts`, `beforeHandleAwareness`). The modeler widgets announce the HUMAN behind them
+the same way once live (`mint_ws_ticket` carries their name and color), and the diagram-js widgets
+(BPMN and the Miragon renderers) publish that person's pointer and selection and render the peers'
+cursors on their own canvas — the web shell's presence controller, unchanged.
+
+The other direction is `get_presence`: who is in a model's room right now — every person's name,
+selected element ids and pointer (model coordinates), the AI clients acting in it (`kind: "agent"`),
+and `you` on the caller's own human presence. The identity behind `you` is server-side (the ws
+connection's login, never the payload), so "analyse the element I have selected" resolves to a real
+selection. It reads a loaded room only and announces nothing itself.
 
 ### Decisions: DMN as a first-class model
 

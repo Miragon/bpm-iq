@@ -20,6 +20,8 @@ import {
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import type * as Y from "yjs";
 
+import { sanitizeCanvas, sanitizeUser } from "./presence.ts";
+
 // re-exported so session consumers don't need a second import for the contract
 export { type CanvasPresence, CONTENT_KEY, type PresenceUser, roomName };
 
@@ -44,30 +46,10 @@ export interface AwarenessPeer {
   canvas?: CanvasPresence;
 }
 
-// ── awareness payloads are PEER INPUT — shape-check at this boundary ────────
-// (a hostile or version-skewed client can put arbitrary JSON into its fields;
-// consumers must never see a malformed CanvasPresence)
-
-/** exported for tests — the session applies it to every peer state */
-export function sanitizeUser(raw: unknown): PresenceUser | undefined {
-  if (raw === null || typeof raw !== "object") return undefined;
-  const u = raw as Record<string, unknown>;
-  if (typeof u.name !== "string" || typeof u.color !== "string") return undefined;
-  return u as unknown as PresenceUser;
-}
-
-/** exported for tests — the session applies it to every peer state */
-export function sanitizeCanvas(raw: unknown): CanvasPresence | undefined {
-  if (raw === null || typeof raw !== "object") return undefined;
-  const c = raw as { cursor?: unknown; selection?: unknown };
-  const cur = c.cursor as { x?: unknown; y?: unknown } | null | undefined;
-  const cursor =
-    cur !== null && cur !== undefined && typeof cur === "object" && Number.isFinite(cur.x) && Number.isFinite(cur.y)
-      ? { x: cur.x as number, y: cur.y as number }
-      : null;
-  const selection = Array.isArray(c.selection) ? c.selection.filter((id): id is string => typeof id === "string") : [];
-  return { cursor, selection };
-}
+// awareness payloads are PEER INPUT — the sanitizers live in ./presence.ts
+// (dependency-free: the Live Host reads room presence through them too) and
+// are re-exported here for the session consumers and the tests
+export { sanitizeCanvas, sanitizeUser } from "./presence.ts";
 
 export interface LiveSession {
   readonly doc: Y.Doc;

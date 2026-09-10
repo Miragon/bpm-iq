@@ -29,6 +29,7 @@
     "@modelcontextprotocol/sdk": "1.30.0",
     "jose": "6.2.10",
     "yaml": "2.9.0",
+    "y-protocols": "1.0.7",
     "yjs": "13.6.32",
     "zod": "4.5.2"
   },

@@ -148,6 +148,11 @@ test("putContent with a fresh token writes through to disk BEFORE returning (dis
   const out = await putContent(deps, REPO, PATH, { content: VALID_V2, baseVersion: got.baseVersion });
   assert.ok(out.ok);
   assert.notEqual(out.result.baseVersion, got.baseVersion, "token moved");
+  // the texts around the write ride the outcome (the agent presence diffs
+  // them) — never the wire result
+  assert.equal(out.previous, VALID);
+  assert.equal(out.next, VALID_V2);
+  assert.ok(!("previous" in out.result) && !("next" in out.result));
   assert.deepEqual(out.result.warnings, []);
   // the write-through is complete when the PUT returns — no debounce window
   assert.equal(await readFile(join(ws, PATH), "utf8"), VALID_V2);

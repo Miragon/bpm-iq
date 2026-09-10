@@ -68,7 +68,17 @@ export interface ContentDeps {
   docCodec?: (path: string) => DocCodec | undefined;
 }
 
-export type PutOutcome = { ok: true; result: PutContentResultWire } | { ok: false; conflict: ContentConflictWire };
+export type PutOutcome =
+  | {
+      ok: true;
+      result: PutContentResultWire;
+      /** the document text the save replaced — with `next`, the input of the
+       *  element diff the agent presence publishes (never on the wire) */
+      previous: string;
+      /** the canonical text the document holds after the save */
+      next: string;
+    }
+  | { ok: false; conflict: ContentConflictWire };
 
 /** opaque optimistic-concurrency token (see header) — clients never parse it.
  *  Content-derived, so it survives doc unload/reseed cycles between read and save. */
@@ -203,6 +213,8 @@ export async function putContent(
           warnings,
           ...(lintErrors.length > 0 ? { errors: lintErrors } : {}),
         },
+        previous: current,
+        next: canonicalNext,
       };
     });
   });

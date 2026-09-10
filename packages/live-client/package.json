@@ -13,7 +13,8 @@
     "./bpmn-sync": "./src/bpmn-sync.ts",
     "./dmn-sync": "./src/dmn-sync.ts",
     "./miragon-sync": "./src/miragon-sync.ts",
-    "./structured": "./src/structured.ts"
+    "./structured": "./src/structured.ts",
+    "./presence": "./src/presence.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

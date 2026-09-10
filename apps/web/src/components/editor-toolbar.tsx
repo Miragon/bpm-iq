@@ -36,7 +36,7 @@ import {
 } from "@bpmiq/ui-kit/components/dropdown-menu";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Code, Ellipsis, GitPullRequest, ListPlus, Loader2, Shapes } from "lucide-react";
+import { ArrowLeft, Code, Ellipsis, GitPullRequest, ListPlus, Loader2, Shapes, Sparkles } from "lucide-react";
 import { type ComponentType, type ReactNode, useEffect, useState } from "react";
 
 import { safeAvatarUrl, safePresenceColor } from "@/lib/presence-format";
@@ -299,6 +299,20 @@ function PeerAvatar({ user }: { user: PresenceUser }) {
   // color is peer input landing in inline CSS — same guard as the canvas/caret
   // render sites (url(...) would fetch on paint)
   const background = safePresenceColor(user.color);
+  // an AI client acting for someone (kind is server-asserted, see
+  // @bpmiq/contracts/live): a sparkle on its color, named after that person
+  if (user.kind === "agent") {
+    return (
+      <div
+        className="border-background flex size-6 items-center justify-center rounded-full border-2 text-white"
+        style={{ background }}
+        title={user.name}
+        aria-label={user.name}
+      >
+        <Sparkles className="size-3.5" aria-hidden="true" />
+      </div>
+    );
+  }
   return avatar ? (
     <img
       className="border-background size-6 rounded-full border-2"

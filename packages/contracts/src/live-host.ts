@@ -327,6 +327,30 @@ export interface ContentConflictWire {
   baseVersion: string;
 }
 
+/** one peer of a model's live room — what the MCP get_presence tool answers
+ *  per person (and per AI client) with the model open right now */
+export interface PresencePeerWire {
+  name: string;
+  /** "agent" = an AI client acting for someone (server-asserted, see
+   *  @bpmiq/contracts/live PresenceUser.kind) */
+  kind: "human" | "agent";
+  /** the caller's OWN human presence — the person an agent acts for. Matched
+   *  server-side on the ws connection's login, never on the payload. */
+  you: boolean;
+  /** selected element ids — a human's selection; for an agent, the elements
+   *  its last save changed */
+  selection: string[];
+  /** pointer in model coordinates (the DI space); null = off-canvas / none */
+  cursor: { x: number; y: number } | null;
+}
+
+/** get_presence — who is in a model's live room; empty when nobody has it open */
+export interface RoomPresenceWire {
+  repo: string;
+  path: string;
+  peers: PresencePeerWire[];
+}
+
 /** the boot payload the Live Host bakes into the modeler widgets' HTML
  *  (the __BPMIQ_BOOT__ marker, http/mcp.ts) — parsed back by the widgets'
  *  bridge.ts. The widget iframe is sandboxed on the HOST's origin, so this is

@@ -21,6 +21,8 @@
  */
 import type * as Y from "yjs";
 
+import type { PresenceSurface } from "../../lib/presence-canvas.ts";
+
 /** what a live binding may report back while the Y.Text owns the canvas */
 export interface LiveBindHooks {
   /** overlapping concurrent edit — the remote change won (model-sync rule 4) */
@@ -28,6 +30,10 @@ export interface LiveBindHooks {
   /** a remote snapshot did not import — reported by the binds that support it
    *  (bindBpmn reports nothing; the core tolerates silence) */
   onImportError(message: string): void;
+  /** live presence (#115): publish this canvas's pointer/selection, render
+   *  the peers' — the diagram-js engines attach lib/presence-canvas to it.
+   *  Absent = the session has no awareness (tests, older cores). */
+  presence?: PresenceSurface;
 }
 
 export interface WidgetEngine {

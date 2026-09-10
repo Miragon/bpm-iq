@@ -89,6 +89,9 @@ importers:
       jose:
         specifier: 6.2.10
         version: 6.2.10
+      y-protocols:
+        specifier: 1.0.7
+        version: 1.0.7(yjs@13.6.32)
       yaml:
         specifier: 2.9.0
         version: 2.9.0
