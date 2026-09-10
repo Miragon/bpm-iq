@@ -64,6 +64,17 @@ export async function run(): Promise<void> {
     if (doc.getText() === disk) pass("virtual document content equals working tree");
     else fail(`content mismatch: doc ${doc.getText().length} chars vs disk ${disk.length}`);
 
+    // 1b — presence: the extension announced its identity in the room (the
+    // dev-token identity here; a signed-in person shows up under their own name)
+    const roster = () =>
+      [...(guest.awareness?.getStates().values() ?? [])].map((s) => (s as { user?: { name?: string } }).user?.name);
+    try {
+      await until("VS Code presence in the room", () => roster().includes("dev-token"), 4000);
+      pass("presence: the VS Code client shows up in the roster as dev-token");
+    } catch {
+      fail(`presence: VS Code missing from the roster (${JSON.stringify(roster())})`);
+    }
+
     // 2 — inbound: remote edit reaches the open document
     const M1 = `<!-- vscode-e2e-in-${Date.now()} -->`;
     ytext.insert(ytext.length, `\n${M1}`);
