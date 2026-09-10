@@ -33,6 +33,7 @@ import { createGitHubIssueTracker } from "./adapters/github/issues.ts";
 import { createGitHubProvider } from "./adapters/github/provider.ts";
 import { LineageStore } from "./adapters/sqlite/lineage-store.ts";
 import { SessionStore } from "./adapters/sqlite/sessions.ts";
+import { AgentPresence } from "./application/agent-presence.ts";
 import { makeCollabHooks } from "./application/collab.ts";
 import { WsTicketStore } from "./application/ws-tickets.ts";
 import { makeOidcVerifier } from "./auth/oidc.ts";
@@ -346,6 +347,10 @@ const httpServer = startApi(PORT, {
   webDist: WEB_DIST,
   publicUrl: PUBLIC_URL,
   wsTickets,
+  // agent presence: MCP calls show up in the rooms they touch, for co-editors
+  // to see — published straight into a LOADED room's awareness (no ws client,
+  // no pinned document; an unloaded room has nobody to show it to)
+  presence: new AgentPresence({ awarenessOf: (room) => server.hocuspocus.documents.get(room)?.awareness }),
   providers,
   github,
   sessions,

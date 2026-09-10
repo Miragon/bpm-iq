@@ -53,7 +53,10 @@ export function sanitizeUser(raw: unknown): PresenceUser | undefined {
   if (raw === null || typeof raw !== "object") return undefined;
   const u = raw as Record<string, unknown>;
   if (typeof u.name !== "string" || typeof u.color !== "string") return undefined;
-  return u as unknown as PresenceUser;
+  // kind is a closed enum ("agent" renders distinctly) — anything else is
+  // dropped, on a COPY: the state object belongs to the awareness protocol
+  const { kind, ...rest } = u;
+  return { ...rest, ...(kind === "agent" || kind === "human" ? { kind } : {}) } as unknown as PresenceUser;
 }
 
 /** exported for tests — the session applies it to every peer state */

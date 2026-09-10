@@ -85,6 +85,7 @@ import {
   sessionCookie,
   type SessionStore,
 } from "../adapters/sqlite/sessions.ts";
+import type { AgentPresence } from "../application/agent-presence.ts";
 import { authorizeRepo } from "../application/authz.ts";
 import { type DirectDoc, getContent, putContent } from "../application/content.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
@@ -181,6 +182,9 @@ export interface ApiOptions {
   /** single-use ws tickets for the MCP-App widget's live Yjs connection
    * (application/ws-tickets.ts) — absent = the widget stays on bridge autosave */
   wsTickets?: WsTicketStore;
+  /** agent presence (application/agent-presence.ts): the MCP tools announce
+   * the caller's agent in every room they touch — absent = agents stay invisible */
+  presence?: Pick<AgentPresence, "touch">;
 }
 
 // send/redirect/readBody/securityHeaders/bearerAuth come from @bpmiq/http-kit —

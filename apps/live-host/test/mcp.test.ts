@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 
+import { presenceColor } from "@bpmiq/contracts/live";
 import { toolText } from "@bpmiq/mcp-kit/testing";
 import { Server as HocuspocusServer } from "@hocuspocus/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -757,6 +758,51 @@ test("save_decision_tests keeps the suite's own `decision:` key — callers only
   assert.equal(after.suite.cases.length, 2);
 });
 
+test("agent presence: reads announce the caller's agent in the room, a save adds the elements it changed", async () => {
+  const touches: Array<{ room: string; login: string; name: string; selection?: string[] }> = [];
+  const d = deps({
+    presence: {
+      touch: (room, principal, canvas) => {
+        const c = canvas?.();
+        touches.push({ room, ...principal, ...(c ? { selection: c.selection } : {}) });
+      },
+    },
+  });
+  const { callJson } = await connect(d, session("petra"));
+  const room = `${REPO.fullName}/${PATH}`;
+
+  const got = await callJson("get_bpmn_xml", { repo: REPO.fullName, id: "order" });
+  assert.deepEqual(touches, [{ room, login: "petra", name: "petra" }], "a read: presence, no selection");
+
+  // rename the start event only — the diff must single it out
+  const edited = VALID.replace('name="Process started"', 'name="Order received"');
+  const saved = await callJson("save_bpmn_xml", {
+    repo: REPO.fullName,
+    id: "order",
+    xml: edited,
+    baseVersion: got.baseVersion,
+  });
+  assert.equal(saved.ok, true);
+  assert.deepEqual(touches.at(-1), { room, login: "petra", name: "petra", selection: ["StartEvent_1"] });
+
+  // the non-BPMN notations ride the same seam (the wardley extractor)
+  const owm = await callJson("get_model_content", { repo: REPO.fullName, path: OWM_PATH });
+  await callJson("save_model_content", {
+    repo: REPO.fullName,
+    path: OWM_PATH,
+    content: OWM.replace("Checkout [0.8, 0.6]", "Checkout [0.9, 0.6]"),
+    baseVersion: owm.baseVersion,
+  });
+  assert.equal(touches.at(-1)!.room, `${REPO.fullName}/${OWM_PATH}`);
+  assert.deepEqual(touches.at(-1)!.selection, ["Checkout"]);
+
+  // list/validate tools touch no room
+  const before = touches.length;
+  await callJson("list_processes", { repo: REPO.fullName });
+  await callJson("validate_bpmn", { xml: VALID });
+  assert.equal(touches.length, before);
+});
+
 test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, room-bound", async () => {
   const wsTickets = new WsTicketStore();
   const d = deps({ wsTickets });
@@ -766,6 +812,8 @@ test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, 
   assert.equal(minted.url, "ws://live.test");
   assert.equal(minted.room, `${REPO.fullName}/${PATH}`);
   assert.equal(minted.expiresInSeconds, 60);
+  // the presence the widget announces: the human, as the web app shows them
+  assert.deepEqual(minted.user, { name: "petra", color: presenceColor("petra") });
 
   // the ticket passes the REAL ws gate — makeCollabHooks with the same store
   const hooks = makeCollabHooks({

@@ -23,9 +23,11 @@ function fakeSession() {
   let authFailed: (() => void) | undefined;
   const s = {
     destroyed: 0,
+    users: [] as Array<{ name: string; color: string }>,
     session: {
       doc,
       content,
+      setUser: (user: { name: string; color: string }) => void s.users.push(user),
       onSynced: (cb: () => void) => {
         synced.push(cb);
         return () => {};
@@ -98,6 +100,24 @@ test("mint rejects → undefined, the session is never opened", async () => {
   );
   assert.equal(out, undefined);
   assert.equal(opened, 0);
+});
+
+test("the ticket's user is announced on the session (the web roster shows the widget's human)", async () => {
+  const s = fakeSession();
+  const user = { name: "Petra Muster", color: "#fa8100" };
+  const p = tryLive(deps(s, { mint: async () => ({ ...TICKET, user }) }), liveEngine(), hooks().hooks);
+  await tick(1);
+  s.sync();
+  assert.ok(await p);
+  assert.deepEqual(s.users, [user]);
+
+  // an older Live Host mints no user — stay anonymous, never throw
+  const s2 = fakeSession();
+  const p2 = tryLive(deps(s2), liveEngine(), hooks().hooks);
+  await tick(1);
+  s2.sync();
+  assert.ok(await p2);
+  assert.deepEqual(s2.users, []);
 });
 
 test("no sync within the timeout → undefined and the session is destroyed", async () => {

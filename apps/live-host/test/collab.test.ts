@@ -328,3 +328,24 @@ test("beforeHandleMessage caps EPHEMERAL messages on their own (awareness broadc
     /ephemeral message rejected/,
   );
 });
+
+// ── beforeHandleAwareness ───────────────────────────────────────────────────
+
+test("beforeHandleAwareness: only the server asserts kind:'agent' — a ws peer claiming it is downgraded", async () => {
+  const { hooks } = setup();
+  const impostor = {
+    user: { name: "AI · petra", color: "#fff", kind: "agent" },
+    canvas: { cursor: null, selection: [] },
+  };
+  const human = { user: { name: "kai", color: "#000" } };
+  const anonymous = { selection: { anchor: 1 } }; // y-monaco's field only, no user yet
+  const states = new Map<number, Record<string, unknown>>([
+    [1, impostor],
+    [2, human],
+    [3, anonymous],
+  ]);
+  await hooks.beforeHandleAwareness({ states });
+  assert.equal(impostor.user.kind, "human", "rewritten in place — the update peers receive carries it");
+  assert.deepEqual(human, { user: { name: "kai", color: "#000" } }, "untouched");
+  assert.deepEqual(anonymous, { selection: { anchor: 1 } }, "untouched");
+});

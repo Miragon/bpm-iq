@@ -16,7 +16,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 
-import { CONTENT_KEY, ELEMENTS_KEY, META_KEY } from "@bpmiq/contracts/live";
+import { AWARENESS_USER_KEY, CONTENT_KEY, ELEMENTS_KEY, META_KEY } from "@bpmiq/contracts/live";
 import { readSnapshot, reconcileSnapshot } from "@bpmiq/live-client/structured";
 import { type DocCodec } from "@bpmiq/notations/codecs";
 import * as Y from "yjs";
@@ -226,6 +226,21 @@ export function makeCollabHooks(deps: CollabDeps) {
       }
       if (!docGuard.admit(documentName, update.length, () => Y.encodeStateAsUpdate(document).length)) {
         throw new Error(`${documentName}: update rejected — document is at the ${maxDocBytes}B cap`);
+      }
+    },
+
+    // ws-originated awareness is PEER INPUT. kind:"agent" is the ONE presence
+    // field with a trust meaning (the roster and the canvas render agents
+    // distinctly, "AI · name"), and only the Live Host asserts it — for the
+    // leases application/agent-presence.ts publishes, which never pass through
+    // here (they are applied to the room's awareness directly). A browser peer
+    // claiming it is downgraded in place; the update is otherwise untouched.
+    async beforeHandleAwareness({ states }: { states: Map<number, Record<string, unknown>> }) {
+      for (const state of states.values()) {
+        const user = state[AWARENESS_USER_KEY];
+        if (user !== null && typeof user === "object" && (user as { kind?: unknown }).kind === "agent") {
+          (user as { kind?: string }).kind = "human";
+        }
       }
     },
 

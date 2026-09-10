@@ -63,15 +63,9 @@ export const config = {
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`,
 };
 
-/** presence color, DETERMINISTIC per login — the same person shows up in the
- *  same color on every device and session (was: random + localStorage, which
- *  gave one person a different color per browser) */
-export function presenceColor(login: string): string {
-  const palette = ["#fa8100", "#0aa2c0", "#7c4dff", "#2e7d32", "#c2185b", "#00695c", "#5d4037"] as const;
-  let hash = 0;
-  for (const ch of login) hash = (hash * 31 + (ch.codePointAt(0) ?? 0)) >>> 0;
-  return palette[hash % palette.length] ?? palette[0];
-}
+/** presence color, DETERMINISTIC per login — lives in the live contract now
+ *  so the Live Host paints its agent presence from the same palette */
+export { presenceColor } from "@bpmiq/contracts/live";
 
 export const fetchConfig = (): Promise<AppConfig> => api("/api/config");
 export const fetchMe = (): Promise<Me> => api("/api/me");

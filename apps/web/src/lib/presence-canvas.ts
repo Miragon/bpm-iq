@@ -14,6 +14,11 @@
  * `scale(1/zoom)` so they keep their screen size. Canvas._clear (re-import)
  * leaves named layers alone, but elements change — render re-runs on
  * import.done / elements.changed and rebuilds from the last peer states.
+ *
+ * Agents (PresenceUser.kind "agent" — the Live Host's MCP clients, published
+ * server-side) have no pointer: their selection is the elements their last
+ * save changed. They render as dashed outlines with the name pill anchored to
+ * the first outlined element, so "where the AI worked" reads at a glance.
  */
 import type { CanvasPresence, PresenceUser } from "@bpmiq/contracts/live";
 
@@ -67,6 +72,27 @@ const MAX_OUTLINES = 50;
 
 const svg = <K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] =>
   document.createElementNS(SVG_NS, tag);
+
+/** a peer's name pill at (x, y) in the group's own coordinates — the width
+ *  fits the text, measurable only once the group is in the live SVG, so the
+ *  caller appends the group and THEN calls fit() */
+function namePill(color: string, name: string, x: number, y: number): { group: SVGGElement; fit(): void } {
+  const group = svg("g");
+  const pill = svg("rect");
+  pill.setAttribute("x", String(x));
+  pill.setAttribute("y", String(y));
+  pill.setAttribute("height", "16");
+  pill.setAttribute("rx", "4");
+  pill.setAttribute("fill", color);
+  const label = svg("text");
+  label.setAttribute("x", String(x + 6));
+  label.setAttribute("y", String(y + 11.5));
+  label.setAttribute("fill", "#fff");
+  label.setAttribute("style", "font: 600 10px system-ui, sans-serif");
+  label.textContent = safePresenceLabel(name);
+  group.append(pill, label);
+  return { group, fit: () => pill.setAttribute("width", String(Math.ceil(label.getComputedTextLength()) + 12)) };
+}
 
 export function attachPresenceCanvas(modeler: ModelerLike, presence: PresenceSurface): { destroy(): void } {
   const canvas = modeler.get("canvas");
@@ -158,11 +184,13 @@ export function attachPresenceCanvas(modeler: ModelerLike, presence: PresenceSur
     for (const peer of peers) {
       if (!peer.canvas) continue;
       const color = safePresenceColor(peer.user.color);
+      const agent = peer.user.kind === "agent";
 
       // the session boundary sanitizes CanvasPresence, but render() clears
       // the layer FIRST — a throw here would blank every peer's presence, so
       // the shape is re-checked (belt and suspenders against future callers)
       const selection = Array.isArray(peer.canvas.selection) ? peer.canvas.selection : [];
+      let anchor: { x: number; y: number } | undefined; // the first outlined box
       for (const id of selection.slice(0, MAX_OUTLINES)) {
         const el = typeof id === "string" ? registry.get(id) : undefined;
         // shapes only — connections carry waypoints, not a box
@@ -178,7 +206,9 @@ export function attachPresenceCanvas(modeler: ModelerLike, presence: PresenceSur
         outline.setAttribute("stroke-width", "1.5");
         // constant screen width regardless of zoom
         outline.setAttribute("vector-effect", "non-scaling-stroke");
+        if (agent) outline.setAttribute("stroke-dasharray", "5 3");
         layer.appendChild(outline);
+        anchor ??= { x: el.x - 3, y: (el.y ?? 0) - 3 };
       }
 
       const cursor = peer.canvas.cursor;
@@ -192,22 +222,20 @@ export function attachPresenceCanvas(modeler: ModelerLike, presence: PresenceSur
         arrow.setAttribute("fill", color);
         arrow.setAttribute("stroke", "#fff");
         arrow.setAttribute("stroke-width", "0.75");
-        const pill = svg("rect");
-        pill.setAttribute("x", "12");
-        pill.setAttribute("y", "14");
-        pill.setAttribute("height", "16");
-        pill.setAttribute("rx", "4");
-        pill.setAttribute("fill", color);
-        const label = svg("text");
-        label.setAttribute("x", "18");
-        label.setAttribute("y", "25.5");
-        label.setAttribute("fill", "#fff");
-        label.setAttribute("style", "font: 600 10px system-ui, sans-serif");
-        label.textContent = safePresenceLabel(peer.user.name);
-        group.append(arrow, pill, label);
+        const pill = namePill(color, peer.user.name, 12, 14);
+        group.append(arrow, pill.group);
         layer.appendChild(group);
-        // pill width fits the text — measurable only once in the live SVG
-        pill.setAttribute("width", String(Math.ceil(label.getComputedTextLength()) + 12));
+        pill.fit();
+      } else if (agent && anchor) {
+        // no pointer to hang the name on: label the work instead — the pill
+        // sits just above the first outlined element, screen-sized
+        const group = svg("g");
+        group.setAttribute("transform", `translate(${anchor.x}, ${anchor.y}) scale(${glyphScale})`);
+        group.setAttribute("style", "pointer-events: none");
+        const pill = namePill(color, peer.user.name, 0, -20);
+        group.appendChild(pill.group);
+        layer.appendChild(group);
+        pill.fit();
       }
     }
   };

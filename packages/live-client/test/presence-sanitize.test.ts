@@ -50,3 +50,13 @@ test("sanitizeUser: requires string name AND color, passes extras through for re
   assert.equal(sanitizeUser("petra"), undefined);
   assert.equal(sanitizeUser(null), undefined);
 });
+
+test("sanitizeUser: kind is a closed enum — agent/human pass, anything else is dropped, the input is not mutated", () => {
+  assert.equal(sanitizeUser({ name: "p", color: "#fff", kind: "agent" })?.kind, "agent");
+  assert.equal(sanitizeUser({ name: "p", color: "#fff", kind: "human" })?.kind, "human");
+  const odd = { name: "p", color: "#fff", kind: "robot" };
+  const out = sanitizeUser(odd)!;
+  assert.ok(!("kind" in out));
+  assert.equal(odd.kind, "robot", "the awareness state object is the protocol's — never rewritten");
+  assert.equal(sanitizeUser({ name: "p", color: "#fff", kind: 7 })?.kind, undefined);
+});

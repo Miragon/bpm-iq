@@ -165,6 +165,20 @@ app-visible — hidden from agents — and registered when at least one live-cap
 served AND the host is not read-only, bound to the first such widget's resource; absent under
 `LIVE_MCP_READONLY=1`, absent for a DMN-only dist.)
 
+### Agent presence: the AI shows up like a co-editor
+
+Every tool call that touches a model announces the caller's agent in that model's live room
+for a while (60 s after the last call, renewed by every call). People who have the model open
+see an **"AI · <name>"** avatar in the roster (named after the person the agent acts for), and
+after a save the elements the agent changed are outlined on the canvas in the agent's color,
+with its name pill on the first one — the agent's cursor. Nothing is written into the document:
+the presence is an awareness state the Live Host publishes into a LOADED room
+(`application/agent-presence.ts`); an unloaded room has nobody to show it to and is never pinned
+for it. `kind: "agent"` is server-asserted — a browser peer claiming it is downgraded on the way
+in (`collab.ts`, `beforeHandleAwareness`). The modeler widgets announce the HUMAN behind them
+the same way once live (`mint_ws_ticket` carries their name and color), so they show up in the
+web roster too.
+
 ### Decisions: DMN as a first-class model
 
 A decision **is** a `.dmn` file under the same `bpmiq.yml` folder (id = file stem), so the

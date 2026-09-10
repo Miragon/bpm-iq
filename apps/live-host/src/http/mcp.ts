@@ -29,7 +29,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 
 import { fileDeepLink, processDeepLink } from "@bpmiq/contracts/deep-link";
-import { roomName } from "@bpmiq/contracts/live";
+import { type CanvasPresence, presenceColor, roomName } from "@bpmiq/contracts/live";
 import type { ContentConflictWire, TodoWire, WidgetBootWire } from "@bpmiq/contracts/live-host";
 import { mcpAppToolName } from "@bpmiq/contracts/mcp-app";
 import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
@@ -46,6 +46,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
+import type { AgentPresence } from "../application/agent-presence.ts";
 import { authorizeRepo } from "../application/authz.ts";
 import { type ContentDeps, getContent, putContent } from "../application/content.ts";
 import { readDecisionTests, runTestsFor, saveTestsFor } from "../application/decision-tests.ts";
@@ -62,6 +63,7 @@ import {
 import { createDecision, createNotationModel, createProcess } from "../application/scaffold.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
+import { changedElementIds } from "../domain/model-diff.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
 import { release, type ReleaseDeps, releaseFiles } from "../release.ts";
@@ -87,6 +89,9 @@ export type McpDeps = OverviewDeps &
     publicUrl: string;
     /** ws tickets for the widget's live Yjs connection — absent = no live mode */
     wsTickets?: WsTicketStore;
+    /** agent presence (application/agent-presence.ts): the caller's agent
+     *  shows up in every room a tool touches — absent = agents stay invisible */
+    presence?: Pick<AgentPresence, "touch">;
   };
 
 // tool result codec: @bpmiq/mcp-kit — safe() runs WITHOUT a prefix here, the
@@ -314,6 +319,40 @@ export function createLiveMcpServer(
    *  safe() surfaces the AppError message to the agent verbatim */
   const requireRepo = (fullName: string): Promise<ConnectedRepo> => authorizeRepo(opts, session, fullName);
 
+  // ── agent presence: the AI client acting for the caller shows up in a room
+  // like a co-editor for a while after every model-touching call — a read
+  // announces it, a save also publishes the elements it changed as its
+  // selection, so co-editors see WHERE the agent worked (the agent's cursor).
+  // application/agent-presence.ts owns the lease; absent deps = dark. ───────
+  const principal = { login: session.user.login, name: session.user.name };
+  const seen = (r: ConnectedRepo, path: string, canvas?: () => CanvasPresence | undefined): void =>
+    opts.presence?.touch(roomName(r.fullName, path), principal, canvas);
+  /** the extractor of a lint:"warn" save may choke on what it let through —
+   *  a presence marker must never fail a save that already happened */
+  const graphOf = (path: string, text: string) => {
+    try {
+      return extractModelGraph(path, text);
+    } catch {
+      return undefined;
+    }
+  };
+  const readContent = async (r: ConnectedRepo, path: string) => {
+    const content = await getContent(opts, r, path);
+    seen(r, content.path);
+    return content;
+  };
+  const writeContent = async (r: ConnectedRepo, path: string, body: Parameters<typeof putContent>[3]) => {
+    const out = await putContent(opts, r, path, body);
+    if (out.ok) {
+      const saved = out.result.path;
+      seen(r, saved, () => ({
+        cursor: null,
+        selection: changedElementIds(graphOf(saved, out.previous), graphOf(saved, out.next)),
+      }));
+    }
+    return out;
+  };
+
   const resolveBpmnPath = async (repo: ConnectedRepo, id?: string, path?: string): Promise<string> => {
     if (path) return path;
     if (!id) throw new Error("provide either `id` or `path`.");
@@ -374,7 +413,7 @@ export function createLiveMcpServer(
     }
     if (!repo) throw new Error("provide `repo` (with `id` or `path`), or an explicit `xml` to dry-run.");
     const r = await requireRepo(repo);
-    const content = await getContent(opts, r, await resolveDmnPath(r, id, path));
+    const content = await readContent(r, await resolveDmnPath(r, id, path));
     return {
       view: decisionViewOf(content.path, content.content),
       at: { path: content.path, baseVersion: content.baseVersion },
@@ -423,7 +462,7 @@ export function createLiveMcpServer(
       { description: cfg.description, inputSchema: cfg.ref, annotations: READ },
       safe(async ({ repo, ...ref }: { repo: string } & RefArgs) => {
         const r = await requireRepo(repo);
-        const { xml: _legacy, ...content } = await getContent(opts, r, await cfg.resolve(r, ref));
+        const { xml: _legacy, ...content } = await readContent(r, await cfg.resolve(r, ref));
         return ok(cfg.legacyAlias ? { ...content, xml: _legacy } : content);
       }),
     );
@@ -497,7 +536,7 @@ export function createLiveMcpServer(
           Partial<Record<"xml" | "content", string>>) => {
           const r = await requireRepo(repo);
           const text = rest[cfg.payloadKey] ?? "";
-          const out = await putContent(opts, r, await cfg.resolve(r, rest), { content: text, baseVersion, lint });
+          const out = await writeContent(r, await cfg.resolve(r, rest), { content: text, baseVersion, lint });
           if (!out.ok) return conflictResult(out.conflict, cfg.legacyConflictKey);
           console.log(`content saved: ${r.fullName}/${out.result.path} by @${session.user.login} via mcp`);
           return ok({ ok: true, ...out.result });
@@ -562,7 +601,7 @@ export function createLiveMcpServer(
     safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
       const r = await requireRepo(repo);
       const bpmnPath = await resolveBpmnPath(r, id, path);
-      const content = await getContent(opts, r, bpmnPath);
+      const content = await readContent(r, bpmnPath);
       const graph = extractModelGraph(content.path, content.content);
       if (!graph) return fail(`could not derive a process view from ${content.path}.`);
       return ok({ id: id ?? null, path: content.path, baseVersion: content.baseVersion, ...deriveProcess(graph) });
@@ -589,7 +628,7 @@ export function createLiveMcpServer(
     },
     safe(async ({ repo, id, path, notation }: { repo: string; id?: string; path?: string; notation?: string }) => {
       const r = await requireRepo(repo);
-      const content = await getContent(opts, r, await resolveModelPath(r, { id, path, notation }));
+      const content = await readContent(r, await resolveModelPath(r, { id, path, notation }));
       const graph = extractModelGraph(content.path, content.content);
       const view = graph && deriveView(graph);
       if (!view) return fail(`no derived view for ${content.path} — the notation has no extract/derive capability.`);
@@ -725,7 +764,7 @@ export function createLiveMcpServer(
     safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
       const r = await requireRepo(repo);
       const dmnPath = await resolveDmnPath(r, id, path);
-      const content = await getContent(opts, r, dmnPath);
+      const content = await readContent(r, dmnPath);
       const decisionId = id ?? decisionIdOf(content.path);
       const workspace = await opts.workspaces.ensure(r);
       return ok({
@@ -844,7 +883,7 @@ export function createLiveMcpServer(
       }) => {
         const r = await requireRepo(repo);
         const dmnPath = await resolveDmnPath(r, id, path);
-        const content = xml === undefined ? await getContent(opts, r, dmnPath) : undefined;
+        const content = xml === undefined ? await readContent(r, dmnPath) : undefined;
         const view = decisionViewOf(dmnPath, xml ?? content?.xml ?? "");
         return ok({
           decisionPath: dmnPath,
@@ -1017,7 +1056,7 @@ export function createLiveMcpServer(
         }) => {
           const r = await requireRepo(repo);
           const dmnPath = await resolveDmnPath(r, id, path);
-          const content = await getContent(opts, r, dmnPath);
+          const content = await readContent(r, dmnPath);
           const view = decisionViewOf(content.path, content.content);
           const out = await saveTestsFor(
             opts,
@@ -1317,7 +1356,7 @@ export function createLiveMcpServer(
       // widget fetches the text itself — never send it here
       safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
         const r = await requireRepo(repo);
-        const content = await getContent(opts, r, await b.resolve(r, { id, path }));
+        const content = await readContent(r, await b.resolve(r, { id, path }));
         return ok({
           opened: { repo: r.fullName, path: content.path, url: b.url(r.fullName, content.path) },
           summary: b.summary(content.path, content.content),
@@ -1356,7 +1395,15 @@ export function createLiveMcpServer(
           { login: session.user.login, name: session.user.name, avatarUrl: null, provider: session.user.provider },
           room,
         );
-        return ok({ ticket, url: opts.publicUrl.replace(/^http/, "ws"), room, expiresInSeconds: 60 });
+        return ok({
+          ticket,
+          url: opts.publicUrl.replace(/^http/, "ws"),
+          room,
+          expiresInSeconds: 60,
+          // the presence the widget announces once connected — the HUMAN in
+          // the AI host, same name and color as in the web app
+          user: { name: session.user.name || session.user.login, color: presenceColor(session.user.login) },
+        });
       }),
     );
   }
