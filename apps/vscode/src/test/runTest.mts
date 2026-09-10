@@ -35,8 +35,8 @@ await runTests({
   extensionTestsPath: join(ROOT, "out", "test-e2e.js"),
   extensionTestsEnv: {
     // e2e.ts reads the file the Live Host serves in place — default to the
-    // monorepo's example content repo, overridable for any other checkout
-    LIVE_HOST_CONTENT_DIR: process.env.LIVE_HOST_CONTENT_DIR ?? resolve(ROOT, "..", "..", "process-documentation"),
+    // monorepo root (its bpmiq.yml points at process-documentation/processes), overridable for any other checkout
+    LIVE_HOST_CONTENT_DIR: process.env.LIVE_HOST_CONTENT_DIR ?? resolve(ROOT, "..", ".."),
   },
   launchArgs: [
     "--extensions-dir",
