@@ -24,6 +24,10 @@
         "title": "BPM Live: Sign in"
       },
       {
+        "command": "bpmLive.loginWithToken",
+        "title": "BPM Live: Sign in with a session token…"
+      },
+      {
         "command": "bpmLive.logout",
         "title": "BPM Live: Sign out"
       }
