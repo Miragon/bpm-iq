@@ -20,10 +20,10 @@
   "dependencies": {
     "@bpmiq/http-kit": "workspace:*",
     "@modelcontextprotocol/sdk": "1.30.0",
-    "zod": "4.5.2"
+    "zod": "4.5.4"
   },
   "devDependencies": {
-    "@types/node": "26.4.0",
+    "@types/node": "26.4.1",
     "typescript": "6.0.3"
   }
 }
