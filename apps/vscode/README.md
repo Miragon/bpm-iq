@@ -42,6 +42,14 @@ day (12h); after that the next open asks you to sign in again.
 Works in VS Code, Insiders, Cursor and other `vscode.env.uriScheme` editors
 on the desktop; browser-hosted VS Code (vscode.dev) is not covered.
 
+## Sync
+
+An open document is bound two-way to its room: what you type (or the Miragon
+modeler writes) goes into the shared document at once as a minimal diff, what
+others change comes back as an edit into your open document — dirty or not —
+and the document is kept clean, because a live document has no unsaved state
+(the Live Host holds the working copy; releases go through git).
+
 ## Presence
 
 Each open live document announces you (name, avatar, the same color as in
@@ -50,9 +58,10 @@ the web app) in the room's roster; on the dev token you show up as
 
 ## Limits
 
-- Remote changes are applied while the document is not dirty. Once you edit,
-  the document goes dirty and re-syncs on save — `files.autoSave: afterDelay`
-  keeps a co-editing session flowing until the live binding lands.
+- The binding keeps an open document and its room converged, but the apply
+  of a remote edit is asynchronous: a keystroke landing in exactly that few-ms
+  window wins locally and can revert a peer's edit from the same instant. The
+  web app has no such window (Monaco edits are synchronous with Yjs).
 - No Explorer tree yet: models are opened through the picker, not browsed as
   a workspace folder.
 

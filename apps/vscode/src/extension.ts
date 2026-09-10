@@ -12,13 +12,12 @@
  * setting applies (local spike mode). Presence: every live document announces
  * the signed-in person (or the dev-token identity) in the room's roster.
  *
- * Documented limits (the M1 sync layer, see apps/live-host/README.md):
- *  - writeFile applies a minimal diff into the shared Y.Text (concept sync rule 2,
- *    via @bpmiq/live-client updateText — same rule as the web app)
- *  - remote changes reach VS Code via FileChangeType.Changed; VS Code re-reads the
- *    file only while the local document is not dirty. Live two-way binding into a
- *    dirty open document is the M1 sync layer (WorkspaceEdit application), the
- *    verified pattern of the OCT VS Code extension.
+ * Sync (the M1 layer, live-binding.ts): an OPEN document is bound two-way to
+ * its room — local changes go into the shared Y.Text at once as minimal diffs
+ * (sync rule 2, the same updateText the web app uses), remote transactions
+ * come back as WorkspaceEdits, dirty or not, and the document is kept clean.
+ * Documents nobody has open only exist on the host; writeFile (a save) is the
+ * same minimal diff, a no-op once bound.
  */
 import type { PresenceUser } from "@bpmiq/contracts/live";
 import type { ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
@@ -30,10 +29,14 @@ import type * as Y from "yjs";
 
 import { LiveAuth } from "./auth.ts";
 import { hostJson } from "./host-api.ts";
+import { LiveBinding } from "./live-binding.ts";
 import { hostUrls } from "./login-flow.ts";
 import { modelItems, modelUri, repoItems } from "./model-picker.ts";
 
 const SCHEME = "bpm-live";
+
+/** room name = repo-qualified path = uri.path without the leading slash */
+const roomOf = (uri: vscode.Uri): string => uri.path.replace(/^\//, "");
 
 interface LiveDoc {
   session: LiveSession;
@@ -54,6 +57,8 @@ class LiveFileSystem implements vscode.FileSystemProvider {
   private readonly docs = new Map<string, LiveDoc>();
   /** sessions being opened — stat + readFile race for the same uri, one socket */
   private readonly opening = new Map<string, Promise<LiveDoc>>();
+  /** open TextDocuments bound two-way to their room (live-binding.ts), by room */
+  private readonly bindings = new Map<string, LiveBinding>();
   private readonly emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
   readonly onDidChangeFile = this.emitter.event;
   private readonly deps: LiveDeps;
@@ -62,9 +67,8 @@ class LiveFileSystem implements vscode.FileSystemProvider {
     this.deps = deps;
   }
 
-  /** Room name = repo-qualified path = uri.path without the leading slash. */
   private ensure(uri: vscode.Uri): Promise<LiveDoc> {
-    const name = uri.path.replace(/^\//, "");
+    const name = roomOf(uri);
     const existing = this.docs.get(name);
     if (existing) return Promise.resolve(existing);
     let opening = this.opening.get(name);
@@ -88,6 +92,7 @@ class LiveFileSystem implements vscode.FileSystemProvider {
         // so the next open reconnects with a fresh credential
         if (this.docs.get(name)?.session === session) {
           this.docs.delete(name);
+          this.detach(name);
           session.destroy();
         }
         this.deps.onAuthFailed(name, reason);
@@ -105,10 +110,40 @@ class LiveFileSystem implements vscode.FileSystemProvider {
     const doc: LiveDoc = { session, ytext, mtime: Date.now() };
     ytext.observe(() => {
       doc.mtime = Date.now();
-      this.emitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
+      // a bound document follows the room itself (WorkspaceEdit); the Changed
+      // event would make VS Code re-read a CLEAN file on top of that
+      if (!this.bindings.has(name)) this.emitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
     });
     this.docs.set(name, doc);
+    // a document already open on this uri (a session re-opened after sign-out
+    // or an auth failure) gets its binding back
+    const openDoc = vscode.workspace.textDocuments.find((d) => d.uri.scheme === SCHEME && roomOf(d.uri) === name);
+    if (openDoc) this.attach(name, openDoc, ytext);
     return doc;
+  }
+
+  private attach(name: string, textDoc: vscode.TextDocument, ytext: Y.Text): void {
+    if (this.bindings.has(name) || textDoc.isClosed) return;
+    this.bindings.set(name, new LiveBinding(textDoc, ytext));
+  }
+
+  private detach(name: string): void {
+    this.bindings.get(name)?.dispose();
+    this.bindings.delete(name);
+  }
+
+  /** an opened TextDocument of ours → bind it two-way to its room */
+  async bind(textDoc: vscode.TextDocument): Promise<void> {
+    if (textDoc.uri.scheme !== SCHEME) return;
+    const doc = await this.ensure(textDoc.uri);
+    this.attach(roomOf(textDoc.uri), textDoc, doc.ytext);
+  }
+
+  /** a closed TextDocument of ours → drop the binding (the session stays for
+   *  the next open; closeAll() ends it) */
+  unbind(textDoc: vscode.TextDocument): void {
+    if (textDoc.uri.scheme !== SCHEME) return;
+    this.detach(roomOf(textDoc.uri));
   }
 
   watch(): vscode.Disposable {
@@ -149,6 +184,7 @@ class LiveFileSystem implements vscode.FileSystemProvider {
   /** drop every live session (provider AND socket); open editors reconnect
    *  on their next read/write with the then-current credential */
   closeAll(): void {
+    for (const name of this.bindings.keys()) this.detach(name);
     for (const doc of this.docs.values()) doc.session.destroy();
     this.docs.clear();
   }
@@ -196,6 +232,8 @@ export function activate(context: vscode.ExtensionContext): void {
     status.show();
   };
   renderStatus();
+  // documents already open when the extension activates (a restored window)
+  for (const d of vscode.workspace.textDocuments) void fsProvider.bind(d);
 
   context.subscriptions.push(
     auth,
@@ -206,6 +244,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.workspace.registerFileSystemProvider(SCHEME, fsProvider, { isCaseSensitive: true }),
     { dispose: () => fsProvider.dispose() },
+    // the live binding follows the document lifecycle
+    vscode.workspace.onDidOpenTextDocument((d) => void fsProvider.bind(d)),
+    vscode.workspace.onDidCloseTextDocument((d) => fsProvider.unbind(d)),
     // the sign-in callback: <uriScheme>://miragon-gmbh.bpm-live/auth?code=…&state=…
     vscode.window.registerUriHandler({ handleUri: (uri) => auth.handleUri(uri) }),
     vscode.commands.registerCommand("bpmLive.login", async () => {

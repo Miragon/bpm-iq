@@ -115,6 +115,41 @@ export async function run(): Promise<void> {
     const tOut = await until("guest receives local edit", () => ytext.toString().includes(M2), 6000);
     pass(`local edit+save reached the remote guest after ${tOut}ms`);
 
+    // 3b — the live binding: an UNSAVED local edit reaches the guest, a remote
+    // edit reaches the document while it is being edited (the spike only
+    // followed the room while the document was clean), and the document
+    // settles clean — a live document has no unsaved state
+    const M4 = `<!-- vscode-e2e-live-out-${Date.now()} -->`;
+    const liveEdit = new vscode.WorkspaceEdit();
+    liveEdit.insert(uri, new vscode.Position(doc.lineCount, 0), `${M4}\n`);
+    await vscode.workspace.applyEdit(liveEdit);
+    try {
+      const t = await until("unsaved local edit reaches the guest", () => ytext.toString().includes(M4), 4000);
+      pass(`live binding: unsaved local edit reached the guest after ${t}ms`);
+    } catch {
+      fail("live binding: unsaved local edit did not reach the guest");
+    }
+    const M5 = `<!-- vscode-e2e-live-in-${Date.now()} -->`;
+    ytext.insert(ytext.length, `${M5}\n`);
+    try {
+      const t = await until("remote edit into the edited document", () => doc.getText().includes(M5), 4000);
+      pass(`live binding: remote edit applied to the edited document after ${t}ms`);
+    } catch {
+      fail("live binding: remote edit did not reach the edited document");
+    }
+    try {
+      await until("document settles clean", () => !doc.isDirty, 3000);
+      pass("live binding: the document settles clean after both edits");
+    } catch {
+      fail("live binding: the document stayed dirty");
+    }
+    for (const m of [M4, M5]) {
+      const s = ytext.toString();
+      const i = s.indexOf(`${m}\n`);
+      if (i >= 0) ytext.delete(i, m.length + 1);
+    }
+    await until("live markers gone from the document", () => !doc.getText().includes("vscode-e2e-live"), 4000);
+
     // 4 — the Miragon custom editor on the SAME virtual document
     const miragon = vscode.extensions.getExtension(MIRAGON);
     if (miragon) {
