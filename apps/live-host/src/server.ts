@@ -35,6 +35,7 @@ import { LineageStore } from "./adapters/sqlite/lineage-store.ts";
 import { SessionStore } from "./adapters/sqlite/sessions.ts";
 import { AgentPresence } from "./application/agent-presence.ts";
 import { makeCollabHooks } from "./application/collab.ts";
+import { LoginCodeStore } from "./application/login-codes.ts";
 import { peersOfDocument } from "./application/room-presence.ts";
 import { WsTicketStore } from "./application/ws-tickets.ts";
 import { makeOidcVerifier } from "./auth/oidc.ts";
@@ -324,6 +325,9 @@ const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
 // single-use ws tickets for the MCP-App widget's live connection — minted by
 // /mcp (mint_ws_ticket), redeemed in onAuthenticate (application/ws-tickets.ts)
 const wsTickets = new WsTicketStore();
+// single-use sign-in codes for EDITOR logins (the VS Code extension) — issued by
+// the login callback, redeemed by POST /auth/exchange (application/login-codes.ts)
+const loginCodes = new LoginCodeStore();
 
 const server = new Server({
   // no `port`: Hocuspocus does NOT open its own listener — we attach its
@@ -348,6 +352,7 @@ const httpServer = startApi(PORT, {
   webDist: WEB_DIST,
   publicUrl: PUBLIC_URL,
   wsTickets,
+  loginCodes,
   // agent presence: MCP calls show up in the rooms they touch, for co-editors
   // to see — published straight into a LOADED room's awareness (no ws client,
   // no pinned document; an unloaded room has nobody to show it to)

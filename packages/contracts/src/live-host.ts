@@ -149,10 +149,17 @@ export interface RepoInfo {
   liveSessions: number;
 }
 
-/** GET /api/me */
+/** GET /api/me — and the response of POST /auth/exchange */
 export interface Me {
   user: GitUserWire;
   wsToken: string;
+}
+
+/** POST /auth/exchange — an editor (the VS Code extension) turns the one-time
+ *  code its sign-in URI handler received into its session (response: Me; 401
+ *  for an unknown, used or expired code). See EDITOR_EXTENSION_ID in ./live.ts. */
+export interface EditorLoginExchangeBody {
+  code: string;
 }
 
 /** GET /api/config */

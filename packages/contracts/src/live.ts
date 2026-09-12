@@ -31,6 +31,20 @@ export const META_KEY = "meta";
 /** room name = "<repo-full-name>/<repo-relative-path>" (multi-repo contract) */
 export const roomName = (repoFullName: string, path: string): string => `${repoFullName}/${path}`;
 
+// ── editor sign-in (the VS Code extension) ───────────────────────────────────
+// A login started with ?editor=<uri scheme>&editor_state=<nonce> lands in the
+// editor: the callback bounces the browser to
+// <scheme>://EDITOR_EXTENSION_ID EDITOR_LOGIN_PATH?code=…&state=… and the
+// editor exchanges the one-time code for its session (POST /auth/exchange —
+// EditorLoginExchangeBody in ./live-host.ts). The Live Host BUILDS this target
+// (live-host http/editor-login.ts); the extension registers the URI handler
+// under the same id — a literal shared here so the two cannot drift.
+
+/** publisher.name of the VS Code extension (apps/vscode/package.json) */
+export const EDITOR_EXTENSION_ID = "miragon-gmbh.bpm-live";
+/** the path of the extension's sign-in URI handler */
+export const EDITOR_LOGIN_PATH = "/auth";
+
 /** every room of one repo starts with this — the trailing slash keeps
  *  "acme/models-2" from ever matching "acme/models" */
 export const roomPrefix = (repoFullName: string): string => `${repoFullName}/`;
