@@ -19,10 +19,10 @@ import * as vscode from "vscode";
 import WebSocket from "ws";
 
 const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/bpm-iq";
-const FILE = "processes/order-to-cash/order-to-cash.bpmn";
+const FILE = "process-documentation/processes/order-to-cash.bpmn";
 /** room name on the Live Host = <owner>/<repo>/<repo-relative-path> */
 const DOC = `${HOST_REPO}/${FILE}`;
-/** where that file lives on disk (the host serves process-documentation/ in place);
+/** where that file lives on disk (the host serves the checkout in place);
  *  set by runTest.mts (repo-relative default) or overridden via the environment */
 const CONTENT_ROOT = process.env.LIVE_HOST_CONTENT_DIR;
 if (!CONTENT_ROOT)
