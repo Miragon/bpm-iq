@@ -191,6 +191,17 @@ export function clearPkceCookie(secure: boolean): string {
   return `${PKCE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
 }
 
+/** the editor sign-in's (scheme, nonce) pair (http/editor-login.ts) —
+ * browser-bound for one flow exactly like the state nonce; the callback reads it
+ * to land in the editor instead of setting the session cookie, then clears it */
+export const EDITOR_COOKIE = "bpm_live_editor";
+export function editorCookie(value: string, secure: boolean): string {
+  return `${EDITOR_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? "; Secure" : ""}`;
+}
+export function clearEditorCookie(secure: boolean): string {
+  return `${EDITOR_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
+}
+
 export const readCookie = readCookieKit;
 
 export function sessionCookie(id: string, secure: boolean): string {

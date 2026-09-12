@@ -14,15 +14,19 @@
 import { readFileSync } from "node:fs";
 
 import { CONTENT_KEY } from "@bpmiq/contracts/live";
+import type { ModelInfo } from "@bpmiq/contracts/live-host";
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
 import * as vscode from "vscode";
 import WebSocket from "ws";
 
+import { hostJson } from "../host-api.ts";
+import { modelItems } from "../model-picker.ts";
+
 const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/bpm-iq";
-const FILE = "processes/order-to-cash/order-to-cash.bpmn";
+const FILE = "process-documentation/processes/order-to-cash.bpmn";
 /** room name on the Live Host = <owner>/<repo>/<repo-relative-path> */
 const DOC = `${HOST_REPO}/${FILE}`;
-/** where that file lives on disk (the host serves process-documentation/ in place);
+/** where that file lives on disk (the host serves the checkout in place);
  *  set by runTest.mts (repo-relative default) or overridden via the environment */
 const CONTENT_ROOT = process.env.LIVE_HOST_CONTENT_DIR;
 if (!CONTENT_ROOT)
@@ -56,6 +60,19 @@ export async function run(): Promise<void> {
     });
     const ytext = guest.document.getText(CONTENT_KEY);
 
+    // 0 — the picker's data path: the host lists the model we are about to open
+    // (GET /models through the extension's own client, on the dev token)
+    try {
+      const models = await hostJson<ModelInfo[]>(`http://localhost:8301/api/repos/${HOST_REPO}/models`, {
+        token: "demo",
+      });
+      const item = modelItems(models).find((i) => i.value.path === FILE);
+      if (item) pass(`picker: the host lists the model (${item.label} — ${item.description})`);
+      else fail(`picker: ${FILE} not among the host's ${models.length} models`);
+    } catch (err) {
+      fail(`picker: model listing failed — ${(err as Error).message}`);
+    }
+
     // 1 — open the live document as text
     const uri = vscode.Uri.parse(`bpm-live:/${DOC}`);
     const doc = await vscode.workspace.openTextDocument(uri);
@@ -63,6 +80,17 @@ export async function run(): Promise<void> {
     const disk = readFileSync(`${CONTENT_ROOT}/${FILE}`, "utf8");
     if (doc.getText() === disk) pass("virtual document content equals working tree");
     else fail(`content mismatch: doc ${doc.getText().length} chars vs disk ${disk.length}`);
+
+    // 1b — presence: the extension announced its identity in the room (the
+    // dev-token identity here; a signed-in person shows up under their own name)
+    const roster = () =>
+      [...(guest.awareness?.getStates().values() ?? [])].map((s) => (s as { user?: { name?: string } }).user?.name);
+    try {
+      await until("VS Code presence in the room", () => roster().includes("dev-token"), 4000);
+      pass("presence: the VS Code client shows up in the roster as dev-token");
+    } catch {
+      fail(`presence: VS Code missing from the roster (${JSON.stringify(roster())})`);
+    }
 
     // 2 — inbound: remote edit reaches the open document
     const M1 = `<!-- vscode-e2e-in-${Date.now()} -->`;
@@ -86,6 +114,41 @@ export async function run(): Promise<void> {
     await doc.save();
     const tOut = await until("guest receives local edit", () => ytext.toString().includes(M2), 6000);
     pass(`local edit+save reached the remote guest after ${tOut}ms`);
+
+    // 3b — the live binding: an UNSAVED local edit reaches the guest, a remote
+    // edit reaches the document while it is being edited (the spike only
+    // followed the room while the document was clean), and the document
+    // settles clean — a live document has no unsaved state
+    const M4 = `<!-- vscode-e2e-live-out-${Date.now()} -->`;
+    const liveEdit = new vscode.WorkspaceEdit();
+    liveEdit.insert(uri, new vscode.Position(doc.lineCount, 0), `${M4}\n`);
+    await vscode.workspace.applyEdit(liveEdit);
+    try {
+      const t = await until("unsaved local edit reaches the guest", () => ytext.toString().includes(M4), 4000);
+      pass(`live binding: unsaved local edit reached the guest after ${t}ms`);
+    } catch {
+      fail("live binding: unsaved local edit did not reach the guest");
+    }
+    const M5 = `<!-- vscode-e2e-live-in-${Date.now()} -->`;
+    ytext.insert(ytext.length, `${M5}\n`);
+    try {
+      const t = await until("remote edit into the edited document", () => doc.getText().includes(M5), 4000);
+      pass(`live binding: remote edit applied to the edited document after ${t}ms`);
+    } catch {
+      fail("live binding: remote edit did not reach the edited document");
+    }
+    try {
+      await until("document settles clean", () => !doc.isDirty, 3000);
+      pass("live binding: the document settles clean after both edits");
+    } catch {
+      fail("live binding: the document stayed dirty");
+    }
+    for (const m of [M4, M5]) {
+      const s = ytext.toString();
+      const i = s.indexOf(`${m}\n`);
+      if (i >= 0) ytext.delete(i, m.length + 1);
+    }
+    await until("live markers gone from the document", () => !doc.getText().includes("vscode-e2e-live"), 4000);
 
     // 4 — the Miragon custom editor on the SAME virtual document
     const miragon = vscode.extensions.getExtension(MIRAGON);

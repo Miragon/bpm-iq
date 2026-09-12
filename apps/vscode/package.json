@@ -1,7 +1,7 @@
 {
-  "name": "@bpmiq/vscode",
+  "name": "bpm-live",
   "displayName": "BPM Live Workspace",
-  "description": "M0 spike skeleton: open live model documents (bpm-live://) synced through the Live Host \u2014 the Miragon BPMN Modeler opens them like any other file.",
+  "description": "Open live model documents (bpm-live://) synced through the bpmiq Live Host — the Miragon BPMN Modeler opens them like any other file.",
   "version": "0.0.1",
   "private": true,
   "publisher": "miragon-gmbh",
@@ -10,13 +10,26 @@
   },
   "main": "./out/extension.js",
   "activationEvents": [
-    "onFileSystem:bpm-live"
+    "onFileSystem:bpm-live",
+    "onUri"
   ],
   "contributes": {
     "commands": [
       {
         "command": "bpmLive.open",
         "title": "BPM Live: Open Live Model"
+      },
+      {
+        "command": "bpmLive.login",
+        "title": "BPM Live: Sign in"
+      },
+      {
+        "command": "bpmLive.loginWithToken",
+        "title": "BPM Live: Sign in with a session token…"
+      },
+      {
+        "command": "bpmLive.logout",
+        "title": "BPM Live: Sign out"
       }
     ],
     "configuration": {
@@ -24,20 +37,21 @@
       "properties": {
         "bpmLive.serverUrl": {
           "type": "string",
-          "default": "ws://localhost:8301",
-          "description": "WebSocket URL of the Live Host (Hocuspocus)."
+          "default": "http://localhost:8301",
+          "description": "URL of the Live Host — http(s):// or ws(s)://, both forms work."
         },
         "bpmLive.token": {
           "type": "string",
           "default": "demo",
-          "description": "Auth token (spike: shared token; later: WorkOS/GitHub JWT)."
+          "description": "Dev token (the host's LIVE_DEV_TOKEN) for a local host without a login provider. Applies only while not signed in."
         }
       }
     }
   },
   "scripts": {
-    "compile": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js",
+    "compile": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=out/extension.js",
     "typecheck": "tsc -p .",
+    "test": "node --test src/test/unit/*.test.ts",
     "test:e2e": "pnpm compile && esbuild src/test/e2e.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/test-e2e.js && node src/test/runTest.mts"
   },
   "dependencies": {

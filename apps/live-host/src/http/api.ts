@@ -10,7 +10,9 @@
  *   GET  /api/config                             → providers + app install URL
  *   GET  /auth/oidc(/callback)                   → browser OIDC login (code+PKCE; when configured — in cell mode THE login)
  *   GET  /auth/:provider(/callback)              → OAuth login (authentication only)
- *   GET  /api/me, POST /api/logout
+ *        …?editor=<scheme>&editor_state=<nonce> → the SAME logins landing in an editor (editor-login.ts)
+ *   POST /auth/exchange                          → editor sign-in: one-time code → Me (session id as wsToken)
+ *   GET  /api/me, POST /api/logout               (logout: cookie session, or the Bearer session id)
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
  *   GET  /api/repos/:owner/:repo/processes       → process list      (repo write required)
  *   POST /api/repos/:owner/:repo/processes       → create a process from the blank template (repo write required)
@@ -55,6 +57,7 @@ import type {
   CreateProcessBody,
   CreateTodoBody,
   DecisionInfo,
+  EditorLoginExchangeBody,
   FileAtCommitWire,
   FileCommitWire,
   FolderListWire,
@@ -73,9 +76,12 @@ import { AppError, bearerAuth, errorBody, readBody, redirect, securityHeaders, s
 
 import {
   clearCookie,
+  clearEditorCookie,
   clearOauthCookie,
   clearPkceCookie,
   COOKIE,
+  EDITOR_COOKIE,
+  editorCookie,
   OAUTH_COOKIE,
   oauthCookie,
   PKCE_COOKIE,
@@ -89,6 +95,7 @@ import type { AgentPresence } from "../application/agent-presence.ts";
 import { authorizeRepo } from "../application/authz.ts";
 import { type DirectDoc, getContent, putContent } from "../application/content.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
+import type { LoginCodeStore } from "../application/login-codes.ts";
 import { listAllModels, listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
 import type { RoomPresenceDeps } from "../application/room-presence.ts";
 import {
@@ -108,6 +115,13 @@ import { release, releaseFiles } from "../release.ts";
 import type { AccessCache } from "../repos/access.ts";
 import type { ConnectedRepo, RepoRegistry } from "../repos/registry.ts";
 import type { WorkspaceManager } from "../repos/workspaces.ts";
+import {
+  decodeEditorCookie,
+  editorReturnPage,
+  editorReturnUri,
+  encodeEditorCookie,
+  parseEditorLogin,
+} from "./editor-login.ts";
 import { handleMcp } from "./mcp.ts";
 
 const MIME: Record<string, string> = {
@@ -183,6 +197,9 @@ export interface ApiOptions {
   /** single-use ws tickets for the MCP-App widget's live Yjs connection
    * (application/ws-tickets.ts) — absent = the widget stays on bridge autosave */
   wsTickets?: WsTicketStore;
+  /** single-use sign-in codes for EDITOR logins (application/login-codes.ts,
+   * http/editor-login.ts) — absent = a ?editor= login start answers 501 */
+  loginCodes?: LoginCodeStore;
   /** agent presence (application/agent-presence.ts): the MCP tools announce
    * the caller's agent in every room they touch — absent = agents stay invisible */
   presence?: Pick<AgentPresence, "touch">;
@@ -281,6 +298,38 @@ export function startApi(port: number, opts: ApiOptions): Server {
       };
     }
     return opts.sessions.get(bearer);
+  };
+
+  // ── editor sign-in (http/editor-login.ts) ──────────────────────────────
+  // A login START may carry ?editor=<scheme>&editor_state=<nonce>: returns the
+  // flow cookie to set alongside the OAuth nonce, undefined for a plain
+  // browser login, or answers the 400/501 itself and returns null.
+  const editorStart = (res: ServerResponse, params: URLSearchParams): string | undefined | null => {
+    const editor = parseEditorLogin(params);
+    if (editor === undefined) return undefined;
+    if (editor === null) {
+      send(res, 400, { error: "invalid editor sign-in parameters" });
+      return null;
+    }
+    if (!opts.loginCodes) {
+      send(res, 501, { error: "editor sign-in is not available on this host" });
+      return null;
+    }
+    return editorCookie(encodeEditorCookie(editor), secure);
+  };
+  // The login LANDING, shared by every callback: an editor flow gets the
+  // one-time-code page and NO session cookie (its session stays separate from
+  // any web session); a browser flow the cookie + redirect home.
+  const finishLogin = (req: IncomingMessage, res: ServerResponse, session: Session, clearFlow: string[]): void => {
+    const editor = decodeEditorCookie(readCookie(req.headers.cookie, EDITOR_COOKIE));
+    if (editor && opts.loginCodes) {
+      const code = opts.loginCodes.issue(session.id);
+      return send(res, 200, editorReturnPage(editorReturnUri(editor, code), session.user.login), {
+        "content-type": "text/html; charset=utf-8",
+        "set-cookie": [...clearFlow, clearEditorCookie(secure)],
+      });
+    }
+    return redirect(res, "/", { "set-cookie": [sessionCookie(session.id, secure), ...clearFlow] });
   };
 
   // RFC 9728: 401s advertise where the protected-resource metadata lives, so
@@ -437,6 +486,8 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // grant, ADR 0001); per-repo authorization runs app-side as everywhere.
       // Must precede the /auth/:provider matchers ("oidc" is not a git provider).
       if (opts.oidcLogin && url.pathname === "/auth/oidc") {
+        const editor = editorStart(res, url.searchParams);
+        if (editor === null) return;
         const redirectUri = `${opts.publicUrl}/auth/oidc/callback`;
         // browser-bound state (login-CSRF/fixation) + PKCE verifier, both riding
         // in short-lived HttpOnly cookies exactly like the git-provider flow
@@ -444,11 +495,11 @@ export function startApi(port: number, opts: ApiOptions): Server {
         const verifier = randomBytes(32).toString("base64url");
         const challenge = createHash("sha256").update(verifier).digest("base64url");
         return redirect(res, await opts.oidcLogin.authorizeUrl(redirectUri, state, challenge), {
-          "set-cookie": [oauthCookie(nonce, secure), pkceCookie(verifier, secure)],
+          "set-cookie": [oauthCookie(nonce, secure), pkceCookie(verifier, secure), ...(editor ? [editor] : [])],
         });
       }
       if (opts.oidcLogin && url.pathname === "/auth/oidc/callback") {
-        const clearFlow = [clearOauthCookie(secure), clearPkceCookie(secure)];
+        const clearFlow = [clearOauthCookie(secure), clearPkceCookie(secure), clearEditorCookie(secure)];
         if (
           !opts.sessions.verifyState(
             url.searchParams.get("state"),
@@ -494,7 +545,20 @@ export function startApi(port: number, opts: ApiOptions): Server {
         }
         const session = opts.sessions.create({ login: id.login, name: id.name, avatarUrl: null, provider: "oidc" });
         console.log(`oidc login: @${id.login}`);
-        return redirect(res, "/", { "set-cookie": [sessionCookie(session.id, secure), ...clearFlow] });
+        return finishLogin(req, res, session, clearFlow);
+      }
+
+      // ── editor sign-in, step 3: the one-time code becomes the session ───
+      // (before the /auth/:provider matcher — "exchange" is not a provider)
+      if (url.pathname === "/auth/exchange" && req.method === "POST") {
+        if (!opts.loginCodes) return send(res, 501, { error: "editor sign-in is not available on this host" });
+        const body = await jsonBody<EditorLoginExchangeBody>(req, res, 4096);
+        if (!body) return;
+        const session =
+          typeof body.code === "string" ? opts.sessions.get(opts.loginCodes.redeem(body.code)) : undefined;
+        if (!session) return send(res, 401, { error: "invalid, used or expired sign-in code" });
+        console.log(`editor sign-in: @${session.user.login}`);
+        return send(res, 200, { user: session.user, wsToken: session.id } satisfies Me);
       }
 
       // ── OAuth: LOGIN = AUTHENTICATION ONLY (repos authorize per request) ─
@@ -502,11 +566,15 @@ export function startApi(port: number, opts: ApiOptions): Server {
       if (authStart) {
         const provider = opts.providers.get(authStart[1] ?? "");
         if (!provider) return send(res, 404, { error: `provider '${authStart[1]}' not configured` });
+        const editor = editorStart(res, url.searchParams);
+        if (editor === null) return;
         const redirectUri = `${opts.publicUrl}/auth/${provider.id}/callback`;
         // bind the flow to THIS browser: the nonce rides in both the signed state and
         // a short-lived cookie; the callback requires both (login-CSRF / fixation fix)
         const { state, nonce } = opts.sessions.issueState(provider.id);
-        return redirect(res, provider.authorizeUrl(redirectUri, state), { "set-cookie": oauthCookie(nonce, secure) });
+        return redirect(res, provider.authorizeUrl(redirectUri, state), {
+          "set-cookie": [oauthCookie(nonce, secure), ...(editor ? [editor] : [])],
+        });
       }
       const authCb = url.pathname.match(/^\/auth\/([a-z]+)\/callback$/);
       if (authCb) {
@@ -553,7 +621,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
         const session = opts.sessions.create(user, grant);
         console.log(`login: @${user.login} via ${provider.id}`);
         // single-use: drop the OAuth binding cookie once the login completes
-        return redirect(res, "/", { "set-cookie": [sessionCookie(session.id, secure), clearOauthCookie(secure)] });
+        return finishLogin(req, res, session, [clearOauthCookie(secure)]);
       }
 
       // ── session-facing API ───────────────────────────────────────────
@@ -580,7 +648,9 @@ export function startApi(port: number, opts: ApiOptions): Server {
         return send(res, 200, { user: session.user, wsToken: session.id } satisfies Me);
       }
       if (url.pathname === "/api/logout" && req.method === "POST") {
-        const sid = readCookie(req.headers.cookie, COOKIE);
+        // the cookie session — or, for an editor / headless client, the Bearer
+        // session id (a dev token or JWT bearer names no row: a no-op delete)
+        const sid = readCookie(req.headers.cookie, COOKIE) ?? req.headers.authorization?.replace(/^Bearer /, "");
         if (sid) opts.sessions.delete(sid);
         return send(res, 200, { ok: true }, { "set-cookie": clearCookie() });
       }

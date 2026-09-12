@@ -147,8 +147,9 @@ is independent of the provider handshake.
 
 ### Headless clients & offline demos
 
-- `LIVE_DEV_TOKEN=<token>` grants a bot session for tests and the VS Code extension (which
-  gets its own OAuth device flow later). With no provider configured, it defaults to `demo`
+- `LIVE_DEV_TOKEN=<token>` grants a bot session for tests and the VS Code extension's local
+  mode (a signed-in person uses the editor sign-in instead: `?editor=` on the login routes +
+  `POST /auth/exchange`, `src/http/editor-login.ts`, `apps/vscode/README.md`). With no provider configured, it defaults to `demo`
   (local spike mode); once a provider is configured it is **off unless set explicitly**.
   It is also accepted as Bearer auth on `POST /mcp` and the content routes.
 - **OIDC bearer JWTs** join the dev token: with `LIVE_OIDC_ISSUER` + `LIVE_OIDC_JWKS_URL`
