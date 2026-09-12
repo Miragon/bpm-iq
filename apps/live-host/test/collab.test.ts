@@ -53,7 +53,6 @@ function setup(over: Partial<CollabDeps> = {}) {
     registry: { get: (n) => (n.toLowerCase() === REPO.fullName ? REPO : undefined) },
     workspaces: { ensure: async () => ws },
     contentConfig: () => ({ processes: "processes" }),
-    devToken: () => undefined,
     liveDocs: new Set<string>(),
     ...over,
   };
@@ -75,14 +74,19 @@ test("onAuthenticate: session with write access passes, without is refused", asy
   await assert.rejects(() => denied.hooks.onAuthenticate({ token: s.id, documentName: ROOM }), /no write access/);
 });
 
-test("onAuthenticate: dev token grants headless access; anything else is invalid", async () => {
-  const { hooks } = setup({ devToken: () => "demo" });
-  const ctx = await hooks.onAuthenticate({ token: "demo", documentName: ROOM });
-  assert.equal(ctx.user.login, "dev-token");
+test("onAuthenticate: an unknown token is invalid; LIVE_AUTH=none makes every join the local principal", async () => {
+  const { hooks } = setup();
   await assert.rejects(() => hooks.onAuthenticate({ token: "wrong", documentName: ROOM }), /invalid session/);
-  // malformed/unknown rooms are rejected BEFORE any token is considered
+
+  // none mode (ADR 0007): whatever token was sent, the join IS the local
+  // principal — no session lookup, no per-repo check (access would say no here)
+  const local = { login: "dominik", name: "dominik", avatarUrl: null, provider: "local" };
+  const none = setup({ local, access: { canWrite: async () => false } });
+  const ctx = await none.hooks.onAuthenticate({ token: "anything", documentName: ROOM });
+  assert.equal(ctx.user.login, "dominik");
+  // malformed/unknown rooms are rejected BEFORE the principal is considered
   await assert.rejects(
-    () => hooks.onAuthenticate({ token: "demo", documentName: "stranger/repo/x.bpmn" }),
+    () => none.hooks.onAuthenticate({ token: "anything", documentName: "stranger/repo/x.bpmn" }),
     /not a connected repository/,
   );
 });

@@ -32,7 +32,7 @@
  *   POST /api/repos/:owner/:repo/release/:id     → release AS THE USER (repo write required)
  *   GET  /api/repos/:owner/:repo/content?path=   → current LIVE model content + baseVersion (repo write required)
  *   PUT  /api/repos/:owner/:repo/content?path=   → validate + CAS-save into the live doc (repo write required)
- *   POST /mcp                                    → MCP endpoint (stateless Streamable HTTP; session/dev token/OIDC JWT)
+ *   POST /mcp                                    → MCP endpoint (stateless Streamable HTTP; session id / OIDC JWT / none-mode principal)
  *   GET  /.well-known/oauth-protected-resource(/mcp) → RFC-9728 PRM, per resource (only when OIDC is configured)
  *   POST /webhook/github                         → installation lifecycle (HMAC-verified)
  *   GET  /setup/installed                        → post-install sync + redirect
@@ -143,10 +143,10 @@ export interface ApiOptions {
   sessions: SessionStore;
   registry: RepoRegistry;
   workspaces: WorkspaceManager;
-  access: AccessCache;
-  /** optional shared token for headless clients (tests, VS Code) — off if unset */
-  devToken?: () => string | undefined;
-  devUser?: string;
+  access: Pick<AccessCache, "canWrite" | "invalidate">;
+  /** LIVE_AUTH=none (auth/none.ts, ADR 0007): the ONE principal every request
+   * resolves to, whatever credential it carries — absent = authenticated mode */
+  local?: Session;
   /** repo-qualified document names of live rooms */
   liveDocs: () => string[];
   /** invalidate a room's Yjs lineage — sync-to-default drops the reset files' lineage */
@@ -264,25 +264,13 @@ export function startApi(port: number, opts: ApiOptions): Server {
   const secure = opts.publicUrl.startsWith("https");
 
   const sessionOf = async (req: IncomingMessage): Promise<Session | undefined> => {
+    // LIVE_AUTH=none: everyone is the local principal (ADR 0007)
+    if (opts.local) return opts.local;
     const sid = readCookie(req.headers.cookie, COOKIE);
     const fromCookie = opts.sessions.get(sid);
     if (fromCookie) return fromCookie;
-    // headless clients: Authorization: Bearer <session-id, dev token or OIDC JWT>
+    // headless clients: Authorization: Bearer <session-id or OIDC JWT>
     const bearer = req.headers.authorization?.replace(/^Bearer /, "");
-    const devToken = opts.devToken?.();
-    if (bearer && devToken && bearer === devToken) {
-      return {
-        id: "dev",
-        user: {
-          login: opts.devUser ?? "dev-token",
-          name: opts.devUser ?? "dev-token",
-          avatarUrl: null,
-          provider: "dev",
-        },
-        providerToken: "",
-        createdAt: Date.now(),
-      };
-    }
     // a JWS-shaped bearer (three dot-separated parts) is a JWT, never a session
     // id — verify it (throws a typed 401 AppError) instead of a doomed lookup.
     // The session is SYNTHETIC (never persisted): identity only; per-repo authz
@@ -633,6 +621,8 @@ export function startApi(port: number, opts: ApiOptions): Server {
             ...(opts.oidcLogin ? [{ id: "oidc", label: opts.oidcLogin.label }] : []),
             ...[...opts.providers.values()].map((p) => ({ id: p.id, label: p.label })),
           ],
+          // ADR 0007: "none" tells the clients there is nothing to sign in to
+          auth: opts.local ? "none" : "oidc",
           installUrl: opts.connectionSource?.connectUrl() ?? null,
           // publicUrl, not the request Host — the URL must work from OUTSIDE
           // (an AI client on another machine), and behind a proxy the Host
@@ -649,7 +639,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       }
       if (url.pathname === "/api/logout" && req.method === "POST") {
         // the cookie session — or, for an editor / headless client, the Bearer
-        // session id (a dev token or JWT bearer names no row: a no-op delete)
+        // session id (a JWT bearer or the local principal names no row: a no-op delete)
         const sid = readCookie(req.headers.cookie, COOKIE) ?? req.headers.authorization?.replace(/^Bearer /, "");
         if (sid) opts.sessions.delete(sid);
         return send(res, 200, { ok: true }, { "set-cookie": clearCookie() });
@@ -888,7 +878,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
 
       // MCP endpoint (http/mcp.ts): stateless Streamable HTTP on the official
       // SDK; tools call the application use-cases in-process with the caller's
-      // session. Same auth surface as the REST API (session id, dev token, JWT).
+      // session. Same auth surface as the REST API (session id, JWT, none-mode principal).
       if (url.pathname === "/mcp") {
         if (req.method !== "POST") {
           res.writeHead(405, { allow: "POST", "content-type": "application/json" });
@@ -935,7 +925,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
   });
   httpServer.listen(port, () => {
     console.log(
-      `api + web + ws : http://localhost:${port}  (providers: ${[...opts.providers.keys()].join(", ") || "none — set GITHUB_CLIENT_ID/SECRET"})`,
+      `api + web + ws : http://localhost:${port}  (auth: ${opts.local ? `none — every request is @${opts.local.user.login}` : [...(opts.oidcLogin ? ["oidc"] : []), ...opts.providers.keys()].join(", ") || "bearer only"})`,
     );
   });
   return httpServer;

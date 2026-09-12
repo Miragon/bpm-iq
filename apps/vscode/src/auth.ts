@@ -6,8 +6,10 @@
  * credential the Live Host accepts on the websocket AND the REST routes.
  *
  * The session id lives in SecretStorage (per host URL), the identity in
- * globalState. Without a sign-in the configured dev token is used — the local
- * spike mode, where the Live Host runs without a login provider.
+ * globalState. Without a sign-in the extension presents a placeholder
+ * credential: a LIVE_AUTH=none host ignores it (everyone is its local
+ * principal — /api/me says who), an authenticated host refuses it, which is
+ * exactly the sign-in prompt.
  */
 import { randomBytes } from "node:crypto";
 
@@ -19,11 +21,13 @@ import { hostJson } from "./host-api.ts";
 import { hostUrls, loginStartUrl, parseLoginCallback } from "./login-flow.ts";
 
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
+/** the credential while not signed in — meaningless to an authenticated host
+ *  (401 → sign-in), irrelevant to a LIVE_AUTH=none one (any token is accepted) */
+export const ANONYMOUS_TOKEN = "anonymous";
 
 export class LiveAuth implements vscode.Disposable {
   private readonly context: vscode.ExtensionContext;
   private readonly serverUrl: () => string;
-  private readonly devToken: () => string;
   /** the sign-in waiting for its browser callback (one at a time) */
   private pending: { state: string; resolve: (code: string) => void } | undefined;
   /** the host's /api/me answer for the credential it was fetched with */
@@ -32,10 +36,9 @@ export class LiveAuth implements vscode.Disposable {
   /** fires after a sign-in or sign-out */
   readonly onDidChange = this.changed.event;
 
-  constructor(context: vscode.ExtensionContext, serverUrl: () => string, devToken: () => string) {
+  constructor(context: vscode.ExtensionContext, serverUrl: () => string) {
     this.context = context;
     this.serverUrl = serverUrl;
-    this.devToken = devToken;
   }
 
   private key(kind: "session" | "me"): string {
@@ -47,14 +50,14 @@ export class LiveAuth implements vscode.Disposable {
     return this.context.globalState.get<Me["user"]>(this.key("me"));
   }
 
-  /** the ws/REST credential: the signed-in session, else the dev token */
+  /** the ws/REST credential: the signed-in session, else the placeholder */
   async token(): Promise<string> {
-    return (await this.context.secrets.get(this.key("session"))) ?? this.devToken();
+    return (await this.context.secrets.get(this.key("session"))) ?? ANONYMOUS_TOKEN;
   }
 
   /** who the HOST says we are for the current credential — the signed-in
-   *  person (also for a pasted session token) or the dev-token bot; the
-   *  stored identity when the host cannot be asked */
+   *  person (also for a pasted session token) or a none-mode host's local
+   *  principal; the stored identity when the host cannot be asked */
   async identity(): Promise<Me["user"] | undefined> {
     const token = await this.token();
     if (this.identityCache?.token === token) return this.identityCache.user;
@@ -68,10 +71,10 @@ export class LiveAuth implements vscode.Disposable {
   }
 
   /** how we show up in a room's roster — the same name and color as in the
-   *  web app; "dev-token" is what the host calls the dev-token session */
+   *  web app; the placeholder only while an authenticated host is not signed in to */
   async presence(): Promise<PresenceUser> {
     const me = await this.identity();
-    const login = me?.login ?? "dev-token";
+    const login = me?.login ?? ANONYMOUS_TOKEN;
     return { name: me ? me.name || me.login : login, color: presenceColor(login), avatarUrl: me?.avatarUrl ?? null };
   }
 
@@ -81,8 +84,8 @@ export class LiveAuth implements vscode.Disposable {
     const { http } = hostUrls(this.serverUrl());
     const me = await hostJson<Me>(`${http}/api/me`, { token });
     // a JWT bearer identifies over HTTP but its /api/me wsToken is synthetic —
-    // it cannot open the live websocket; the dev token's session is "dev"
-    if (me.wsToken !== token && me.user.provider !== "dev") {
+    // it cannot open the live websocket (a none-mode host accepts any token)
+    if (me.wsToken !== token && me.user.provider !== "local") {
       throw new Error(
         `this token cannot open the live websocket — paste the wsToken of ${http}/api/me from a browser login`,
       );
@@ -116,6 +119,9 @@ export class LiveAuth implements vscode.Disposable {
       );
     }
     const config = await hostJson<AppConfig>(`${http}/api/config`);
+    if (config.auth === "none") {
+      throw new Error(`${http} runs without authentication (LIVE_AUTH=none) — there is nothing to sign in to`);
+    }
     const provider = await pickProvider(config.providers);
     if (!provider) throw new Error("sign-in cancelled");
     const state = randomBytes(18).toString("base64url");
@@ -180,7 +186,7 @@ export class LiveAuth implements vscode.Disposable {
 
 async function pickProvider(providers: AppConfig["providers"]): Promise<AppConfig["providers"][number] | undefined> {
   if (providers.length === 0) {
-    throw new Error("the Live Host has no login provider configured — use the dev token (bpmLive.token)");
+    throw new Error("the Live Host has no browser login configured");
   }
   if (providers.length === 1) return providers[0];
   const picked = await vscode.window.showQuickPick(

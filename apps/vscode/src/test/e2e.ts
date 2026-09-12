@@ -9,12 +9,12 @@
  *
  * Server contract (multi-repo): HTTP + ws share ONE port (8301), room names are
  * repo-qualified (<owner>/<repo>/<path>). Needs the Live Host running with
- * LIVE_DEV_TOKEN=demo.
+ * LIVE_AUTH=none.
  */
 import { readFileSync } from "node:fs";
 
 import { CONTENT_KEY } from "@bpmiq/contracts/live";
-import type { ModelInfo } from "@bpmiq/contracts/live-host";
+import type { Me, ModelInfo } from "@bpmiq/contracts/live-host";
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
 import * as vscode from "vscode";
 import WebSocket from "ws";
@@ -52,7 +52,7 @@ export async function run(): Promise<void> {
       url: "ws://localhost:8301",
       WebSocketPolyfill: WebSocket as never,
     });
-    const guest = new HocuspocusProvider({ websocketProvider: socket, name: DOC, token: "demo" });
+    const guest = new HocuspocusProvider({ websocketProvider: socket, name: DOC, token: "e2e-guest" });
     guest.attach();
     await new Promise<void>((res, rej) => {
       guest.on("synced", () => res());
@@ -61,11 +61,10 @@ export async function run(): Promise<void> {
     const ytext = guest.document.getText(CONTENT_KEY);
 
     // 0 — the picker's data path: the host lists the model we are about to open
-    // (GET /models through the extension's own client, on the dev token)
+    // (GET /models through the extension's own client — the host runs
+    // LIVE_AUTH=none, so no credential is needed)
     try {
-      const models = await hostJson<ModelInfo[]>(`http://localhost:8301/api/repos/${HOST_REPO}/models`, {
-        token: "demo",
-      });
+      const models = await hostJson<ModelInfo[]>(`http://localhost:8301/api/repos/${HOST_REPO}/models`);
       const item = modelItems(models).find((i) => i.value.path === FILE);
       if (item) pass(`picker: the host lists the model (${item.label} — ${item.description})`);
       else fail(`picker: ${FILE} not among the host's ${models.length} models`);
@@ -81,13 +80,17 @@ export async function run(): Promise<void> {
     if (doc.getText() === disk) pass("virtual document content equals working tree");
     else fail(`content mismatch: doc ${doc.getText().length} chars vs disk ${disk.length}`);
 
-    // 1b — presence: the extension announced its identity in the room (the
-    // dev-token identity here; a signed-in person shows up under their own name)
+    // 1b — presence: the extension announced its identity in the room (on a
+    // LIVE_AUTH=none host the local principal /api/me reports; a signed-in
+    // person shows up under their own name)
+    const expected = await hostJson<Me>("http://localhost:8301/api/me")
+      .then((m) => m.user.name || m.user.login)
+      .catch(() => "anonymous");
     const roster = () =>
       [...(guest.awareness?.getStates().values() ?? [])].map((s) => (s as { user?: { name?: string } }).user?.name);
     try {
-      await until("VS Code presence in the room", () => roster().includes("dev-token"), 4000);
-      pass("presence: the VS Code client shows up in the roster as dev-token");
+      await until("VS Code presence in the room", () => roster().includes(expected), 4000);
+      pass(`presence: the VS Code client shows up in the roster as ${expected}`);
     } catch {
       fail(`presence: VS Code missing from the roster (${JSON.stringify(roster())})`);
     }

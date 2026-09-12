@@ -3,7 +3,7 @@
  *
  * The widget iframe holds NO credential (bridge tool calls ride the host's
  * authenticated backend; the OAuth token never reaches the iframe), so it
- * cannot pass the ws onAuthenticate gate (session id / dev token). The
+ * cannot pass the ws onAuthenticate gate (session id). The
  * mint_ws_ticket tool closes that gap: an ALREADY-AUTHENTICATED caller whose
  * per-repo write access was just checked (requireRepo) mints a ticket bound
  * to exactly one room, redeemable exactly once, for a few seconds.

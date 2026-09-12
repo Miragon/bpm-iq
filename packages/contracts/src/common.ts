@@ -16,6 +16,6 @@ export interface GitUserWire {
   login: string;
   name: string;
   avatarUrl: string | null;
-  /** provider id, e.g. "github" ("dev" for the headless dev-token session) */
+  /** provider id, e.g. "github" ("oidc" for an IdP login, "local" for a LIVE_AUTH=none host's principal) */
   provider: string;
 }
