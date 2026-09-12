@@ -26,6 +26,8 @@ export class LiveAuth implements vscode.Disposable {
   private readonly devToken: () => string;
   /** the sign-in waiting for its browser callback (one at a time) */
   private pending: { state: string; resolve: (code: string) => void } | undefined;
+  /** the host's /api/me answer for the credential it was fetched with */
+  private identityCache: { token: string; user: Me["user"] } | undefined;
   private readonly changed = new vscode.EventEmitter<void>();
   /** fires after a sign-in or sign-out */
   readonly onDidChange = this.changed.event;
@@ -50,21 +52,69 @@ export class LiveAuth implements vscode.Disposable {
     return (await this.context.secrets.get(this.key("session"))) ?? this.devToken();
   }
 
-  /** how we show up in a room's roster — the signed-in person (same name and
-   *  color as in the web app), else the dev-token identity the host assigns */
-  presence(): PresenceUser {
-    const me = this.me();
-    return {
-      name: me ? me.name || me.login : "dev-token",
-      color: presenceColor(me?.login ?? "dev-token"),
-      avatarUrl: me?.avatarUrl ?? null,
-    };
+  /** who the HOST says we are for the current credential — the signed-in
+   *  person (also for a pasted session token) or the dev-token bot; the
+   *  stored identity when the host cannot be asked */
+  async identity(): Promise<Me["user"] | undefined> {
+    const token = await this.token();
+    if (this.identityCache?.token === token) return this.identityCache.user;
+    try {
+      const me = await hostJson<Me>(`${hostUrls(this.serverUrl()).http}/api/me`, { token });
+      this.identityCache = { token, user: me.user };
+      return me.user;
+    } catch {
+      return this.me();
+    }
+  }
+
+  /** how we show up in a room's roster — the same name and color as in the
+   *  web app; "dev-token" is what the host calls the dev-token session */
+  async presence(): Promise<PresenceUser> {
+    const me = await this.identity();
+    const login = me?.login ?? "dev-token";
+    return { name: me ? me.name || me.login : login, color: presenceColor(login), avatarUrl: me?.avatarUrl ?? null };
+  }
+
+  /** sign in with a pasted session token — the wsToken of <host>/api/me after
+   *  a browser login there — for hosts without the editor sign-in */
+  async useToken(token: string): Promise<Me> {
+    const { http } = hostUrls(this.serverUrl());
+    const me = await hostJson<Me>(`${http}/api/me`, { token });
+    // a JWT bearer identifies over HTTP but its /api/me wsToken is synthetic —
+    // it cannot open the live websocket; the dev token's session is "dev"
+    if (me.wsToken !== token && me.user.provider !== "dev") {
+      throw new Error(
+        `this token cannot open the live websocket — paste the wsToken of ${http}/api/me from a browser login`,
+      );
+    }
+    await this.remember(token, me.user);
+    return me;
+  }
+
+  private async remember(token: string, user: Me["user"]): Promise<void> {
+    await this.context.secrets.store(this.key("session"), token);
+    await this.context.globalState.update(this.key("me"), user);
+    this.identityCache = { token, user };
+    this.changed.fire();
   }
 
   /** the browser round-trip; resolves to the signed-in identity, throws on
    *  cancel/timeout — the caller reports */
   async login(): Promise<Me> {
     const { http } = hostUrls(this.serverUrl());
+    // an older host (no editor sign-in) would run a plain browser login and
+    // never call back — probe first: the exchange route answers 401 where it
+    // exists, 404 where it doesn't (501 = present but switched off)
+    const probe = await fetch(`${http}/auth/exchange`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    if (probe.status === 404 || probe.status === 501) {
+      throw new Error(
+        `${http} has no editor sign-in yet (older Live Host) — use "BPM Live: Sign in with a session token…"`,
+      );
+    }
     const config = await hostJson<AppConfig>(`${http}/api/config`);
     const provider = await pickProvider(config.providers);
     if (!provider) throw new Error("sign-in cancelled");
@@ -94,9 +144,7 @@ export class LiveAuth implements vscode.Disposable {
       method: "POST",
       body: { code } satisfies EditorLoginExchangeBody,
     });
-    await this.context.secrets.store(this.key("session"), me.wsToken);
-    await this.context.globalState.update(this.key("me"), me.user);
-    this.changed.fire();
+    await this.remember(me.wsToken, me.user);
     return me;
   }
 
@@ -109,6 +157,7 @@ export class LiveAuth implements vscode.Disposable {
     }
     await this.context.secrets.delete(this.key("session"));
     await this.context.globalState.update(this.key("me"), undefined);
+    this.identityCache = undefined;
     this.changed.fire();
   }
 

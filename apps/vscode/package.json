@@ -24,6 +24,10 @@
         "title": "BPM Live: Sign in"
       },
       {
+        "command": "bpmLive.loginWithToken",
+        "title": "BPM Live: Sign in with a session token…"
+      },
+      {
         "command": "bpmLive.logout",
         "title": "BPM Live: Sign out"
       }
@@ -45,7 +49,7 @@
     }
   },
   "scripts": {
-    "compile": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js",
+    "compile": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=out/extension.js",
     "typecheck": "tsc -p .",
     "test": "node --test src/test/unit/*.test.ts",
     "test:e2e": "pnpm compile && esbuild src/test/e2e.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/test-e2e.js && node src/test/runTest.mts"

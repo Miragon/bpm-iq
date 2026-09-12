@@ -7,9 +7,14 @@ every other notation opens as text.
 
 ## Run it (development)
 
+Open the monorepo (or `apps/vscode`) in VS Code and press **F5** — "Run BPM Live
+Extension" compiles the bundle (with sourcemaps, so breakpoints land in the
+`.ts` sources) and starts an Extension Development Host with your normal
+extensions, the Miragon modeler included. Without the debugger:
+
 ```
 pnpm --filter bpm-live compile
-code --extensionDevelopmentPath=$PWD/apps/vscode      # or open apps/vscode and press F5
+code --extensionDevelopmentPath=$PWD/apps/vscode
 ```
 
 Settings (`bpmLive.*`):
@@ -25,8 +30,9 @@ Commands:
   then a model of any notation; the list shows folder, notation, who is on it
   and whether it carries unreleased changes. _Enter a path…_ at the end takes
   a repo-relative path by hand.
-- **BPM Live: Sign in** / **Sign out**. The status-bar item runs the sign-in
-  while signed out and the open command once signed in.
+- **BPM Live: Sign in** / **Sign in with a session token…** / **Sign out**. The
+  status-bar item runs the sign-in while signed out and the open command once
+  signed in.
 
 ## Sign-in
 
@@ -41,6 +47,14 @@ day (12h); after that the next open asks you to sign in again.
 
 Works in VS Code, Insiders, Cursor and other `vscode.env.uriScheme` editors
 on the desktop; browser-hosted VS Code (vscode.dev) is not covered.
+
+**Older hosts, or no way back into the editor:** _BPM Live: Sign in with a
+session token…_ takes a token by hand. Sign in to the host in your browser,
+open `<host>/api/me` and paste its `wsToken` — the extension verifies it
+against `/api/me`, shows you in the status bar and reconnects open documents
+under that identity. The browser sign-in probes the host first and points
+you here when the host has no editor sign-in yet. Whatever credential is in
+use, presence shows the identity the host assigns it.
 
 ## Sync
 

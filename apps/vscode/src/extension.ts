@@ -48,7 +48,7 @@ interface LiveDoc {
 interface LiveDeps {
   wsUrl(): string;
   token(): Promise<string>;
-  presence(): PresenceUser;
+  presence(): Promise<PresenceUser>;
   /** the host refused our credential (expired session, wrong dev token) */
   onAuthFailed(room: string, reason: string): void;
 }
@@ -80,12 +80,14 @@ class LiveFileSystem implements vscode.FileSystemProvider {
   }
 
   private async open(name: string, uri: vscode.Uri): Promise<LiveDoc> {
+    // credential + the identity the host assigns it (one /api/me per credential)
+    const [token, presence] = await Promise.all([this.deps.token(), this.deps.presence()]);
     // one session (provider + its own socket) per live document — session.destroy()
     // tears BOTH down (the spike destroyed only providers and leaked the sockets)
     const session = openLiveSession({
       url: this.deps.wsUrl(),
       room: name,
-      token: await this.deps.token(),
+      token,
       WebSocketPolyfill: WebSocket,
       onAuthenticationFailed: (reason) => {
         // also fires on a RE-connect (a session expired mid-day): forget the doc
@@ -98,7 +100,7 @@ class LiveFileSystem implements vscode.FileSystemProvider {
         this.deps.onAuthFailed(name, reason);
       },
     });
-    session.setUser(this.deps.presence());
+    session.setUser(presence);
     try {
       await session.whenSynced(10_000);
     } catch (err) {
@@ -232,8 +234,13 @@ export function activate(context: vscode.ExtensionContext): void {
     status.show();
   };
   renderStatus();
-  // documents already open when the extension activates (a restored window)
-  for (const d of vscode.workspace.textDocuments) void fsProvider.bind(d);
+  /** (re)connect every open live document — at activation (a restored window)
+   *  and after a credential change, so open editors move to the new identity */
+  const rebindOpen = () => {
+    fsProvider.closeAll();
+    for (const d of vscode.workspace.textDocuments) void fsProvider.bind(d);
+  };
+  rebindOpen();
 
   context.subscriptions.push(
     auth,
@@ -252,14 +259,34 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("bpmLive.login", async () => {
       try {
         const me = await auth.login();
+        rebindOpen();
         void vscode.window.showInformationMessage(`BPM Live: signed in as ${me.user.name || me.user.login}.`);
       } catch (err) {
         void vscode.window.showErrorMessage(`BPM Live: sign-in failed — ${(err as Error).message}`);
       }
     }),
+    // the manual route: a session token pasted from a browser login — for hosts
+    // without the editor sign-in (older Live Hosts), or when no browser can
+    // reach this editor's URI scheme
+    vscode.commands.registerCommand("bpmLive.loginWithToken", async () => {
+      const { http } = hostUrls(serverUrl());
+      const token = await vscode.window.showInputBox({
+        prompt: `Session token for ${http}: sign in there in the browser, open ${http}/api/me and paste its wsToken`,
+        password: true,
+        ignoreFocusOut: true,
+      });
+      if (!token?.trim()) return;
+      try {
+        const me = await auth.useToken(token.trim());
+        rebindOpen();
+        void vscode.window.showInformationMessage(`BPM Live: signed in as ${me.user.name || me.user.login}.`);
+      } catch (err) {
+        void vscode.window.showErrorMessage(`BPM Live: the token was not accepted — ${(err as Error).message}`);
+      }
+    }),
     vscode.commands.registerCommand("bpmLive.logout", async () => {
       await auth.logout();
-      fsProvider.closeAll();
+      rebindOpen();
       void vscode.window.showInformationMessage("BPM Live: signed out.");
     }),
     vscode.commands.registerCommand("bpmLive.open", async () => {

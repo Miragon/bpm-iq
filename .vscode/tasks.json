@@ -4,7 +4,7 @@
     {
       "label": "bpm-live: compile",
       "type": "shell",
-      "command": "pnpm compile",
+      "command": "pnpm --filter bpm-live compile",
       "problemMatcher": [],
       "presentation": { "reveal": "silent", "panel": "shared" }
     }
