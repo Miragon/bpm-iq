@@ -36,7 +36,6 @@ const ROOM = "acme/models/processes/order/order.bpmn";
 const session = (login = "petra"): Session => ({
   id: `sess-${login}`,
   user: { login, name: login, avatarUrl: null, provider: "github" },
-  providerToken: "user-token",
   createdAt: Date.now(),
 });
 

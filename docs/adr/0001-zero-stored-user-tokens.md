@@ -2,6 +2,9 @@
 
 - **Status:** accepted (2026-07-10). Write-path attribution DECIDED 2026-07-11:
   **variant A (bot-authored)** — implemented (`apps/live-host/src/api.ts` release()).
+  **Target state reached 2026-09-12** ([ADR 0007](0007-idp-only-login-and-no-auth-mode.md)):
+  the GitHub OAuth login and with it the last stored user token and the user-token
+  fallback (releases, `AccessCache` path 2) are gone; sessions are identity-only.
 - **Context:** SaaS direction (docs/adr/0002); security research 2026-07-10 (26 primary sources, verified)
 
 ## Context

@@ -57,7 +57,6 @@ test("release: the upstream-guard fetch carries the installation token", async (
   const session: Session = {
     id: "s1",
     user: { login: "petra", name: "Petra", avatarUrl: null, provider: "github" },
-    providerToken: "",
     createdAt: Date.now(),
   };
 

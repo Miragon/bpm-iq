@@ -2,15 +2,15 @@
  * The Live Host's HTTP side (companion to the Hocuspocus ws server).
  *
  * Access model (docs/multi-repo-architecture.md): LOGIN AUTHENTICATES,
- * REPOS AUTHORIZE. The OAuth grant only establishes who you are; whether you
- * may see/edit/release a repository is decided per (user, repo) against the
- * provider — the connected-repo set derives from the GitHub App's
- * installations (RepoRegistry).
+ * REPOS AUTHORIZE. The IdP login only establishes who you are; whether you
+ * may see/edit/release a repository is decided per (user, repo) app-side
+ * against the GitHub App's installation (ADR 0001) — the connected-repo set
+ * derives from its installations (RepoRegistry). ADR 0007: the IdP is the
+ * one login; LIVE_AUTH=none is the declared absence of one.
  *
- *   GET  /api/config                             → providers + app install URL
- *   GET  /auth/oidc(/callback)                   → browser OIDC login (code+PKCE; when configured — in cell mode THE login)
- *   GET  /auth/:provider(/callback)              → OAuth login (authentication only)
- *        …?editor=<scheme>&editor_state=<nonce> → the SAME logins landing in an editor (editor-login.ts)
+ *   GET  /api/config                             → auth mode, login, app install URL
+ *   GET  /auth/oidc(/callback)                   → browser OIDC login (code+PKCE) — THE login
+ *        …?editor=<scheme>&editor_state=<nonce> → the SAME login landing in an editor (editor-login.ts)
  *   POST /auth/exchange                          → editor sign-in: one-time code → Me (session id as wsToken)
  *   GET  /api/me, POST /api/logout               (logout: cookie session, or the Bearer session id)
  *   GET  /api/repos                              → repo OVERVIEW (per-user permission)
@@ -38,8 +38,9 @@
  *   GET  /setup/installed                        → post-install sync + redirect
  *   GET  /healthz, /*                            → liveness, built web app (public)
  *
- * Releases push with the USER's token and open the PR in their name — merge
- * rights stay at the provider (CODEOWNERS/branch protection).
+ * Releases push with the App's installation token and open the PR bot-authored
+ * with the human as git author (ADR 0001) — merge rights stay at the provider
+ * (CODEOWNERS/branch protection).
  */
 import { createHash, randomBytes } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
@@ -137,8 +138,7 @@ const MIME: Record<string, string> = {
 export interface ApiOptions {
   webDist: string;
   publicUrl: string;
-  providers: Map<string, GitProvider>;
-  /** REST backend for per-repo access checks + releases (works without login buttons) */
+  /** the release backend: push URL + PR creation on installation tokens */
   github: GitProvider;
   sessions: SessionStore;
   registry: RepoRegistry;
@@ -186,7 +186,7 @@ export interface ApiOptions {
   };
   /** interactive browser OIDC login (auth/oidc-login.ts) — code+PKCE flow whose
    * access token is validated by `oidc.verify` (requires `oidc`). Present → the
-   * web client shows an SSO button ("/auth/oidc") next to the git providers. */
+   * web client shows the SSO button ("/auth/oidc"). */
   oidcLogin?: {
     label: string;
     authorizeUrl(redirectUri: string, state: string, codeChallenge: string): Promise<string>;
@@ -273,15 +273,13 @@ export function startApi(port: number, opts: ApiOptions): Server {
     const bearer = req.headers.authorization?.replace(/^Bearer /, "");
     // a JWS-shaped bearer (three dot-separated parts) is a JWT, never a session
     // id — verify it (throws a typed 401 AppError) instead of a doomed lookup.
-    // The session is SYNTHETIC (never persisted): identity only; per-repo authz
-    // runs app-side against the login (AccessCache Path 1 — the user-token
-    // fallback path is impossible without a providerToken, and stays closed).
+    // The session is SYNTHETIC (never persisted): identity only, like every
+    // session; per-repo authz runs app-side against the login (AccessCache).
     if (bearer && opts.oidc && bearer.split(".").length === 3) {
       const id = await opts.oidc.verify(bearer);
       return {
         id: `oidc:${id.sub}`,
         user: { login: id.login, name: id.name, avatarUrl: null, provider: "oidc" },
-        providerToken: "",
         createdAt: Date.now(),
       };
     }
@@ -470,15 +468,14 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // ── browser OIDC login (auth/oidc-login.ts): code + PKCE against the
       // configured IdP; the access token is verified by the SAME resource-server
       // verifier as MCP bearers (issuer/audience/login claim/tenant gate — one
-      // identity contract, two entrances). The session is identity-only (no
-      // grant, ADR 0001); per-repo authorization runs app-side as everywhere.
-      // Must precede the /auth/:provider matchers ("oidc" is not a git provider).
+      // identity contract, two entrances). The session is identity-only
+      // (ADR 0001); per-repo authorization runs app-side as everywhere.
       if (opts.oidcLogin && url.pathname === "/auth/oidc") {
         const editor = editorStart(res, url.searchParams);
         if (editor === null) return;
         const redirectUri = `${opts.publicUrl}/auth/oidc/callback`;
         // browser-bound state (login-CSRF/fixation) + PKCE verifier, both riding
-        // in short-lived HttpOnly cookies exactly like the git-provider flow
+        // in short-lived HttpOnly cookies
         const { state, nonce } = opts.sessions.issueState("oidc");
         const verifier = randomBytes(32).toString("base64url");
         const challenge = createHash("sha256").update(verifier).digest("base64url");
@@ -535,9 +532,13 @@ export function startApi(port: number, opts: ApiOptions): Server {
         console.log(`oidc login: @${id.login}`);
         return finishLogin(req, res, session, clearFlow);
       }
+      // the IdP is the only browser login (ADR 0007): unconfigured, its routes
+      // are a 404 — never the SPA fallthrough
+      if (url.pathname === "/auth/oidc" || url.pathname === "/auth/oidc/callback") {
+        return send(res, 404, { error: "browser login not configured" });
+      }
 
       // ── editor sign-in, step 3: the one-time code becomes the session ───
-      // (before the /auth/:provider matcher — "exchange" is not a provider)
       if (url.pathname === "/auth/exchange" && req.method === "POST") {
         if (!opts.loginCodes) return send(res, 501, { error: "editor sign-in is not available on this host" });
         const body = await jsonBody<EditorLoginExchangeBody>(req, res, 4096);
@@ -549,78 +550,12 @@ export function startApi(port: number, opts: ApiOptions): Server {
         return send(res, 200, { user: session.user, wsToken: session.id } satisfies Me);
       }
 
-      // ── OAuth: LOGIN = AUTHENTICATION ONLY (repos authorize per request) ─
-      const authStart = url.pathname.match(/^\/auth\/([a-z]+)$/);
-      if (authStart) {
-        const provider = opts.providers.get(authStart[1] ?? "");
-        if (!provider) return send(res, 404, { error: `provider '${authStart[1]}' not configured` });
-        const editor = editorStart(res, url.searchParams);
-        if (editor === null) return;
-        const redirectUri = `${opts.publicUrl}/auth/${provider.id}/callback`;
-        // bind the flow to THIS browser: the nonce rides in both the signed state and
-        // a short-lived cookie; the callback requires both (login-CSRF / fixation fix)
-        const { state, nonce } = opts.sessions.issueState(provider.id);
-        return redirect(res, provider.authorizeUrl(redirectUri, state), {
-          "set-cookie": [oauthCookie(nonce, secure), ...(editor ? [editor] : [])],
-        });
-      }
-      const authCb = url.pathname.match(/^\/auth\/([a-z]+)\/callback$/);
-      if (authCb) {
-        const provider = opts.providers.get(authCb[1] ?? "");
-        if (!provider) return send(res, 404, { error: "provider not configured" });
-        // Two legitimate entries: (a) our own login redirect, carrying our HMAC
-        // state; (b) GitHub-initiated authorization straight after app install
-        // (request_oauth_on_install) — no state from us, identified by GitHub's
-        // setup parameters. Everything else is rejected.
-        const installInitiated = url.searchParams.has("installation_id") || url.searchParams.has("setup_action");
-        if (
-          !installInitiated &&
-          !opts.sessions.verifyState(
-            url.searchParams.get("state"),
-            provider.id,
-            readCookie(req.headers.cookie, OAUTH_COOKIE),
-          )
-        ) {
-          return send(res, 400, { error: "invalid OAuth state" }, { "set-cookie": clearOauthCookie(secure) });
-        }
-        if (installInitiated) {
-          // GitHub-initiated post-install callback carries NO browser-bound state, so
-          // we must NOT mint a session from its code — that is a login-CSRF surface
-          // (anyone can craft ?setup_action=install&code=<their own>&installation_id=
-          // <a known id>). Sync the new install so its repos appear, verify it exists
-          // for OUR app, then bounce to a FRESH, browser-bound login (the install-time
-          // code is never exchanged). Mirrors the control-plane's setup_action handling.
-          await opts.registry
-            .requestSync(true)
-            .catch((e) => console.log(`post-install sync failed: ${(e as Error).message}`));
-          const instId = Number(url.searchParams.get("installation_id"));
-          const known = opts.registry.list().some((r) => r.installationId === instId);
-          if (opts.registry.appConfigured && !known) {
-            return send(res, 400, { error: "unknown installation" });
-          }
-          opts.access.invalidate();
-          return redirect(res, `/auth/${provider.id}`);
-        }
-        // only the state-verified (browser-bound) path reaches here
-        const code = url.searchParams.get("code");
-        if (!code) return send(res, 400, { error: "missing code" }, { "set-cookie": clearOauthCookie(secure) });
-        const grant = await provider.exchangeCode(code, `${opts.publicUrl}/auth/${provider.id}/callback`);
-        const user = await provider.fetchUser(grant.accessToken);
-        const session = opts.sessions.create(user, grant);
-        console.log(`login: @${user.login} via ${provider.id}`);
-        // single-use: drop the OAuth binding cookie once the login completes
-        return finishLogin(req, res, session, [clearOauthCookie(secure)]);
-      }
-
       // ── session-facing API ───────────────────────────────────────────
       if (url.pathname === "/api/config") {
         return send(res, 200, {
-          providers: [
-            // the SSO login leads when configured — the web client renders these
-            // generically as "/auth/<id>" buttons, so no client change is needed
-            ...(opts.oidcLogin ? [{ id: "oidc", label: opts.oidcLogin.label }] : []),
-            ...[...opts.providers.values()].map((p) => ({ id: p.id, label: p.label })),
-          ],
+          // the IdP login when configured — the web client renders it generically
+          // as a "/auth/<id>" button (empty in none mode: nothing to sign in to)
+          providers: opts.oidcLogin ? [{ id: "oidc", label: opts.oidcLogin.label }] : [],
           // ADR 0007: "none" tells the clients there is nothing to sign in to
           auth: opts.local ? "none" : "oidc",
           installUrl: opts.connectionSource?.connectUrl() ?? null,
@@ -843,7 +778,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
         }
         // file-selection release: ship exactly the picked changed files as one PR
         if (repoRoute[2] === "release" && req.method === "POST") {
-          const provider = opts.providers.get(session.user.provider) ?? opts.github;
+          const provider = opts.github;
           const body = await jsonBody<ReleaseFilesBody>(req, res);
           if (body === undefined) return;
           if (!Array.isArray(body?.files) || body.files.some((f) => typeof f !== "string")) {
@@ -860,7 +795,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
           return send(res, 200, result satisfies ReleaseResult);
         }
         if (repoRoute[2]?.startsWith("release/") && req.method === "POST") {
-          const provider = opts.providers.get(session.user.provider) ?? opts.github;
+          const provider = opts.github;
           // process ids come from file names — decode so any URL-safe encoding
           // works; a malformed %-escape is simply an unknown process, not a 500
           let id: string;
@@ -925,7 +860,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
   });
   httpServer.listen(port, () => {
     console.log(
-      `api + web + ws : http://localhost:${port}  (auth: ${opts.local ? `none — every request is @${opts.local.user.login}` : [...(opts.oidcLogin ? ["oidc"] : []), ...opts.providers.keys()].join(", ") || "bearer only"})`,
+      `api + web + ws : http://localhost:${port}  (auth: ${opts.local ? `none — every request is @${opts.local.user.login}` : opts.oidcLogin ? "oidc" : "bearer only"})`,
     );
   });
   return httpServer;

@@ -96,54 +96,51 @@ docs/adr/0005-in-process-mcp-and-oidc-resource-server.md.
 | `LIVE_OIDC_LOGIN_CLAIM` | `github_login`    | Claim carrying the IdP-verified GitHub login; a token without it is refused (fail closed). |
 | `LIVE_MCP_READONLY`     | —                 | `1` = register no MCP write tools (absent from `tools/list`, not erroring).                |
 
-## Authentication — the git provider's grant IS the login
+## Authentication — the IdP authenticates, the GitHub App authorizes
 
-Implemented target state (verified with an 11-check browser E2E against the stub provider):
-**login authenticates, repos authorize.** Users log in via the git provider's OAuth grant
-(session: httpOnly cookie for the API, session id as websocket token); per-(user,repo)
-write permission is checked at request/room-join time (5-min cache) — the overview only
-shows repos the user may work on. Releases push and open the PR **as the logged-in user** —
-merge rights stay at the provider (CODEOWNERS/branch protection). Provider tokens never
-leave the server (SQLite-backed sessions).
+**Login authenticates, repos authorize** ([ADR 0007](../../docs/adr/0007-idp-only-login-and-no-auth-mode.md)):
+people sign in at the identity provider — the OIDC browser login (`src/auth/oidc-login.ts`,
+code + PKCE) for the web app and editors, audience-bound bearer JWTs (`src/auth/oidc.ts`)
+for MCP and headless clients, ONE identity contract for both. The session is identity-only
+(httpOnly cookie for the API, session id as websocket token); per-(user,repo) write
+permission is checked at request/room-join time (5-min cache) app-side with the GitHub
+App's installation token — the overview only shows repos the user may work on. Releases
+push and open the PR **bot-authored with the human as git author**
+([ADR 0001](../../docs/adr/0001-zero-stored-user-tokens.md)) — merge rights stay at the
+provider (CODEOWNERS/branch protection). No user token is obtained or stored, anywhere.
 
-### GitHub — the Netlify/GitBook model: one vendor app, users only see GitHub
+### GitHub — one vendor app, users only see the install picker
 
 **Vendor step, once ever** (Miragon / the instance operator):
 `pnpm --filter @bpmiq/live-host create-app` — a guided page creates the central
 **"BPM Live" GitHub App** under the org that owns the content repo (requires being signed
 in as org owner); credentials land automatically in `apps/live-host/.env`. Never touched again.
 
-**User flow, forever after** — exactly what Netlify/GitBook users see:
+**User flow, forever after**: sign in at the IdP → repo not connected yet? The screen offers
+**"Repository verbinden"** → GitHub's own **install picker** (choose org + repository) →
+GitHub bounces to `/setup/installed`, the new repos appear. No app creation, no tokens, no
+secrets for users. The gate stays: write permission on the content repository (checked
+app-side via `collaborators/permission`) is the entry ticket.
 
-1. **"Mit GitHub anmelden"** → GitHub's authorize screen → logged in.
-2. Repo not connected yet? The screen offers **"Repository verbinden"** → GitHub's own
-   **install picker** (choose org + repository) → GitHub finishes with
-   `request_oauth_on_install` and the user lands back **logged in**.
-
-No app creation, no tokens, no secrets for users. The gate stays: write permission on the
-content repository (checked via the user's effective permissions) is the entry ticket, and
-releases push + open PRs as the logged-in user. Verified with a 10-check browser E2E
-including the full connect loop, plus an E2E of the vendor script itself.
-
-Decision history: a per-instance app wizard and a per-user PAT login were both built,
-verified, and discarded (git history) — the central-app model is what the familiar SaaS flow
-actually is. `GITHUB_BASE_URL`/`GITHUB_API_URL` still point everything at GitHub Enterprise
-or `test/stub-provider.ts` (offline).
+Decision history: a per-instance app wizard, a per-user PAT login and the GitHub OAuth
+login itself were each built, verified, and retired (git history; ADR 0007 for the last).
+`GITHUB_BASE_URL`/`GITHUB_API_URL` still point everything at GitHub Enterprise or
+`test/stub-provider.ts` (offline).
 
 ### GitLab — architecture carries it, implementation deferred
 
-The `GitProvider` interface models the four capabilities a provider needs (identity,
-repo-permission gate, push URL, PR/MR creation); token login maps 1:1 onto GitLab personal
-access tokens. A full GitLab draft exists in git history (`08b6c20` era).
+The `GitProvider` interface models the release half (push URL, PR/MR creation on the
+platform credential); the `RepoConnectionSource` interface the connection half (project
+enumeration, tokens, per-user permission). A GitLab port implements both. An early GitLab
+draft of the old user-OAuth shape exists in git history (`08b6c20` era).
 
-### WorkOS (optional identity layer — by design NOT a replacement)
+### Identity providers — pure configuration, by design
 
-WorkOS AuthKit can sit in front for enterprise SSO (_who you are_), but repository
-authorization always requires the git provider's own grant (_what you may release_) — that
-grant is what the `GitProvider` interface models, and it is the actual entry ticket. Wiring
-WorkOS in means: authenticate the person via WorkOS first, then link the git-provider grant
-to that identity. Clean seam: session issuance (`SessionStore`, `src/adapters/sqlite/sessions.ts`)
-is independent of the provider handshake.
+Any OIDC-conformant IdP (Keycloak, Entra ID, WorkOS AuthKit, …) can BE the login — it must
+issue the git-provider login claim (`github_login`), because identity is not authorization:
+repository access always requires the git provider's own permission, resolved app-side.
+Recipe: [docs/extending/mcp-idp-setup.md](../../docs/extending/mcp-idp-setup.md); seam:
+[docs/extending/sso.md](../../docs/extending/sso.md).
 
 ### Headless clients & offline demos
 

@@ -22,32 +22,32 @@ From the live-host README (WorkOS section):
 
 So: an OIDC/SAML/WorkOS layer answers **who you are**; the git provider's
 per-(user,repo) grant answers **what you may release** — and stays the entry ticket
-regardless of SSO. SSO never replaces `checkRepoAccess`/`checkUserPermission`, it
+regardless of SSO. SSO never replaces `checkUserPermission`, it
 only changes how a session comes into existence. Merge rights stay at the provider
 (CODEOWNERS/branch protection) either way.
 
 ## The seam in code: session issuance is provider-independent
 
 `SessionStore` (`apps/live-host/src/adapters/sqlite/sessions.ts`) mints sessions
-from an identity — the grant is **optional**:
+from an identity and nothing else — there is no grant to attach
+([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)):
 
 ```ts
-create(user: GitUser, grant?: TokenGrant): Session
+create(user: GitUser): Session
 ```
 
 Two production paths in `apps/live-host/src/http/api.ts` prove the independence:
 
-- The **OAuth callback** (`/auth/:provider/callback`) exchanges the code, fetches
-  the user, then mints: `opts.sessions.create(user, grant)` — the session id (an
-  httpOnly cookie / the websocket token) is the only credential clients ever hold.
-- The **OIDC browser login** (`/auth/oidc/callback`) mints a session from a
-  verified IdP access token with **no grant at all**: `opts.sessions.create(identity)` —
-  zero stored user token; authorization then runs app-side via the connection
-  source's `checkUserPermission` (installation token, ADR 0001), and releases are
-  bot-authored with human attribution.
+- The **OIDC browser login** (`/auth/oidc/callback`) mints a session from a verified
+  IdP access token: `opts.sessions.create(identity)` — the session id (an httpOnly
+  cookie / the websocket token) is the only credential clients ever hold.
+- A **bearer JWT** on `/mcp` or the REST routes yields a synthetic, never-persisted
+  session of the same shape (`sessionOf`).
 
-An identity-only session is therefore already a supported, tested state — exactly
-what an SSO login produces.
+Both are identity-only: zero stored user token; authorization runs app-side via the
+connection source's `checkUserPermission` (installation token, ADR 0001), and releases
+are bot-authored with human attribution. An identity-only session is therefore the
+ONLY session there is — exactly what any SSO login produces.
 
 ## Where an SSO contribution lands
 
@@ -77,14 +77,13 @@ only place reading env and wiring the module in (ADR 0003, `pnpm arch`-enforced)
 3. **The session authenticates, nothing authorizes yet** — `/api/repos` shows no
    writable repo until a git-provider authorization can be resolved for this
    identity.
-4. **Link the git-provider grant to that identity** — either run the existing
-   `GitProvider` OAuth from within the session and attach the grant
-   (`SessionStore.updateGrant`), or map the IdP profile to a provider username and
-   let the app-side `checkUserPermission` path answer without any user token
-   (ADR 0001). _The mapping path is concrete now:_ `oidc.ts` takes the verified
-   GitHub login from the token's login claim (`LIVE_OIDC_LOGIN_CLAIM`, default
-   `github_login`; a token without it is refused) and `checkUserPermission`
-   authorizes app-side — the account-linking consequence is recorded in
+4. **Map the identity to the git-provider login** — the IdP profile carries the
+   provider username, and the app-side `checkUserPermission` path answers without any
+   user token (ADR 0001). This is the only path: user grants are not stored
+   ([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)). _Concretely:_
+   `oidc.ts` takes the verified GitHub login from the token's login claim
+   (`LIVE_OIDC_LOGIN_CLAIM`, default `github_login`; a token without it is refused) —
+   the account-linking consequence is recorded in
    [ADR 0005](../adr/0005-in-process-mcp-and-oidc-resource-server.md).
 5. **Per-(user,repo) authorization runs unchanged** — `AccessCache` gates every
    room join, API call and release exactly as today. SSO changed who logs in,

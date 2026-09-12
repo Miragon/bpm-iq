@@ -164,6 +164,8 @@ export interface EditorLoginExchangeBody {
 
 /** GET /api/config */
 export interface AppConfig {
+  /** the login(s) to offer as "/auth/<id>" buttons — the IdP login (`oidc`) when
+   *  configured, empty on a LIVE_AUTH=none host (ADR 0007) */
   providers: { id: string; label: string }[];
   /** the host's authentication mode (ADR 0007): "none" = every request is the
    *  local principal, nothing to sign in to or out of; "oidc" = a login is required */

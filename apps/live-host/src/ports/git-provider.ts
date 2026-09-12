@@ -1,25 +1,20 @@
 /**
- * Git-provider abstraction — the USER-credentialed half of the provider seam.
+ * Git-provider abstraction — the RELEASE half of the provider seam: what the
+ * Live Host does on a git host with the PLATFORM's credential (the App's
+ * installation token) once a release is due: the authenticated push URL and
+ * PR/MR creation. The release flow never mentions a concrete provider.
  *
- * Everything a provider does WITH THE USER'S GRANT lives here: OAuth dance
- * (incl. token refresh — GitHub App user tokens expire after 8h, GitLab OAuth
- * tokens always expire), permission check, push URL, PR/MR creation. The
- * release flow and the session layer never mention a concrete provider.
- *
- * The PLATFORM-credentialed half — where the connected-repo set comes from,
- * clone credentials, webhooks — is the sibling seam:
- * src/ports/connection-source.ts (RepoConnectionSource). A GitLab port
- * implements BOTH interfaces; an early GitLab draft of this one exists in git
- * history (`08b6c20` era, pre TokenGrant).
+ * There is no user-credentialed half any more (ADR 0007): people authenticate
+ * at the IdP, and whether an identity may write a repository is answered
+ * app-side by the sibling seam — src/ports/connection-source.ts
+ * (RepoConnectionSource.checkUserPermission, ADR 0001). A GitLab port
+ * implements BOTH interfaces; an early GitLab draft of the old user-OAuth
+ * shape exists in git history (`08b6c20` era).
  *
  * Multi-repo (docs/multi-repo-architecture.md): the provider represents the
  * CONNECTION to a git host, not a repository — every repo-scoped capability
  * takes the target repo's full path per call (GitHub "owner/name", GitLab
  * "group/sub/project" — multi-segment paths are supported end to end).
- *
- * Identity vs. authorization: an SSO layer (e.g. WorkOS AuthKit) can sit in
- * front for *who you are*, but repository access always requires the git
- * provider's own OAuth grant — that grant is what this interface models.
  */
 
 export interface GitUser {
@@ -27,6 +22,8 @@ export interface GitUser {
   login: string;
   name: string;
   avatarUrl: string | null;
+  /** where the identity came from: "oidc" (the IdP login / a bearer JWT) or
+   * "local" (a LIVE_AUTH=none host's principal) */
   provider: string;
 }
 
@@ -35,46 +32,16 @@ export interface PullRequestRef {
   number: number;
 }
 
-/**
- * Result of an OAuth code exchange (or refresh). GitHub Apps default to
- * expiring 8h user tokens, GitLab OAuth tokens always expire (2h) — a provider
- * that drops refreshToken/expiresAt strands sessions mid-day.
- */
-export interface TokenGrant {
-  accessToken: string;
-  refreshToken?: string;
-  /** epoch ms; undefined = the token does not expire */
-  expiresAt?: number;
-}
-
 export interface GitProvider {
-  /** id used in routes (/auth/<id>) and sessions */
+  /** provider id — names the release's noreply attribution domain */
   readonly id: string;
-  /** human label for the login button */
-  readonly label: string;
 
-  /** Full authorize URL the browser is redirected to (includes state). */
-  authorizeUrl(redirectUri: string, state: string): string;
-
-  /** Exchange the callback code for the user's token grant. */
-  exchangeCode(code: string, redirectUri: string): Promise<TokenGrant>;
-
-  /** Refresh an expiring grant (absent when the provider's tokens never expire). */
-  refreshGrant?(refreshToken: string): Promise<TokenGrant>;
-
-  /** Fetch the authenticated user's identity. */
-  fetchUser(token: string): Promise<GitUser>;
-
-  /**
-   * True if the user may write the given repository ("owner/name").
-   * Per-(user,repo) authorization — the entry ticket for exactly that repo.
-   */
-  checkRepoAccess(token: string, user: GitUser, repo: string): Promise<boolean>;
-
-  /** HTTPS remote URL for the given repo carrying the user's token (`git push`). */
+  /** HTTPS remote URL for the given repo carrying the credential (`git push`). */
   pushUrl(token: string, repo: string): string;
 
-  /** Open a pull/merge request AS THE USER (their token) on the given repo. */
+  /** Open a pull/merge request on the given repo with the given credential —
+   * the App's installation token, so the PR is bot-authored with the human as
+   * git author (ADR 0001). */
   createPullRequest(
     token: string,
     repo: string,
