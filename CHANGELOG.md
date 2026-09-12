@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.11.0](https://github.com/Miragon/bpm-iq/compare/v3.10.0...v3.11.0) (2026-09-12)
+
+
+### Features
+
+* agent presence — MCP clients show up in the roster and on the canvas ([#167](https://github.com/Miragon/bpm-iq/issues/167)) ([250cf85](https://github.com/Miragon/bpm-iq/commit/250cf857389ce86746b3df88cd841122860fdf7f))
+* **live-host,vscode,contracts:** editor sign-in and presence for the VS Code extension ([#170](https://github.com/Miragon/bpm-iq/issues/170)) ([4f244ac](https://github.com/Miragon/bpm-iq/commit/4f244ac7bfc11c31079e6f209fb1cdf670090884))
+* **vscode:** bind open documents two-way to their room — the M1 sync layer ([#172](https://github.com/Miragon/bpm-iq/issues/172)) ([fd3e688](https://github.com/Miragon/bpm-iq/commit/fd3e688f77111dd5984dd8637931970975b3d46b))
+* **vscode:** identity from the host, and sign-in with a pasted session token ([#173](https://github.com/Miragon/bpm-iq/issues/173)) ([5fc779c](https://github.com/Miragon/bpm-iq/commit/5fc779cf2a1a78c8a6c6995520545e394f968280))
+* **vscode:** pick the model to open from the host's repositories and models ([#171](https://github.com/Miragon/bpm-iq/issues/171)) ([ce43962](https://github.com/Miragon/bpm-iq/commit/ce43962ed6bc063222e3e60b453c7614d5ccad27))
+
 ## [3.10.0](https://github.com/Miragon/bpm-iq/compare/v3.9.0...v3.10.0) (2026-09-07)
 
 
