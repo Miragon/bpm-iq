@@ -14,9 +14,13 @@
 import { readFileSync } from "node:fs";
 
 import { CONTENT_KEY } from "@bpmiq/contracts/live";
+import type { ModelInfo } from "@bpmiq/contracts/live-host";
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
 import * as vscode from "vscode";
 import WebSocket from "ws";
+
+import { hostJson } from "../host-api.ts";
+import { modelItems } from "../model-picker.ts";
 
 const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/bpm-iq";
 const FILE = "process-documentation/processes/order-to-cash.bpmn";
@@ -55,6 +59,19 @@ export async function run(): Promise<void> {
       setTimeout(() => rej(new Error("guest sync timeout")), 8000);
     });
     const ytext = guest.document.getText(CONTENT_KEY);
+
+    // 0 — the picker's data path: the host lists the model we are about to open
+    // (GET /models through the extension's own client, on the dev token)
+    try {
+      const models = await hostJson<ModelInfo[]>(`http://localhost:8301/api/repos/${HOST_REPO}/models`, {
+        token: "demo",
+      });
+      const item = modelItems(models).find((i) => i.value.path === FILE);
+      if (item) pass(`picker: the host lists the model (${item.label} — ${item.description})`);
+      else fail(`picker: ${FILE} not among the host's ${models.length} models`);
+    } catch (err) {
+      fail(`picker: model listing failed — ${(err as Error).message}`);
+    }
 
     // 1 — open the live document as text
     const uri = vscode.Uri.parse(`bpm-live:/${DOC}`);

@@ -21,6 +21,7 @@
  *    verified pattern of the OCT VS Code extension.
  */
 import type { PresenceUser } from "@bpmiq/contracts/live";
+import type { ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { type LiveSession, openLiveSession } from "@bpmiq/live-client";
 import { updateText } from "@bpmiq/live-client/text";
 import * as vscode from "vscode";
@@ -28,7 +29,9 @@ import WebSocket from "ws";
 import type * as Y from "yjs";
 
 import { LiveAuth } from "./auth.ts";
+import { hostJson } from "./host-api.ts";
 import { hostUrls } from "./login-flow.ts";
+import { modelItems, modelUri, repoItems } from "./model-picker.ts";
 
 const SCHEME = "bpm-live";
 
@@ -219,14 +222,55 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage("BPM Live: signed out.");
     }),
     vscode.commands.registerCommand("bpmLive.open", async () => {
-      const path = await vscode.window.showInputBox({
-        prompt: "Model path on the Live Host: <owner>/<repo>/<repo-relative-path>",
-        value: "Miragon/bpm-iq/process-documentation/processes/order-to-cash.bpmn",
+      const { http } = hostUrls(serverUrl());
+      const token = await auth.token();
+      // the picker's data path is the host's overview: the repos this session
+      // may write, then every model of every notation in the chosen one
+      let repos: RepoInfo[];
+      try {
+        repos = await hostJson<RepoInfo[]>(`${http}/api/repos`, { token });
+      } catch (err) {
+        return offerSignIn(`could not list the repositories on ${http} — ${(err as Error).message}`);
+      }
+      const repoChoices = repoItems(repos);
+      if (repoChoices.length === 0) {
+        void vscode.window.showWarningMessage(`BPM Live: no repository with write access on ${http}.`);
+        return;
+      }
+      const repo =
+        repoChoices.length === 1
+          ? repoChoices[0]?.value
+          : (await vscode.window.showQuickPick(repoChoices, { placeHolder: "Repository" }))?.value;
+      if (!repo) return;
+      let models: ModelInfo[];
+      try {
+        models = await hostJson<ModelInfo[]>(`${http}/api/repos/${repo.fullName}/models`, { token });
+      } catch (err) {
+        return offerSignIn(`could not list the models of ${repo.fullName} — ${(err as Error).message}`);
+      }
+      const byHand = { label: "$(edit) Enter a path…", description: "repo-relative model path", value: undefined };
+      const pick = await vscode.window.showQuickPick([...modelItems(models), byHand], {
+        placeHolder: `Model in ${repo.fullName}`,
+        matchOnDescription: true,
+        matchOnDetail: true,
       });
+      if (!pick) return;
+      const path =
+        pick.value?.path ??
+        (await vscode.window.showInputBox({
+          prompt: `Model path in ${repo.fullName} (repo-relative)`,
+          value: "processes/",
+        }));
       if (!path) return;
-      await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(`${SCHEME}:/${path}`));
+      await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(modelUri(repo.fullName, path)));
     }),
   );
+
+  function offerSignIn(message: string): void {
+    void vscode.window.showErrorMessage(`BPM Live: ${message}`, "Sign in").then((choice) => {
+      if (choice) void vscode.commands.executeCommand("bpmLive.login");
+    });
+  }
 }
 
 export function deactivate(): void {}

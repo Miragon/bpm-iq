@@ -19,9 +19,14 @@ Settings (`bpmLive.*`):
 | `serverUrl` | `http://localhost:8301` | The Live Host — `http(s)://` or `ws(s)://`, both work.                                                     |
 | `token`     | `demo`                  | Dev token (the host's `LIVE_DEV_TOKEN`) for a local host without a login provider; used until you sign in. |
 
-Commands: **BPM Live: Sign in** / **Sign out** / **Open Live Model** (the
-status-bar item runs the sign-in while signed out and the open command once
-signed in).
+Commands:
+
+- **BPM Live: Open Live Model** — pick a repository (the ones you may write),
+  then a model of any notation; the list shows folder, notation, who is on it
+  and whether it carries unreleased changes. _Enter a path…_ at the end takes
+  a repo-relative path by hand.
+- **BPM Live: Sign in** / **Sign out**. The status-bar item runs the sign-in
+  while signed out and the open command once signed in.
 
 ## Sign-in
 
@@ -48,13 +53,13 @@ the web app) in the room's roster; on the dev token you show up as
 - Remote changes are applied while the document is not dirty. Once you edit,
   the document goes dirty and re-syncs on save — `files.autoSave: afterDelay`
   keeps a co-editing session flowing until the live binding lands.
-- No model browser yet: _Open Live Model_ takes the repo-qualified path
-  (`<owner>/<repo>/<repo-relative-path>`).
+- No Explorer tree yet: models are opened through the picker, not browsed as
+  a workspace folder.
 
 ## Tests
 
-- `pnpm --filter bpm-live test` — unit tests of the sign-in helpers.
+- `pnpm --filter bpm-live test` — unit tests of the sign-in and picker helpers.
 - `pnpm --filter bpm-live test:e2e` — a real VS Code (downloaded once) with
   the Miragon modeler, against a running Live Host on `localhost:8301` with
-  `LIVE_DEV_TOKEN=demo`; asserts content sync both ways, presence and the
-  custom editor.
+  `LIVE_DEV_TOKEN=demo`; asserts the picker's data path, content sync both
+  ways, presence and the custom editor.
