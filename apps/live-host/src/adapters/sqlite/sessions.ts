@@ -3,7 +3,9 @@
  *
  * The session id is the only credential clients hold: as an httpOnly cookie
  * for the HTTP API and as the Hocuspocus connection token for the websocket.
- * The provider access token never leaves the server.
+ * A session is IDENTITY-ONLY (ADR 0001, completed by ADR 0007): no provider
+ * credential is stored anywhere — per-repo authorization runs app-side on the
+ * App's installation token, releases are bot-authored with human attribution.
  */
 import { createHmac, randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
@@ -12,18 +14,11 @@ import type { DatabaseSync } from "node:sqlite";
 // this move keep verifying
 import { readCookie as readCookieKit, tag, timingSafeStr, untag } from "@bpmiq/http-kit";
 
-import { type Cipher, makeCipher } from "../../domain/crypt.ts";
-import type { GitUser, TokenGrant } from "../../ports/git-provider.ts";
+import type { GitUser } from "../../ports/git-provider.ts";
 
 export interface Session {
   id: string;
   user: GitUser;
-  /** git-provider access token — server-side only, never serialized to clients */
-  providerToken: string;
-  /** provider refresh token (expiring grants, e.g. GitHub App 8h user tokens) */
-  refreshToken?: string;
-  /** provider token expiry (epoch ms); undefined = non-expiring */
-  tokenExpiresAt?: number;
   createdAt: number;
 }
 
@@ -37,114 +32,50 @@ export class SessionStore {
    * control plane derives for exactly this reason); random only in keyless dev. */
   private readonly stateSecret: Buffer;
   private readonly db: DatabaseSync;
-  /** at-rest cipher for the stored provider tokens (undefined = no key → cleartext,
-   * dev only). A leaked live.db volume then yields no usable GitHub credential. */
-  private readonly cipher: Cipher | undefined;
 
-  constructor(db: DatabaseSync, encryptionKey?: string) {
+  /** `secret` (SESSION_ENC_KEY) only feeds the state HMAC — nothing is encrypted
+   *  any more, because nothing secret is stored */
+  constructor(db: DatabaseSync, secret?: string) {
     this.db = db;
-    this.stateSecret = encryptionKey
-      ? createHmac("sha256", encryptionKey).update("live-host:oauth-state").digest()
-      : randomBytes(32);
-    this.cipher = makeCipher(encryptionKey);
+    this.stateSecret = secret ? createHmac("sha256", secret).update("live-host:oauth-state").digest() : randomBytes(32);
     db.exec(`CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       user TEXT NOT NULL,
-      provider_token TEXT NOT NULL,
       created_at INTEGER NOT NULL
     )`);
-    // grant columns arrived after the first deployments — migrate in place
+    // pre-ADR-0007 databases carry the stored-grant columns (provider_token NOT
+    // NULL, refresh_token, token_expires_at): drop them in place — the rows
+    // (identity + age) stay valid, nobody is signed out by the upgrade, and the
+    // credentials they held are gone from disk for good
     const cols = new Set(
       (db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>).map((c) => c.name),
     );
-    if (!cols.has("refresh_token")) db.exec("ALTER TABLE sessions ADD COLUMN refresh_token TEXT");
-    if (!cols.has("token_expires_at")) db.exec("ALTER TABLE sessions ADD COLUMN token_expires_at INTEGER");
+    for (const legacy of ["provider_token", "refresh_token", "token_expires_at"]) {
+      if (cols.has(legacy)) db.exec(`ALTER TABLE sessions DROP COLUMN ${legacy}`);
+    }
   }
 
-  /** encrypt a provider token for storage (empty/null pass through — nothing to hide) */
-  private seal(v: string | null): string | null {
-    if (!v) return v;
-    return this.cipher ? this.cipher.enc(v) : v;
-  }
-  /** decrypt a stored provider token; an undecryptable value (rotated key or a legacy
-   * cleartext row once a key is configured) → "" so the caller re-authenticates */
-  private open(v: string | null): string | null {
-    if (!v) return v;
-    return this.cipher ? (this.cipher.dec(v) ?? "") : v;
-  }
-
-  /**
-   * Create a session. `grant` is optional: an OIDC browser login (or any other
-   * identity-only entrance) establishes identity WITHOUT a stored user token —
-   * authorization then runs entirely app-side (installation token). Such a
-   * session has an empty providerToken; releases are bot-authored with human
-   * attribution.
-   */
-  create(user: GitUser, grant?: TokenGrant): Session {
+  /** mint a session for an authenticated identity — the IdP login, or any
+   *  future identity-only entrance (docs/extending/sso.md) */
+  create(user: GitUser): Session {
     const id = randomBytes(24).toString("base64url");
     const createdAt = Date.now();
     this.db
-      .prepare(
-        "INSERT INTO sessions (id, user, provider_token, refresh_token, token_expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        id,
-        JSON.stringify(user),
-        this.seal(grant?.accessToken ?? "") ?? "",
-        this.seal(grant?.refreshToken ?? null),
-        grant?.expiresAt ?? null,
-        createdAt,
-      );
-    return {
-      id,
-      user,
-      providerToken: grant?.accessToken ?? "",
-      refreshToken: grant?.refreshToken,
-      tokenExpiresAt: grant?.expiresAt,
-      createdAt,
-    };
-  }
-
-  /** persist a refreshed grant (and update the caller's session object) */
-  updateGrant(session: Session, grant: TokenGrant): void {
-    this.db
-      .prepare("UPDATE sessions SET provider_token = ?, refresh_token = ?, token_expires_at = ? WHERE id = ?")
-      .run(
-        this.seal(grant.accessToken) ?? "",
-        this.seal(grant.refreshToken ?? session.refreshToken ?? null),
-        grant.expiresAt ?? null,
-        session.id,
-      );
-    session.providerToken = grant.accessToken;
-    if (grant.refreshToken) session.refreshToken = grant.refreshToken;
-    session.tokenExpiresAt = grant.expiresAt;
+      .prepare("INSERT INTO sessions (id, user, created_at) VALUES (?, ?, ?)")
+      .run(id, JSON.stringify(user), createdAt);
+    return { id, user, createdAt };
   }
 
   get(id: string | undefined): Session | undefined {
     if (!id) return undefined;
-    const row = this.db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as
-      | {
-          id: string;
-          user: string;
-          provider_token: string;
-          refresh_token: string | null;
-          token_expires_at: number | null;
-          created_at: number;
-        }
-      | undefined;
+    const row = this.db.prepare("SELECT id, user, created_at FROM sessions WHERE id = ?").get(id) as
+      { id: string; user: string; created_at: number } | undefined;
     if (!row) return undefined;
     if (Date.now() - row.created_at > MAX_AGE_MS) {
       this.delete(id);
       return undefined;
     }
-    return {
-      id: row.id,
-      user: JSON.parse(row.user),
-      providerToken: this.open(row.provider_token) ?? "",
-      refreshToken: this.open(row.refresh_token) ?? undefined,
-      tokenExpiresAt: row.token_expires_at ?? undefined,
-      createdAt: row.created_at,
-    };
+    return { id: row.id, user: JSON.parse(row.user), createdAt: row.created_at };
   }
 
   delete(id: string): void {

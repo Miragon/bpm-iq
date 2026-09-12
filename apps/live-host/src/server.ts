@@ -44,7 +44,6 @@ import { makeOidcLogin } from "./auth/oidc-login.ts";
 import { ConnectionLimiter } from "./domain/conn-limit.ts";
 import { DocSizeGuard } from "./domain/doc-size-guard.ts";
 import { startApi } from "./http/api.ts";
-import type { GitProvider } from "./ports/git-provider.ts";
 import { AccessCache } from "./repos/access.ts";
 import { loadContentConfig } from "./repos/content.ts";
 import { RepoRegistry } from "./repos/registry.ts";
@@ -122,11 +121,12 @@ async function deepHealth(): Promise<{ ok: boolean; checks: Record<string, unkno
 }
 
 // ── Authentication: login authenticates, repos authorize ────────────────────
-// encrypt persisted provider tokens at rest with a key from ENV (Fly secret, off the
-// data volume) so a leaked live.db yields no usable GitHub credential. Prefer an
-// explicit SESSION_ENC_KEY; else reuse a persistent env secret (the cipher sha256-
-// derives its key). Cell mode stores no user token, so this only matters standalone.
-const SESSION_ENC_KEY = process.env.SESSION_ENC_KEY ?? process.env.CELL_TOKEN_KEY ?? process.env.GITHUB_CLIENT_SECRET;
+// Sessions are identity-only (ADR 0001/0007) — nothing secret is stored. The
+// secret only feeds the HMAC of the browser-bound login `state`, derived from a
+// persistent env value so a restart/redeploy mid-login keeps in-flight logins
+// valid. Prefer an explicit SESSION_ENC_KEY (the name predates the change);
+// else the cell's token key; random per boot in keyless dev.
+const SESSION_ENC_KEY = process.env.SESSION_ENC_KEY ?? process.env.CELL_TOKEN_KEY;
 const sessions = new SessionStore(db, SESSION_ENC_KEY);
 const appSlug = process.env.GITHUB_APP_SLUG;
 
@@ -230,11 +230,12 @@ const issues = tokens
   : undefined;
 
 // ── Authentication mode (ADR 0007): explicit, never inferred ─────────────────
-// `oidc` (default): a login is required — the IdP (LIVE_OIDC_*; until the
-// GitHub login is retired, GITHUB_CLIENT_* as well). `none`: no authentication
-// at all — every request, ws join and MCP call is the local principal and every
-// registered repository is writable (auth/none.ts). Local evaluation or a
-// trusted single-team network only: the network boundary IS the auth.
+// `oidc` (default): the IdP is the one login (LIVE_OIDC_*), per-repo
+// authorization runs app-side on the GitHub App connection — both are checked
+// below. `none`: no authentication at all — every request, ws join and MCP call
+// is the local principal and every registered repository is writable
+// (auth/none.ts). Local evaluation or a trusted single-team network only: the
+// network boundary IS the auth.
 const AUTH_MODE = process.env.LIVE_AUTH ?? "oidc";
 if (AUTH_MODE !== "oidc" && AUTH_MODE !== "none") {
   throw new Error(`LIVE_AUTH must be "oidc" or "none" (got "${AUTH_MODE}")`);
@@ -245,23 +246,16 @@ if (process.env.LIVE_DEV_TOKEN) {
 }
 const local = NO_AUTH ? makeLocalPrincipal(process.env.LIVE_LOCAL_USER) : undefined;
 
-// REST backend — constructed even without login credentials (access checks +
-// releases only need tokens passed per call); login buttons need client creds
-const github = createGitHubProvider({
-  clientId: process.env.GITHUB_CLIENT_ID ?? "",
-  clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
-  baseUrl: GH_BASE,
-  apiUrl: GH_API,
-  appMode: Boolean(appSlug),
-});
-// authz prefers the app-side installation-token check (ADR 0001, no user token);
-// falls back to the user-token GitProvider path for sources that can't answer.
-// none mode: everything the registry knows is writable (auth/none.ts).
-const access = NO_AUTH ? allowAllAccess : new AccessCache(github, sessions, connectionSource);
-const providers = new Map<string, GitProvider>();
-if (!NO_AUTH && process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  providers.set("github", github);
+// the release backend (push URL + PR creation on installation tokens passed per call)
+const github = createGitHubProvider({ baseUrl: GH_BASE, apiUrl: GH_API });
+if (process.env.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_SECRET) {
+  console.log(
+    "GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET are no longer read (ADR 0007: the GitHub OAuth login was retired) — remove them",
+  );
 }
+// authz = the app-side installation-token check (ADR 0001, no user token — the
+// only path since ADR 0007). none mode: everything the registry knows is writable.
+const access = NO_AUTH ? allowAllAccess : new AccessCache(connectionSource);
 
 // rooms ("<repo-full-name>/<path>") → repo + on-disk path: splitRoom / toDiskPath
 // live in ./repos/rooms.ts (pure + unit-tested). They take the registry/workspace
@@ -328,15 +322,23 @@ const oidcLogin = ((): ReturnType<typeof makeOidcLogin> | undefined => {
     label: process.env.LIVE_OIDC_LOGIN_LABEL,
   });
 })();
-if (NO_AUTH && (OIDC_ISSUER || OIDC_CLIENT_ID || process.env.GITHUB_CLIENT_ID)) {
-  console.log("LIVE_AUTH=none — LIVE_OIDC_* / GITHUB_CLIENT_* are ignored: an unauthenticated host has no login");
+if (NO_AUTH && (OIDC_ISSUER || OIDC_CLIENT_ID)) {
+  console.log("LIVE_AUTH=none — LIVE_OIDC_* are ignored: an unauthenticated host has no login");
 }
-// oidc mode without any way to authenticate is a misconfiguration, not a
-// silently open host (the old implicit dev-token default — ADR 0007)
-if (!NO_AUTH && !oidc && !oidcLogin && providers.size === 0) {
+// oidc mode has two prerequisites, checked at boot: the IdP (browser login AND
+// bearer JWTs — one identity contract) and a GitHub App connection to authorize
+// against. Missing either is a misconfiguration, never a silently open or a
+// silently read-only host (ADR 0007).
+if (!NO_AUTH && (!oidc || !oidcLogin)) {
   throw new Error(
-    "no login configured — set LIVE_OIDC_ISSUER + LIVE_OIDC_JWKS_URL + LIVE_OIDC_CLIENT_ID (docs/on-prem/configuration.md), " +
+    "LIVE_AUTH=oidc needs LIVE_OIDC_ISSUER + LIVE_OIDC_JWKS_URL + LIVE_OIDC_CLIENT_ID (docs/on-prem/configuration.md) — " +
       "or LIVE_AUTH=none for an unauthenticated host (local evaluation only)",
+  );
+}
+if (!NO_AUTH && !connectionSource?.checkUserPermission) {
+  throw new Error(
+    "LIVE_AUTH=oidc needs a GitHub App connection (GITHUB_APP_ID + private key, or a cell's token mint): " +
+      "per-repo authorization runs on installation tokens (ADR 0001) — an identity-only session can write nothing without it",
   );
 }
 const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
@@ -382,7 +384,6 @@ const httpServer = startApi(PORT, {
     const doc = server.hocuspocus.documents.get(room);
     return doc ? peersOfDocument(doc) : [];
   },
-  providers,
   github,
   sessions,
   registry,
@@ -504,7 +505,7 @@ void (async () => {
   console.log(
     local
       ? `auth      : NONE (LIVE_AUTH=none) — every request is @${local.user.login}, every repository writable; local evaluation / trusted network only`
-      : `auth      : ${oidcLogin ? `browser SSO (${oidc?.issuer})` : providers.size > 0 ? `github login (app: ${appSlug ?? "oauth"})` : "bearer JWT only (no browser login)"}${oidcLogin && providers.size > 0 ? " + github login" : ""}${oidc ? ` (+ oidc bearer: ${oidc.issuer})` : ""}`,
+      : `auth      : OIDC — browser SSO + bearer JWT (${oidc?.issuer})`,
   );
   console.log(`mcp       : POST /mcp${MCP_READONLY ? " (read-only — write tools not registered)" : ""}`);
   console.log(`room name = <owner>/<repo>/<path>, Y.Text field 'content'`);

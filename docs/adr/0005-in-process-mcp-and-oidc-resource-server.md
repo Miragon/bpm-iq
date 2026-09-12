@@ -1,6 +1,8 @@
 # ADR 0005 — AI write access in-process: /mcp + content REST on the Live Host, OIDC resource server, no self-built AS
 
-- **Status:** accepted (2026-07-24), amended (2026-08-03, 2026-08-04 and 2026-09-04 — see below)
+- **Status:** accepted (2026-07-24), amended (2026-08-03, 2026-08-04 and 2026-09-04 — see below);
+  the consequence "the web app's GitHub-OAuth login is untouched" is superseded by
+  [ADR 0007](0007-idp-only-login-and-no-auth-mode.md) (2026-09-12): the IdP is the one login
 - **Context:** adversarially reviewed against a fully built alternative (a
   separate broker-based MCP server); the review's confirmed findings drove this
   decision

@@ -1,11 +1,12 @@
 # GitHub App setup
 
 The platform runs against **your own GitHub App, registered in your own organization**. The
-app is what makes the on-prem model work: users sign in through it (OAuth), repositories
-are connected by installing it, per-(user,repo) write permission is checked with its
-installation tokens, and release PRs are authored by its bot — the server stores zero user
-tokens ([ADR 0001](../adr/0001-zero-stored-user-tokens.md)). Your users only ever see
-GitHub's two standard screens: sign in + the install picker.
+app is what makes the on-prem model work: repositories are connected by installing it,
+per-(user,repo) write permission is checked with its installation tokens, and release PRs
+are authored by its bot — the server stores zero user tokens
+([ADR 0001](../adr/0001-zero-stored-user-tokens.md)). People sign in at your identity
+provider, never through the app ([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md));
+on GitHub they only ever see the install picker.
 
 Two ways to register the app: guided (recommended — one click, no copying from GitHub's UI)
 or manual. Both end with the same set of values in your deployment's `.env`
@@ -38,8 +39,6 @@ Then:
    `apps/live-host/.env`:
 
    ```
-   GITHUB_CLIENT_ID=...
-   GITHUB_CLIENT_SECRET=...
    GITHUB_APP_SLUG=...
    GITHUB_APP_ID=...
    GITHUB_APP_PRIVATE_KEY_B64=...   # the PEM, base64 — returned exactly once
@@ -64,8 +63,7 @@ mirror the manifest in
 | Field                                                      | Value                                                                                                                      |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Name / Homepage URL                                        | e.g. `BPM Live` / `https://<host>`                                                                                         |
-| Callback URL                                               | `https://<host>/auth/github/callback`                                                                                      |
-| **Request user authorization (OAuth) during installation** | **checked** — installing and logging in become one flow                                                                    |
+| **Request user authorization (OAuth) during installation** | **unchecked** — sign-in happens at the identity provider, not through the app                                              |
 | Setup URL                                                  | `https://<host>/setup/installed`, with **Redirect on update** checked                                                      |
 | Webhook                                                    | Active, URL `https://<host>/webhook/github`, generate + note a webhook secret                                              |
 | Repository permissions                                     | **Contents: Read and write** · **Pull requests: Read and write** · **Issues: Read and write** · Metadata: Read (mandatory) |
@@ -80,10 +78,9 @@ mirror the manifest in
 After creation:
 
 1. Note the **App ID** and the **slug** (the URL name: `github.com/apps/<slug>`).
-2. **Generate a client secret** (OAuth credentials section).
-3. **Generate a private key** — downloads a `.pem`.
-4. Fill the deployment's `.env`: `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_CLIENT_ID`,
-   `GITHUB_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET`, and the key via one of
+2. **Generate a private key** — downloads a `.pem`.
+3. Fill the deployment's `.env`: `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET`,
+   and the key via one of
    `GITHUB_APP_PRIVATE_KEY` (raw PEM), `GITHUB_APP_PRIVATE_KEY_FILE` (mounted file), or
    `GITHUB_APP_PRIVATE_KEY_B64` (`base64 -w0 app.pem`) — precedence in
    [configuration.md](configuration.md#github-app-mode-recommended-on-prem).
@@ -91,9 +88,8 @@ After creation:
 ## First run
 
 Start (or restart) the Live Host with the new values. Then install the app: app settings →
-**Install App** → choose the org and select your content repositories — or just click
-**Sign in with GitHub** in the web app and follow the connect flow; the install picker link
-comes from `GITHUB_APP_SLUG`. Every selected repo appears in the overview for users with
+**Install App** → choose the org and select your content repositories — or sign in to the
+web app and follow the connect flow; the install picker link comes from `GITHUB_APP_SLUG`. Every selected repo appears in the overview for users with
 write permission on it; connecting more repos later is the same picker, no server change.
 
 ## What the webhook does

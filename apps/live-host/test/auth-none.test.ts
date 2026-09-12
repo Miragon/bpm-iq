@@ -24,7 +24,6 @@ test("makeLocalPrincipal: LIVE_LOCAL_USER wins, else the OS user — never empty
   assert.equal(named.user.name, "petra");
   assert.equal(named.user.provider, LOCAL_PROVIDER);
   assert.equal(named.id, LOCAL_SESSION_ID);
-  assert.equal(named.providerToken, "", "identity-only: no provider credential, ever");
   const fallback = makeLocalPrincipal(undefined);
   assert.ok(fallback.user.login.length > 0);
   assert.equal(makeLocalPrincipal("   ").user.login, fallback.user.login, "blank counts as unset");
@@ -45,7 +44,6 @@ before(async () => {
   const opts: ApiOptions = {
     webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
     publicUrl: "http://live.test",
-    providers: new Map(),
     github: {} as GitProvider,
     sessions: new SessionStore(new DatabaseSync(":memory:")),
     registry: { get: () => undefined, list: () => [] } as unknown as ApiOptions["registry"],
