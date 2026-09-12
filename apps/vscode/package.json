@@ -39,11 +39,6 @@
           "type": "string",
           "default": "http://localhost:8301",
           "description": "URL of the Live Host — http(s):// or ws(s)://, both forms work."
-        },
-        "bpmLive.token": {
-          "type": "string",
-          "default": "demo",
-          "description": "Dev token (the host's LIVE_DEV_TOKEN) for a local host without a login provider. Applies only while not signed in."
         }
       }
     }

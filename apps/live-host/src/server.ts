@@ -38,6 +38,7 @@ import { makeCollabHooks } from "./application/collab.ts";
 import { LoginCodeStore } from "./application/login-codes.ts";
 import { peersOfDocument } from "./application/room-presence.ts";
 import { WsTicketStore } from "./application/ws-tickets.ts";
+import { allowAllAccess, makeLocalPrincipal } from "./auth/none.ts";
 import { makeOidcVerifier } from "./auth/oidc.ts";
 import { makeOidcLogin } from "./auth/oidc-login.ts";
 import { ConnectionLimiter } from "./domain/conn-limit.ts";
@@ -228,6 +229,22 @@ const issues = tokens
     })
   : undefined;
 
+// ── Authentication mode (ADR 0007): explicit, never inferred ─────────────────
+// `oidc` (default): a login is required — the IdP (LIVE_OIDC_*; until the
+// GitHub login is retired, GITHUB_CLIENT_* as well). `none`: no authentication
+// at all — every request, ws join and MCP call is the local principal and every
+// registered repository is writable (auth/none.ts). Local evaluation or a
+// trusted single-team network only: the network boundary IS the auth.
+const AUTH_MODE = process.env.LIVE_AUTH ?? "oidc";
+if (AUTH_MODE !== "oidc" && AUTH_MODE !== "none") {
+  throw new Error(`LIVE_AUTH must be "oidc" or "none" (got "${AUTH_MODE}")`);
+}
+const NO_AUTH = AUTH_MODE === "none";
+if (process.env.LIVE_DEV_TOKEN) {
+  throw new Error("LIVE_DEV_TOKEN was retired (ADR 0007) — run an unauthenticated host with LIVE_AUTH=none");
+}
+const local = NO_AUTH ? makeLocalPrincipal(process.env.LIVE_LOCAL_USER) : undefined;
+
 // REST backend — constructed even without login credentials (access checks +
 // releases only need tokens passed per call); login buttons need client creds
 const github = createGitHubProvider({
@@ -238,22 +255,13 @@ const github = createGitHubProvider({
   appMode: Boolean(appSlug),
 });
 // authz prefers the app-side installation-token check (ADR 0001, no user token);
-// falls back to the user-token GitProvider path for sources that can't answer
-const access = new AccessCache(github, sessions, connectionSource);
+// falls back to the user-token GitProvider path for sources that can't answer.
+// none mode: everything the registry knows is writable (auth/none.ts).
+const access = NO_AUTH ? allowAllAccess : new AccessCache(github, sessions, connectionSource);
 const providers = new Map<string, GitProvider>();
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+if (!NO_AUTH && process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   providers.set("github", github);
 }
-
-// Headless clients (tests, VS Code extension — until it gets its own OAuth
-// flow). The dev token bypasses per-repo authorization (all-repos god access),
-// so the convenience "demo" default is ONLY for the bare local spike: no login
-// AND no app credentials. The moment app credentials populate the registry with
-// real (private) repos, the default is off — it must be opted into explicitly
-// (adversarial review, critical: app-configured-but-OAuth-pending must not
-// silently expose every connected private repo).
-const devToken = (): string | undefined =>
-  process.env.LIVE_DEV_TOKEN ?? (providers.size === 0 && !connectionSource?.canEnumerate ? "demo" : undefined);
 
 // rooms ("<repo-full-name>/<path>") → repo + on-disk path: splitRoom / toDiskPath
 // live in ./repos/rooms.ts (pure + unit-tested). They take the registry/workspace
@@ -274,7 +282,7 @@ if (Boolean(OIDC_ISSUER) !== Boolean(OIDC_JWKS_URL)) {
 // invalid_scope, including the one verified WorkOS install.
 const MCP_SCOPES = (process.env.LIVE_MCP_SCOPES ?? "").split(/[\s,]+/).filter(Boolean);
 const oidc =
-  OIDC_ISSUER && OIDC_JWKS_URL
+  !NO_AUTH && OIDC_ISSUER && OIDC_JWKS_URL
     ? {
         issuer: OIDC_ISSUER,
         scopes: MCP_SCOPES.length ? MCP_SCOPES : undefined,
@@ -306,7 +314,7 @@ const oidc =
 // access token is verified by exactly that verifier (incl. the cell tenant gate).
 const OIDC_CLIENT_ID = process.env.LIVE_OIDC_CLIENT_ID;
 const oidcLogin = ((): ReturnType<typeof makeOidcLogin> | undefined => {
-  if (!OIDC_CLIENT_ID) return undefined;
+  if (!OIDC_CLIENT_ID || NO_AUTH) return undefined;
   if (!oidc) {
     console.log("LIVE_OIDC_CLIENT_ID set but LIVE_OIDC_ISSUER/JWKS_URL missing — browser SSO DISABLED");
     return undefined;
@@ -320,6 +328,17 @@ const oidcLogin = ((): ReturnType<typeof makeOidcLogin> | undefined => {
     label: process.env.LIVE_OIDC_LOGIN_LABEL,
   });
 })();
+if (NO_AUTH && (OIDC_ISSUER || OIDC_CLIENT_ID || process.env.GITHUB_CLIENT_ID)) {
+  console.log("LIVE_AUTH=none — LIVE_OIDC_* / GITHUB_CLIENT_* are ignored: an unauthenticated host has no login");
+}
+// oidc mode without any way to authenticate is a misconfiguration, not a
+// silently open host (the old implicit dev-token default — ADR 0007)
+if (!NO_AUTH && !oidc && !oidcLogin && providers.size === 0) {
+  throw new Error(
+    "no login configured — set LIVE_OIDC_ISSUER + LIVE_OIDC_JWKS_URL + LIVE_OIDC_CLIENT_ID (docs/on-prem/configuration.md), " +
+      "or LIVE_AUTH=none for an unauthenticated host (local evaluation only)",
+  );
+}
 const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
 
 // single-use ws tickets for the MCP-App widget's live connection — minted by
@@ -342,7 +361,7 @@ const server = new Server({
     registry,
     workspaces,
     contentConfig: loadContentConfig,
-    devToken,
+    local: local?.user,
     liveDocs,
     wsTickets,
   }),
@@ -369,7 +388,7 @@ const httpServer = startApi(PORT, {
   registry,
   workspaces,
   access,
-  devToken,
+  local,
   liveDocs: () => [...liveDocs],
   // sync-to-default invalidates the lineage of every file it reset — same
   // LineageStore the reconcile hook drops through
@@ -483,7 +502,9 @@ void (async () => {
     `minting   : ${MINT_URL ? `remote (control plane, tenant ${TENANT_INSTALLATION_ID})` : appCreds ? "local (app key)" : "none"}`,
   );
   console.log(
-    `auth      : ${oidcLogin ? `browser SSO (${oidc?.issuer})` : providers.size > 0 ? `github login (app: ${appSlug ?? "oauth"})` : "no login configured (pnpm create-app)"}${oidcLogin && providers.size > 0 ? " + github login" : ""}${devToken() ? ` (+ dev token '${devToken()}')` : ""}${oidc ? ` (+ oidc bearer: ${oidc.issuer})` : ""}`,
+    local
+      ? `auth      : NONE (LIVE_AUTH=none) — every request is @${local.user.login}, every repository writable; local evaluation / trusted network only`
+      : `auth      : ${oidcLogin ? `browser SSO (${oidc?.issuer})` : providers.size > 0 ? `github login (app: ${appSlug ?? "oauth"})` : "bearer JWT only (no browser login)"}${oidcLogin && providers.size > 0 ? " + github login" : ""}${oidc ? ` (+ oidc bearer: ${oidc.issuer})` : ""}`,
   );
   console.log(`mcp       : POST /mcp${MCP_READONLY ? " (read-only — write tools not registered)" : ""}`);
   console.log(`room name = <owner>/<repo>/<path>, Y.Text field 'content'`);

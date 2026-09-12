@@ -10,6 +10,11 @@ verification of audience-bound bearer JWTs from a ready-made IdP, used by
 never runs its own authorization server (ADR 0005). Interactive login flows
 (authorize redirect + callback) land beside it.
 
+`none.ts` is the deliberate absence of all of the above (`LIVE_AUTH=none`,
+ADR 0007): one local principal for every request plus an allow-all
+authorization — not an identity provider, but it lives here because it is the
+other answer to "who is this request", chosen explicitly by the operator.
+
 What does NOT belong here: git-provider authorization — the per-(user,repo)
 grant lives in `../ports/` (`git-provider.ts`, `connection-source.ts`) and its
 vendor implementations in `../adapters/<vendor>/`. Identity is who you are;

@@ -43,6 +43,8 @@ const VALID_V2 = newBpmnXml("order", "Order v2");
 
 let base = "";
 let sessions: SessionStore;
+/** the headless caller's Bearer header — a real session row, minted in before() */
+let AUTH: Record<string, string> = {};
 const cleanups: Array<() => unknown> = [];
 after(async () => {
   for (const c of cleanups) await c();
@@ -85,12 +87,14 @@ before(async () => {
       registry,
       workspaces: wsFns,
       contentConfig: loadContentConfig,
-      devToken: () => undefined,
       liveDocs: new Set(),
     }),
   });
   cleanups.push(() => hp.destroy());
   sessions = new SessionStore(new DatabaseSync(":memory:"));
+  // the headless caller of these tests: a real session row, Bearer-authenticated
+  const bot = sessions.create({ login: "demo", name: "demo", avatarUrl: null, provider: "github" });
+  AUTH = { authorization: `Bearer ${bot.id}` };
   const opts: ApiOptions = {
     webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
     publicUrl: "http://live.test",
@@ -99,8 +103,7 @@ before(async () => {
     sessions,
     registry: registry as ApiOptions["registry"],
     workspaces: wsFns as unknown as ApiOptions["workspaces"],
-    access: { canWrite: async () => true } as unknown as ApiOptions["access"],
-    devToken: () => "demo",
+    access: { canWrite: async () => true, invalidate: () => {} },
     liveDocs: () => [],
     dropLineage: () => {},
     openDoc: (room) => hp.hocuspocus.openDirectConnection(room),
@@ -119,7 +122,6 @@ before(async () => {
   base = `http://127.0.0.1:${(httpServer.address() as { port: number }).port}`;
 });
 
-const AUTH = { authorization: "Bearer demo" };
 const get = (path: string, headers: Record<string, string> = AUTH) => fetch(`${base}${path}`, { headers });
 const put = (path: string, body: unknown, headers: Record<string, string> = AUTH) =>
   fetch(`${base}${path}`, {

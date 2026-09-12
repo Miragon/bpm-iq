@@ -146,7 +146,6 @@ function deps(over: Partial<McpDeps> = {}, widgets: readonly string[] = WIDGET_F
       registry,
       workspaces,
       contentConfig: loadContentConfig,
-      devToken: () => undefined,
       liveDocs: new Set(),
     }),
   });
@@ -872,7 +871,6 @@ test("mint_ws_ticket → ws onAuthenticate: the full live-connection handshake, 
     registry: d.registry,
     workspaces: d.workspaces,
     contentConfig: loadContentConfig,
-    devToken: () => undefined,
     liveDocs: new Set(),
     wsTickets,
   });
@@ -958,17 +956,16 @@ test("release_process demands a target; save demands baseVersion by schema", asy
 
 // ── (b) transport behaviour over real HTTP ──────────────────────────────────
 
-function apiOpts(d: McpDeps): ApiOptions {
+function apiOpts(d: McpDeps, sessions = new SessionStore(new DatabaseSync(":memory:"))): ApiOptions {
   return {
     webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
     publicUrl: "http://live.test",
     providers: d.providers,
     github: d.github,
-    sessions: new SessionStore(new DatabaseSync(":memory:")),
+    sessions,
     registry: d.registry as ApiOptions["registry"],
     workspaces: d.workspaces as ApiOptions["workspaces"],
     access: d.access as ApiOptions["access"],
-    devToken: () => "demo",
     liveDocs: () => [],
     dropLineage: () => {},
     openDoc: d.openDoc,
@@ -981,7 +978,9 @@ function apiOpts(d: McpDeps): ApiOptions {
 }
 
 test("/mcp over HTTP: stateless JSON, 405 on GET, 401 + RFC-9728 challenge, -32700 on garbage", async () => {
-  const httpServer = startApi(0, apiOpts(deps()));
+  const sessions = new SessionStore(new DatabaseSync(":memory:"));
+  const bot = sessions.create({ login: "petra", name: "Petra", avatarUrl: null, provider: "github" });
+  const httpServer = startApi(0, apiOpts(deps(), sessions));
   cleanups.push(() => new Promise((r) => httpServer.close(r)));
   await new Promise<void>((r) => httpServer.once("listening", r));
   const addr = httpServer.address() as { port: number };
@@ -989,7 +988,7 @@ test("/mcp over HTTP: stateless JSON, 405 on GET, 401 + RFC-9728 challenge, -327
   const headers = {
     "content-type": "application/json",
     accept: "application/json, text/event-stream",
-    authorization: "Bearer demo",
+    authorization: `Bearer ${bot.id}`,
   };
 
   // initialize → immediate JSON response (enableJsonResponse, no SSE session)
