@@ -46,3 +46,27 @@ export const allowAllAccess = {
   canWrite: async (): Promise<boolean> => true,
   invalidate: (): void => {},
 };
+
+/**
+ * A browser request from ANOTHER site is not the local principal. A none-mode
+ * host on a developer's machine is reachable from every web page that
+ * machine's browser visits — localhost:8301 is inside the "trusted network" —
+ * so without this gate a malicious page could read and release repositories
+ * through the developer's own browser. Browsers label their requests (Fetch
+ * Metadata `Sec-Fetch-Site`; the `Origin` header on cross-origin and WebSocket
+ * requests); non-browser clients (curl, the VS Code extension host, MCP
+ * clients) send neither and are unaffected. Same-site (another port of the
+ * same host — the web dev server, which proxies anyway) is deliberately
+ * allowed: the network boundary IS the auth.
+ */
+export function isCrossSite(header: (name: string) => string | null | undefined, publicUrl?: string): boolean {
+  const site = header("sec-fetch-site");
+  if (site) return site === "cross-site";
+  const origin = header("origin");
+  if (!origin || !publicUrl) return false;
+  try {
+    return new URL(origin).origin !== new URL(publicUrl).origin;
+  } catch {
+    return true; // an unparsable Origin is not ours
+  }
+}

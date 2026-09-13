@@ -20,7 +20,7 @@
  * same minimal diff, a no-op once bound.
  */
 import type { PresenceUser } from "@bpmiq/contracts/live";
-import type { ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { Me, ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { type LiveSession, openLiveSession } from "@bpmiq/live-client";
 import { updateText } from "@bpmiq/live-client/text";
 import * as vscode from "vscode";
@@ -223,11 +223,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
-  /** the identity the HOST reports for our credential: the signed-in person,
-   *  a none-mode host's local principal, or nobody (→ offer the sign-in) */
-  const renderStatus = async () => {
-    const host = hostUrls(serverUrl()).http;
-    const me = await auth.identity();
+  const paint = (host: string, me: Me["user"] | undefined) => {
     status.text = me ? `$(account) BPM Live: @${me.login}` : "$(account) BPM Live: sign in";
     status.tooltip = !me
       ? `Sign in to the Live Host at ${host}`
@@ -236,6 +232,18 @@ export function activate(context: vscode.ExtensionContext): void {
         : `Signed in to ${host} as ${me.name || me.login}`;
     status.command = me ? "bpmLive.open" : "bpmLive.login";
     status.show();
+  };
+  /** the identity the HOST reports for our credential: the signed-in person,
+   *  a none-mode host's local principal, or nobody (→ offer the sign-in).
+   *  Paints the stored identity at once, then what the host says — the latest
+   *  call wins; a slow answer for an earlier host is dropped. */
+  let renderSeq = 0;
+  const renderStatus = async () => {
+    const seq = ++renderSeq;
+    const host = hostUrls(serverUrl()).http;
+    paint(host, auth.me());
+    const me = await auth.identity();
+    if (seq === renderSeq) paint(host, me);
   };
   void renderStatus();
   /** (re)connect every open live document — at activation (a restored window)
