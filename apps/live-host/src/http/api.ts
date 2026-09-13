@@ -109,6 +109,7 @@ import {
 import { syncRepo } from "../application/sync.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
+import { isCrossSite } from "../auth/none.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
@@ -264,8 +265,11 @@ export function startApi(port: number, opts: ApiOptions): Server {
   const secure = opts.publicUrl.startsWith("https");
 
   const sessionOf = async (req: IncomingMessage): Promise<Session | undefined> => {
-    // LIVE_AUTH=none: everyone is the local principal (ADR 0007)
-    if (opts.local) return opts.local;
+    // LIVE_AUTH=none: everyone is the local principal (ADR 0007) — except a
+    // browser request from another site, which is nobody (auth/none.ts)
+    if (opts.local) {
+      return isCrossSite((n) => req.headers[n] as string | undefined, opts.publicUrl) ? undefined : opts.local;
+    }
     const sid = readCookie(req.headers.cookie, COOKIE);
     const fromCookie = opts.sessions.get(sid);
     if (fromCookie) return fromCookie;

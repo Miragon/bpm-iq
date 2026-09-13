@@ -267,7 +267,7 @@ const access = NO_AUTH ? allowAllAccess : new AccessCache(connectionSource);
 // come together; audience defaults to this host's public URL (RFC 8707).
 const OIDC_ISSUER = process.env.LIVE_OIDC_ISSUER;
 const OIDC_JWKS_URL = process.env.LIVE_OIDC_JWKS_URL;
-if (Boolean(OIDC_ISSUER) !== Boolean(OIDC_JWKS_URL)) {
+if (!NO_AUTH && Boolean(OIDC_ISSUER) !== Boolean(OIDC_JWKS_URL)) {
   throw new Error("LIVE_OIDC_ISSUER and LIVE_OIDC_JWKS_URL must be set together");
 }
 // scopes advertised in the PRM (scopes_supported) and the 401 challenge; the
@@ -364,6 +364,7 @@ const server = new Server({
     workspaces,
     contentConfig: loadContentConfig,
     local: local?.user,
+    publicUrl: PUBLIC_URL,
     liveDocs,
     wsTickets,
   }),
@@ -483,6 +484,9 @@ void (async () => {
   // seed the registry from the connection source (local app key OR remote mint)
   if (connectionSource?.canEnumerate) {
     await registry.sync().catch((e) => console.log(`registry sync failed: ${(e as Error).message}`));
+    // the sync may have given the static fallback repo its installation — a
+    // denial cached against the not-yet-synced row must not outlive it
+    access.invalidate();
   }
   console.log("──────────────────────────────────────────────────");
   console.log(

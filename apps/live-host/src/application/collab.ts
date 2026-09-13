@@ -23,6 +23,7 @@ import * as Y from "yjs";
 
 import type { LineageStore } from "../adapters/sqlite/lineage-store.ts";
 import type { Session } from "../adapters/sqlite/sessions.ts";
+import { isCrossSite } from "../auth/none.ts";
 import type { DocSizeGuard } from "../domain/doc-size-guard.ts";
 import {
   type ContentConfigLookup,
@@ -52,6 +53,8 @@ export interface CollabDeps {
   /** LIVE_AUTH=none (auth/none.ts, ADR 0007): every ws join IS this principal,
    * whatever token the client sent — absent = authenticated mode (session id / ticket) */
   local?: Session["user"];
+  /** the host's public origin — the Origin fallback of none mode's cross-site gate */
+  publicUrl?: string;
   /** repo-qualified document names of live rooms (shared with reconcile + API) */
   liveDocs: Set<string>;
   /** single-use ws tickets minted by the MCP-App widget's mint_ws_ticket tool
@@ -74,6 +77,7 @@ export function makeCollabHooks(deps: CollabDeps) {
     workspaces,
     contentConfig,
     local,
+    publicUrl,
     liveDocs,
     wsTickets,
   } = deps;
@@ -103,10 +107,21 @@ export function makeCollabHooks(deps: CollabDeps) {
   };
 
   return {
-    async onAuthenticate({ token, documentName }: { token: string; documentName: string }) {
+    async onAuthenticate({
+      token,
+      documentName,
+      requestHeaders,
+    }: {
+      token: string;
+      documentName: string;
+      /** the upgrade request's headers (Hocuspocus hands a WHATWG Headers) */
+      requestHeaders?: { get(name: string): string | null };
+    }) {
       const { repo } = splitRoom(documentName, registry); // reject malformed/unknown rooms first
-      // LIVE_AUTH=none: the local principal, whatever token was sent (ADR 0007)
-      if (local) return { user: local, documentName };
+      // LIVE_AUTH=none: the local principal, whatever token was sent (ADR 0007) —
+      // unless the browser says the page is from another site (auth/none.ts);
+      // such a join can only get in on a widget ticket, below
+      if (local && !isCrossSite((n) => requestHeaders?.get(n), publicUrl)) return { user: local, documentName };
       // ws token = session id (issued by the login) …
       const session = sessions.get(token);
       if (session) {
