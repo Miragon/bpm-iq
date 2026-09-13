@@ -10,7 +10,9 @@
 services:
   live-host:
     image: ghcr.io/miragon/bpmiq-live-host:${BPMIQ_VERSION:-latest}
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false # `--profile keycloak up keycloak` must work without one
     ports:
       # host 8301 → container 8080 (the image pins PORT=8080; HTTP + ws share it)
       - "8301:8080"
@@ -36,6 +38,41 @@ services:
         ]
       interval: 30s
       start_period: 10s
+
+  # ── Optional: Keycloak as the identity provider (profile "keycloak") ─────
+  # The self-contained IdP quickstart (docs/on-prem/idp-quickstart.md, ADR
+  # 0007): `docker compose --profile keycloak up -d` starts Keycloak next to the
+  # Live Host with the bpmiq realm imported from ./keycloak/realm-bpmiq.json —
+  # two public PKCE clients (bpmiq-web for the browser, bpmiq-mcp for MCP
+  # clients), the `github_login` user attribute (admin-only editable) as a
+  # claim, a fixed audience `bpmiq`, and a demo user petra/petra.
+  # Evaluation only as shipped (dev mode, in-memory H2, admin/admin) — for a
+  # real deployment run Keycloak the way you run Keycloak, and keep the realm.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.3
+    profiles: ["keycloak"]
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # The issuer every token carries — MUST equal LIVE_OIDC_ISSUER's origin.
+      # Fixed here so a token minted over the container network (the Live Host
+      # calls http://keycloak:8080) says the same as one minted by the browser.
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-bpmiq.json:/opt/keycloak/data/import/realm-bpmiq.json:ro
+    restart: unless-stopped
+    healthcheck:
+      # no curl in the image — bash's /dev/tcp against the management port
+      test:
+        - CMD-SHELL
+        - 'exec 3<>/dev/tcp/127.0.0.1/9000 && printf "GET /health/ready HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3 && grep -q UP <&3'
+      interval: 10s
+      start_period: 60s
 
   # ── Optional: read-only MCP server ───────────────────────────────────────
   # Serves a CONTENT repo checkout (a bpmiq.yml + .bpmn files) to MCP clients
