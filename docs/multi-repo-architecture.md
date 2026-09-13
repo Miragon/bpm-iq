@@ -10,7 +10,8 @@
 >
 > - The provider abstraction is now TWO interfaces: `GitProvider`
 >   (user-credentialed: OAuth incl. `TokenGrant` refresh, permission gate, push,
->   PR — `src/auth/provider.ts`) and `RepoConnectionSource`
+>   PR — `src/auth/provider.ts`; _since [ADR 0007](adr/0007-idp-only-login-and-no-auth-mode.md)
+>   only the release half remains: push + PR on the platform credential_) and `RepoConnectionSource`
 >   (platform-credentialed: connected-repo enumeration, clone tokens, connect
 >   URL, webhook verification — `src/repos/connection-source.ts`). The GitHub
 >   App mechanics are one implementation of the source; a GitLab source (OAuth
@@ -126,13 +127,14 @@ Today the OAuth callback denies login entirely without write access to _the_ rep
   `onAuthenticate` derive the repo from the route/room and check permission, cached
   per session+repo (invalidated by installation webhooks). `#/denied` dies as a global
   route; "no access" becomes a per-repo state (hidden/read-only card).
-- `GitProvider` interface change (ripples into github.ts + stub): `checkRepoAccess`,
-  `pushUrl`, `createPullRequest` take the repo per call; new app-level capability
-  (installations listing) lives beside it, since it is app- not user-credentialed.
-- **Expiring user tokens**: manifest-created apps default to 8 h user tokens with
-  refresh tokens — `exchangeCode` discards `refresh_token`/`expires_in` today while
-  sessions live 12 h. Store + proactively refresh (or consciously disable expiry in
-  app settings and document it).
+- `GitProvider` interface change (ripples into github.ts + stub): `pushUrl` and
+  `createPullRequest` take the repo per call; the app-level capabilities (installations
+  listing, per-user permission) live beside it in `RepoConnectionSource`, since they are
+  app- not user-credentialed (`checkRepoAccess`, the user-token check, is gone —
+  [ADR 0007](adr/0007-idp-only-login-and-no-auth-mode.md)).
+- ~~**Expiring user tokens**: store + proactively refresh~~ — moot since
+  [ADR 0007](adr/0007-idp-only-login-and-no-auth-mode.md): no user token is obtained or
+  stored; sessions are identity-only, authorization runs on installation tokens.
 - ~~The dev token would grant headless write to **every** connected repo~~ — retired
   ([ADR 0007](adr/0007-idp-only-login-and-no-auth-mode.md)): an unauthenticated host is
   now an explicit `LIVE_AUTH=none` decision, never a default.

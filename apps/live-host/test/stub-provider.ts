@@ -1,11 +1,10 @@
 /**
- * GitHub-shaped stub for the OAuth + release flow — lets the whole login →
- * repo-gate → session → release path run locally without real credentials
- * (tests, offline demos). Point the live host at it:
+ * GitHub-shaped stub of the App + release surface — lets the whole
+ * repo-gate → release path run locally without real credentials (tests,
+ * offline demos). Point the live host at it:
  *
- *   GITHUB_CLIENT_ID=stub GITHUB_CLIENT_SECRET=stub \
- *   GITHUB_BASE_URL=http://localhost:8399 GITHUB_API_URL=http://localhost:8399 \
- *   LIVE_PUSH_URL_OVERRIDE=<file:///path/to/bare.git> npm start
+ *   LIVE_AUTH=none GITHUB_BASE_URL=http://localhost:8399 GITHUB_API_URL=http://localhost:8399 \
+ *   LIVE_PUSH_URL_OVERRIDE=<file:///path/to/bare.git> pnpm start
  *
  * Control endpoint (tests): POST /_control {"permission":"read"|"write"}
  * simulates a user with/without repo access; {"addIssue":…} seeds tracker rows
@@ -17,7 +16,7 @@ import { createServer, type ServerResponse } from "node:http";
 const PORT = Number(process.env.STUB_PORT ?? 8399);
 
 let permission = "write";
-let lastManifest: { redirect_url?: string; callback_urls?: string[] } | undefined;
+let lastManifest: { redirect_url?: string; setup_url?: string } | undefined;
 let installationRepos: string[] = ["acme/bpm-processes"];
 const pulls: unknown[] = [];
 // in-memory issue tracker (todo feature): labels + issues per repo. Issues are
@@ -97,13 +96,12 @@ createServer(async (req, res) => {
     });
   }
   if (/^\/apps\/[^/]+\/installations\/new$/.test(url.pathname)) {
-    // simulate GitHub's install picker + request_oauth_on_install: auto-install,
-    // then bounce into the user authorization against the app's callback URL
-    const callback = new URL(lastManifest?.callback_urls?.[0] ?? "http://localhost:8301/auth/github/callback");
-    callback.searchParams.set("code", "stub-code");
-    callback.searchParams.set("installation_id", "1");
-    callback.searchParams.set("setup_action", "install");
-    res.writeHead(302, { location: callback.toString() });
+    // simulate GitHub's install picker: auto-install, then bounce to the
+    // app's setup URL (no user OAuth — ADR 0007)
+    const setup = new URL(lastManifest?.setup_url ?? "http://localhost:8301/setup/installed");
+    setup.searchParams.set("installation_id", "1");
+    setup.searchParams.set("setup_action", "install");
+    res.writeHead(302, { location: setup.toString() });
     return res.end();
   }
 
@@ -151,25 +149,6 @@ createServer(async (req, res) => {
     return json(res, 200, { permission, role_name: permission, user: { login: permReq[1] } });
   }
 
-  // OAuth: auto-approve the grant, bounce straight back with a code
-  if (url.pathname === "/login/oauth/authorize") {
-    const redirect = new URL(url.searchParams.get("redirect_uri")!);
-    redirect.searchParams.set("code", "stub-code");
-    redirect.searchParams.set("state", url.searchParams.get("state") ?? "");
-    res.writeHead(302, { location: redirect.toString() });
-    return res.end();
-  }
-  if (url.pathname === "/login/oauth/access_token") return json(res, 200, { access_token: "stub-token" });
-
-  // REST
-  if (url.pathname === "/user") return json(res, 200, { login: "petra", name: "Petra Prozess", avatar_url: null });
-  // installations of THIS app the user can access (org membership + collaborator)
-  if (url.pathname === "/user/installations") {
-    return json(res, 200, {
-      total_count: installations.size,
-      installations: [...installations.keys()].map((id) => ({ id })),
-    });
-  }
   if (/^\/repos\/[^/]+\/[^/]+$/.test(url.pathname)) {
     // effective user permissions, like GET /repos/{owner}/{repo} with a user token
     return json(res, 200, {

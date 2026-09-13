@@ -96,7 +96,6 @@ const USER_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
 const session = (login = "petra"): Session => ({
   id: `sess-${login}`,
   user: { login, name: login, avatarUrl: null, provider: "github" },
-  providerToken: "",
   createdAt: Date.now(),
 });
 
@@ -157,7 +156,6 @@ function deps(over: Partial<McpDeps> = {}, widgets: readonly string[] = WIDGET_F
     liveDocs: () => [],
     openDoc: (room) => hp.hocuspocus.openDirectConnection(room),
     maxDocBytes: 8_000_000,
-    providers: new Map<string, GitProvider>(),
     github: {} as GitProvider,
     webDist,
     publicUrl: "http://live.test",
@@ -960,7 +958,6 @@ function apiOpts(d: McpDeps, sessions = new SessionStore(new DatabaseSync(":memo
   return {
     webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
     publicUrl: "http://live.test",
-    providers: d.providers,
     github: d.github,
     sessions,
     registry: d.registry as ApiOptions["registry"],

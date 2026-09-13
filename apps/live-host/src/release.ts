@@ -21,9 +21,8 @@
  * Bot-authored: push + PR run with the app INSTALLATION token, so the PR is opened
  * by the platform bot — which lets the releasing human approve their own release
  * (merge = approval). The commit carries the human as git author (+ Co-authored-by)
- * for attribution. No user token is needed, so an identity-only session (zero stored
- * user token) can release too; it falls back to the user token only in legacy
- * OAuth-only mode (no app installation token).
+ * for attribution. No user token exists anywhere (ADR 0001, completed by ADR 0007):
+ * a repository without an app installation cannot be released.
  *
  * Error convention: user-actionable release GATES throw typed AppErrors
  * (http-kit) — the http catch-all maps them to 400/404/409 with their message
@@ -190,9 +189,8 @@ async function publish(
   workspace: string,
   args: PublishArgs,
 ): Promise<ReleaseResult> {
-  // the credential for the whole release: fetch, push, PR. Prefer the app
-  // installation token (bot-authored → the human can approve their own
-  // release); fall back to the user token only when there is no installation.
+  // the credential for the whole release: fetch, push, PR — the app
+  // installation token (bot-authored → the human can approve their own release)
   const instToken =
     repo.installationId !== null
       ? await opts.connectionSource?.cloneToken(repo.installationId).catch(() => undefined)
@@ -203,7 +201,7 @@ async function publish(
     // an anonymous fetch of a PRIVATE repo has no credential and no TTY in the
     // container — git dies on "could not read Username for 'https://github.com'"
     await runGit(["-C", workspace, "fetch", "origin", repo.defaultBranch], {
-      env: gitEnv(instToken ?? (session.providerToken || undefined)),
+      env: gitEnv(instToken),
     });
 
     // upstream guard: commits on origin touching a selected file that this
@@ -258,10 +256,10 @@ async function publish(
       );
     }
 
-    const releaseToken = instToken ?? session.providerToken;
+    const releaseToken = instToken ?? "";
     const botAuthored = Boolean(instToken);
     if (!releaseToken && !process.env.LIVE_PUSH_URL_OVERRIDE) {
-      throw new Error("no credential available to publish the release (no app installation token, no user token)");
+      throw new Error(`no app installation token for ${repo.fullName} — releases need the GitHub App connection`);
     }
 
     const email = noreplyEmail(session.user.login, provider.id);

@@ -98,7 +98,6 @@ before(async () => {
   const opts: ApiOptions = {
     webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
     publicUrl: "http://live.test",
-    providers: new Map(),
     github: {} as GitProvider,
     sessions,
     registry: registry as ApiOptions["registry"],

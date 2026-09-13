@@ -27,7 +27,6 @@ export function makeLocalPrincipal(login?: string): Session {
   return {
     id: LOCAL_SESSION_ID,
     user: { login: name, name, avatarUrl: null, provider: LOCAL_PROVIDER },
-    providerToken: "",
     createdAt: Date.now(),
   };
 }

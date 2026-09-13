@@ -13,8 +13,8 @@ test("hostUrls: http and ws forms from either setting form, trailing slashes dro
 });
 
 test("loginStartUrl carries the editor pair the Live Host expects", () => {
-  const url = new URL(loginStartUrl("https://live.example.com", "github", "vscode-insiders", "n0nce_-abc"));
-  assert.equal(url.pathname, "/auth/github");
+  const url = new URL(loginStartUrl("https://live.example.com", "oidc", "vscode-insiders", "n0nce_-abc"));
+  assert.equal(url.pathname, "/auth/oidc");
   assert.equal(url.searchParams.get("editor"), "vscode-insiders");
   assert.equal(url.searchParams.get("editor_state"), "n0nce_-abc");
 });

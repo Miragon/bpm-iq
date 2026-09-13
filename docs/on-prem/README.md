@@ -7,9 +7,10 @@ Releases become pull requests in your own GitHub organization; review + merge st
 is today. The platform never executes code from a content repository.
 
 The auth model in one line: **login authenticates, repositories authorize** — users sign in
-via GitHub OAuth, and per-(user,repo) write permission is checked through your own GitHub
-App's installation token. In app mode the server stores zero user tokens
-([ADR 0001](../adr/0001-zero-stored-user-tokens.md)).
+at your identity provider (OIDC), and per-(user,repo) write permission is checked through
+your own GitHub App's installation token. The server stores zero user tokens
+([ADR 0001](../adr/0001-zero-stored-user-tokens.md),
+[ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)).
 
 Companion documents:
 
@@ -48,8 +49,12 @@ policy requires a non-root user, run with `user:` and make `/data` writable for 
 ## Quickstart (compose)
 
 1. Register your GitHub App — [github-app-setup.md](github-app-setup.md). You come back
-   with an app id, slug, client id/secret, private key, and webhook secret.
-2. Configure and start:
+   with an app id, slug, private key, and webhook secret.
+2. Connect your identity provider — the `LIVE_OIDC_*` block in
+   [configuration.md](configuration.md#oidc-token-auth-mcp--headless-clients) (IdP-side
+   requirements: [mcp-idp-setup.md](../extending/mcp-idp-setup.md)). Evaluating without an
+   IdP: `LIVE_AUTH=none`, see the operating modes below.
+3. Configure and start:
 
    ```bash
    cd deploy
@@ -63,8 +68,8 @@ policy requires a non-root user, run with `user:` and make `/data` writable for 
    persist debounced write-throughs before the container is killed — keep that headroom if
    you write your own unit files.
 
-3. Put your reverse proxy in front (below), open `https://<your-host>`, sign in with
-   GitHub, connect repositories via GitHub's install picker. Done.
+4. Put your reverse proxy in front (below), open `https://<your-host>`, sign in at your
+   identity provider, connect repositories via GitHub's install picker. Done.
 
 Plain `docker run` works too:
 
@@ -78,13 +83,12 @@ docker run -d --name bpmiq -p 8080:8080 -v bpmiq-data:/data \
 The server wires itself from the credentials it finds ([configuration.md](configuration.md)
 has every variable):
 
-| Mode                         | Credentials                                 | What you get                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| No auth (`LIVE_AUTH=none`)   | none                                        | Serves a locally mounted content checkout (`LIVE_HOST_CONTENT_DIR`) — or, with App credentials, the App's repositories — to everyone as the local principal (`LIVE_LOCAL_USER`). Local evaluation / trusted single-team network only: no login, no authorization ([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)). |
-| OAuth-only                   | `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET` | GitHub login + the single static `GITHUB_REPO`.                                                                                                                                                                                                                                                                                |
-| **GitHub App** (recommended) | App id + private key (+ OAuth creds)        | Installation enumeration = multi-repo overview, per-(user,repo) authorization via installation tokens, bot-authored release PRs ([ADR 0001](../adr/0001-zero-stored-user-tokens.md)), direct webhooks.                                                                                                                         |
+| Mode                                | Credentials                          | What you get                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No auth (`LIVE_AUTH=none`)          | none                                 | Serves a locally mounted content checkout (`LIVE_HOST_CONTENT_DIR`) — or, with App credentials, the App's repositories — to everyone as the local principal (`LIVE_LOCAL_USER`). Local evaluation / trusted single-team network only: no login, no authorization ([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)). |
+| **OIDC + GitHub App** (recommended) | `LIVE_OIDC_*` + App id + private key | Installation enumeration = multi-repo overview, per-(user,repo) authorization via installation tokens, bot-authored release PRs ([ADR 0001](../adr/0001-zero-stored-user-tokens.md)), direct webhooks.                                                                                                                         |
 
-Run on-prem in **GitHub App mode**. There is also a cell mode (extra `TENANT_*`/`CELL_*`
+Run on-prem in **OIDC + GitHub App mode** — `oidc` refuses to start without both. There is also a cell mode (extra `TENANT_*`/`CELL_*`
 variables) used by Miragon's hosted multi-tenant operation
 ([ADR 0002](../adr/0002-multi-tenant-cell-architecture.md)) — leave all of those unset;
 the server then runs standalone.

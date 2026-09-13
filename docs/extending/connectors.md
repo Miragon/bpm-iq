@@ -19,19 +19,15 @@ A complete connector implements the first two; `IssueTracker` enables the todo f
 
 ### `GitProvider` — `apps/live-host/src/ports/git-provider.ts`
 
-Everything a provider does with the user's grant: the OAuth dance (incl. refresh),
-the per-(user,repo) permission gate, the authenticated push URL, PR/MR creation.
-The release flow and the session layer never mention a concrete provider.
+The release half of the seam: what the host does on a git host with the PLATFORM's
+credential once a release is due — the authenticated push URL and PR/MR creation. The
+release flow never mentions a concrete provider. There is no user-credentialed half:
+people sign in at the IdP, and authorization is the connection source's job
+([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)).
 
 ```ts
 export interface GitProvider {
   readonly id: string;
-  readonly label: string;
-  authorizeUrl(redirectUri: string, state: string): string;
-  exchangeCode(code: string, redirectUri: string): Promise<TokenGrant>;
-  refreshGrant?(refreshToken: string): Promise<TokenGrant>;
-  fetchUser(token: string): Promise<GitUser>;
-  checkRepoAccess(token: string, user: GitUser, repo: string): Promise<boolean>;
   pushUrl(token: string, repo: string): string;
   createPullRequest(
     token: string,
@@ -41,21 +37,14 @@ export interface GitProvider {
 }
 ```
 
-| Member                                 | One line                                                                                                                                 |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                   | Provider id used in routes (`/auth/<id>`) and sessions — `"gitlab"`.                                                                     |
-| `label`                                | Human label for the login button.                                                                                                        |
-| `authorizeUrl(redirectUri, state)`     | Full authorize URL the browser is redirected to (state included — the host signs and browser-binds it, you just carry it).               |
-| `exchangeCode(code, redirectUri)`      | Exchange the callback code for the user's `TokenGrant`.                                                                                  |
-| `refreshGrant?(refreshToken)`          | Refresh an expiring grant — **not optional for GitLab**: its OAuth tokens always expire (2h); a provider that drops it strands sessions. |
-| `fetchUser(token)`                     | The authenticated user's identity (`GitUser`: login, name, avatar, provider).                                                            |
-| `checkRepoAccess(token, user, repo)`   | True if the user may WRITE the given repo — the per-(user,repo) entry ticket ("login authenticates, repos authorize").                   |
-| `pushUrl(token, repo)`                 | HTTPS remote URL carrying the user's token, consumed by `git push`.                                                                      |
-| `createPullRequest(token, repo, args)` | Open a pull/merge request AS THE USER on the given repo — GitLab returns the MR's `web_url` + `iid` as `PullRequestRef`.                 |
+| Member                                 | One line                                                                                                                                  |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                   | Provider id — `"gitlab"`; names the release's noreply attribution domain.                                                                 |
+| `pushUrl(token, repo)`                 | HTTPS remote URL carrying the platform credential, consumed by `git push`.                                                                |
+| `createPullRequest(token, repo, args)` | Open a pull/merge request with the platform credential on the given repo — GitLab returns the MR's `web_url` + `iid` as `PullRequestRef`. |
 
-`TokenGrant` carries `accessToken` + optional `refreshToken`/`expiresAt` (epoch ms;
-undefined = non-expiring). Every repo-scoped capability takes the target repo's full
-path per call — the provider represents the CONNECTION to a git host, not a repository.
+Every repo-scoped capability takes the target repo's full path per call — the provider
+represents the CONNECTION to a git host, not a repository.
 
 ### `RepoConnectionSource` — `apps/live-host/src/ports/connection-source.ts`
 
@@ -124,10 +113,11 @@ From the live-host README (GitLab section): the architecture carries GitLab, the
 implementation was **deliberately deferred** — a full GitLab draft exists in git
 history (`08b6c20` era, pre-`TokenGrant`), and the ports already carry its lessons:
 
-- Token login maps 1:1 onto GitLab **personal access tokens**.
+- People sign in at the IdP, not at GitLab ([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)):
+  GitLab is a social connection behind it, and the login claim carries the GitLab
+  username. The connection source holds the platform credential (a group access token)
+  and answers `checkUserPermission` from a member's access level.
 - `createPullRequest` opens a **merge request** — same `PullRequestRef` shape.
-- `TokenGrant.refreshToken`/`expiresAt` exist because GitLab OAuth tokens always
-  expire (2h) — implement `refreshGrant`.
 - Webhook verification is token-compare (`X-Gitlab-Token`), not HMAC — that is why
   `verifyWebhook` owns the whole verdict instead of the HTTP layer assuming a scheme.
 - Known open item: repo RENAMES change the identity key (rooms, lineage PKs,
@@ -138,18 +128,16 @@ history (`08b6c20` era, pre-`TokenGrant`), and the ports already carry its lesso
 
 You never need real credentials (or internet) to develop a connector.
 `apps/live-host/test/stub-provider.ts` is a GitHub-shaped fake of the whole vendor
-surface — OAuth authorize/token, user + permissions, App installations +
-installation tokens, PR creation — plus a `POST /_control` endpoint that flips the
-permission gate, edits the installation directory, and records PR payloads for
-assertions.
+surface — App installations + installation tokens, collaborator permissions, PR
+creation — plus a `POST /_control` endpoint that flips the permission gate, edits the
+installation directory, and records PR payloads for assertions.
 
 `apps/live-host/test/release-e2e.sh` shows the full pattern (run:
 `pnpm --filter @bpmiq/live-host test`):
 
 1. Start the stub (`node test/stub-provider.ts`, port 8399) and seed it via `_control`.
-2. Point the host at it: `GITHUB_BASE_URL`/`GITHUB_API_URL=http://localhost:8399`,
-   `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET=stub`, a throwaway RSA key as the app
-   key (the stub never verifies JWT signatures).
+2. Point the host at it: `GITHUB_BASE_URL`/`GITHUB_API_URL=http://localhost:8399`, a
+   throwaway RSA key as the app key (the stub never verifies JWT signatures).
 3. Replace the network git remotes with local bare repos:
    `LIVE_GIT_URL_OVERRIDE=file://…` (clone/fetch) + `LIVE_PUSH_URL_OVERRIDE=file://….git` (push).
 4. Run the host with `LIVE_AUTH=none`, drive the API without a credential and assert the release gates end to end
@@ -157,7 +145,7 @@ assertions.
    upstream-drift guard, monorepo-shaped `bpmiq.yml` folders).
 
 A GitLab connector gets a sibling `test/stub-gitlab.ts` shaped like GitLab's API and
-its own e2e script on the same skeleton — the whole login → repo-gate → session →
+its own e2e script on the same skeleton — the whole repo-gate → session →
 release path runs fully offline.
 
 ## What a connector PR must include

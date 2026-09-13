@@ -78,7 +78,6 @@ export type McpDeps = OverviewDeps &
   ContentDeps &
   ReleaseDeps &
   RoomPresenceDeps & {
-    providers: Map<string, GitProvider>;
     github: GitProvider;
     /** issue-tracker seam (model-anchored todos) — absent when the platform has
      * no credentials to act on the tracker; the todo tools then do not register */
@@ -1122,7 +1121,7 @@ export function createLiveMcpServer(
           title?: string;
         }) => {
           const r = await requireRepo(repo);
-          const provider = opts.providers.get(session.user.provider) ?? opts.github;
+          const provider = opts.github;
           if (processId) {
             const result = await release(opts, session, provider, r, processId);
             console.log(`released ${r.fullName}#${processId} by @${result.by} via mcp → ${result.pr}`);

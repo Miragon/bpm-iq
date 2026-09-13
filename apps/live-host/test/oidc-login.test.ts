@@ -96,7 +96,6 @@ function boot(cellMode: boolean): { base: string; sessions: SessionStore } {
   const opts: ApiOptions = {
     webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
     publicUrl: "http://live.test",
-    providers: new Map(),
     github: {} as GitProvider,
     sessions,
     registry: { get: () => undefined, list: () => [] } as unknown as ApiOptions["registry"],
@@ -206,8 +205,8 @@ test("full login: code exchange (PKCE verifier sent) → verified token → iden
   const body = (await me.json()) as { user: { login: string; provider: string } };
   assert.equal(body.user.login, "petra");
   assert.equal(body.user.provider, "oidc");
-  // zero stored user token (ADR 0001): the session is identity-only
-  assert.equal(sessions.get(sid)?.providerToken, "");
+  // zero stored user token (ADR 0001, completed by ADR 0007): identity + age, nothing else
+  assert.deepEqual(Object.keys(sessions.get(sid) ?? {}).sort(), ["createdAt", "id", "user"]);
 });
 
 test("state without its browser cookie, missing PKCE cookie, IdP error — all refused", async () => {

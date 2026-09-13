@@ -1,7 +1,7 @@
 /**
  * ONE-TIME VENDOR STEP — the Netlify/GitBook model: the product owner registers
  * ONE central GitHub App; every user of every instance then only ever sees
- * GitHub's two standard screens (Authorize + install picker).
+ * GitHub's install picker — sign-in happens at the identity provider (ADR 0007).
  *
  *   GITHUB_REPO=<owner>/<repo> pnpm --filter @bpmiq/live-host create-app
  *
@@ -37,10 +37,10 @@ const manifest = JSON.stringify({
   name: "BPM Live",
   url: PUBLIC_URL,
   redirect_url: `http://localhost:${PORT}/callback`,
-  callback_urls: [`${PUBLIC_URL}/auth/github/callback`],
   setup_url: `${PUBLIC_URL}/setup/installed`,
   setup_on_update: true,
-  request_oauth_on_install: true,
+  // no user OAuth (ADR 0007): people sign in at the IdP, the App only authorizes
+  request_oauth_on_install: false,
   description: "Live BPM collaboration — releases become pull requests in the name of the releasing user.",
   public: false,
   default_permissions: { contents: "write", pull_requests: "write", issues: "write", metadata: "read" },
@@ -56,7 +56,7 @@ code{background:#f6f8fa;padding:1px 5px;border-radius:4px}</style></head><body><
 <h1><em>BPM</em> Live — create the central GitHub App (one-time)</h1>
 <p>This is the vendor step from the Netlify/GitBook model: <strong>one</strong> app,
 registered in the <strong>${OWNER}</strong> organization. From then on users only ever see
-GitHub's standard screens (sign in + connect repositories).</p>
+GitHub's install picker (connect repositories) — sign-in happens at your identity provider.</p>
 <p>Prerequisite: you are signed in to GitHub as an owner of the org. Name and details can
 still be adjusted on GitHub's page.</p>
 <form action="${GH_BASE}/organizations/${encodeURIComponent(OWNER)}/settings/apps/new?state=${state}" method="post">
@@ -103,8 +103,6 @@ const server = createServer(async (req, res) => {
       ENV_FILE,
       [
         `# BPM Live — central GitHub App (created ${new Date().toISOString().slice(0, 10)} via pnpm create-app)`,
-        `GITHUB_CLIENT_ID=${app.client_id}`,
-        `GITHUB_CLIENT_SECRET=${app.client_secret}`,
         `GITHUB_APP_SLUG=${app.slug}`,
         `GITHUB_APP_ID=${app.id}`,
         `GITHUB_APP_PRIVATE_KEY_B64=${Buffer.from(app.pem).toString("base64")}`,
@@ -117,8 +115,9 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(`<html><body style="font-family:system-ui;padding:40px"><h1 style="color:#1a7f37">✓ App created</h1>
       <p>Credentials were written to <code>apps/live-host/.env</code>.</p>
-      <p><strong>(Re)start the Live Host</strong> (<code>pnpm start</code>) — from then on every user just
-      clicks "Sign in with GitHub".</p><p>Manage the app: <a href="${app.html_url}">${app.html_url}</a></p></body></html>`);
+      <p><strong>(Re)start the Live Host</strong> (<code>pnpm start</code>) with your identity provider configured
+      (<code>LIVE_OIDC_*</code>) — users sign in there; the App connects repositories and authorizes.</p>
+      <p>Manage the app: <a href="${app.html_url}">${app.html_url}</a></p></body></html>`);
     setTimeout(() => process.exit(0), 500);
     return;
   }

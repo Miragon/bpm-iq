@@ -33,7 +33,6 @@ const REPO: ConnectedRepo = {
 const session = (id: string, login = "petra"): Session => ({
   id,
   user: { login, name: login, avatarUrl: null, provider: "github" },
-  providerToken: "",
   createdAt: Date.now(),
 });
 

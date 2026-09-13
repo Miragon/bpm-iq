@@ -10,7 +10,7 @@
  *
  * Each app keeps a thin adapter that pins ITS user-agent (GitHubApi.userAgent
  * is a parameter here — "bpm-control-plane" vs "bpm-live-host") and delegates
- * the wire work to this package. The user-OAuth half lives in ./oauth.ts.
+ * the wire work to this package.
  */
 import { createSign } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
