@@ -187,11 +187,13 @@ conflict guard, and the validation gate.
 ## Other IdPs
 
 Any OIDC provider meeting the table above works — the Live Host side is pure
-configuration. Keycloak maps the login claim with a protocol mapper on the
-brokered GitHub/GitLab identity (no metadata detour needed) and mints the
-audience via a client scope + audience mapper (it does not honor RFC 8707);
-GitLab identities even arrive as standard OIDC claims. A verified Keycloak
-recipe is a welcome contribution.
+configuration. **Keycloak** is the shipped, verified quickstart
+([on-prem/idp-quickstart.md](../on-prem/idp-quickstart.md)): the login claim comes
+from an admin-only user attribute (or, for real users, a mapper on the brokered
+GitHub identity), the audience from an audience mapper minting a fixed value
+(Keycloak does not honor RFC 8707 — set `LIVE_OIDC_AUDIENCE`), and MCP clients use
+the pre-registered public client `bpmiq-mcp`. GitLab identities even arrive as
+standard OIDC claims.
 
 ## When the corporate IdP cannot front MCP: broker topology
 

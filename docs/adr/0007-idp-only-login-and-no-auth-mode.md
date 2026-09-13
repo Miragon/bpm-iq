@@ -1,6 +1,8 @@
 # ADR 0007 — One login: the IdP everywhere, an explicit no-auth mode, GitHub OAuth login and the dev token retired
 
-- **Status:** accepted (2026-09-12) — implementation pending, see Rollout
+- **Status:** accepted (2026-09-12); implemented 2026-09-13 in the three stacked
+  PRs of the Rollout (#175, #176, #177) — the exit criterion is met by
+  `apps/live-host/test/keycloak-e2e.sh` (16/16 against the shipped realm)
 - **Context:** an inventory of every credential the Live Host accepts (verified
   against `main` at c232f7c, 2026-09-12), the product decision to keep ONE
   login, and two months of operating ADR 0005's two-entrance design
@@ -214,4 +216,8 @@ Three stacked PRs on `main`, one major release:
    `.env.example`.
 
 PR 3's end-to-end verification (fresh host, Keycloak realm import, browser
-login, MCP bearer, one release) is the exit criterion for the release.
+login, MCP bearer, one release) is the exit criterion for the release — met
+2026-09-13: `apps/live-host/test/keycloak-e2e.sh` proves the prerequisite
+check, the browser login through Keycloak's form, an MCP bearer at `/api/me`
+and `/mcp`, a release with human attribution, and fail-closed refusal of a
+token without `github_login` at every entrance.

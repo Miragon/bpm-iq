@@ -16,10 +16,15 @@ Companion documents:
 
 - [configuration.md](configuration.md) — the complete environment reference
 - [github-app-setup.md](github-app-setup.md) — registering your GitHub App (do this first)
+- [idp-quickstart.md](idp-quickstart.md) — the login: a ready-made Keycloak realm, and how
+  to bring your own identity provider
 
 ## Prerequisites
 
 - A GitHub organization (or GitHub Enterprise) holding your BPM content repositories.
+- An OIDC identity provider — the one login ([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)).
+  None yet? The compose file ships a Keycloak with a ready realm
+  ([idp-quickstart.md](idp-quickstart.md)); evaluating without any login is `LIVE_AUTH=none`.
 - Docker with the compose plugin.
 - A **public HTTPS URL** for the instance — the OAuth callback and webhook URLs derive from
   `LIVE_PUBLIC_URL`. A localhost evaluation works without one (webhooks simply can't reach
@@ -50,10 +55,10 @@ policy requires a non-root user, run with `user:` and make `/data` writable for 
 
 1. Register your GitHub App — [github-app-setup.md](github-app-setup.md). You come back
    with an app id, slug, private key, and webhook secret.
-2. Connect your identity provider — the `LIVE_OIDC_*` block in
-   [configuration.md](configuration.md#oidc-token-auth-mcp--headless-clients) (IdP-side
-   requirements: [mcp-idp-setup.md](../extending/mcp-idp-setup.md)). Evaluating without an
-   IdP: `LIVE_AUTH=none`, see the operating modes below.
+2. Connect your identity provider — [idp-quickstart.md](idp-quickstart.md): the shipped
+   Keycloak (`docker compose --profile keycloak up -d`) or your own, via the `LIVE_OIDC_*`
+   block in [configuration.md](configuration.md#oidc-token-auth-mcp--headless-clients).
+   Evaluating without an IdP: `LIVE_AUTH=none`, see the operating modes below.
 3. Configure and start:
 
    ```bash
