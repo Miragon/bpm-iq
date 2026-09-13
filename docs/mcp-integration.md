@@ -473,15 +473,15 @@ refuse the save, WARN findings come back as warnings) and land in the live Yjs s
 every open editor sees them instantly, exactly like a keystroke.
 
 **Auth** is the Live Host's one auth surface: a browser session cookie,
-`Authorization: Bearer <session-id>`, the dev token (`LIVE_DEV_TOKEN` — local only), or an
+`Authorization: Bearer <session-id>`, or an
 **OIDC JWT** from your IdP (`LIVE_OIDC_ISSUER` + `LIVE_OIDC_JWKS_URL`; audience defaults
 to `LIVE_PUBLIC_URL`, and the login claim — default `github_login` — must carry the
 IdP-verified GitHub login; see [on-prem/configuration.md](on-prem/configuration.md) and
 the verified IdP recipe in [extending/mcp-idp-setup.md](extending/mcp-idp-setup.md)).
 Per-repo authorization runs app-side against real GitHub permissions on every tool
-call — with one deliberate exception: the dev token bypasses it entirely (that is its
-purpose; local spikes only, never set it in production — see
-[on-prem/configuration.md](on-prem/configuration.md)).
+call. A `LIVE_AUTH=none` host is the one exception: it authenticates nobody and
+authorizes everything — local evaluation only, see
+[on-prem/configuration.md](on-prem/configuration.md).
 `LIVE_MCP_READONLY=1` registers **no** write tools — they are absent from `tools/list`,
 not erroring.
 
@@ -492,11 +492,12 @@ claude mcp add --transport http bpm-live http://localhost:8301/mcp \
   --header "Authorization: Bearer <token>"
 ```
 
-Locally the token is `LIVE_DEV_TOKEN`; in production it is an OIDC access token obtained
+A `LIVE_AUTH=none` host needs no token (drop the header); in production it is an OIDC access token obtained
 via the client's OAuth flow — when OIDC is configured the host publishes RFC-9728
 protected-resource metadata at `/.well-known/oauth-protected-resource`, so clients like
 claude.ai discover the IdP themselves. Manual smoke test:
-`SMOKE_TOKEN=<dev-token> node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]`.
+`node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]` (`SMOKE_TOKEN=<token>` against an
+authenticated host).
 
 Non-MCP clients get the same live content over plain REST:
 `GET/PUT /api/repos/:owner/:repo/content?path=<model path>` — GET returns

@@ -165,6 +165,9 @@ export interface EditorLoginExchangeBody {
 /** GET /api/config */
 export interface AppConfig {
   providers: { id: string; label: string }[];
+  /** the host's authentication mode (ADR 0007): "none" = every request is the
+   *  local principal, nothing to sign in to or out of; "oidc" = a login is required */
+  auth: "none" | "oidc";
   installUrl: string | null;
   /** the MCP endpoint under the server's public URL — what an AI client connects to */
   mcpUrl: string;

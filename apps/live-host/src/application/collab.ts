@@ -23,6 +23,7 @@ import * as Y from "yjs";
 
 import type { LineageStore } from "../adapters/sqlite/lineage-store.ts";
 import type { Session } from "../adapters/sqlite/sessions.ts";
+import { isCrossSite } from "../auth/none.ts";
 import type { DocSizeGuard } from "../domain/doc-size-guard.ts";
 import {
   type ContentConfigLookup,
@@ -49,8 +50,11 @@ export interface CollabDeps {
   workspaces: WorkspaceEnsure;
   /** the repo's content config (bpmiq.yml) — rooms exist only inside its processes folder */
   contentConfig: ContentConfigLookup;
-  /** optional shared token for headless clients (tests, VS Code) — off if unset */
-  devToken: () => string | undefined;
+  /** LIVE_AUTH=none (auth/none.ts, ADR 0007): every ws join IS this principal,
+   * whatever token the client sent — absent = authenticated mode (session id / ticket) */
+  local?: Session["user"];
+  /** the host's public origin — the Origin fallback of none mode's cross-site gate */
+  publicUrl?: string;
   /** repo-qualified document names of live rooms (shared with reconcile + API) */
   liveDocs: Set<string>;
   /** single-use ws tickets minted by the MCP-App widget's mint_ws_ticket tool
@@ -72,7 +76,8 @@ export function makeCollabHooks(deps: CollabDeps) {
     registry,
     workspaces,
     contentConfig,
-    devToken,
+    local,
+    publicUrl,
     liveDocs,
     wsTickets,
   } = deps;
@@ -102,9 +107,22 @@ export function makeCollabHooks(deps: CollabDeps) {
   };
 
   return {
-    async onAuthenticate({ token, documentName }: { token: string; documentName: string }) {
+    async onAuthenticate({
+      token,
+      documentName,
+      requestHeaders,
+    }: {
+      token: string;
+      documentName: string;
+      /** the upgrade request's headers (Hocuspocus hands a WHATWG Headers) */
+      requestHeaders?: { get(name: string): string | null };
+    }) {
       const { repo } = splitRoom(documentName, registry); // reject malformed/unknown rooms first
-      // ws token = session id (issued after the provider's OAuth grant) …
+      // LIVE_AUTH=none: the local principal, whatever token was sent (ADR 0007) —
+      // unless the browser says the page is from another site (auth/none.ts);
+      // such a join can only get in on a widget ticket, below
+      if (local && !isCrossSite((n) => requestHeaders?.get(n), publicUrl)) return { user: local, documentName };
+      // ws token = session id (issued by the login) …
       const session = sessions.get(token);
       if (session) {
         if (!(await access.canWrite(session, repo))) {
@@ -112,16 +130,11 @@ export function makeCollabHooks(deps: CollabDeps) {
         }
         return { user: session.user, documentName };
       }
-      // … or the explicit dev token for headless clients (all-repos semantics) …
-      const dev = devToken();
-      if (dev && token === dev) {
-        return { user: { login: "dev-token", provider: "dev" }, documentName };
-      }
       // … or a single-use widget ticket (room-bound; write access was checked
       // at mint time, seconds ago — see application/ws-tickets.ts)
       const ticketUser = wsTickets?.redeem(token, documentName);
       if (ticketUser) return { user: ticketUser, documentName };
-      throw new Error("invalid session — log in via the web app (git provider OAuth)");
+      throw new Error("invalid session — sign in via the web app");
     },
 
     async onLoadDocument({ document, documentName }: { document: Y.Doc; documentName: string }) {

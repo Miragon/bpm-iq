@@ -72,7 +72,6 @@ function setup(over: { contentRepo?: boolean; maxDocBytes?: number } = {}) {
       registry,
       workspaces,
       contentConfig: loadContentConfig,
-      devToken: () => undefined,
       liveDocs,
     }),
   });

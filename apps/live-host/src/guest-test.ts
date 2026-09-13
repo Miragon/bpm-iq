@@ -19,7 +19,9 @@ import WebSocket from "ws";
 import type * as Y from "yjs";
 
 const URL = process.env.LIVE_URL ?? "ws://localhost:8301";
-const TOKEN = process.env.LIVE_TOKEN ?? "demo";
+// the ws token: a LIVE_AUTH=none host accepts any value; against an
+// authenticated host pass a session id (the wsToken of /api/me after a login)
+const TOKEN = process.env.LIVE_TOKEN ?? "local";
 // room = <owner>/<repo>/<repo-relative-path>; the monorepo's root bpmiq.yml
 // points its processes folder at process-documentation/processes
 const DOC_NAME = "Miragon/bpm-iq/process-documentation/processes/order-to-cash.bpmn";

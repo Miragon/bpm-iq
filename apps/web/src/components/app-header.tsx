@@ -4,10 +4,12 @@ import { Link } from "@tanstack/react-router";
 
 import { MiragonComet } from "@/components/miragon-comet";
 import type { Me } from "@/lib/api";
-import { useLogout } from "@/lib/queries";
+import { useConfig, useLogout } from "@/lib/queries";
 
 export function AppHeader({ me }: { me?: Me }) {
   const logout = useLogout();
+  // a LIVE_AUTH=none host has nothing to sign out of (ADR 0007)
+  const canLogout = useConfig().data?.auth !== "none";
   return (
     <header className="flex items-center gap-3 border-b px-5 py-3">
       <Link to="/" className="flex items-center gap-2.5">
@@ -33,9 +35,11 @@ export function AppHeader({ me }: { me?: Me }) {
             <AvatarFallback>{me.user.login.slice(0, 2).toUpperCase()}</AvatarFallback>
           </Avatar>
           <span className="text-muted-foreground text-sm">@{me.user.login}</span>
-          <Button variant="ghost" size="sm" onClick={() => logout.mutate()}>
-            Logout
-          </Button>
+          {canLogout && (
+            <Button variant="ghost" size="sm" onClick={() => logout.mutate()}>
+              Logout
+            </Button>
+          )}
         </div>
       )}
     </header>

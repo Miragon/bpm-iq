@@ -214,9 +214,8 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
   const live = opts.liveDocs();
   const out: RepoInfo[] = [];
   for (const repo of opts.registry.list()) {
-    // dev sessions (tests, VS Code) see everything; real users per provider check
-    const writable = session.id === "dev" ? true : await opts.access.canWrite(session, repo);
-    if (!writable && session.id !== "dev") {
+    // per-repo permission (a LIVE_AUTH=none host injects an allow-all access)
+    if (!(await opts.access.canWrite(session, repo))) {
       // no access → the repo does not exist for this user (private by default)
       continue;
     }
@@ -257,7 +256,7 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
       defaultBranch: repo.defaultBranch,
       avatarUrl: repo.avatarUrl,
       suspended: repo.suspended,
-      permission: writable ? "write" : "none",
+      permission: "write", // repos without write access were skipped above
       processCount,
       decisionCount,
       dirtyCount,

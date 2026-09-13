@@ -82,7 +82,6 @@ function setup(existing?: { ws: string; db: DatabaseSync }) {
       registry,
       workspaces,
       contentConfig: loadContentConfig,
-      devToken: () => undefined,
       liveDocs: new Set(),
       docCodec,
     }),

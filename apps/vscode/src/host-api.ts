@@ -1,5 +1,5 @@
 /** the Live Host's JSON routes from the extension host — Bearer = the signed-in
- *  session id or the dev token (both are accepted by the REST routes) */
+ *  session id (a LIVE_AUTH=none host needs none — everyone is its local principal) */
 export async function hostJson<T>(
   url: string,
   opts: { token?: string; method?: "GET" | "POST"; body?: unknown } = {},

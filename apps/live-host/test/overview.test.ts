@@ -210,7 +210,7 @@ test("listRepos: a repo whose ONLY change is a decision shows a dirty badge (the
       changedFiles: async () => [],
     },
   };
-  const repos = await listRepos(deps, session("dev", "dev-token"));
+  const repos = await listRepos(deps, session("s1"));
   assert.equal(repos[0]?.dirtyCount, 1, "dirty decisions count — dirtyCount was process-only before #95");
   assert.equal(repos[0]?.processCount, 2, "counts stay discovery-based");
   assert.equal(repos[0]?.decisionCount, 1);
@@ -218,9 +218,9 @@ test("listRepos: a repo whose ONLY change is a decision shows a dirty badge (the
 
 // ── listRepos ───────────────────────────────────────────────────────────────
 
-test("listRepos: dev session sees every repo with write permission + counts", async () => {
+test("listRepos: a session with write access sees every repo with write permission + counts", async () => {
   const { deps } = setup();
-  const repos = await listRepos(deps, session("dev", "dev-token"));
+  const repos = await listRepos(deps, session("s1"));
   assert.equal(repos.length, 1);
   const r = repos[0];
   assert.ok(r);

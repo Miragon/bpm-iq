@@ -19,10 +19,9 @@ code --extensionDevelopmentPath=$PWD/apps/vscode
 
 Settings (`bpmLive.*`):
 
-| Setting     | Default                 | What                                                                                                       |
-| ----------- | ----------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `serverUrl` | `http://localhost:8301` | The Live Host — `http(s)://` or `ws(s)://`, both work.                                                     |
-| `token`     | `demo`                  | Dev token (the host's `LIVE_DEV_TOKEN`) for a local host without a login provider; used until you sign in. |
+| Setting     | Default                 | What                                                   |
+| ----------- | ----------------------- | ------------------------------------------------------ |
+| `serverUrl` | `http://localhost:8301` | The Live Host — `http(s)://` or `ws(s)://`, both work. |
 
 Commands:
 
@@ -67,8 +66,8 @@ and the document is kept clean, because a live document has no unsaved state
 ## Presence
 
 Each open live document announces you (name, avatar, the same color as in
-the web app) in the room's roster; on the dev token you show up as
-`dev-token`.
+the web app) in the room's roster; on a `LIVE_AUTH=none` host you show up as
+its local principal (`LIVE_LOCAL_USER`) — no sign-in needed there.
 
 ## Limits
 
@@ -84,5 +83,5 @@ the web app) in the room's roster; on the dev token you show up as
 - `pnpm --filter bpm-live test` — unit tests of the sign-in and picker helpers.
 - `pnpm --filter bpm-live test:e2e` — a real VS Code (downloaded once) with
   the Miragon modeler, against a running Live Host on `localhost:8301` with
-  `LIVE_DEV_TOKEN=demo`; asserts the picker's data path, content sync both
+  `LIVE_AUTH=none`; asserts the picker's data path, content sync both
   ways, presence and the custom editor.

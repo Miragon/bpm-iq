@@ -133,8 +133,9 @@ Today the OAuth callback denies login entirely without write access to _the_ rep
   refresh tokens — `exchangeCode` discards `refresh_token`/`expires_in` today while
   sessions live 12 h. Store + proactively refresh (or consciously disable expiry in
   app settings and document it).
-- The dev token would grant headless write to **every** connected repo — scope it
-  (repo allowlist) or restrict to single-tenant/dev mode.
+- ~~The dev token would grant headless write to **every** connected repo~~ — retired
+  ([ADR 0007](adr/0007-idp-only-login-and-no-auth-mode.md)): an unauthenticated host is
+  now an explicit `LIVE_AUTH=none` decision, never a default.
 
 ### F. Repo-scoped API + the overview screen
 

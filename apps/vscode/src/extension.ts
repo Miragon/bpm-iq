@@ -8,9 +8,9 @@
  *
  * Identity: the editor sign-in (auth.ts) — the Live Host's own provider / OIDC
  * login, bounced back through this extension's URI handler; the session id it
- * yields is the ws token AND the REST bearer. Without a sign-in the dev-token
- * setting applies (local spike mode). Presence: every live document announces
- * the signed-in person (or the dev-token identity) in the room's roster.
+ * yields is the ws token AND the REST bearer. A LIVE_AUTH=none host needs no
+ * sign-in (everyone is its local principal). Presence: every live document
+ * announces the identity the host reports in the room's roster.
  *
  * Sync (the M1 layer, live-binding.ts): an OPEN document is bound two-way to
  * its room — local changes go into the shared Y.Text at once as minimal diffs
@@ -20,7 +20,7 @@
  * same minimal diff, a no-op once bound.
  */
 import type { PresenceUser } from "@bpmiq/contracts/live";
-import type { ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { Me, ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { type LiveSession, openLiveSession } from "@bpmiq/live-client";
 import { updateText } from "@bpmiq/live-client/text";
 import * as vscode from "vscode";
@@ -49,7 +49,7 @@ interface LiveDeps {
   wsUrl(): string;
   token(): Promise<string>;
   presence(): Promise<PresenceUser>;
-  /** the host refused our credential (expired session, wrong dev token) */
+  /** the host refused our credential (expired session, or not signed in to an authenticated host) */
   onAuthFailed(room: string, reason: string): void;
 }
 
@@ -207,7 +207,7 @@ function toFsError(err: unknown): vscode.FileSystemError {
 export function activate(context: vscode.ExtensionContext): void {
   const config = () => vscode.workspace.getConfiguration("bpmLive");
   const serverUrl = () => config().get<string>("serverUrl") ?? "http://localhost:8301";
-  const auth = new LiveAuth(context, serverUrl, () => config().get<string>("token") ?? "demo");
+  const auth = new LiveAuth(context, serverUrl);
 
   const fsProvider = new LiveFileSystem({
     wsUrl: () => hostUrls(serverUrl()).ws,
@@ -223,17 +223,29 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
-  const renderStatus = () => {
-    const me = auth.me();
-    const host = hostUrls(serverUrl()).http;
+  const paint = (host: string, me: Me["user"] | undefined) => {
     status.text = me ? `$(account) BPM Live: @${me.login}` : "$(account) BPM Live: sign in";
-    status.tooltip = me
-      ? `Signed in to ${host} as ${me.name || me.login}`
-      : `Sign in to the Live Host at ${host} (the dev token applies until then)`;
+    status.tooltip = !me
+      ? `Sign in to the Live Host at ${host}`
+      : me.provider === "local"
+        ? `${host} runs without authentication — you are @${me.login}`
+        : `Signed in to ${host} as ${me.name || me.login}`;
     status.command = me ? "bpmLive.open" : "bpmLive.login";
     status.show();
   };
-  renderStatus();
+  /** the identity the HOST reports for our credential: the signed-in person,
+   *  a none-mode host's local principal, or nobody (→ offer the sign-in).
+   *  Paints the stored identity at once, then what the host says — the latest
+   *  call wins; a slow answer for an earlier host is dropped. */
+  let renderSeq = 0;
+  const renderStatus = async () => {
+    const seq = ++renderSeq;
+    const host = hostUrls(serverUrl()).http;
+    paint(host, auth.me());
+    const me = await auth.identity();
+    if (seq === renderSeq) paint(host, me);
+  };
+  void renderStatus();
   /** (re)connect every open live document — at activation (a restored window)
    *  and after a credential change, so open editors move to the new identity */
   const rebindOpen = () => {
@@ -245,9 +257,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     auth,
     status,
-    auth.onDidChange(renderStatus),
+    auth.onDidChange(() => void renderStatus()),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("bpmLive")) renderStatus();
+      if (e.affectsConfiguration("bpmLive")) void renderStatus();
     }),
     vscode.workspace.registerFileSystemProvider(SCHEME, fsProvider, { isCaseSensitive: true }),
     { dispose: () => fsProvider.dispose() },

@@ -147,12 +147,15 @@ is independent of the provider handshake.
 
 ### Headless clients & offline demos
 
-- `LIVE_DEV_TOKEN=<token>` grants a bot session for tests and the VS Code extension's local
-  mode (a signed-in person uses the editor sign-in instead: `?editor=` on the login routes +
-  `POST /auth/exchange`, `src/http/editor-login.ts`, `apps/vscode/README.md`). With no provider configured, it defaults to `demo`
-  (local spike mode); once a provider is configured it is **off unless set explicitly**.
-  It is also accepted as Bearer auth on `POST /mcp` and the content routes.
-- **OIDC bearer JWTs** join the dev token: with `LIVE_OIDC_ISSUER` + `LIVE_OIDC_JWKS_URL`
+- `LIVE_AUTH=none` runs the host **without authentication**
+  ([ADR 0007](../../docs/adr/0007-idp-only-login-and-no-auth-mode.md)): every request, ws
+  join and MCP call is the local principal (`LIVE_LOCAL_USER`, else the OS user), every
+  registered repository is writable, nothing to sign in to. Tests, the guest script and the
+  VS Code extension's local mode run on it (a signed-in person uses the editor sign-in
+  instead: `?editor=` on the login routes + `POST /auth/exchange`, `src/http/editor-login.ts`,
+  `apps/vscode/README.md`). It replaced the dev token (`LIVE_DEV_TOKEN` is refused at
+  startup) and is never inferred: an `oidc`-mode host without a login refuses to start.
+- **OIDC bearer JWTs**: with `LIVE_OIDC_ISSUER` + `LIVE_OIDC_JWKS_URL`
   configured, `Authorization: Bearer <IdP JWT>` (audience-bound; the login claim must
   carry the IdP-verified GitHub login) authenticates `/mcp` and the REST routes — per-repo
   authorization still runs app-side via `checkUserPermission`. Caveat: for a JWT session
@@ -197,13 +200,13 @@ Prerequisites: Node ≥ 23.6, pnpm.
 pnpm install                     # monorepo root
 
 # Terminal 1 — the Live Host (HTTP + WebSocket on http://localhost:8301)
-pnpm live-host
+LIVE_AUTH=none pnpm live-host   # local evaluation: no login (ADR 0007)
 
 # Terminal 2 — automated exit-criterion test (two headless guests)
 pnpm --filter @bpmiq/live-host test:sync
 
-# MCP smoke test against the running host (needs LIVE_DEV_TOKEN on the server)
-SMOKE_TOKEN=<dev-token> node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]
+# MCP smoke test against the running host (LIVE_AUTH=none: no token; else SMOKE_TOKEN=<token>)
+node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]
 
 # Web client (dev server with hot reload; the Live Host serves the built app)
 pnpm web:dev                     # http://localhost:5173

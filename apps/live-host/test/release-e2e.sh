@@ -73,10 +73,9 @@ sleep 1
 curl -s -X POST -d '{"repos":["acme/bpm-processes","acme/monorepo"]}' "http://localhost:$STUB_PORT/_control" >/dev/null
 
 start_host() { # $1=repo $2=data-dir $3=port — sets HOST_PID
-  PORT="$3" LIVE_DATA_DIR="$2" LIVE_DEV_TOKEN=demo \
+  PORT="$3" LIVE_DATA_DIR="$2" LIVE_AUTH=none LIVE_LOCAL_USER=petra \
   GITHUB_REPO="$1" LIVE_HOST_CONTENT_DIR="$E2E/empty" \
   GITHUB_BASE_URL="http://localhost:$STUB_PORT" GITHUB_API_URL="http://localhost:$STUB_PORT" \
-  GITHUB_CLIENT_ID=stub GITHUB_CLIENT_SECRET=stub \
   LIVE_GIT_URL_OVERRIDE="file://$E2E/origin" \
   LIVE_PUSH_URL_OVERRIDE="file://$E2E/origin/$1.git" \
   node "$REPO_ROOT/apps/live-host/src/server.ts" >"$E2E/host-$3.log" 2>&1 &
@@ -84,13 +83,13 @@ start_host() { # $1=repo $2=data-dir $3=port — sets HOST_PID
   PIDS+=($HOST_PID)
 }
 release() { # $1=port $2=repo $3=id
-  curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" "http://localhost:$1/api/repos/$2/release/$3"
+  curl -s --max-time 60 -X POST "http://localhost:$1/api/repos/$2/release/$3"
 }
 
 # ═══ Case A: plain content repo ═══
 start_host "acme/bpm-processes" "$E2E/data1" "$PORT_A"
 sleep 2.5
-curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes" >/dev/null
+curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes" >/dev/null
 sleep 1
 WS1="$E2E/data1/workspaces/acme/bpm-processes"
 [ -d "$WS1/.git" ] && ok "A: workspace cloned" || bad "A: workspace not cloned"
@@ -119,7 +118,7 @@ BRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/two-p
 git -C "$E2E/origin/acme/bpm-processes.git" show --stat "$BRANCH" | grep -q "processes/two-pool/two-pool.bpmn" && ok "A3: diff touches the process file" || bad "A3: wrong paths in release commit"
 # the commit is ATTRIBUTED to the human (git author), not the bot
 AUTHOR=$(git -C "$E2E/origin/acme/bpm-processes.git" show -s --format='%an' "$BRANCH")
-[ "$AUTHOR" = "dev-token" ] && ok "A3: commit authored by the releasing user (attribution)" || bad "A3: unexpected commit author '$AUTHOR'"
+[ "$AUTHOR" = "petra" ] && ok "A3: commit authored by the releasing user (attribution)" || bad "A3: unexpected commit author '$AUTHOR'"
 git -C "$E2E/origin/acme/bpm-processes.git" show -s --format='%b' "$BRANCH" | grep -q "Co-authored-by:" && ok "A3: Co-authored-by trailer present" || bad "A3: no Co-authored-by trailer"
 
 FOREIGN="$E2E/foreign"
@@ -134,7 +133,7 @@ echo "$R" | grep -q "upstream geändert" && ok "A4: upstream guard blocks silent
 # ═══ Case B: monorepo-shaped repo ═══
 start_host "acme/monorepo" "$E2E/data2" "$PORT_B"
 sleep 2.5
-PROCS=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_B/api/repos/acme/monorepo/processes")
+PROCS=$(curl -s --max-time 60 "http://localhost:$PORT_B/api/repos/acme/monorepo/processes")
 echo "$PROCS" | grep -q "two-pool" && ok "B: monorepo processes listed (bpmiq.yml folder honored)" || bad "B: monorepo listing failed: $PROCS"
 echo "$PROCS" | grep -q '"bpmn": *"process-documentation/processes/two-pool/two-pool.bpmn"' && ok "B: process paths are repo-relative" || bad "B: unexpected process paths: $PROCS"
 WS2="$E2E/data2/workspaces/acme/monorepo"
@@ -147,58 +146,58 @@ echo "$STAT" | grep -q "process-documentation/processes/two-pool" && ok "B: PR p
 echo "$STAT" | grep -qE "^ processes/" && bad "B: bogus top-level processes/ in PR" || ok "B: no bogus top-level processes/"
 
 # ═══ Case C: model-anchored todos (HTTP route → adapter → stub issue tracker) ═══
-T=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+T=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"title":"Verify credit rule","body":"Threshold looks stale.","anchor":{"process":"two-pool","elements":[{"id":"Task_SendOffer","name":"Send offer"}]}}' \
   "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos")
 echo "$T" | grep -q '"id": *"1"' && ok "C: todo created via HTTP (tracker issue #1)" || bad "C: todo create failed: $T"
-echo "$T" | grep -q '"author": *"dev-token"' && ok "C: author attributed from the session" || bad "C: wrong author: $T"
-L=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos?process=two-pool")
+echo "$T" | grep -q '"author": *"petra"' && ok "C: author attributed from the session" || bad "C: wrong author: $T"
+L=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos?process=two-pool")
 echo "$L" | grep -q '"process": *"two-pool"' && ok "C: todo listed with parsed anchor (process filter)" || bad "C: todo list failed: $L"
-CLOSE=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" \
+CLOSE=$(curl -s --max-time 60 -X POST \
   "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos/1/close")
 echo "$CLOSE" | grep -q '"ok": *true' && ok "C: todo closed via HTTP" || bad "C: todo close failed: $CLOSE"
-L2=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos")
+L2=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos")
 echo "$L2" | grep -q '"id": *"1"' && bad "C: closed todo still listed: $L2" || ok "C: closed todo gone from the open list"
-BADREQ=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -d '{"title":"  "}' \
+BADREQ=$(curl -s --max-time 60 -X POST -d '{"title":"  "}' \
   "http://localhost:$PORT_A/api/repos/acme/bpm-processes/todos")
 echo "$BADREQ" | grep -q "title must be" && ok "C: blank title rejected (400)" || bad "C: expected title validation, got: $BADREQ"
 
 # ═══ Case D: folder + process creation (repo view create endpoints) ═══
-F=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+F=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"path":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
 echo "$F" | grep -q '"path": *"onboarding"' && ok "D: folder created" || bad "D: folder create failed: $F"
-FL=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
+FL=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
 echo "$FL" | grep -q '"onboarding"' && ok "D: EMPTY folder listed (survives before its first process)" || bad "D: folder missing from list: $FL"
-FDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+FDUP=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"path":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
 echo "$FDUP" | grep -q "already exists" && ok "D: duplicate folder is a 409" || bad "D: expected 409, got: $FDUP"
-FBAD=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+FBAD=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"path":"../escape"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/folders")
 echo "$FBAD" | grep -q "invalid folder" && ok "D: traversal in the folder path refused (400)" || bad "D: expected 400, got: $FBAD"
 
-P=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+P=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"name":"Employee Onboarding","folder":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
 echo "$P" | grep -q '"id": *"employee-onboarding"' && ok "D: process created (title slugged to the id)" || bad "D: process create failed: $P"
 echo "$P" | grep -q '"folder": *"onboarding"' && ok "D: created row carries its folder" || bad "D: folder field wrong: $P"
 [ -f "$WS1/processes/onboarding/employee-onboarding.bpmn" ] && ok "D: template written into the workspace" || bad "D: file not in workspace"
-PROCS=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
+PROCS=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
 echo "$PROCS" | grep -q '"bpmn": *"processes/onboarding/employee-onboarding.bpmn"' && ok "D: new process in the listing" || bad "D: not listed: $PROCS"
 # untracked files must count as dirty (changedPaths includes ls-files --others)
 echo "$PROCS" | grep -q '"folder": *"onboarding", *"dirty": *true' && ok "D: brand-new (untracked) process is dirty" || bad "D: expected dirty:true for the new process: $PROCS"
-PDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+PDUP=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"name":"Employee Onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/processes")
 echo "$PDUP" | grep -q "already exists" && ok "D: duplicate id refused repo-wide (409)" || bad "D: expected 409, got: $PDUP"
 
 # decisions: the .dmn sibling of the process create endpoint
-DEC=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+DEC=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"name":"Travel Approval","folder":"onboarding"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
 echo "$DEC" | grep -q '"id": *"travel-approval"' && ok "D: decision created (title slugged to the id)" || bad "D: decision create failed: $DEC"
 [ -f "$WS1/processes/onboarding/travel-approval.dmn" ] && ok "D: dmn template written into the workspace" || bad "D: dmn file not in workspace"
 grep -q '<decisionTable' "$WS1/processes/onboarding/travel-approval.dmn" && ok "D: dmn template holds a decision table" || bad "D: dmn template malformed"
-DECS=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
+DECS=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
 echo "$DECS" | grep -q '"path": *"processes/onboarding/travel-approval.dmn"' && ok "D: new decision in the listing" || bad "D: decision not listed: $DECS"
 echo "$DECS" | grep -q '"dirty": *true' && ok "D: brand-new (untracked) decision is dirty" || bad "D: expected dirty:true for the new decision: $DECS"
-DDUP=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+DDUP=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"name":"Travel Approval"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/decisions")
 echo "$DDUP" | grep -q "already exists" && ok "D: duplicate decision id refused repo-wide (409)" || bad "D: expected 409, got: $DDUP"
 
@@ -209,31 +208,31 @@ BRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/emplo
 git -C "$E2E/origin/acme/bpm-processes.git" show --stat "$BRANCH" | grep -q "processes/onboarding/employee-onboarding.bpmn" && ok "D: release ships the new file" || bad "D: new file missing from release commit"
 
 # ═══ Case E: file-selection release (GET /changes + POST /release) ═══
-CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+CH=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
 echo "$CH" | grep -q '"path": *"processes/onboarding/travel-approval.dmn"' && ok "E: changes lists the new decision" || bad "E: changes wrong: $CH"
 echo "$CH" | grep -q '"status": *"added"' && ok "E: untracked files report status added" || bad "E: no added status: $CH"
 
 # a modified + a deleted file join the pool
 printf '<!-- release-e2e tweak -->\n' >> "$WS1/processes/order-to-cash/order-to-cash.bpmn"
 rm "$WS1/processes/order-to-cash/decisions/credit-check.dmn"
-CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+CH=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
 echo "$CH" | grep -q '"path": *"processes/order-to-cash/order-to-cash.bpmn", *"status": *"modified"' && ok "E: tracked edit reports modified" || bad "E: no modified status: $CH"
 echo "$CH" | grep -q '"path": *"processes/order-to-cash/decisions/credit-check.dmn", *"status": *"deleted"' && ok "E: workspace delete reports deleted" || bad "E: no deleted status: $CH"
 
 # gates: empty selection 400, unchanged file 409
-R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":[]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q "at least one" && ok "E: empty selection refused (400)" || bad "E: expected 400, got: $R"
-R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":["bpmiq.yml"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q "not changed" && ok "E: unchanged file refused (409)" || bad "E: expected not-changed, got: $R"
 # a file that moved UPSTREAM is in the pool but the guard must block it
-R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":["processes/two-pool/two-pool.bpmn"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q "upstream geändert" && ok "E: upstream guard blocks per selected file" || bad "E: expected upstream guard, got: $R"
 
 # release a SELECTION: the new dmn + the deletion, NOT the modified bpmn
-R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":["processes/onboarding/travel-approval.dmn","processes/order-to-cash/decisions/credit-check.dmn"],"title":"Decision cleanup"}' \
   "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q '"pr"' && ok "E: file selection released → PR" || bad "E: selection release failed: $R"
@@ -246,18 +245,18 @@ echo "$ESHIP" | grep -q "order-to-cash.bpmn" && bad "E: UNSELECTED file leaked i
 
 # non-ASCII filenames must survive the git listing un-quoted (core.quotepath)
 printf '<definitions/>' > "$WS1/processes/onboarding/prüfung.dmn"
-CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+CH=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
 echo "$CH" | grep -q '"path": *"processes/onboarding/prüfung.dmn"' && ok "E: umlaut filename listed un-quoted" || bad "E: quoted/mangled path: $CH"
-R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":["processes/onboarding/prüfung.dmn"],"title":"Umlaut check"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q '"pr"' && ok "E: umlaut filename releases" || bad "E: umlaut release failed: $R"
 
 # the pool is confined to the bpmiq.yml content scope — checkout files outside
 # the processes folder never appear and never release
 printf 'operator scratch\n' > "$WS1/NOTES.md"
-CH=$(curl -s --max-time 60 -H "Authorization: Bearer demo" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+CH=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
 echo "$CH" | grep -q "NOTES.md" && bad "E: out-of-scope file leaked into the pool: $CH" || ok "E: out-of-scope file stays out of the pool"
-R=$(curl -s --max-time 60 -X POST -H "Authorization: Bearer demo" -H "Content-Type: application/json" \
+R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":["NOTES.md"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q "not changed" && ok "E: out-of-scope file refused (409)" || bad "E: expected not-changed for out-of-scope, got: $R"
 

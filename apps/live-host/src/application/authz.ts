@@ -7,7 +7,8 @@
  *
  * Deliberately NOT the WebSocket entrance (collab.ts): its lookup is the
  * room-based splitRoom (longest registry prefix, canonical casing, suspension)
- * with its own dev-token branch — only the denial WORDING is shared there.
+ * — only the denial WORDING is shared there. A LIVE_AUTH=none host needs no
+ * branch here either: its injected `access` allows everything (auth/none.ts).
  */
 import { AppError } from "@bpmiq/http-kit";
 
@@ -30,7 +31,7 @@ export async function authorizeRepo(deps: AuthzDeps, session: Session, fullName:
   if (!repo) {
     throw new AppError("repo/not-connected", notConnectedMessage(fullName), { status: 404, expose: true });
   }
-  if (session.id !== "dev" && !(await deps.access.canWrite(session, repo))) {
+  if (!(await deps.access.canWrite(session, repo))) {
     throw new AppError("repo/no-write-access", noWriteAccessMessage(session.user.login, repo.fullName), {
       status: 403,
       expose: true,

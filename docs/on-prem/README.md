@@ -78,11 +78,11 @@ docker run -d --name bpmiq -p 8080:8080 -v bpmiq-data:/data \
 The server wires itself from the credentials it finds ([configuration.md](configuration.md)
 has every variable):
 
-| Mode                         | Credentials                                 | What you get                                                                                                                                                                                           |
-| ---------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Bare spike                   | none                                        | Serves a locally mounted content checkout (`LIVE_HOST_CONTENT_DIR`), dev token `demo`. Local evaluation only — no login, no authorization.                                                             |
-| OAuth-only                   | `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET` | GitHub login + the single static `GITHUB_REPO`.                                                                                                                                                        |
-| **GitHub App** (recommended) | App id + private key (+ OAuth creds)        | Installation enumeration = multi-repo overview, per-(user,repo) authorization via installation tokens, bot-authored release PRs ([ADR 0001](../adr/0001-zero-stored-user-tokens.md)), direct webhooks. |
+| Mode                         | Credentials                                 | What you get                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No auth (`LIVE_AUTH=none`)   | none                                        | Serves a locally mounted content checkout (`LIVE_HOST_CONTENT_DIR`) — or, with App credentials, the App's repositories — to everyone as the local principal (`LIVE_LOCAL_USER`). Local evaluation / trusted single-team network only: no login, no authorization ([ADR 0007](../adr/0007-idp-only-login-and-no-auth-mode.md)). |
+| OAuth-only                   | `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET` | GitHub login + the single static `GITHUB_REPO`.                                                                                                                                                                                                                                                                                |
+| **GitHub App** (recommended) | App id + private key (+ OAuth creds)        | Installation enumeration = multi-repo overview, per-(user,repo) authorization via installation tokens, bot-authored release PRs ([ADR 0001](../adr/0001-zero-stored-user-tokens.md)), direct webhooks.                                                                                                                         |
 
 Run on-prem in **GitHub App mode**. There is also a cell mode (extra `TENANT_*`/`CELL_*`
 variables) used by Miragon's hosted multi-tenant operation
@@ -101,9 +101,9 @@ claude mcp add --transport http bpm-live https://<your-host>/mcp \
 
 The token: in production, an OIDC access token from your identity provider — set the
 `LIVE_OIDC_*` variables
-([configuration.md](configuration.md#oidc-token-auth-mcp--headless-clients)); for a local
-evaluation, `LIVE_DEV_TOKEN` works. Set `LIVE_MCP_READONLY=1` to serve the read tools
-only. Tool list and semantics: [docs/mcp-integration.md](../mcp-integration.md).
+([configuration.md](configuration.md#oidc-token-auth-mcp--headless-clients)); a
+`LIVE_AUTH=none` host needs no token at all (drop the header). Set `LIVE_MCP_READONLY=1`
+to serve the read tools only. Tool list and semantics: [docs/mcp-integration.md](../mcp-integration.md).
 
 ## Reverse proxy / TLS
 

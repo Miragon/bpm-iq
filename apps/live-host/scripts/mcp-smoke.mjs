@@ -1,7 +1,9 @@
 // Manual end-to-end smoke client for the Live Host's /mcp endpoint.
-// Requires a running Live Host with a dev token:
-//   LIVE_DEV_TOKEN=smoke-dev-token pnpm live-host
-//   SMOKE_TOKEN=smoke-dev-token node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]
+// Requires a running Live Host — unauthenticated (no token needed):
+//   LIVE_AUTH=none pnpm live-host
+//   node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]
+// or authenticated, with an OIDC access token / session id:
+//   SMOKE_TOKEN=<token> node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]
 // Uses the official MCP SDK (resolved via node_modules) over Streamable HTTP.
 // Reads + no-op saves only — never create_process/release_process (a release
 // would open a REAL GitHub PR).
@@ -10,17 +12,14 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 
 const MCP_URL = process.argv[2] ?? "http://localhost:8301/mcp";
 const REPO = process.argv[3] ?? "Miragon/bpm-iq";
-const TOKEN = process.env.SMOKE_TOKEN ?? process.env.LIVE_DEV_TOKEN;
-if (!TOKEN) {
-  console.error("set SMOKE_TOKEN (or LIVE_DEV_TOKEN) to the Live Host's dev token — /mcp always authenticates");
-  process.exit(2);
-}
+/** absent = the host runs LIVE_AUTH=none (an authenticated host answers 401) */
+const TOKEN = process.env.SMOKE_TOKEN;
 
 const out = (label, v) => console.log(`\n### ${label}\n` + (typeof v === "string" ? v : JSON.stringify(v, null, 2)));
 const parsed = (r) => (r?.content?.[0]?.text ? JSON.parse(r.content[0].text) : r);
 
 const transport = new StreamableHTTPClientTransport(new URL(MCP_URL), {
-  requestInit: { headers: { authorization: `Bearer ${TOKEN}` } },
+  requestInit: { headers: TOKEN ? { authorization: `Bearer ${TOKEN}` } : {} },
 });
 const client = new Client({ name: "live-host-mcp-smoke", version: "0.0.0" });
 await client.connect(transport);
