@@ -11,9 +11,10 @@ time, release as a pull request, and let AI agents query every process.
   `.vc.json`, `.yaml`, `.md`) syncs as a shared Y.Text document; the web client and VS Code bind their editors to
   it. Login authenticates, **repos authorize**: what you see and edit follows your git write
   permission.
-- **Release as PR** — one click cuts a branch from `origin/<default>`, pushes **as the
-  user**, and opens the PR in their name. Merge = approval — governance stays at the git
-  provider (CODEOWNERS / branch protection), not in the tool.
+- **Release as PR** — one click cuts a branch from `origin/<default>`, pushes and opens
+  the PR — bot-authored, with **you as the commit author**, so you can approve your own
+  release. Merge = approval — governance stays at the git provider (CODEOWNERS / branch
+  protection), not in the tool.
 - **Processes talk** — the MCP server answers questions live from the content repo, agents
   read and edit work-in-progress models through the Live Host's own `/mcp` endpoint, the AI
   skill layer (capture, import, review, feedback, export …) travels with it, and
@@ -22,26 +23,26 @@ time, release as a pull request, and let AI agents query every process.
 
 ## Run it in 5 minutes
 
-Evaluation mode — one container, no git provider, a dev token:
+Evaluation mode — one container, no login (`LIVE_AUTH=none`: everyone is the local user):
 
 ```bash
-docker run --rm -p 8301:8080 -e LIVE_DEV_TOKEN=demo ghcr.io/miragon/bpmiq-live-host:latest
+docker run --rm -p 8301:8080 -e LIVE_AUTH=none ghcr.io/miragon/bpmiq-live-host:latest
 ```
 
-The server is up at http://localhost:8301 (`/healthz` answers). The browser login needs a
-GitHub app (the 10-minute path: [docs/on-prem/](docs/on-prem/)); the dev token `demo` drives
-the headless clients right away — the VS Code extension (`bpmLive.serverUrl` =
-`ws://localhost:8301`, `bpmLive.token` = `demo`) and `pnpm --filter @bpmiq/live-host
-test:sync`. `LIVE_DEV_TOKEN` is dev-only: it switches itself off as soon as a login provider
-is configured.
+The server is up at http://localhost:8301 (`/healthz` answers): the web app, the VS Code
+extension (`bpmLive.serverUrl` = `ws://localhost:8301`, no sign-in needed) and
+`pnpm --filter @bpmiq/live-host test:sync` all work right away. A real login is your OIDC
+identity provider plus a GitHub App for authorization — the 15-minute path ships a
+Keycloak: [docs/on-prem/idp-quickstart.md](docs/on-prem/idp-quickstart.md).
 
 From source (Node >= 23.6 — TypeScript runs directly via type stripping, no build step):
 
 ```bash
 pnpm install                     # pnpm, never npm/yarn (workspace: protocol)
 pnpm --filter @bpmiq/web build  # the Live Host serves apps/web/dist
-pnpm live-host                   # sync + API + web app on http://localhost:8301
-#   GitHub login (one-time vendor step): GITHUB_REPO=<owner>/<repo> pnpm --filter @bpmiq/live-host create-app
+LIVE_AUTH=none pnpm live-host    # sync + API + web app on http://localhost:8301, no login
+#   with a login: the IdP quickstart (docs/on-prem/idp-quickstart.md) + your GitHub App
+#   (one-time vendor step): GITHUB_REPO=<owner>/<repo> pnpm --filter @bpmiq/live-host create-app
 ```
 
 More entry points: `pnpm web:dev` (web client with hot reload, proxies to the Live Host),
@@ -52,31 +53,30 @@ More entry points: `pnpm web:dev` (web client with hot reload, proxies to the Li
 through order-to-cash"_ or _"What should we automate first?"_.
 
 To reach the **live, write-capable** endpoint of the running host instead, point a client at
-`/mcp` with the dev token as bearer:
+`/mcp` — on a `LIVE_AUTH=none` host no credential is needed:
 
 ```bash
-claude mcp add --transport http bpm-live http://localhost:8301/mcp \
-  --header "Authorization: Bearer demo"
+claude mcp add --transport http bpm-live http://localhost:8301/mcp
 ```
 
-Claude Desktop's custom-connector dialog carries no static headers (it expects OAuth), so
-bridge it in `claude_desktop_config.json` — the `${AUTH}` indirection is deliberate, Desktop
-splits args on whitespace:
+Claude Desktop's custom-connector dialog expects OAuth, so bridge a no-auth host in
+`claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "bpm-live": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:8301/mcp", "--header", "Authorization:${AUTH}"],
-      "env": { "AUTH": "Bearer demo" }
+      "args": ["-y", "mcp-remote", "http://localhost:8301/mcp"]
     }
   }
 }
 ```
 
-Restart Desktop fully (Cmd+Q) afterwards. In production the bearer is an OIDC access token
-the client fetches itself — see [docs/mcp-integration.md](docs/mcp-integration.md).
+Restart Desktop fully (Cmd+Q) afterwards. Against a real deployment the client fetches an
+OIDC access token itself — Claude Code: `claude mcp add --transport http bpm-live
+https://<host>/mcp --client-id bpmiq-mcp --callback-port 8765` with the quickstart realm —
+see [docs/mcp-integration.md](docs/mcp-integration.md).
 
 ## What's in this repo
 

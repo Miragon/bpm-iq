@@ -54,7 +54,8 @@ localhost). The running server always receives webhooks at `/webhook/github`.
 ## OIDC — token auth (MCP & headless) + browser SSO
 
 Connects the Live Host to your identity provider (Keycloak, Entra ID, WorkOS, Auth0, … —
-GitHub as a social connection behind it), for two things on ONE identity contract:
+GitHub as a social connection behind it), for two things on ONE identity contract. No IdP
+yet? [idp-quickstart.md](idp-quickstart.md) ships a Keycloak realm with these values filled in.
 
 1. **Token auth**: MCP clients and other headless callers authenticate with an
    audience-bound JWT. The Live Host only **verifies** tokens (a resource server); it
