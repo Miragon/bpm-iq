@@ -1,5 +1,24 @@
 # Changelog
 
+## [4.0.0](https://github.com/Miragon/bpm-iq/compare/v3.10.0...v4.0.0) (2026-09-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **live-host:** GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET are ignored and /auth/github is gone — the browser login is the OIDC IdP (LIVE_OIDC_*), which LIVE_AUTH=oidc now requires together with a GitHub App connection; a bearer-only host (no LIVE_OIDC_CLIENT_ID) no longer starts.
+* **live-host,web,vscode:** LIVE_DEV_TOKEN is refused at startup (use LIVE_AUTH=none); a host without any configured login no longer starts in an implicit no-auth mode — set LIVE_AUTH=none explicitly, or configure the OIDC login. VS Code: the bpmLive.token setting is gone.
+
+### Features
+
+* agent presence — MCP clients show up in the roster and on the canvas ([#167](https://github.com/Miragon/bpm-iq/issues/167)) ([250cf85](https://github.com/Miragon/bpm-iq/commit/250cf857389ce86746b3df88cd841122860fdf7f))
+* **deploy,docs:** the Keycloak identity-provider quickstart, verified end to end (ADR 0007, step 3) ([#177](https://github.com/Miragon/bpm-iq/issues/177)) ([75621c6](https://github.com/Miragon/bpm-iq/commit/75621c6f95e3a714fb3ab1c1cbb1ac0c2c8358ac))
+* **live-host,vscode,contracts:** editor sign-in and presence for the VS Code extension ([#170](https://github.com/Miragon/bpm-iq/issues/170)) ([4f244ac](https://github.com/Miragon/bpm-iq/commit/4f244ac7bfc11c31079e6f209fb1cdf670090884))
+* **live-host,web,vscode:** LIVE_AUTH=none replaces the dev token (ADR 0007, step 1) ([#175](https://github.com/Miragon/bpm-iq/issues/175)) ([a0551e5](https://github.com/Miragon/bpm-iq/commit/a0551e598d76dfdfbb269a57fe231f43eef16c02))
+* **live-host:** the IdP is the one login — GitHub OAuth login and stored user tokens retired (ADR 0007, step 2) ([#176](https://github.com/Miragon/bpm-iq/issues/176)) ([953a0a8](https://github.com/Miragon/bpm-iq/commit/953a0a8cfb57f3ea279ef68b4621b4bb7b611a45))
+* **vscode:** bind open documents two-way to their room — the M1 sync layer ([#172](https://github.com/Miragon/bpm-iq/issues/172)) ([fd3e688](https://github.com/Miragon/bpm-iq/commit/fd3e688f77111dd5984dd8637931970975b3d46b))
+* **vscode:** identity from the host, and sign-in with a pasted session token ([#173](https://github.com/Miragon/bpm-iq/issues/173)) ([5fc779c](https://github.com/Miragon/bpm-iq/commit/5fc779cf2a1a78c8a6c6995520545e394f968280))
+* **vscode:** pick the model to open from the host's repositories and models ([#171](https://github.com/Miragon/bpm-iq/issues/171)) ([ce43962](https://github.com/Miragon/bpm-iq/commit/ce43962ed6bc063222e3e60b453c7614d5ccad27))
+
 ## [3.10.0](https://github.com/Miragon/bpm-iq/compare/v3.9.0...v3.10.0) (2026-09-07)
 
 
