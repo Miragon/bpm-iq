@@ -127,9 +127,11 @@ Today the OAuth callback denies login entirely without write access to _the_ rep
   `onAuthenticate` derive the repo from the route/room and check permission, cached
   per session+repo (invalidated by installation webhooks). `#/denied` dies as a global
   route; "no access" becomes a per-repo state (hidden/read-only card).
-- `GitProvider` interface change (ripples into github.ts + stub): `checkRepoAccess`,
-  `pushUrl`, `createPullRequest` take the repo per call; new app-level capability
-  (installations listing) lives beside it, since it is app- not user-credentialed.
+- `GitProvider` interface change (ripples into github.ts + stub): `pushUrl` and
+  `createPullRequest` take the repo per call; the app-level capabilities (installations
+  listing, per-user permission) live beside it in `RepoConnectionSource`, since they are
+  app- not user-credentialed (`checkRepoAccess`, the user-token check, is gone —
+  [ADR 0007](adr/0007-idp-only-login-and-no-auth-mode.md)).
 - ~~**Expiring user tokens**: store + proactively refresh~~ — moot since
   [ADR 0007](adr/0007-idp-only-login-and-no-auth-mode.md): no user token is obtained or
   stored; sessions are identity-only, authorization runs on installation tokens.

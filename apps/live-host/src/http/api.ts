@@ -109,6 +109,7 @@ import {
 import { syncRepo } from "../application/sync.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
+import { isCrossSite } from "../auth/none.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
 import type { IssueTracker } from "../ports/issue-tracker.ts";
@@ -264,8 +265,11 @@ export function startApi(port: number, opts: ApiOptions): Server {
   const secure = opts.publicUrl.startsWith("https");
 
   const sessionOf = async (req: IncomingMessage): Promise<Session | undefined> => {
-    // LIVE_AUTH=none: everyone is the local principal (ADR 0007)
-    if (opts.local) return opts.local;
+    // LIVE_AUTH=none: everyone is the local principal (ADR 0007) — except a
+    // browser request from another site, which is nobody (auth/none.ts)
+    if (opts.local) {
+      return isCrossSite((n) => req.headers[n] as string | undefined, opts.publicUrl) ? undefined : opts.local;
+    }
     const sid = readCookie(req.headers.cookie, COOKIE);
     const fromCookie = opts.sessions.get(sid);
     if (fromCookie) return fromCookie;
@@ -438,6 +442,19 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // GitHub redirects here after (re)installation of the central app.
       // requestSync() coalesces (single-flight + 10s min interval), so an
       // anonymous flood of this endpoint can't amplify into GitHub API calls.
+      // pre-0007 GitHub Apps still carry the retired login's callback URL and
+      // "request user authorization during installation": GitHub then sends
+      // installers here with the setup parameters — land them like a post-install
+      // (never exchanging the code, never minting a session); anything else at
+      // this URL is told where the login went
+      if (url.pathname === "/auth/github/callback") {
+        if (url.searchParams.has("installation_id") || url.searchParams.has("setup_action")) {
+          return redirect(res, "/setup/installed");
+        }
+        return send(res, 410, {
+          error: "the GitHub login was retired (ADR 0007) — sign in at the identity provider: /auth/oidc",
+        });
+      }
       if (url.pathname === "/setup/installed") {
         await opts.registry
           .requestSync()

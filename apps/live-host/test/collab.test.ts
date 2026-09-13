@@ -88,6 +88,29 @@ test("onAuthenticate: an unknown token is invalid; LIVE_AUTH=none makes every jo
     () => none.hooks.onAuthenticate({ token: "anything", documentName: "stranger/repo/x.bpmn" }),
     /not a connected repository/,
   );
+  // a browser page from another site is NOT the local principal — the join is
+  // refused like an unknown token, unless it carries a widget ticket
+  const crossSite = new Headers({ "sec-fetch-site": "cross-site", origin: "https://evil.example" });
+  await assert.rejects(
+    () => none.hooks.onAuthenticate({ token: "anything", documentName: ROOM, requestHeaders: crossSite }),
+    /invalid session/,
+  );
+  const ticketed = setup({
+    local,
+    wsTickets: { redeem: (t) => (t === "ticket-1" ? { login: "widget-user", provider: "oidc" } : undefined) },
+  });
+  const viaTicket = await ticketed.hooks.onAuthenticate({
+    token: "ticket-1",
+    documentName: ROOM,
+    requestHeaders: crossSite,
+  });
+  assert.equal(viaTicket.user.login, "widget-user", "the MCP-App iframe still gets in on its ticket");
+  const sameOrigin = await none.hooks.onAuthenticate({
+    token: "anything",
+    documentName: ROOM,
+    requestHeaders: new Headers({ "sec-fetch-site": "same-origin" }),
+  });
+  assert.equal(sameOrigin.user.login, "dominik");
 });
 
 // ── onLoadDocument: restore vs seed ─────────────────────────────────────────

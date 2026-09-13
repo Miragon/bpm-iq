@@ -45,6 +45,9 @@ test("upgrade: a pre-0007 sessions table loses its grant columns in place, its r
     null,
   );
   const store = new SessionStore(db, "any-secret");
+  assert.deepEqual(columns(db).length, 6, "constructing the store touches nothing — the boot gates run first");
+  assert.equal(store.get("legacy-1")?.user.login, "petra", "reads work before the migration (explicit columns)");
+  store.migrate();
   assert.deepEqual(columns(db), ["created_at", "id", "user"], "the credential columns are gone from disk");
   const s = store.get("legacy-1");
   assert.equal(s?.user.login, "petra", "the person stays signed in across the upgrade");

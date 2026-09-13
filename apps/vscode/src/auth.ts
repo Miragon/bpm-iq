@@ -30,8 +30,9 @@ export class LiveAuth implements vscode.Disposable {
   private readonly serverUrl: () => string;
   /** the sign-in waiting for its browser callback (one at a time) */
   private pending: { state: string; resolve: (code: string) => void } | undefined;
-  /** the host's /api/me answer for the credential it was fetched with */
-  private identityCache: { token: string; user: Me["user"] } | undefined;
+  /** the host's /api/me answer for the credential it was fetched with — keyed
+   *  by host too: the not-signed-in placeholder is the same token everywhere */
+  private identityCache: { host: string; token: string; user: Me["user"] } | undefined;
   private readonly changed = new vscode.EventEmitter<void>();
   /** fires after a sign-in or sign-out */
   readonly onDidChange = this.changed.event;
@@ -60,10 +61,11 @@ export class LiveAuth implements vscode.Disposable {
    *  principal; the stored identity when the host cannot be asked */
   async identity(): Promise<Me["user"] | undefined> {
     const token = await this.token();
-    if (this.identityCache?.token === token) return this.identityCache.user;
+    const host = hostUrls(this.serverUrl()).http;
+    if (this.identityCache?.host === host && this.identityCache.token === token) return this.identityCache.user;
     try {
-      const me = await hostJson<Me>(`${hostUrls(this.serverUrl()).http}/api/me`, { token });
-      this.identityCache = { token, user: me.user };
+      const me = await hostJson<Me>(`${host}/api/me`, { token });
+      this.identityCache = { host, token, user: me.user };
       return me.user;
     } catch {
       return this.me();
@@ -97,7 +99,7 @@ export class LiveAuth implements vscode.Disposable {
   private async remember(token: string, user: Me["user"]): Promise<void> {
     await this.context.secrets.store(this.key("session"), token);
     await this.context.globalState.update(this.key("me"), user);
-    this.identityCache = { token, user };
+    this.identityCache = { host: hostUrls(this.serverUrl()).http, token, user };
     this.changed.fire();
   }
 

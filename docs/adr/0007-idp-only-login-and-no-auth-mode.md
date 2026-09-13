@@ -144,11 +144,25 @@ host kept it for the zero-prerequisite quickstart.
 
 ## Consequences
 
-- **One identity contract, one authorization path.** `sessionOf` and
-  `onAuthenticate` resolve through one principal resolver with two
-  implementations (`auth/none.ts`, `auth/oidc.ts`). A future trusted-proxy
-  mode (`X-Forwarded-User` behind oauth2-proxy) would be a third
-  implementation behind the same seam — deferred until a customer asks.
+- **One identity contract, one authorization path.** The two entrances
+  (`sessionOf` for HTTP, `onAuthenticate` for the websocket) short-circuit on
+  the injected local principal (`auth/none.ts`) and otherwise run the OIDC
+  contract (`auth/oidc.ts`). A future trusted-proxy mode (`X-Forwarded-User`
+  behind oauth2-proxy) would be a third source of the principal behind the
+  same two seams — deferred until a customer asks.
+- **`none` mode is gated against the browser's other tabs.** A none-mode host
+  on a developer's machine is reachable from every page that browser visits,
+  so a request a browser labels as coming from another site (Fetch Metadata
+  `Sec-Fetch-Site: cross-site`, or an `Origin` that is not the host's) is
+  nobody, not the local principal — at the REST routes, `/mcp` and the
+  websocket join (a widget ticket still lets the MCP-App iframe in). Non-browser
+  clients send neither header and are unaffected; same-site pages (another
+  port of the same host) are allowed on purpose.
+- **`none` mode has one identity — literally.** Every human and every agent
+  is the same login, so what keys on the login collapses: room presence marks
+  every peer as `you`, and agent-presence leases (one per room and login)
+  merge concurrent MCP clients into one marker. Inherent to the mode, not a
+  defect to fix; a team that needs told-apart people runs `oidc`.
 - **The on-prem quickstart changes hands.** Today: register a GitHub App,
   paste five values, sign in with GitHub. Tomorrow: the same App **plus** an
   IdP that issues `github_login`. The only documented recipe is WorkOS

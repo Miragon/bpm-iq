@@ -267,7 +267,7 @@ const access = NO_AUTH ? allowAllAccess : new AccessCache(connectionSource);
 // come together; audience defaults to this host's public URL (RFC 8707).
 const OIDC_ISSUER = process.env.LIVE_OIDC_ISSUER;
 const OIDC_JWKS_URL = process.env.LIVE_OIDC_JWKS_URL;
-if (Boolean(OIDC_ISSUER) !== Boolean(OIDC_JWKS_URL)) {
+if (!NO_AUTH && Boolean(OIDC_ISSUER) !== Boolean(OIDC_JWKS_URL)) {
   throw new Error("LIVE_OIDC_ISSUER and LIVE_OIDC_JWKS_URL must be set together");
 }
 // scopes advertised in the PRM (scopes_supported) and the 401 challenge; the
@@ -308,11 +308,8 @@ const oidc =
 // access token is verified by exactly that verifier (incl. the cell tenant gate).
 const OIDC_CLIENT_ID = process.env.LIVE_OIDC_CLIENT_ID;
 const oidcLogin = ((): ReturnType<typeof makeOidcLogin> | undefined => {
-  if (!OIDC_CLIENT_ID || NO_AUTH) return undefined;
-  if (!oidc) {
-    console.log("LIVE_OIDC_CLIENT_ID set but LIVE_OIDC_ISSUER/JWKS_URL missing — browser SSO DISABLED");
-    return undefined;
-  }
+  // a client id without the verifier is caught by the oidc-mode gate below
+  if (!OIDC_CLIENT_ID || NO_AUTH || !oidc) return undefined;
   return makeOidcLogin({
     issuer: OIDC_ISSUER!,
     clientId: OIDC_CLIENT_ID,
@@ -341,6 +338,10 @@ if (!NO_AUTH && !connectionSource?.checkUserPermission) {
       "per-repo authorization runs on installation tokens (ADR 0001) — an identity-only session can write nothing without it",
   );
 }
+// every boot gate has passed — only now touch the database irreversibly: a
+// boot refused above leaves live.db as the previous image left it, so a
+// rollback keeps working
+sessions.migrate();
 const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
 
 // single-use ws tickets for the MCP-App widget's live connection — minted by
@@ -364,6 +365,7 @@ const server = new Server({
     workspaces,
     contentConfig: loadContentConfig,
     local: local?.user,
+    publicUrl: PUBLIC_URL,
     liveDocs,
     wsTickets,
   }),
@@ -483,6 +485,9 @@ void (async () => {
   // seed the registry from the connection source (local app key OR remote mint)
   if (connectionSource?.canEnumerate) {
     await registry.sync().catch((e) => console.log(`registry sync failed: ${(e as Error).message}`));
+    // the sync may have given the static fallback repo its installation — a
+    // denial cached against the not-yet-synced row must not outlive it
+    access.invalidate();
   }
   console.log("──────────────────────────────────────────────────");
   console.log(

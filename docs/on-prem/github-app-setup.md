@@ -102,9 +102,19 @@ redirect (`/setup/installed`) triggers the same sync when a user connects a repo
 workspace checkouts fetch upstream on access (at most every 60 s) — so a localhost
 evaluation without a reachable webhook still works.
 
+## Upgrading an App registered before 4.0
+
+Apps created by the pre-4.0 `create-app` (or the old manual table) carry the retired
+GitHub login: a callback URL `…/auth/github/callback` and **Request user authorization
+(OAuth) during installation** checked. Nothing breaks — the Live Host still lands
+installers arriving at that URL as a post-install (sync + redirect, never a login) — but
+tidy it up: uncheck the setting, clear the callback URL, and delete `GITHUB_CLIENT_ID` /
+`GITHUB_CLIENT_SECRET` from the deployment (the server logs a reminder while they are
+set). The client secret itself can be revoked in the app settings; nothing reads it.
+
 ## Key rotation and loss
 
 GitHub returns the private key and webhook secret only at creation time. If either is lost
-or must be rotated: app settings → generate a new private key / webhook secret / client
-secret, update the deployment's `.env`, restart. Old private keys keep working until
-revoked, so rotation is zero-downtime.
+or must be rotated: app settings → generate a new private key / webhook secret, update the
+deployment's `.env`, restart. Old private keys keep working until revoked, so rotation is
+zero-downtime.
