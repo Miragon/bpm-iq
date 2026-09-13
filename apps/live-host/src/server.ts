@@ -308,11 +308,8 @@ const oidc =
 // access token is verified by exactly that verifier (incl. the cell tenant gate).
 const OIDC_CLIENT_ID = process.env.LIVE_OIDC_CLIENT_ID;
 const oidcLogin = ((): ReturnType<typeof makeOidcLogin> | undefined => {
-  if (!OIDC_CLIENT_ID || NO_AUTH) return undefined;
-  if (!oidc) {
-    console.log("LIVE_OIDC_CLIENT_ID set but LIVE_OIDC_ISSUER/JWKS_URL missing — browser SSO DISABLED");
-    return undefined;
-  }
+  // a client id without the verifier is caught by the oidc-mode gate below
+  if (!OIDC_CLIENT_ID || NO_AUTH || !oidc) return undefined;
   return makeOidcLogin({
     issuer: OIDC_ISSUER!,
     clientId: OIDC_CLIENT_ID,
@@ -341,6 +338,10 @@ if (!NO_AUTH && !connectionSource?.checkUserPermission) {
       "per-repo authorization runs on installation tokens (ADR 0001) — an identity-only session can write nothing without it",
   );
 }
+// every boot gate has passed — only now touch the database irreversibly: a
+// boot refused above leaves live.db as the previous image left it, so a
+// rollback keeps working
+sessions.migrate();
 const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
 
 // single-use ws tickets for the MCP-App widget's live connection — minted by

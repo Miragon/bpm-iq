@@ -442,6 +442,19 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // GitHub redirects here after (re)installation of the central app.
       // requestSync() coalesces (single-flight + 10s min interval), so an
       // anonymous flood of this endpoint can't amplify into GitHub API calls.
+      // pre-0007 GitHub Apps still carry the retired login's callback URL and
+      // "request user authorization during installation": GitHub then sends
+      // installers here with the setup parameters — land them like a post-install
+      // (never exchanging the code, never minting a session); anything else at
+      // this URL is told where the login went
+      if (url.pathname === "/auth/github/callback") {
+        if (url.searchParams.has("installation_id") || url.searchParams.has("setup_action")) {
+          return redirect(res, "/setup/installed");
+        }
+        return send(res, 410, {
+          error: "the GitHub login was retired (ADR 0007) — sign in at the identity provider: /auth/oidc",
+        });
+      }
       if (url.pathname === "/setup/installed") {
         await opts.registry
           .requestSync()

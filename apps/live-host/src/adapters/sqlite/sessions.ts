@@ -43,15 +43,26 @@ export class SessionStore {
       user TEXT NOT NULL,
       created_at INTEGER NOT NULL
     )`);
-    // pre-ADR-0007 databases carry the stored-grant columns (provider_token NOT
-    // NULL, refresh_token, token_expires_at): drop them in place — the rows
-    // (identity + age) stay valid, nobody is signed out by the upgrade, and the
-    // credentials they held are gone from disk for good
+  }
+
+  /**
+   * Upgrade a pre-ADR-0007 database in place: drop the stored-grant columns
+   * (provider_token NOT NULL, refresh_token, token_expires_at). The rows
+   * (identity + age) stay valid — nobody is signed out by the upgrade — and the
+   * credentials they held are gone from disk for good. Irreversible, hence a
+   * separate step: server.ts runs it only after every boot gate has passed, so
+   * a refused boot (wrong env) leaves the database exactly as the previous
+   * image left it. Reads work either way (explicit columns); `create` needs it.
+   */
+  migrate(): void {
     const cols = new Set(
-      (db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>).map((c) => c.name),
+      (this.db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>).map((c) => c.name),
     );
     for (const legacy of ["provider_token", "refresh_token", "token_expires_at"]) {
-      if (cols.has(legacy)) db.exec(`ALTER TABLE sessions DROP COLUMN ${legacy}`);
+      if (cols.has(legacy)) {
+        this.db.exec(`ALTER TABLE sessions DROP COLUMN ${legacy}`);
+        console.log(`sessions: dropped the pre-0007 column ${legacy} (no credential is stored any more)`);
+      }
     }
   }
 

@@ -166,4 +166,12 @@ test("without a configured IdP the login routes are a 404, not the SPA — and t
   }
   const config = (await (await fetch(`${bare}/api/config`)).json()) as { providers: unknown[] };
   assert.deepEqual(config.providers, [], "the retired GitHub login is not offered either");
+  // a pre-0007 App still bounces installers to the old callback: land them as a
+  // post-install; a plain visit learns where the login went
+  const install = await manual("/auth/github/callback?code=x&installation_id=1&setup_action=install", {}, bare);
+  assert.equal(install.status, 302);
+  assert.equal(install.headers.get("location"), "/setup/installed");
+  const stale = await manual("/auth/github/callback?code=x&state=y", {}, bare);
+  assert.equal(stale.status, 410);
+  assert.match(((await stale.json()) as { error: string }).error, /\/auth\/oidc/);
 });
