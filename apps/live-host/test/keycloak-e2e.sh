@@ -60,9 +60,15 @@ PIDS+=($!)
 curl -sf --retry 20 --retry-delay 1 --retry-all-errors -o /dev/null "http://localhost:$STUB_PORT/app"
 curl -s -X POST -d '{"repos":["acme/bpm-processes"]}' "http://localhost:$STUB_PORT/_control" >/dev/null
 
-# the quickstart's Live Host environment (docs/on-prem/idp-quickstart.md) plus the stub wiring
+# The Live Host's environment: the quickstart's values (docs/on-prem/idp-quickstart.md)
+# plus the stub wiring. `exec` so a backgrounded call IS the node process ($!
+# kills it — a plain function call would leave an orphan behind). The blanks
+# neutralise whatever a developer's apps/live-host/.env carries (server.ts
+# loads it without overriding set variables); "$@" wins over them.
 host() {
-  env PORT=8301 LIVE_PUBLIC_URL="$HOST" LIVE_DATA_DIR="$E2E/data" \
+  exec env PORT=8301 LIVE_PUBLIC_URL="$HOST" LIVE_DATA_DIR="$E2E/data" \
+    LIVE_OIDC_ISSUER= LIVE_OIDC_JWKS_URL= LIVE_OIDC_CLIENT_ID= LIVE_OIDC_AUDIENCE= LIVE_DEV_TOKEN= \
+    GITHUB_CLIENT_ID= GITHUB_CLIENT_SECRET= \
     GITHUB_REPO=acme/bpm-processes LIVE_HOST_CONTENT_DIR="$E2E/empty" \
     GITHUB_BASE_URL="http://localhost:$STUB_PORT" GITHUB_API_URL="http://localhost:$STUB_PORT" \
     GITHUB_APP_ID=4711 GITHUB_APP_PRIVATE_KEY_FILE="$E2E/app.pem" GITHUB_APP_SLUG=bpm-live-stub \
@@ -71,9 +77,16 @@ host() {
 }
 OIDC=(LIVE_AUTH=oidc LIVE_OIDC_ISSUER="$ISSUER" LIVE_OIDC_JWKS_URL="$ISSUER/protocol/openid-connect/certs"
       LIVE_OIDC_AUDIENCE=bpmiq LIVE_OIDC_CLIENT_ID=bpmiq-web LIVE_OIDC_LOGIN_LABEL=Keycloak)
+# the flow helpers print the credential on stdout; stderr goes to a log that a
+# failure shows (Node's own warnings must never end up inside a cookie)
+flow() { node "$HERE/keycloak-flows.ts" "$@" 2>>"$E2E/flows.log"; }
 
 # ═══ K1: prerequisites ═══
-host LIVE_AUTH=oidc >"$E2E/host-noidp.log" 2>&1
+# in a subshell (host execs), bounded — a host that unexpectedly starts must not hang the run
+( host LIVE_AUTH=oidc ) >"$E2E/host-noidp.log" 2>&1 &
+NOIDP=$!
+( sleep 20; kill "$NOIDP" 2>/dev/null ) &
+wait "$NOIDP" 2>/dev/null
 grep -q 'LIVE_AUTH=oidc needs LIVE_OIDC_ISSUER' "$E2E/host-noidp.log" \
   && ok "K1: oidc mode without an IdP refuses to start, naming the variables" \
   || bad "K1: expected the prerequisite error, got: $(tail -3 "$E2E/host-noidp.log")"
@@ -89,10 +102,10 @@ ANON=$(curl -s -o /dev/null -w '%{http_code}' "$HOST/api/me")
 [ "$ANON" = 401 ] && ok "K1c: anonymous is 401" || bad "K1c: anonymous → $ANON"
 
 # ═══ K2: browser login ═══
-if SID=$(node "$HERE/keycloak-flows.ts" login "$HOST" petra petra 2>&1); then
+if SID=$(flow login "$HOST" petra petra); then
   ok "K2: /auth/oidc → Keycloak login form → callback → session cookie"
 else
-  bad "K2: browser login failed: $SID"; SID=""
+  bad "K2: browser login failed: $(tail -1 "$E2E/flows.log")"; SID=""
 fi
 ME=$(curl -s -H "cookie: bpm_live_sid=$SID" "$HOST/api/me")
 echo "$ME" | grep -q '"login": *"petra"' && echo "$ME" | grep -q '"provider": *"oidc"' \
@@ -102,10 +115,10 @@ echo "$REPOS" | grep -q '"fullName": *"acme/bpm-processes"' && echo "$REPOS" | g
   && ok "K2c: the overview shows the writable repo (app-side permission check)" || bad "K2c: $REPOS"
 
 # ═══ K3: MCP bearer ═══
-if TOKEN=$(node "$HERE/keycloak-flows.ts" token "$ISSUER" bpmiq-mcp http://localhost:8765/callback petra petra 2>&1); then
+if TOKEN=$(flow token "$ISSUER" bpmiq-mcp http://localhost:8765/callback petra petra); then
   ok "K3: code+PKCE on the bpmiq-mcp client yields an access token"
 else
-  bad "K3: $TOKEN"; TOKEN=""
+  bad "K3: $(tail -1 "$E2E/flows.log")"; TOKEN=""
 fi
 MEB=$(curl -s -H "Authorization: Bearer $TOKEN" "$HOST/api/me")
 echo "$MEB" | grep -q '"login": *"petra"' && ok "K3b: the bearer identifies petra at the REST routes" || bad "K3b: $MEB"
@@ -128,16 +141,19 @@ AUTHOR=$(git -C "$E2E/origin/acme/bpm-processes.git" show -s --format='%an <%ae>
   && ok "K4c: commit authored by the human (IdP name, GitHub noreply address)" || bad "K4c: author '$AUTHOR'"
 
 # ═══ K5: fail closed without the login claim ═══
-NTOKEN=$(node "$HERE/keycloak-flows.ts" token "$ISSUER" bpmiq-mcp http://localhost:8765/callback nobody nobody 2>&1) || bad "K5: token flow for nobody: $NTOKEN"
+NTOKEN=$(flow token "$ISSUER" bpmiq-mcp http://localhost:8765/callback nobody nobody) || bad "K5: token flow for nobody: $(tail -1 "$E2E/flows.log")"
 NME=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $NTOKEN" "$HOST/api/me")
 echo "$NME" | grep -q 'github_login' && [ "$(echo "$NME" | tail -1)" = 401 ] \
   && ok "K5: a token without github_login is refused (401, names the claim)" || bad "K5: $NME"
 NMCP=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $NTOKEN" -H "content-type: application/json" -d '{}' "$HOST/mcp")
 [ "$NMCP" = 401 ] && ok "K5b: …and at /mcp" || bad "K5b: /mcp → $NMCP"
-NLOGIN=$(node "$HERE/keycloak-flows.ts" login "$HOST" nobody nobody 2>&1)
+NLOGIN=$(node "$HERE/keycloak-flows.ts" login "$HOST" nobody nobody 2>&1 >/dev/null)
 echo "$NLOGIN" | grep -q 'callback → HTTP 401' && ok "K5c: the browser login refuses nobody at the callback" || bad "K5c: $NLOGIN"
 
 echo
 echo "── $PASS passed, $FAIL failed ──"
-if [ "$FAIL" -ne 0 ]; then echo "── host log (tail) ──"; tail -30 "$E2E/host.log"; fi
+if [ "$FAIL" -ne 0 ]; then
+  echo "── flow helper stderr ──"; cat "$E2E/flows.log" 2>/dev/null
+  echo "── host log (tail) ──"; tail -30 "$E2E/host.log"
+fi
 [ "$FAIL" -eq 0 ]

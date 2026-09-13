@@ -12,7 +12,8 @@ services:
     image: ghcr.io/miragon/bpmiq-live-host:${BPMIQ_VERSION:-latest}
     env_file:
       - path: .env
-        required: false # `--profile keycloak up keycloak` must work without one
+        required: false # `--profile keycloak up -d keycloak` must work before one exists;
+        # without a .env the Live Host itself refuses to boot (no login configured) — write it first
     ports:
       # host 8301 → container 8080 (the image pins PORT=8080; HTTP + ws share it)
       - "8301:8080"

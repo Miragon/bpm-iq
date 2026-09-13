@@ -52,12 +52,15 @@ LIVE_OIDC_LOGIN_LABEL=Keycloak \
 pnpm live-host            # plus GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY_FILE / GITHUB_APP_SLUG
 ```
 
-Both in containers (`docker compose --profile keycloak up -d`): the same values, except that
-the Live Host reaches Keycloak over the compose network — JWKS and the token endpoint via
-`http://keycloak:8080`, while the issuer and the authorize URL stay what the browser sees.
-`.env.example` carries exactly this block (`LIVE_OIDC_JWKS_URL`, `LIVE_OIDC_TOKEN_URL`,
-`LIVE_OIDC_AUTHORIZE_URL`); `KC_HOSTNAME` is pinned in the compose file so a token minted
-over the container network carries the same issuer.
+Both in containers: write `deploy/.env` first — `LIVE_PUBLIC_URL=http://localhost:8301`
+(the realm's redirect URI is exactly that; the template's `https://bpm.example.com`
+placeholder would be refused by Keycloak), the GitHub App values, and the OIDC block from
+`.env.example` uncommented as is — then `docker compose --profile keycloak up -d`. The
+block differs from the source-run values in one respect: the Live Host reaches Keycloak
+over the compose network, so JWKS and the token endpoint go via `http://keycloak:8080`
+(`LIVE_OIDC_JWKS_URL`, `LIVE_OIDC_TOKEN_URL`), while the issuer and the authorize URL
+(`LIVE_OIDC_AUTHORIZE_URL`) stay what the browser sees. `KC_HOSTNAME` is pinned in the
+compose file so a token minted over the container network carries the same issuer.
 
 ## 3. Sign in
 

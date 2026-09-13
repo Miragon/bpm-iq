@@ -55,11 +55,13 @@ policy requires a non-root user, run with `user:` and make `/data` writable for 
 
 1. Register your GitHub App — [github-app-setup.md](github-app-setup.md). You come back
    with an app id, slug, private key, and webhook secret.
-2. Connect your identity provider — [idp-quickstart.md](idp-quickstart.md): the shipped
-   Keycloak (`docker compose --profile keycloak up -d`) or your own, via the `LIVE_OIDC_*`
-   block in [configuration.md](configuration.md#oidc-token-auth-mcp--headless-clients).
+2. Decide on the identity provider — [idp-quickstart.md](idp-quickstart.md): the shipped
+   Keycloak (a compose profile, its `LIVE_OIDC_*` values are in `.env.example`) or your
+   own, via the `LIVE_OIDC_*` block in
+   [configuration.md](configuration.md#oidc-token-auth-mcp--headless-clients).
    Evaluating without an IdP: `LIVE_AUTH=none`, see the operating modes below.
-3. Configure and start:
+3. Configure, then start (the Live Host refuses to boot without its login configured —
+   write `.env` before the first `up`; `--profile keycloak` adds the shipped Keycloak):
 
    ```bash
    cd deploy
