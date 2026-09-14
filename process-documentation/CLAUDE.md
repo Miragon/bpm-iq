@@ -6,19 +6,29 @@ of truth — ground every answer in them.** It is served by the
 
 ## The contract (slim)
 
-- A root **`bpmiq.yml`** names the processes folder (`processes: processes`).
-- Every `.bpmn` under it is a **process**; its id is the file name without the
-  extension. There is NO `process.yaml` — the process view (name, roles from
-  lanes, steps, flow, sub-process calls) is derived from the BPMN.
+- A root **`bpmiq.yml`** names the models folder (`processes: processes`).
+- Every file with a notation extension under it is a **model** — `.bpmn` a
+  process, `.dmn` a decision; its id is the file name without the extension.
+  There is NO `process.yaml` — the process view (name, roles from lanes, steps,
+  flow, sub-process calls) is derived from the BPMN.
 - Sub-processes are separate `.bpmn` files, called via `callActivity`
-  `calledElement="<process-id>"`.
+  `calledElement="<process-id>"`; decisions are `.dmn` files called from a
+  `businessRuleTask` via `calledDecision="<decision-id>"`, with their cases in
+  `<decision>.tests.yaml` next to them.
 
 ```
 bpmiq.yml
 processes/
-  order-to-cash.bpmn
+  order-to-cash.bpmn              the process
+  order-to-cash.storm             same id, other notation — one model, two views
+  credit-limit-check.dmn          called by order-to-cash
+  credit-limit-check.tests.yaml   its cases (pnpm validate runs them)
   subprocesses/invoice-handling.bpmn
 ```
+
+File names are ids: kebab-case, English, descriptive — and `calledElement` /
+`calledDecision` point at them, so a rename is a rename of every reference too.
+Never leave scratch models (`test1.bpmn`, `des.dmn`) in the folder.
 
 ## Skills — prefer them over ad-hoc approaches
 

@@ -1,4 +1,4 @@
-title Order Checkout
+title Order to Cash
 actor Customer [80, 300]
 command Place Order [240, 300]
 aggregate Order [420, 290] (id agg_order)

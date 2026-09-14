@@ -6,15 +6,15 @@ MCP server and validator run against.
 
 ## The contract
 
-A content repo is a root **`bpmiq.yml`** naming the folder its BPMN processes
-live in:
+A content repo is a root **`bpmiq.yml`** naming the folder its models live in:
 
 ```yaml
 processes: processes
 ```
 
-- Every `.bpmn` file under that folder (subfolders included) is a **process**.
-- A process's **id** is its file name without the extension
+- Every file with a known notation extension under that folder (subfolders
+  included) is a **model** — `.bpmn` a process, `.dmn` a decision.
+- A model's **id** is its file name without the extension
   (`processes/order-to-cash.bpmn` → `order-to-cash`).
 - There is no hand-written metadata: the process view (name, roles from lanes,
   steps, flow, sub-process calls) is **derived from the BPMN on the fly**
@@ -23,10 +23,30 @@ processes: processes
 ```
 bpmiq.yml
 processes/
-  order-to-cash.bpmn
+  order-to-cash.bpmn              ← the process
+  order-to-cash.storm             ← same id, other notation: the event-storming session behind it
+  credit-limit-check.dmn          ← called by order-to-cash (businessRuleTask calledDecision)
+  credit-limit-check.tests.yaml   ← its test cases, run by `pnpm validate`
   subprocesses/
-    invoice-handling.bpmn   ← called by order-to-cash (callActivity calledElement)
+    invoice-handling.bpmn         ← called by order-to-cash (callActivity calledElement)
 ```
+
+## File naming
+
+The file name is not decoration — it IS the model id, and the id is what other
+models link to. So:
+
+- **kebab-case, English, descriptive**: `credit-limit-check.dmn`, not
+  `Kreditpruefung v2 final.dmn`.
+- **The stem is the link target**: `calledElement="invoice-handling"` and
+  `calledDecision="credit-limit-check"` are file stems. Renaming a file renames
+  the id — fix every reference in the same commit (`pnpm validate` catches the
+  dangling ones).
+- **Same stem, other extension = the same model in another notation**
+  (`order-to-cash.bpmn` + `order-to-cash.storm` are one model, two views).
+- **Test cases sit next to their decision** as `<decision>.tests.yaml`.
+- No scratch files in the models folder — `test1.bpmn`, `copy of ….dmn` and
+  friends become processes the whole organization sees.
 
 ## Working with it
 
