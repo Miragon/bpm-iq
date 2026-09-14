@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.1](https://github.com/Miragon/bpm-iq/compare/v4.0.0...v4.0.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **live-host:** a port-mapped none-mode host syncs again — plus the Docker quickstart and the starter content it exposed ([#178](https://github.com/Miragon/bpm-iq/issues/178)) ([3e0123b](https://github.com/Miragon/bpm-iq/commit/3e0123ba439b162b6c696925e0f6be56d06586f6))
+
 ## [4.0.0](https://github.com/Miragon/bpm-iq/compare/v3.10.0...v4.0.0) (2026-09-13)
 
 
