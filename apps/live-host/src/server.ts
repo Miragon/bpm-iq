@@ -45,7 +45,7 @@ import { ConnectionLimiter } from "./domain/conn-limit.ts";
 import { DocSizeGuard } from "./domain/doc-size-guard.ts";
 import { startApi } from "./http/api.ts";
 import { AccessCache } from "./repos/access.ts";
-import { loadContentConfig } from "./repos/content.ts";
+import { CONTENT_CONFIG_FILE, loadContentConfig } from "./repos/content.ts";
 import { RepoRegistry } from "./repos/registry.ts";
 import { localMintFn, remoteMintFn, TokenService } from "./repos/token-minter.ts";
 import { WorkspaceManager } from "./repos/workspaces.ts";
@@ -65,6 +65,14 @@ const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/bpm-iq";
 const MONO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 /** local host checkout served without a clone — its root bpmiq.yml names the content */
 const HOST_CONTENT = process.env.LIVE_HOST_CONTENT_DIR ?? MONO_ROOT;
+// An explicit LIVE_HOST_CONTENT_DIR that is NOT a content repo is silently
+// ignored (workspaces.isHostRepo), and GITHUB_REPO gets cloned instead — say so,
+// or an empty bind mount looks like the mount simply had no effect.
+if (process.env.LIVE_HOST_CONTENT_DIR && !existsSync(join(HOST_CONTENT, CONTENT_CONFIG_FILE))) {
+  console.log(
+    `LIVE_HOST_CONTENT_DIR=${HOST_CONTENT} has no ${CONTENT_CONFIG_FILE} — serving ${HOST_REPO} from a clone instead`,
+  );
+}
 /** built web app served on the same port */
 const WEB_DIST = resolve(MONO_ROOT, "apps", "web", "dist");
 /** host-owned state (Yjs lineages, sessions, registry, workspace clones) */

@@ -38,9 +38,16 @@ test("isCrossSite: Fetch Metadata decides; the Origin header is the fallback; no
   assert.equal(isCrossSite(h({ "sec-fetch-site": "same-site" }), host), false, "another port of the host");
   assert.equal(isCrossSite(h({ "sec-fetch-site": "cross-site" }), host), true);
   assert.equal(isCrossSite(h({ "sec-fetch-site": "cross-site", origin: host }), host), true, "metadata wins");
-  assert.equal(isCrossSite(h({ origin: "https://evil.example" }), host), true, "older browser: Origin");
+  assert.equal(isCrossSite(h({ origin: "https://evil.example" }), host), true, "no metadata (ws handshake): Origin");
   assert.equal(isCrossSite(h({ origin: "http://live.test" }), host), false);
   assert.equal(isCrossSite(h({ origin: "http://live.test" }), "http://live.test/"), false, "trailing slash");
+  assert.equal(
+    isCrossSite(h({ origin: "http://localhost:8301" }), "http://localhost:8080"),
+    false,
+    "same site, other port — a container published under -p 8301:8080",
+  );
+  assert.equal(isCrossSite(h({ origin: "https://live.test" }), host), true, "scheme is part of the site");
+  assert.equal(isCrossSite(h({ origin: "http://other.test:8080" }), "http://live.test:8080"), true, "another host");
   assert.equal(isCrossSite(h({ origin: "null" }), host), true, "opaque origin (sandboxed iframe, file:)");
   assert.equal(isCrossSite(h({ origin: "https://evil.example" }), undefined), false, "no public URL to compare");
 });

@@ -57,6 +57,14 @@ export const allowAllAccess = {
  * clients) send neither and are unaffected. Same-site (another port of the
  * same host — the web dev server, which proxies anyway) is deliberately
  * allowed: the network boundary IS the auth.
+ *
+ * The Origin fallback is NOT a leftover for old browsers: no browser sends
+ * Fetch Metadata on a WebSocket handshake (verified Chrome 153 — `origin` and
+ * nothing else), so it decides every browser ws join, plus every same-origin
+ * POST. It therefore compares SITES, not origins — the port may differ: a
+ * container publishes 8080 under another port (`-p 8301:8080`), and
+ * LIVE_PUBLIC_URL names the container's. Scheme and host must still match, so
+ * a page on another host is as rejected as before.
  */
 export function isCrossSite(header: (name: string) => string | null | undefined, publicUrl?: string): boolean {
   const site = header("sec-fetch-site");
@@ -64,7 +72,9 @@ export function isCrossSite(header: (name: string) => string | null | undefined,
   const origin = header("origin");
   if (!origin || !publicUrl) return false;
   try {
-    return new URL(origin).origin !== new URL(publicUrl).origin;
+    const from = new URL(origin);
+    const ours = new URL(publicUrl);
+    return from.protocol !== ours.protocol || from.hostname !== ours.hostname;
   } catch {
     return true; // an unparsable Origin is not ours
   }
