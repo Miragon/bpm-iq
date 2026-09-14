@@ -26,14 +26,50 @@ time, release as a pull request, and let AI agents query every process.
 Evaluation mode — one container, no login (`LIVE_AUTH=none`: everyone is the local user):
 
 ```bash
-docker run --rm -p 8301:8080 -e LIVE_AUTH=none ghcr.io/miragon/bpmiq-live-host:latest
+docker run --rm -p 8301:8080 -e LIVE_AUTH=none \
+  -e LIVE_PUBLIC_URL=http://localhost:8301 ghcr.io/miragon/bpmiq-live-host:latest
 ```
+
+`LIVE_PUBLIC_URL` is the URL you actually open — deep links, the MCP resource audience and
+the same-site check on browser requests derive from it, so a published port other than the
+container's 8080 has to say so, or the editors never sync.
 
 The server is up at http://localhost:8301 (`/healthz` answers): the web app, the VS Code
 extension (`bpmLive.serverUrl` = `ws://localhost:8301`, no sign-in needed) and
-`pnpm --filter @bpmiq/live-host test:sync` all work right away. A real login is your OIDC
-identity provider plus a GitHub App for authorization — the 15-minute path ships a
-Keycloak: [docs/on-prem/idp-quickstart.md](docs/on-prem/idp-quickstart.md).
+`pnpm --filter @bpmiq/live-host test:sync` all work right away. What it serves is this
+repo's example content, cloned into the container on the first request — and thrown away
+again with `--rm`.
+
+**Your own models.** A content repo is any checkout with a root `bpmiq.yml`
+([`process-documentation-starter`](https://github.com/Miragon/process-documentation-starter)
+is the template). Name it, and mount a volume so the clone, the live edits and their
+lineages survive a restart:
+
+```bash
+docker run -p 8301:8080 -e LIVE_AUTH=none -e LIVE_PUBLIC_URL=http://localhost:8301 \
+  -e GITHUB_REPO=<owner>/<repo> -v bpmiq-data:/data \
+  ghcr.io/miragon/bpmiq-live-host:latest
+```
+
+That clone happens without credentials, so the repo must be public — private repos (and
+release-as-PR) need the GitHub App. Already have a checkout? Bind-mount it and the host
+serves it **in place**, no clone: edits write through to your working tree, `git diff`
+shows them, you commit as usual. Nothing is fetched then, so `GITHUB_REPO` is a pure label —
+any `<owner>/<name>`, no GitHub repository behind it:
+
+```bash
+git clone https://github.com/<owner>/<repo> my-processes   # or your own; needs a root bpmiq.yml
+docker run -p 8301:8080 -e LIVE_AUTH=none -e LIVE_PUBLIC_URL=http://localhost:8301 \
+  -e GITHUB_REPO=acme/my-processes -e LIVE_HOST_CONTENT_DIR=/content \
+  -v "$PWD/my-processes:/content" -v bpmiq-data:/data \
+  ghcr.io/miragon/bpmiq-live-host:latest
+```
+
+(A `/content` without a root `bpmiq.yml` is not a content repo: the host says so at boot and
+clones `GITHUB_REPO` instead — which is where a made-up label then fails.)
+
+A real login is your OIDC identity provider plus a GitHub App for authorization — the
+15-minute path ships a Keycloak: [docs/on-prem/idp-quickstart.md](docs/on-prem/idp-quickstart.md).
 
 From source (Node >= 23.6 — TypeScript runs directly via type stripping, no build step):
 
