@@ -22,11 +22,11 @@
   },
   "dependencies": {
     "@bpmiq/contracts": "workspace:*",
-    "@hocuspocus/provider": "4.6.0",
+    "@hocuspocus/provider": "4.7.0",
     "yjs": "13.6.32"
   },
   "devDependencies": {
-    "@types/node": "26.4.1",
+    "@types/node": "26.5.1",
     "typescript": "6.0.3"
   }
 }
