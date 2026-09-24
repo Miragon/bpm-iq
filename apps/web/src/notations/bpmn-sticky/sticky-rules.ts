@@ -6,14 +6,16 @@
  *  - stickies FLOAT above the diagram: any drop target is fine (the
  *    ordering provider re-homes them to the canvas root), only drilldown
  *    planes refuse — and creation exists only in t.BPM workshop mode
- *  - resizable (min 60x60); never connect, never copy (a pasted sticky
- *    would duplicate its extension-element id)
+ *  - resizable (min 60x60); never connect. Copy & paste are fine (#187):
+ *    StickyCopyPaste mints a new id per pasted sticky, and a paste is not a
+ *    new creation path — it works outside workshop mode too
  *  - mixed selections delegate the non-sticky subset back to the rule chain,
- *    so a lasso of tasks + stickies moves iff both parts may
+ *    so a lasso of tasks + stickies moves (and pastes) iff both parts may
  */
 import { is } from "bpmn-js/lib/util/ModelUtil";
 import RuleProvider from "diagram-js/lib/features/rules/RuleProvider";
 
+import { isPastedSticky } from "./sticky-copy-paste";
 import { isSticky, STICKY_MIN } from "./sticky-model";
 
 const HIGH_PRIORITY = 1500;
@@ -50,21 +52,23 @@ export class StickyRules extends RuleProvider {
   override init(): void {
     // sticky CREATION requires (a) a bpmn:Process to persist into and (b)
     // the t.BPM workshop mode — the rule is the last line of defense: the
-    // palette/dblclick gates go stale when the mode toggle is UNDONE
-    const canCreateSticky = (): boolean => {
+    // palette/dblclick gates go stale when the mode toggle is UNDONE. A
+    // PASTED sticky (#187) only needs (a): it copies one that already exists
+    const canCreateSticky = (sticky: unknown): boolean => {
       const bpmnjs = this._injector.get("bpmnjs") as {
         getDefinitions(): { mode?: unknown; rootElements?: Array<{ $type: string }> } | undefined;
       };
       const definitions = bpmnjs.getDefinitions();
-      if (definitions?.mode !== "workshop") return false;
+      if (definitions?.mode !== "workshop" && !isPastedSticky(sticky)) return false;
       return (definitions?.rootElements ?? []).some((r) => r.$type === "bpmn:Process");
     };
 
-    const delegate = (context: Record<string, unknown>, shapes: unknown[]): Verdict => {
+    /** ask the rule chain about the non-sticky part of a mixed selection */
+    const delegate = (action: string, context: Record<string, unknown>, subset: Record<string, unknown[]>): Verdict => {
       const rules = this._injector.get("rules") as {
         allowed(action: string, context: Record<string, unknown>): Verdict;
       };
-      return rules.allowed("elements.move", { ...context, shapes });
+      return rules.allowed(action, { ...context, ...subset });
     };
 
     this.addRule("elements.move", HIGH_PRIORITY, (context: Record<string, unknown>) => {
@@ -75,19 +79,19 @@ export class StickyRules extends RuleProvider {
       if (stickies.length === shapes.length) return verdict;
       // mixed selection: the rest must be movable too
       if (verdict !== true) return false;
-      return delegate(
-        context,
-        shapes.filter((s) => !isSticky(s)),
-      );
+      return delegate("elements.move", context, { shapes: shapes.filter((s) => !isSticky(s)) });
     });
 
     this.addRule(["shape.create", "elements.create"], HIGH_PRIORITY, (context: Record<string, unknown>) => {
       const elements = (context.elements as unknown[] | undefined) ?? [context.shape];
       const stickies = elements.filter(isSticky);
       if (stickies.length === 0) return undefined;
-      if (stickies.length !== elements.length) return false; // never mixed-create
-      if (!canCreateSticky()) return false;
-      return canDropSticky(context.target);
+      if (!stickies.every(canCreateSticky)) return false;
+      const verdict = canDropSticky(context.target);
+      if (stickies.length === elements.length) return verdict;
+      // mixed PASTE (#187): the BPMN part must be creatable at the target too
+      if (verdict !== true) return false;
+      return delegate("elements.create", context, { elements: elements.filter((e) => !isSticky(e)) });
     });
 
     this.addRule("shape.resize", HIGH_PRIORITY, (context: Record<string, unknown>) => {
@@ -95,11 +99,6 @@ export class StickyRules extends RuleProvider {
       const bounds = context.newBounds as { width?: number; height?: number } | undefined;
       if (bounds && ((bounds.width ?? 0) < STICKY_MIN.width || (bounds.height ?? 0) < STICKY_MIN.height)) return false;
       return true;
-    });
-
-    this.addRule("element.copy", HIGH_PRIORITY, (context: Record<string, unknown>) => {
-      if (isSticky(context.element)) return false;
-      return undefined;
     });
 
     this.addRule(["connection.create", "connection.reconnect"], HIGH_PRIORITY, (context: Record<string, unknown>) => {
