@@ -1,6 +1,6 @@
 {
   "name": "bpmiq",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "private": true,
   "type": "module",
   "description": "bpmiq — collaborative BPM platform: live modeling, PR-based release, and processes that talk",
