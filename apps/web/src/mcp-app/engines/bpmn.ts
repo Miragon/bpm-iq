@@ -7,7 +7,9 @@
  * Stickies (#117): the editable widget gets the FULL module (workshop-gated
  * palette, n-key, persistence — identical to the web editor), the viewer the
  * render-only subset (the full set injects services a viewer does not
- * register and would fail DI on mount). bpmn-js clears its command stack
+ * register and would fail DI on mount). Element colours (#189) likewise: the
+ * brush only in the editable widget, the viewer renders the DI colours as is.
+ * bpmn-js clears its command stack
  * SILENTLY on import, so no dirty suppression is needed here (contrast the
  * DSL engines).
  */
@@ -17,6 +19,7 @@ import NavigatedViewer from "bpmn-js/lib/NavigatedViewer";
 import type * as Y from "yjs";
 
 import { attachPresenceCanvas } from "../../lib/presence-canvas.ts";
+import { bpmnColorModule } from "../../notations/bpmn-color.ts";
 import { bpmiqModdle, bpmnStickyModule, bpmnStickyViewModule } from "../../notations/bpmn-sticky/index.ts";
 import type { EngineFactory, LiveBindHooks, WidgetEngine } from "../core/engine.ts";
 import { fitViewport, selectedElementOf } from "./diagram-js.ts";
@@ -36,7 +39,7 @@ export const mountBpmnEngine: EngineFactory<BpmnEngine> = (container, readonly) 
       })
     : new Modeler({
         container,
-        additionalModules: [bpmnStickyModule],
+        additionalModules: [bpmnStickyModule, bpmnColorModule],
         moddleExtensions: { bpmiq: bpmiqModdle },
       });
   const dirtyCbs = new Set<() => void>();

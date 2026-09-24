@@ -205,6 +205,9 @@ importers:
       bpmn-js:
         specifier: 18.28.0
         version: 18.28.0
+      bpmn-js-color-picker:
+        specifier: 0.7.2
+        version: 0.7.2(bpmn-js@18.28.0)
       bpmn-js-differ:
         specifier: 3.2.0
         version: 3.2.0
@@ -1891,6 +1894,11 @@ packages:
   body-parser@2.3.0:
     resolution: {integrity: sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw==}
     engines: {node: '>=18'}
+
+  bpmn-js-color-picker@0.7.2:
+    resolution: {integrity: sha512-V3Gusxgx+Y6uEh3gg2Jpqd92au0kjfad6ETSNa7U0p2/hqlpYj8RWGwqjUui9tghkTg0mlKaqs6KZ8Lvxzn0pg==}
+    peerDependencies:
+      bpmn-js: '>= 14'
 
   bpmn-js-differ@3.2.0:
     resolution: {integrity: sha512-FdLXHzoysjVL5mr0pIbbsPmVV04/qcHBxrQHsQxXb2blAw4u9sDnJmaHTh/PMGrPRRZyVVcKaY1sMFRNx64fCw==}
@@ -4884,6 +4892,10 @@ snapshots:
       type-is: 2.1.0
     transitivePeerDependencies:
       - supports-color
+
+  bpmn-js-color-picker@0.7.2(bpmn-js@18.28.0):
+    dependencies:
+      bpmn-js: 18.28.0
 
   bpmn-js-differ@3.2.0:
     dependencies:
