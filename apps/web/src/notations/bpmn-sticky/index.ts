@@ -4,11 +4,13 @@
  * `bpmiqModdle` via `moddleExtensions`. Stickies persist as
  * `<bpmiq:sticky/>` extension elements (no BPMNDI), ride the existing
  * Y.Text/bpmn-sync collab and are ignored by the derive/validator toolchain
- * (warn-only residue check aside).
+ * (warn-only residue check aside). It also carries the rest of the t.BPM
+ * workshop tooling: the reduced palette (#54) and group naming (#190).
  */
 import "./sticky.css";
 
 import { bpmiqModdle } from "./bpmiq-moddle";
+import { GroupNaming } from "./group-naming";
 import { StickyElementFactory } from "./sticky-factory";
 import { StickyOrdering } from "./sticky-ordering";
 import { StickyPersistence } from "./sticky-persistence";
@@ -25,6 +27,7 @@ export const bpmnStickyModule = {
     "stickyContextPad",
     "stickyEditing",
     "stickyPersistence",
+    "groupNaming",
   ],
   elementFactory: ["type", StickyElementFactory],
   stickyRenderer: ["type", StickyRenderer],
@@ -34,6 +37,7 @@ export const bpmnStickyModule = {
   stickyContextPad: ["type", StickyContextPad],
   stickyEditing: ["type", StickyEditing],
   stickyPersistence: ["type", StickyPersistence],
+  groupNaming: ["type", GroupNaming],
 };
 
 export { bpmiqModdle };

@@ -45,7 +45,9 @@ interface ModelingLike {
 
 /** the t.BPM suitcase (#54): what the WORKSHOP palette keeps of the default
  *  bpmn set — participants model with real core tiles, stickies carry the
- *  discussion; everything else is "one step further" away */
+ *  discussion; everything else is "one step further" away. The group (#190)
+ *  frames several steps into one activity — the backbone of a user story
+ *  map, discussed right there in the workshop */
 const WORKSHOP_PALETTE = new Set([
   "hand-tool",
   "lasso-tool",
@@ -57,6 +59,7 @@ const WORKSHOP_PALETTE = new Set([
   "create.exclusive-gateway",
   "create.task",
   "create.participant-expanded",
+  "create.group",
 ]);
 
 export class StickyPalette {
