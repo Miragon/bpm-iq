@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.1.0](https://github.com/Miragon/bpm-iq/compare/v4.0.1...v4.1.0) (2026-09-24)
+
+
+### Features
+
+* **web:** colour BPMN elements from the context pad ([#189](https://github.com/Miragon/bpm-iq/issues/189)) ([#195](https://github.com/Miragon/bpm-iq/issues/195)) ([da9ce76](https://github.com/Miragon/bpm-iq/commit/da9ce76a01f45c7d683393ef731f802f9a85b996))
+* **web:** groups in the t.BPM workshop palette, named right on creation ([#190](https://github.com/Miragon/bpm-iq/issues/190)) ([#194](https://github.com/Miragon/bpm-iq/issues/194)) ([1b8fdc7](https://github.com/Miragon/bpm-iq/commit/1b8fdc7988f8dc2ff800cf60790dcaa62e5a0012))
+
 ## [4.0.1](https://github.com/Miragon/bpm-iq/compare/v4.0.0...v4.0.1) (2026-09-14)
 
 
