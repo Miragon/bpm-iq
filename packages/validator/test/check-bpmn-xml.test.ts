@@ -93,3 +93,29 @@ test("checkBpmnXml: a group without its BPMNDI shape is a DI error (#190)", () =
     ["ERROR bpmn/di Group_inner has no BPMNDI shape/edge (breaks the visual editor)"],
   );
 });
+
+// #189: element colours as bpmn-js' setColor writes them — BPMN in Color
+// (color:*) plus the legacy bioc:* pair on shapes, border-only on edges, the
+// label colour on its BPMNLabel. Layout attributes only: nothing to report
+test("checkBpmnXml: coloured shapes, edges and labels validate clean (#189)", () => {
+  const coloured = withGroup(true)
+    .replace(
+      'xmlns:di="http://www.omg.org/spec/DD/20100524/DI"',
+      'xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"',
+    )
+    .replace(
+      '<bpmndi:BPMNShape id="Task_submit_di" bpmnElement="Task_submit">',
+      '<bpmndi:BPMNShape id="Task_submit_di" bpmnElement="Task_submit" bioc:stroke="#831311" bioc:fill="#ffcdd2" color:background-color="#ffcdd2" color:border-color="#831311">',
+    )
+    .replace(
+      '<bpmndi:BPMNEdge id="F2_di" bpmnElement="F2">',
+      '<bpmndi:BPMNEdge id="F2_di" bpmnElement="F2" bioc:stroke="#205022" color:border-color="#205022">',
+    )
+    .replace(
+      '<bpmndi:BPMNShape id="End_di" bpmnElement="End"><dc:Bounds x="330" y="100" width="36" height="36" /></bpmndi:BPMNShape>',
+      '<bpmndi:BPMNShape id="End_di" bpmnElement="End" bioc:stroke="#205022" bioc:fill="#c8e6c9" color:background-color="#c8e6c9" color:border-color="#205022"><dc:Bounds x="330" y="100" width="36" height="36" /><bpmndi:BPMNLabel color:color="#205022"><dc:Bounds x="320" y="143" width="56" height="14" /></bpmndi:BPMNLabel></bpmndi:BPMNShape>',
+    );
+  assert.equal((coloured.match(/color:border-color=/g) ?? []).length, 3, "the fixture carries the colours");
+  const { findings } = checkBpmnXml(coloured, { file: "coloured.bpmn" });
+  assert.deepEqual(findings, [], `unexpected findings: ${JSON.stringify(findings)}`);
+});

@@ -168,6 +168,17 @@ export class StickyContextPad {
     // on a discussion artifact
     return () => entries;
   }
+
+  /** a selection of ONLY stickies gets no colour brush (#189): stickies are
+   *  coloured by kind, and setColor skips them (no DI) — the brush would be
+   *  a silent no-op. A mixed selection keeps it and colours the BPMN part. */
+  getMultiElementContextPadEntries(elements: unknown[]): unknown {
+    if (!elements.every(isSticky)) return {};
+    return (entries: Record<string, unknown>) => {
+      const { "set-color": _brush, ...rest } = entries;
+      return rest;
+    };
+  }
 }
 
 // ── direct editing + n-key create ────────────────────────────────────────────
