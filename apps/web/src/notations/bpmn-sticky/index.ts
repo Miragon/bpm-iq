@@ -11,6 +11,7 @@ import "./sticky.css";
 
 import { bpmiqModdle } from "./bpmiq-moddle";
 import { GroupNaming } from "./group-naming";
+import { StickyCopyPaste } from "./sticky-copy-paste";
 import { StickyElementFactory } from "./sticky-factory";
 import { StickyOrdering } from "./sticky-ordering";
 import { StickyPersistence } from "./sticky-persistence";
@@ -27,6 +28,7 @@ export const bpmnStickyModule = {
     "stickyContextPad",
     "stickyEditing",
     "stickyPersistence",
+    "stickyCopyPaste",
     "groupNaming",
   ],
   elementFactory: ["type", StickyElementFactory],
@@ -37,6 +39,7 @@ export const bpmnStickyModule = {
   stickyContextPad: ["type", StickyContextPad],
   stickyEditing: ["type", StickyEditing],
   stickyPersistence: ["type", StickyPersistence],
+  stickyCopyPaste: ["type", StickyCopyPaste],
   groupNaming: ["type", GroupNaming],
 };
 
