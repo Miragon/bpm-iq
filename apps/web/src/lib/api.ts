@@ -22,6 +22,8 @@ import type {
   ReleaseFilesBody,
   ReleaseResult,
   RepoInfo,
+  ResolveConflictBody,
+  ResolveConflictResult,
   SyncResult,
   TodoWire,
 } from "@bpmiq/contracts/live-host";
@@ -53,6 +55,8 @@ export type {
   ReleaseFilesBody,
   ReleaseResult,
   RepoInfo,
+  ResolveConflictBody,
+  ResolveConflictResult,
   SyncResult,
   TodoAnchorWire,
   TodoElementWire,
@@ -123,6 +127,13 @@ export const releaseProcess = (repo: string, id: string): Promise<ReleaseResult>
   api(`/api/repos/${repo}/release/${encodeURIComponent(id)}`, { method: "POST" });
 /** every file differing from origin — the release dialog's selection pool */
 export const fetchChanges = (repo: string): Promise<ChangedFileWire[]> => api(`/api/repos/${repo}/changes`);
+/** resolve a catch-up conflict: take main's version of the file, or keep the workspace's */
+export const resolveConflict = (repo: string, body: ResolveConflictBody): Promise<ResolveConflictResult> =>
+  api(`/api/repos/${repo}/conflicts`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 /** release exactly the selected changed files as one PR */
 export const releaseFiles = (repo: string, body: ReleaseFilesBody): Promise<ReleaseResult> =>
   api(`/api/repos/${repo}/release`, {

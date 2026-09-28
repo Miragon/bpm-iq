@@ -29,6 +29,8 @@ import {
   type MoveModelsBody,
   releaseFiles,
   type ReleaseFilesBody,
+  resolveConflict,
+  type ResolveConflictBody,
   syncRepo,
   type TodoWire,
 } from "@/lib/api";
@@ -139,6 +141,23 @@ export function useReleaseFiles(repo: string) {
         duration: 15_000,
       });
       void qc.invalidateQueries({ queryKey: ["changes", repo] });
+    },
+  });
+}
+
+/** resolve a catch-up conflict (#185). Keeping the workspace's version only
+ *  clears the flag; taking main's rewrites the file — so the model lists'
+ *  dirty flags and the overview's counts may change too. */
+export function useResolveConflict(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ResolveConflictBody) => resolveConflict(repo, body),
+    onSuccess: (_result, body) => {
+      void qc.invalidateQueries({ queryKey: ["changes", repo] });
+      if (body.keep === "main") {
+        for (const key of ["processes", "decisions", "models"]) void qc.invalidateQueries({ queryKey: [key, repo] });
+        void qc.invalidateQueries({ queryKey: ["repos"] });
+      }
     },
   });
 }

@@ -4,7 +4,12 @@
  * colleagues' in-progress edits: nothing beyond `preselect` is checked by
  * default, and files somebody currently has open carry a warning badge. A
  * MOVED model (#182) is a delete + add pair that ships whole, so it is
- * selected whole too (moveUnits — the same rule the server applies).
+ * selected whole too (moveUnits — the same rule the server applies). A file
+ * in CONFLICT (#185: changed on the default branch while the workspace held
+ * unreleased edits of it) cannot be picked — releasing it would silently
+ * revert that change — until it is resolved right here: keep this version
+ * (the release then deliberately replaces main's) or take main's (discards
+ * the file's edits, confirmed first).
  * Mounted on open, so state resets by unmounting (create-dialog convention).
  */
 import { moveUnits } from "@bpmiq/contracts/live-host";
@@ -13,7 +18,7 @@ import { Button } from "@bpmiq/ui-kit/components/button";
 import { useEffect, useMemo, useState } from "react";
 
 import { type ChangedFileWire } from "@/lib/api";
-import { useChanges, useReleaseFiles } from "@/lib/queries";
+import { useChanges, useReleaseFiles, useRepos, useResolveConflict } from "@/lib/queries";
 
 const fieldClass =
   "border-input bg-background focus-visible:ring-ring/50 focus-visible:border-ring mt-1 w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]";
@@ -39,6 +44,11 @@ export function ReleaseDialog({
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set(preselect));
   const [title, setTitle] = useState("");
   const release = useReleaseFiles(repo);
+  const resolve = useResolveConflict(repo);
+  // the conflict row whose "take main's version" awaits its confirmation
+  const [discarding, setDiscarding] = useState<string | null>(null);
+  const repos = useRepos();
+  const branch = repos.data?.find((r) => r.fullName === repo)?.defaultBranch ?? "main";
 
   // no close while the release runs — an unmounted dialog would drop the
   // mutation's onSuccess (toast + refetch), same as the create dialogs
@@ -60,8 +70,9 @@ export function ReleaseDialog({
   // brings its other half along)
   const isSelected = (path: string) => unitOf(path).some((p) => selected.has(p));
   // only files that are actually in the pool count — a preselected path that
-  // is not dirty (or healed meanwhile) silently drops out
-  const files = pool.filter((c) => isSelected(c.path)).map((c) => c.path);
+  // is not dirty (or healed meanwhile) silently drops out, and so does one in
+  // conflict (the server would refuse it)
+  const files = pool.filter((c) => !c.conflict && isSelected(c.path)).map((c) => c.path);
 
   const toggle = (path: string) =>
     setSelected((prev) => {
@@ -106,24 +117,41 @@ export function ReleaseDialog({
           </p>
         ) : (
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-md border">
-            {pool.map((c) => (
-              <label
-                key={c.path}
-                className="hover:bg-accent/50 flex cursor-pointer items-center gap-2.5 border-b px-3 py-2 text-sm last:border-b-0"
-              >
-                <input
-                  type="checkbox"
-                  className="accent-primary size-4 shrink-0"
-                  checked={isSelected(c.path)}
-                  onChange={() => toggle(c.path)}
+            {pool.map((c) =>
+              c.conflict ? (
+                <ConflictRow
+                  key={c.path}
+                  file={c}
+                  badge={statusBadge(c, units.has(c.path))}
+                  branch={branch}
+                  confirming={discarding === c.path}
+                  pending={resolve.isPending}
+                  onKeep={() => resolve.mutate({ path: c.path, keep: "workspace" })}
+                  onDiscard={() => setDiscarding(c.path)}
+                  onConfirm={() =>
+                    resolve.mutate({ path: c.path, keep: "main" }, { onSettled: () => setDiscarding(null) })
+                  }
+                  onCancel={() => setDiscarding(null)}
                 />
-                <span className="min-w-0 flex-1 truncate font-mono text-xs" title={c.path}>
-                  {c.path}
-                </span>
-                {statusBadge(c, units.has(c.path))}
-                {c.liveSessions > 0 && <Badge variant="warning">{c.liveSessions} active</Badge>}
-              </label>
-            ))}
+              ) : (
+                <label
+                  key={c.path}
+                  className="hover:bg-accent/50 flex cursor-pointer items-center gap-2.5 border-b px-3 py-2 text-sm last:border-b-0"
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-primary size-4 shrink-0"
+                    checked={isSelected(c.path)}
+                    onChange={() => toggle(c.path)}
+                  />
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs" title={c.path}>
+                    {c.path}
+                  </span>
+                  {statusBadge(c, units.has(c.path))}
+                  {c.liveSessions > 0 && <Badge variant="warning">{c.liveSessions} active</Badge>}
+                </label>
+              ),
+            )}
           </div>
         )}
 
@@ -143,6 +171,7 @@ export function ReleaseDialog({
         )}
 
         {release.error && <p className="text-destructive mt-3 text-sm">{release.error.message}</p>}
+        {resolve.error && <p className="text-destructive mt-3 text-sm">{resolve.error.message}</p>}
         <div className="mt-4 flex items-center justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={release.isPending}>
             Cancel
@@ -152,6 +181,101 @@ export function ReleaseDialog({
           </Button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/** a pool row in conflict: not selectable, resolvable in place */
+function ConflictRow({
+  file,
+  badge,
+  branch,
+  confirming,
+  pending,
+  onKeep,
+  onDiscard,
+  onConfirm,
+  onCancel,
+}: {
+  file: ChangedFileWire;
+  badge: React.ReactNode;
+  branch: string;
+  confirming: boolean;
+  pending: boolean;
+  onKeep: () => void;
+  onDiscard: () => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const action = "h-7 px-2.5 text-xs";
+  return (
+    <div className="border-b px-3 py-2 text-sm last:border-b-0">
+      <div className="flex items-center gap-2.5">
+        <input
+          type="checkbox"
+          className="size-4 shrink-0"
+          checked={false}
+          disabled
+          aria-label={`${file.path} cannot be released until the conflict is resolved`}
+        />
+        <span className="min-w-0 flex-1 truncate font-mono text-xs" title={file.path}>
+          {file.path}
+        </span>
+        {badge}
+        <Badge variant="destructive">conflict</Badge>
+        {file.liveSessions > 0 && <Badge variant="warning">{file.liveSessions} active</Badge>}
+      </div>
+      <div className="text-muted-foreground mt-1.5 pl-6.5 text-xs">
+        {confirming ? (
+          <>
+            <p>Discard this workspace's edits to the file and use the version on {branch}?</p>
+            <div className="mt-1.5 flex gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className={action}
+                onClick={onConfirm}
+                disabled={pending}
+              >
+                {pending ? "Discarding…" : "Discard edits"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={action}
+                onClick={onCancel}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p>
+              Changed on {branch} while this workspace had unreleased edits — releasing it now would revert that change.
+            </p>
+            <div className="mt-1.5 flex gap-2">
+              <Button type="button" variant="outline" size="sm" className={action} onClick={onKeep} disabled={pending}>
+                Keep this version
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={action}
+                onClick={onDiscard}
+                disabled={pending || file.liveSessions > 0}
+                title={file.liveSessions > 0 ? "Open in a live session — close it first" : undefined}
+              >
+                Use {branch}'s version
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

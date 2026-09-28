@@ -73,6 +73,8 @@ import type {
   PutContentResultWire,
   ReleaseFilesBody,
   ReleaseResult,
+  ResolveConflictBody,
+  ResolveConflictResult,
   SyncResult,
   TodoWire,
 } from "@bpmiq/contracts/live-host";
@@ -97,6 +99,7 @@ import {
 } from "../adapters/sqlite/sessions.ts";
 import type { AgentPresence } from "../application/agent-presence.ts";
 import { authorizeRepo } from "../application/authz.ts";
+import { resolveConflict } from "../application/conflicts.ts";
 import { type DirectDoc, getContent, putContent } from "../application/content.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
 import type { LoginCodeStore } from "../application/login-codes.ts";
@@ -631,7 +634,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // address /content over REST (the URL is claimed by history/content) —
       // accepted keyword-collision edge; MCP tools and ws rooms are unaffected.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|move|changes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
+        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|move|changes|conflicts|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
       );
       if (repoRoute) {
         const session = await sessionOf(req);
@@ -815,6 +818,24 @@ export function startApi(port: number, opts: ApiOptions): Server {
           if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
           const workspace = await opts.workspaces.ensure(repo);
           return send(res, 200, (await listChanges(opts, repo, workspace)) satisfies ChangedFileWire[]);
+        }
+        // resolve a catch-up conflict (#185): take main's version of ONE file, or
+        // keep the workspace's and clear the flag (application/conflicts.ts)
+        if (repoRoute[2] === "conflicts") {
+          if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+          const body = await jsonBody<ResolveConflictBody>(req, res);
+          if (body === undefined) return;
+          if (typeof body?.path !== "string" || body.path.length === 0) {
+            return send(res, 400, { error: "path must be a non-empty string" });
+          }
+          if (body.keep !== "main" && body.keep !== "workspace") {
+            return send(res, 400, { error: 'keep must be "main" or "workspace"' });
+          }
+          const result = await resolveConflict(opts, repo, { path: body.path, keep: body.keep });
+          console.log(
+            `conflict resolved in ${repo.fullName} by @${session.user.login}: ${result.path} → ${result.keep}`,
+          );
+          return send(res, 200, result satisfies ResolveConflictResult);
         }
         // file-selection release: ship exactly the picked changed files as one PR
         if (repoRoute[2] === "release" && req.method === "POST") {

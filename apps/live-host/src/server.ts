@@ -205,10 +205,14 @@ const workspaces = new WorkspaceManager({
   registry,
   githubBaseUrl: GH_BASE,
 });
-// reconcile safety: never fast-forward under live sessions; after a fast-forward,
-// drop the Yjs lineage of changed files so the next open reseeds from the new tree
+// catch-up safety (#185): never rewrite a file that is open in a live session;
+// after a catch-up, drop the Yjs lineage of the rewritten files so the next
+// open reseeds from the new tree
 workspaces.hooks = {
-  hasLiveDocs: (repo) => [...liveDocs].some((d) => d.startsWith(roomPrefix(repo.fullName))),
+  livePaths: (repo) => {
+    const prefix = roomPrefix(repo.fullName);
+    return [...liveDocs].filter((d) => d.startsWith(prefix)).map((d) => d.slice(prefix.length));
+  },
   onReconciled: (repo, changedPaths) => {
     for (const path of changedPaths) {
       lineage.drop(roomName(repo.fullName, path));

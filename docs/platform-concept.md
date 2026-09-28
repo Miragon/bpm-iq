@@ -134,6 +134,9 @@ A Node service, the heart of the platform:
   overlay onto the new `main`. Files without live changes: fast-forward. Files with live
   changes: three-way text merge; on conflict, mark the file in-session (conflict banner in
   web app; the file's Y.Text gets conflict markers like git) — modelers resolve live.
+  _As built (#185): a per-file catch-up after every fetch instead — no text merge of model
+  XML; a file changed on both sides keeps its live version and is flagged, the release
+  refuses it until resolved (see `multi-repo-architecture.md`, C)._
 - **Also serves**: presence/awareness relay is OCT's job, but the Live Host adds a tiny
   status API (who is connected, which files are dirty vs. `main`, open releases) that the web
   app renders.

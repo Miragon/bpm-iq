@@ -202,7 +202,7 @@ export function makeCollabHooks(deps: CollabDeps) {
       // toDiskPath + existsSync validated it, and a Document IS being created so
       // afterUnloadDocument will symmetrically remove it. (Doing this in the pre-auth
       // onConnect leaked unauthenticated/garbage names forever — no Document means no
-      // unload — an unauth DoS of the hasLiveDocs-gated release/reconcile path.)
+      // unload — an unauth DoS of the liveDocs-gated sync/reconcile paths.)
       liveDocs.add(documentName);
       return document;
     },

@@ -220,6 +220,9 @@ export interface ChangedFileWire {
   path: string;
   status: "modified" | "added" | "deleted";
   liveSessions: number;
+  /** changed on the default branch while the workspace held unreleased edits
+   *  of it (#185) — the release refuses it until resolved (POST …/conflicts) */
+  conflict: boolean;
 }
 
 /** the move key of a changed file: its file name, with a decision's tests
@@ -286,6 +289,23 @@ export interface SyncResult {
   branch: string;
   /** repo-relative paths whose content the reset changed or removed */
   changed: string[];
+}
+
+/**
+ * POST /api/repos/:fullName/conflicts — resolve a catch-up conflict (#185):
+ * `main` gives the file the default branch's version (only this file; its
+ * unreleased edits are discarded), `workspace` keeps the local version and
+ * clears the flag, so the next release deliberately replaces upstream's change.
+ */
+export interface ResolveConflictBody {
+  /** repo-relative path of a file flagged `conflict` in GET /changes */
+  path: string;
+  keep: "main" | "workspace";
+}
+
+export interface ResolveConflictResult {
+  path: string;
+  keep: "main" | "workspace";
 }
 
 /** GET /api/repos/:fullName/history?path=<model path>[&limit=<n>] — commits on
