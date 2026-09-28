@@ -16,3 +16,6 @@ minimumReleaseAgeExclude:
   # the context-maps modeler pair (#157) — 0.2.0 published minutes before the bump
   - "@miragon/context-maps-renderer@0.2.0"
   - "@miragon/context-maps-schema-model@0.2.0"
+  # the team-topologies modeler pair — 0.8.0 (document v3, annotations) published minutes before the bump
+  - "@miragon/team-topologies-renderer@0.8.0"
+  - "@miragon/team-topologies-schema-model@0.8.0"

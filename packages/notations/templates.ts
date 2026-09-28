@@ -128,12 +128,13 @@ export function newOwmText(_id: string, name: string): string {
 
 /**
  * The initial content of a new Team Topology — EXACTLY the schema-model's
- * canonical serialization (version 2, 2-space indent, no trailing newline):
- * the modeler's first save re-serializes canonically, and a byte-identical
- * template keeps that save from showing up as a phantom diff.
+ * canonical serialization (version 3, 2-space indent, no trailing newline, an
+ * empty `annotations` list left out): the modeler's first save re-serializes
+ * canonically, and a byte-identical template keeps that save from showing up
+ * as a phantom diff.
  */
 export function newTtJson(_id: string, name: string): string {
-  return JSON.stringify({ version: 2, title: oneLine(name), nodes: [], interactions: [], flows: [] }, null, 2);
+  return JSON.stringify({ version: 3, title: oneLine(name), nodes: [], interactions: [], flows: [] }, null, 2);
 }
 
 /**
