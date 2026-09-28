@@ -5,8 +5,10 @@
  *   host repo   — the checkout the Live Host runs in (zero-migration path:
  *                 live edits, dirty state and the demo keep working)
  *   other repos — cloned under <dataDir>/workspaces/<owner>/<name>; fetched
- *                 (never auto-merged: the working tree is owned by
- *                 write-through, release cuts worktrees from origin/<branch>)
+ *                 and caught up with origin/<branch> per file (#185): the
+ *                 working tree is owned by write-through and never loses an
+ *                 unreleased edit, a release marks what it shipped in the
+ *                 index, release cuts worktrees from origin/<branch>
  *
  * The installation token is passed to git via env config (GIT_CONFIG_* →
  * http.extraHeader), NEVER baked into the persisted remote URL — so it never
@@ -15,13 +17,23 @@
  * LIVE_GIT_URL_OVERRIDE (tests/offline): clone/fetch URL becomes
  * `<override>/<owner>/<name>.git` instead of the provider URL.
  */
-import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { existsSync, lstatSync } from "node:fs";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { FileCommitWire } from "@bpmiq/contracts/live-host";
 
 import { gitEnv, runGit, scrub } from "../adapters/git/run.ts";
+import {
+  catchUpAction,
+  type IndexEntry,
+  indexTarget,
+  parks,
+  parseIndex,
+  parseRawDiff,
+  releasedAfter,
+  type UpstreamChange,
+} from "../domain/catch-up.ts";
 import { FILE_LOG_FORMAT, parseFileLog } from "../domain/file-history.ts";
 import { CONTENT_CONFIG_FILE } from "./content.ts";
 import type { ConnectedRepo, RepoRegistry } from "./registry.ts";
@@ -29,10 +41,31 @@ import type { ConnectedRepo, RepoRegistry } from "./registry.ts";
 /** model blobs can exceed execFile's 1 MB default (large BPMN diagrams) */
 const GIT_OUT_MAX = 16 * 1024 * 1024;
 
+/** files changed on BOTH sides that the catch-up kept locally (#185) — a JSON
+ *  path list inside the clone's .git, so it lives and dies with the checkout */
+const CONFLICTS_FILE = "bpmiq-conflicts.json";
+
+/** per file, the blobs its still-open releases shipped, oldest first (#185) —
+ *  so an earlier release that merges while a later one is open is no
+ *  conflict. Kept like the conflict list; the catch-up drains it. */
+const RELEASED_FILE = "bpmiq-released.json";
+
+/** path → blobs, oldest first (null = a shipped deletion) */
+type ReleasedLists = Map<string, Array<string | null>>;
+
+/** paths per git invocation — keeps argv far below ARG_MAX */
+const ARGV_CHUNK = 200;
+
+const chunks = <T>(items: T[]): T[][] =>
+  Array.from({ length: Math.ceil(items.length / ARGV_CHUNK) }, (_, i) =>
+    items.slice(i * ARGV_CHUNK, (i + 1) * ARGV_CHUNK),
+  );
+
 export interface WorkspaceHooks {
-  /** true while any live document of this repo has connections — blocks reconcile */
-  hasLiveDocs?: (repo: ConnectedRepo) => boolean;
-  /** upstream commits were fast-forwarded into the tree — invalidate these files' Yjs lineages */
+  /** repo-root-relative paths of this repo's files open in a live session —
+   *  the catch-up never rewrites one of them under an editor */
+  livePaths?: (repo: ConnectedRepo) => string[];
+  /** upstream content was written into these files — invalidate their Yjs lineages */
   onReconciled?: (repo: ConnectedRepo, changedPaths: string[]) => void;
 }
 
@@ -45,6 +78,9 @@ export class WorkspaceManager {
   private readonly ensured = new Map<string, number>();
   /** single-flight: concurrent ensure() for the same repo share one promise */
   private readonly inflight = new Map<string, Promise<string>>();
+  /** per-repo chain of the git operations that write .git/index (catch-up,
+   *  release marks, conflict resolution, reset) — they never interleave */
+  private readonly tails = new Map<string, Promise<unknown>>();
   hooks: WorkspaceHooks = {};
 
   constructor(args: {
@@ -101,12 +137,12 @@ export class WorkspaceManager {
   }
 
   /**
-   * Clone (first time) or fetch (at most every 60s). NEVER merges into a DIRTY
-   * working tree — write-through owns it; release/dirty-diff use origin/<branch>
-   * which the fetch updates. But a clean tree with no live sessions IS
-   * reconciled (fast-forward): otherwise upstream-merged changes never reach
+   * Clone (first time) or fetch (at most every 60s) and catch up with the
+   * default branch (reconcile): otherwise upstream-merged changes never reach
    * live documents, upstream-created processes never appear, and the next
-   * release silently reverts foreign work.
+   * release silently reverts foreign work. Between fetches, ensure() still
+   * waits for a catch-up a release started — nobody seeds a room from a tree
+   * that is being rewritten.
    */
   private async provision(repo: ConnectedRepo): Promise<string> {
     const dir = this.checkoutDir(repo);
@@ -118,10 +154,12 @@ export class WorkspaceManager {
         try {
           await runGit(["-C", dir, "fetch", "origin", repo.defaultBranch], { env: gitEnv(token) });
           this.ensured.set(repo.fullName, Date.now());
-          await this.reconcile(repo, dir);
+          await this.reconcile(repo);
         } catch (e) {
           console.log(`fetch ${repo.fullName} failed: ${scrub((e as Error).message).split("\n")[0]}`);
         }
+      } else {
+        await this.tails.get(repo.fullName)?.catch(() => undefined);
       }
       return dir;
     }
@@ -137,43 +175,312 @@ export class WorkspaceManager {
     return dir;
   }
 
+  /** run `op` after every earlier index-writing operation of this repo */
+  private serial<T>(repo: ConnectedRepo, op: () => Promise<T>): Promise<T> {
+    const next = (this.tails.get(repo.fullName) ?? Promise.resolve()).catch(() => undefined).then(op);
+    this.tails.set(repo.fullName, next);
+    const settled = () => {
+      if (this.tails.get(repo.fullName) === next) this.tails.delete(repo.fullName);
+    };
+    next.then(settled, settled);
+    return next;
+  }
+
   /**
-   * Fast-forward the working tree onto origin/<branch> when it is SAFE:
-   * no uncommitted live edits (write-through owns dirty trees) and no live
-   * sessions (an open doc's lineage must not race a reseed). Lineages of files
-   * the fast-forward changed are invalidated via hooks.onReconciled so the next
-   * open reseeds from the updated tree instead of write-through resurrecting
-   * the stale state.
+   * Catch the workspace up with origin/<branch> (#185) — per file, never over
+   * anyone's unreleased edits. git's fast-forward does the heavy lifting: it
+   * keeps every locally edited file upstream did not touch and writes every
+   * untouched file upstream changed. The files it would refuse get the index
+   * entry that lets it pass (domain/catch-up.ts): a merged release is simply
+   * clean afterwards (also an earlier one of a file released again meanwhile,
+   * via the release list), and a file changed on BOTH sides keeps its local version
+   * and lands on the conflict list, which the release guard refuses until
+   * someone resolves it. Stands down (retried after the next fetch) only when
+   * a file it would rewrite is open in a live session — write-through would
+   * put the editor's stale state right back. Rewritten files get their Yjs
+   * lineage invalidated (hooks.onReconciled) so the next open reseeds from the
+   * new tree. The in-place host checkout is never touched: it is the
+   * operator's own working tree.
    */
-  private async reconcile(repo: ConnectedRepo, dir: string): Promise<void> {
-    if (this.hooks.hasLiveDocs?.(repo)) return;
-    const { stdout: status } = await runGit(["-C", dir, "status", "--porcelain"]);
-    if (status.trim().length > 0) return; // live edits on disk — never merge over them
+  async reconcile(repo: ConnectedRepo): Promise<void> {
+    if (this.isHostRepo(repo.fullName)) return;
+    const dir = this.dir(repo);
+    await this.serial(repo, async () => {
+      await this.catchUp(repo, dir);
+      await this.pruneConflicts(repo, dir);
+    });
+  }
+
+  private async catchUp(repo: ConnectedRepo, dir: string): Promise<void> {
     const { stdout: oldHead } = await runGit(["-C", dir, "rev-parse", "HEAD"]);
     const { stdout: newHead } = await runGit(["-C", dir, "rev-parse", `origin/${repo.defaultBranch}`]);
-    if (oldHead.trim() === newHead.trim()) return;
+    const [from, to] = [oldHead.trim(), newHead.trim()];
+    if (from === to) return;
+    const released = await this.readReleased(dir);
+    const plan = (await this.upstreamChanges(dir, from, to, released)).map((c) => ({ c, action: catchUpAction(c) }));
+    const taken = plan.filter((p) => p.action === "take").map((p) => p.c.path);
+    // a local file at a path upstream deletes (edited or re-created here): git
+    // refuses to fast-forward "over" it once untracked, so it is parked inside .git
+    const parked = plan.filter((p) => parks(p.c, p.action)).map((p) => p.c.path);
+    const live = new Set(this.hooks.livePaths?.(repo) ?? []);
+    const busy = [...taken, ...parked].filter((p) => live.has(p));
+    if (busy.length > 0) {
+      console.log(
+        `reconcile ${repo.fullName}: deferred — changed upstream but open in a live session: ${busy.join(", ")}`,
+      );
+      return;
+    }
+    const conflicts = plan.filter((p) => p.action === "conflict").map((p) => p.c.path);
+    // flag FIRST: once the index holds upstream, nothing but this list
+    // remembers that the local version builds on an older state
+    if (conflicts.length > 0) await this.writeConflicts(dir, [...(await this.readConflicts(dir)), ...conflicts]);
+    await this.setIndex(
+      dir,
+      plan.map((p) => ({ path: p.c.path, entry: indexTarget(p.c, p.action) })),
+    );
+    const parking = join(dir, ".git", "bpmiq-parked");
+    await mkdir(parking, { recursive: true });
+    for (const [i, path] of parked.entries()) await rename(join(dir, path), join(parking, String(i)));
     try {
-      await runGit(["-C", dir, "merge", "--ff-only", `origin/${repo.defaultBranch}`]);
+      await runGit(["-C", dir, "merge", "--ff-only", "-q", to]);
     } catch (e) {
       console.log(`reconcile ${repo.fullName}: fast-forward failed (${scrub((e as Error).message).split("\n")[0]})`);
       return;
+    } finally {
+      for (const [i, path] of parked.entries()) {
+        await mkdir(dirname(join(dir, path)), { recursive: true }); // git may have pruned the emptied folder
+        await rename(join(parking, String(i)), join(dir, path));
+      }
     }
-    const { stdout: changed } = await runGit([
-      "-C",
-      dir,
-      "diff",
-      "--name-only",
-      `${oldHead.trim()}..${newHead.trim()}`,
-    ]);
-    // lineage keys are repo-root-relative — exactly what git diff emits
-    const changedPaths = changed
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
+    // only once HEAD moved: a release upstream reached (and every older one)
+    // is no longer open; anything else upstream did to the file ends its list
+    const settled = plan.filter((p) => released.has(p.c.path));
+    if (settled.length > 0) {
+      for (const { c } of settled) released.set(c.path, releasedAfter(c));
+      await this.writeReleased(dir, released);
+    }
     console.log(
-      `reconciled ${repo.fullName}: ${oldHead.trim().slice(0, 7)} → ${newHead.trim().slice(0, 7)} (${changedPaths.length} content file(s))`,
+      `reconciled ${repo.fullName}: ${from.slice(0, 7)} → ${to.slice(0, 7)} ` +
+        `(${taken.length} file(s) updated, ${conflicts.length} conflict(s))`,
     );
-    if (changedPaths.length > 0) this.hooks.onReconciled?.(repo, changedPaths);
+    if (taken.length > 0) this.hooks.onReconciled?.(repo, taken);
+  }
+
+  /** every file the default branch changed between two commits, with the
+   *  workspace's index entry and working-tree content of each */
+  private async upstreamChanges(
+    dir: string,
+    from: string,
+    to: string,
+    released: ReleasedLists,
+  ): Promise<UpstreamChange[]> {
+    const { stdout: raw } = await runGit(
+      ["-C", dir, "diff-tree", "-r", "-z", "--no-renames", "--no-abbrev", from, to],
+      { maxBuffer: GIT_OUT_MAX },
+    );
+    const sides = parseRawDiff(raw);
+    const { stdout: ls } = await runGit(["-C", dir, "ls-files", "-s", "-z"], { maxBuffer: GIT_OUT_MAX });
+    const index = parseIndex(ls);
+    const tree = await this.hashTree(
+      dir,
+      sides.map((c) => c.path),
+    );
+    return sides.map((c) => ({
+      ...c,
+      index: index.get(c.path) ?? null,
+      tree: tree.get(c.path) ?? null,
+      released: released.get(c.path) ?? [],
+    }));
+  }
+
+  /** working-tree object ids, hashed the way `git add` would; absent files
+   *  are missing from the map */
+  private async hashTree(dir: string, paths: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const files: string[] = [];
+    for (const path of paths) {
+      const st = lstatSync(join(dir, path), { throwIfNoEntry: false });
+      if (st?.isFile()) files.push(path);
+      else if (st) out.set(path, "(not a regular file)"); // never equals an object id
+    }
+    for (const chunk of chunks(files)) {
+      const { stdout } = await runGit(["-C", dir, "hash-object", "--", ...chunk]);
+      stdout
+        .split("\n")
+        .filter(Boolean)
+        .forEach((id, i) => {
+          const path = chunk[i];
+          if (path) out.set(path, id.trim());
+        });
+    }
+    return out;
+  }
+
+  /** the entries of `paths` in a commit's tree (absent paths are missing) */
+  private async treeEntries(dir: string, commit: string, paths: string[]): Promise<Map<string, IndexEntry>> {
+    const out = new Map<string, IndexEntry>();
+    for (const chunk of chunks(paths)) {
+      const { stdout } = await runGit(["-C", dir, "ls-tree", "-r", "-z", commit, "--", ...chunk], {
+        maxBuffer: GIT_OUT_MAX,
+      });
+      for (const record of stdout.split("\0")) {
+        const tab = record.indexOf("\t");
+        const [mode, , blob] = record.slice(0, tab).split(" ");
+        if (tab > 0 && mode && blob) out.set(record.slice(tab + 1), { mode, blob });
+      }
+    }
+    return out;
+  }
+
+  /** set index entries (null = remove, undefined = leave) — never the working tree */
+  private async setIndex(dir: string, entries: Array<{ path: string; entry: IndexEntry | null | undefined }>) {
+    const set = entries.flatMap(({ path, entry }) => (entry ? [`${entry.mode},${entry.blob},${path}`] : []));
+    const remove = entries.flatMap(({ path, entry }) => (entry === null ? [path] : []));
+    for (const chunk of chunks(set)) {
+      await runGit(["-C", dir, "update-index", "--add", ...chunk.flatMap((info) => ["--cacheinfo", info])]);
+    }
+    for (const chunk of chunks(remove)) {
+      await runGit(["-C", dir, "update-index", "--force-remove", "--", ...chunk]);
+    }
+  }
+
+  /** a JSON state file inside the clone's .git — undefined when absent or unreadable */
+  private async readState(dir: string, name: string): Promise<unknown> {
+    try {
+      return JSON.parse(await readFile(join(dir, ".git", name), "utf8"));
+    } catch {
+      return undefined; // not written yet
+    }
+  }
+
+  /** undefined removes the file */
+  private async writeState(dir: string, name: string, value: unknown): Promise<void> {
+    const file = join(dir, ".git", name);
+    if (value === undefined) return rm(file, { force: true });
+    // write + rename: a torn conflict list would read as "no conflicts" — the
+    // one state whose loss could let a release silently revert upstream work
+    await writeFile(`${file}.tmp`, `${JSON.stringify(value, null, 2)}\n`);
+    await rename(`${file}.tmp`, file);
+  }
+
+  private async readConflicts(dir: string): Promise<string[]> {
+    const parsed = await this.readState(dir, CONFLICTS_FILE);
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+  }
+
+  private async writeConflicts(dir: string, paths: string[]): Promise<void> {
+    const unique = [...new Set(paths)].sort();
+    await this.writeState(dir, CONFLICTS_FILE, unique.length > 0 ? unique : undefined);
+  }
+
+  private async readReleased(dir: string): Promise<ReleasedLists> {
+    const parsed = await this.readState(dir, RELEASED_FILE);
+    const out: ReleasedLists = new Map();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return out;
+    for (const [path, list] of Object.entries(parsed)) {
+      if (Array.isArray(list))
+        out.set(
+          path,
+          list.filter((b): b is string | null => b === null || typeof b === "string"),
+        );
+    }
+    return out;
+  }
+
+  /** empty lists are dropped */
+  private async writeReleased(dir: string, released: ReleasedLists): Promise<void> {
+    const open = [...released].filter(([, list]) => list.length > 0).sort(([a], [b]) => a.localeCompare(b));
+    await this.writeState(dir, RELEASED_FILE, open.length > 0 ? Object.fromEntries(open) : undefined);
+  }
+
+  /** a conflict heals by itself once the working tree equals the default
+   *  branch again (someone took main's version, or re-did its change) */
+  private async pruneConflicts(repo: ConnectedRepo, dir: string): Promise<void> {
+    const listed = await this.readConflicts(dir);
+    if (listed.length === 0) return;
+    const upstream = await this.treeEntries(dir, `origin/${repo.defaultBranch}`, listed);
+    const tree = await this.hashTree(dir, listed);
+    const open = listed.filter((p) => (tree.get(p) ?? null) !== (upstream.get(p)?.blob ?? null));
+    if (open.length < listed.length) await this.writeConflicts(dir, open);
+  }
+
+  /**
+   * Files the catch-up kept locally although the default branch changed them
+   * too (#185) — releasing one would silently revert upstream's change, so
+   * the release guard refuses them until resolved. Always [] for the in-place
+   * host checkout (never caught up).
+   */
+  async conflicts(repo: ConnectedRepo): Promise<string[]> {
+    if (this.isHostRepo(repo.fullName)) return [];
+    return this.readConflicts(this.dir(repo));
+  }
+
+  /**
+   * Resolve a conflict for the default branch: the file gets origin's version
+   * (or goes, when origin deleted it) in index and working tree and leaves the
+   * conflict list. Only this file — every other unreleased edit stays. Its
+   * release list goes too: the file now builds on main, not on an older
+   * release that may still merge. The caller drops the file's Yjs lineage.
+   */
+  async takeUpstream(repo: ConnectedRepo, path: string): Promise<void> {
+    if (this.isHostRepo(repo.fullName)) {
+      throw new Error(`refusing to rewrite the in-place host checkout ${repo.fullName}`);
+    }
+    const dir = this.dir(repo);
+    await this.serial(repo, async () => {
+      const ref = `origin/${repo.defaultBranch}`;
+      if ((await this.treeEntries(dir, ref, [path])).has(path)) {
+        await runGit(["-C", dir, "checkout", ref, "--", path]);
+      } else {
+        await runGit(["-C", dir, "rm", "-q", "--cached", "--ignore-unmatch", "--", path]);
+        await rm(join(dir, path), { force: true });
+      }
+      await this.writeConflicts(
+        dir,
+        (await this.readConflicts(dir)).filter((p) => p !== path),
+      );
+      const released = await this.readReleased(dir);
+      if (released.delete(path)) await this.writeReleased(dir, released);
+    });
+  }
+
+  /** resolve a conflict for the workspace: the flag goes, the local version
+   *  stays — the next release deliberately replaces upstream's change */
+  async keepWorkspace(repo: ConnectedRepo, path: string): Promise<void> {
+    const dir = this.dir(repo);
+    await this.serial(repo, async () => {
+      await this.writeConflicts(
+        dir,
+        (await this.readConflicts(dir)).filter((p) => p !== path),
+      );
+    });
+  }
+
+  /**
+   * Mark what a release shipped (#185): the released blobs become the index
+   * entries — the base further live edits build on. Once the PR merges, the
+   * catch-up finds index == upstream and keeps the working tree: the release
+   * is no longer a change, edits made since stay one. A path missing from the
+   * release commit (a shipped deletion) loses its entry. Each blob also joins
+   * the file's release list, because releasing the file again moves the index
+   * on while this PR may still merge first. Never the in-place host checkout
+   * (that index is the operator's).
+   */
+  async markReleased(repo: ConnectedRepo, commit: string, paths: string[]): Promise<void> {
+    if (this.isHostRepo(repo.fullName)) return;
+    const dir = this.dir(repo);
+    await this.serial(repo, async () => {
+      const shipped = await this.treeEntries(dir, commit, paths);
+      const entries = paths.map((path) => ({ path, entry: shipped.get(path) ?? null }));
+      const released = await this.readReleased(dir);
+      for (const { path, entry } of entries) {
+        const list = released.get(path) ?? [];
+        const blob = entry?.blob ?? null;
+        if (list.at(-1) !== blob) released.set(path, [...list, blob]);
+      }
+      await this.writeReleased(dir, released);
+      await this.setIndex(dir, entries);
+    });
   }
 
   /**
@@ -280,7 +587,8 @@ export class WorkspaceManager {
   /**
    * Hard-reset the workspace onto origin/<defaultBranch> — "load the latest
    * state from main", DISCARDING every uncommitted live edit (the opposite of
-   * reconcile, which refuses to touch a dirty tree). Fetches first, records the
+   * reconcile, which never touches one), release marks and conflicts included.
+   * Fetches first, records the
    * paths the reset will overwrite or remove (tracked diffs vs origin PLUS
    * untracked files git clean will delete) so their Yjs lineage can be dropped,
    * then `reset --hard` + `clean -fd`. Returns those repo-root-relative paths.
@@ -295,6 +603,10 @@ export class WorkspaceManager {
     if (this.isHostRepo(repo.fullName)) {
       throw new Error(`refusing to hard-reset the in-place host checkout ${repo.fullName}`);
     }
+    return this.serial(repo, () => this.hardReset(repo));
+  }
+
+  private async hardReset(repo: ConnectedRepo): Promise<string[]> {
     const dir = this.dir(repo);
     const token = await this.registry.tokenFor(repo);
     await runGit(["-C", dir, "fetch", "origin", repo.defaultBranch], { env: gitEnv(token) });
@@ -316,6 +628,10 @@ export class WorkspaceManager {
     }
     await runGit(["-C", dir, "reset", "--hard", `origin/${repo.defaultBranch}`]);
     await runGit(["-C", dir, "clean", "-fd"]);
+    // nothing unreleased is left to conflict, and an open release that merges
+    // later is plain upstream work for the reset tree (the catch-up takes it)
+    await this.writeConflicts(dir, []);
+    await this.writeReleased(dir, new Map());
     // the tree now matches the ref we just fetched — keep provision()'s 60s
     // throttle honest so it doesn't immediately re-fetch/reconcile behind us
     this.ensured.set(repo.fullName, Date.now());

@@ -19,6 +19,11 @@
 #   E   file-selection release: GET /changes statuses, gates, selections
 #   F   moving a model into another folder (#182): delete + add in /changes,
 #       and a release of either half ships the whole move as a git rename
+#   G   the workspace catches up with main per file (#185): a squash-merged
+#       release is no longer a change, editing on and releasing again ships
+#       only the new edits (no upstream-guard 409), upstream work on untouched
+#       files arrives, and a file changed on both sides is flagged, refused,
+#       and resolvable either way
 #
 # Run: bash test/release-e2e.sh   (or: pnpm --filter @bpmiq/live-host test)
 set -u
@@ -289,6 +294,65 @@ echo "$R" | grep -q '"pr"' && ok "F: moved process released by id → PR" || bad
 PBRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/invoice-handling | tail -1 | tr -d ' *')
 PSHIP=$(git -C "$E2E/origin/acme/bpm-processes.git" show -M --name-status --format= "$PBRANCH")
 echo "$PSHIP" | grep -qE "^R[0-9]+	$OLD_IH	$NEW_IH\$" && ok "F: release by id is a git rename too" || bad "F: expected a rename: $PSHIP"
+
+# ═══ Case G: catch-up with main per file (#185) ═══
+CHANGES="http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes"
+TP="processes/two-pool/two-pool.bpmn"
+OTC="processes/order-to-cash/order-to-cash.bpmn"
+DOC="processes/order-to-cash/docs/overview.md"
+release_files() { # $1=path $2=title — a file-selection release (second-stamped branch)
+  curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
+    -d "{\"files\":[\"$1\"],\"title\":\"$2\"}" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release"
+}
+resolve() { # $1=path $2=main|workspace
+  curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
+    -d "{\"path\":\"$1\",\"keep\":\"$2\"}" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/conflicts"
+}
+# A4 left two-pool changed on both sides: released here, edited on, changed upstream
+CH=$(curl -s --max-time 60 "$CHANGES")
+echo "$CH" | grep -qE "\"path\": *\"$TP\"[^}]*\"conflict\": *true" && ok "G: /changes flags the file changed on both sides" || bad "G: no conflict flag: $CH"
+R=$(resolve "processes/nope.bpmn" workspace)
+echo "$R" | grep -q '"code": *"conflict/not-found"' && ok "G: resolving an unflagged path is a 404" || bad "G: expected conflict/not-found, got: $R"
+R=$(resolve "$TP" workspace)
+echo "$R" | grep -q '"keep": *"workspace"' && ok "G: conflict resolved — keep the workspace's version" || bad "G: resolve failed: $R"
+R=$(release_files "$TP" "Keep final offer")
+echo "$R" | grep -q '"pr"' && ok "G: the kept version releases deliberately" || bad "G: release after resolve failed: $R"
+GBRANCH=$(echo "$R" | sed -E 's/.*"branch": *"([^"]+)".*/\1/')
+
+# the PR merges (squashed — main gets a NEW commit), and someone else changes
+# a file nobody touched in the workspace
+git -C "$FOREIGN" fetch -q origin "$GBRANCH"
+git -C "$FOREIGN" merge -q --squash FETCH_HEAD
+git -C "$FOREIGN" -c user.name=col -c user.email=c@test commit -qm "squash: $GBRANCH"
+printf '# Overview\n\nupdated upstream\n' > "$FOREIGN/$DOC"
+git -C "$FOREIGN" -c user.name=col -c user.email=c@test commit -qam "docs upstream"
+git -C "$FOREIGN" push -q origin main
+
+# edit on, release again: only the new edit ships, no upstream-guard 409
+edit "$WS1/$TP" 'name="Review final offer"' 'name="Review final offer v2"'
+R=$(release_files "$TP" "Final offer v2")
+echo "$R" | grep -q '"pr"' && ok "G: releasing again after the merge works (no upstream-guard 409)" || bad "G: re-release failed: $R"
+GBRANCH2=$(echo "$R" | sed -E 's/.*"branch": *"([^"]+)".*/\1/')
+NUM=$(git -C "$E2E/origin/acme/bpm-processes.git" diff --numstat "$GBRANCH2~1" "$GBRANCH2")
+[ "$NUM" = "1	1	$TP" ] && ok "G: the second release ships only the new edit" || bad "G: unexpected diff: $NUM"
+[ "$(cat "$WS1/$DOC")" = "$(git -C "$E2E/origin/acme/bpm-processes.git" show "main:$DOC")" ] && ok "G: upstream work on an untouched file reached the workspace" || bad "G: $DOC not caught up"
+CH=$(curl -s --max-time 60 "$CHANGES")
+echo "$CH" | grep -q "$DOC" && bad "G: upstream's file shows as a reverse change: $CH" || ok "G: upstream's file is no change"
+echo "$CH" | grep -q "\"path\": *\"$OTC\"" && ok "G: a colleague's unreleased edit survived the catch-up" || bad "G: unreleased edit lost: $CH"
+
+# changed outside the platform while the workspace holds an unreleased edit
+git -C "$FOREIGN" pull -q --ff-only origin main
+edit "$FOREIGN/$OTC" 'name="Validate order"' 'name="Validate order (outside)"'
+git -C "$FOREIGN" -c user.name=col -c user.email=c@test commit -qam "outside edit"
+git -C "$FOREIGN" push -q origin main
+R=$(release_files "$OTC" "Order tweak")
+echo "$R" | grep -q '"code": *"release/conflict"' && ok "G: a file changed on both sides is refused (409 release/conflict)" || bad "G: expected release/conflict, got: $R"
+grep -q "release-e2e tweak" "$WS1/$OTC" && ok "G: the local version is kept" || bad "G: local edit lost"
+R=$(resolve "$OTC" main)
+echo "$R" | grep -q '"keep": *"main"' && ok "G: conflict resolved — take main's version" || bad "G: resolve main failed: $R"
+[ "$(cat "$WS1/$OTC")" = "$(git -C "$E2E/origin/acme/bpm-processes.git" show "main:$OTC")" ] && ok "G: the file now holds main's version" || bad "G: $OTC is not main's version"
+CH=$(curl -s --max-time 60 "$CHANGES")
+echo "$CH" | grep -q "$OTC" && bad "G: resolved file still in the pool: $CH" || ok "G: the resolved file left the release pool"
 
 echo; echo "── $PASS passed, $FAIL failed ──"
 exit "$FAIL"

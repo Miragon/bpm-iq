@@ -155,9 +155,10 @@ export function releaseFilesPrBody(
 /** the subset of ApiOptions release() needs — keeps the dep one-way (api → release) */
 export interface ReleaseDeps {
   workspaces: Pick<WorkspaceManager, "ensure" | "changedFiles"> &
-    // optional: without it a release simply ships without its decision-impact
-    // section (tests and the in-process fakes do not implement it)
-    Partial<Pick<WorkspaceManager, "fileAtCommit">>;
+    // optional: without fileAtCommit a release simply ships without its
+    // decision-impact section; without the catch-up trio (#185) the upstream
+    // guard alone protects foreign work (tests and in-process fakes)
+    Partial<Pick<WorkspaceManager, "fileAtCommit" | "reconcile" | "conflicts" | "markReleased">>;
   /** REST backend for the app installation clone token (bot-authored release) */
   connectionSource?: Pick<RepoConnectionSource, "cloneToken">;
 }
@@ -180,10 +181,12 @@ interface PublishArgs {
 }
 
 /**
- * The shared worktree → push → PR core: fetch origin, guard against silently
- * reverting upstream commits (per file), stage exactly `files` on a fresh
- * branch off origin/<default>, commit with human attribution, push and open
- * the PR bot-authored when possible.
+ * The shared worktree → push → PR core: fetch origin and catch the workspace
+ * up with it, guard against silently reverting upstream changes (per file),
+ * stage exactly `files` on a fresh branch off origin/<default>, commit with
+ * human attribution, push, open the PR bot-authored when possible, and mark
+ * the shipped state in the workspace (#185) — once the PR merges, what it
+ * shipped is no longer a change.
  */
 async function publish(
   opts: ReleaseDeps,
@@ -207,9 +210,32 @@ async function publish(
     await runGit(["-C", workspace, "fetch", "origin", repo.defaultBranch], {
       env: gitEnv(instToken),
     });
+    // absorb what the default branch gained since the last catch-up — a
+    // release merged seconds ago must not read as an upstream change of its
+    // own files. A failed catch-up leaves HEAD behind: the guard below still holds.
+    await opts.workspaces.reconcile?.(repo).catch((e: unknown) => {
+      console.log(`release ${repo.fullName}: catch-up failed (${(e as Error).message.split("\n")[0]})`);
+    });
+
+    // conflict guard: files changed upstream while the workspace held
+    // unreleased edits of them — the catch-up kept the local version
+    const conflicted = new Set((await opts.workspaces.conflicts?.(repo)) ?? []);
+    const blocked = args.files.filter((f) => conflicted.has(f.path)).map((f) => f.path);
+    if (blocked.length > 0) {
+      throw new AppError(
+        "release/conflict",
+        `Diese Dateien wurden upstream geändert, während sie hier noch unveröffentlichte Änderungen hatten:\n` +
+          `${blocked.join("\n")}\n` +
+          `Ein Release jetzt würde die Änderungen auf ${repo.defaultBranch} still zurückdrehen. Konflikt zuerst ` +
+          `auflösen (Version von ${repo.defaultBranch} übernehmen oder die eigene bewusst behalten), danach erneut releasen.`,
+        { status: 409, expose: true },
+      );
+    }
 
     // upstream guard: commits on origin touching a selected file that this
     // workspace has never absorbed would be silently REVERTED by the copy below
+    // (the catch-up was deferred — a changed file is open in an editor — or
+    // this is the in-place host checkout, which never catches up)
     const conflicts: string[] = [];
     for (const file of args.files) {
       const { stdout: upstream } = await runGit([
@@ -228,8 +254,8 @@ async function publish(
         "release/upstream-changed",
         `Diese Dateien wurden upstream geändert, seit dieser Workspace zuletzt synchronisiert wurde:\n` +
           `${conflicts.join("\n")}\n` +
-          `Ein Release jetzt würde diese Änderungen still zurückdrehen. Der Workspace gleicht sich automatisch ab, ` +
-          `sobald keine Live-Sessions offen sind — danach erneut releasen.`,
+          `Ein Release jetzt würde diese Änderungen still zurückdrehen. Der Workspace übernimmt sie automatisch, ` +
+          `sobald keine davon betroffene Datei mehr im Editor geöffnet ist — danach erneut releasen.`,
         { status: 409, expose: true },
       );
     }
@@ -294,6 +320,20 @@ async function publish(
       title: args.prTitle,
       body: await args.prBody(botAuthored, stagedFiles),
     });
+    // the PR exists — a failed mark must not fail the release; the only cost is
+    // a false conflict on this file once the PR merges (never a silent revert)
+    const { stdout: commit } = await runGit(["-C", worktree, "rev-parse", "HEAD"]);
+    await opts.workspaces
+      .markReleased?.(
+        repo,
+        commit.trim(),
+        args.files.map((f) => f.path),
+      )
+      .catch((e: unknown) => {
+        console.log(
+          `release ${repo.fullName}: marking the shipped state failed (${(e as Error).message.split("\n")[0]})`,
+        );
+      });
     return {
       pr: pr.url,
       branch: args.branch,

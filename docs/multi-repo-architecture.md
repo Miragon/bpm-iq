@@ -104,6 +104,21 @@ Nothing today records where the app is installed; `/setup/installed` discards
   `LIVE_DATA_DIR`; `webDist` likewise resolves relative to the install location, not
   the content repo (`server.ts:146`).
 - `BASE_BRANCH` becomes per-repo (`repository.default_branch` from the registry).
+- **Catch-up with the default branch, per file (#185).** After every fetch (at most
+  every 60 s, driven by requests — and right after the fetch of every release) the
+  workspace fast-forwards onto `origin/<branch>` without touching anyone's unreleased
+  edits: files nobody edited take upstream's version, edited files upstream did not
+  touch stay as they are. A release marks what it shipped in the workspace's git
+  index, so once its PR merges the released state is no change anymore and only
+  edits made since remain; the file's still-open releases are remembered too
+  (`.git/bpmiq-released.json`), so an earlier release that merges while a later one
+  of the same file is open is no conflict either. A file changed on **both** sides (outside the platform,
+  or a PR altered before its merge) keeps its local version and is flagged as a
+  conflict (`.git/bpmiq-conflicts.json`): the release refuses it (409
+  `release/conflict`) until someone takes main's version or deliberately keeps the
+  workspace's (`POST /api/repos/:owner/:repo/conflicts`). The catch-up only waits
+  while a file it would rewrite is open in a live session. The decision per file is
+  `apps/live-host/src/domain/catch-up.ts`; the in-place host checkout never catches up.
 
 ### D. Repo-namespaced collaboration protocol (client/server lockstep)
 

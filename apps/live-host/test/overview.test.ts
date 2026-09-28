@@ -14,6 +14,7 @@ import { test } from "node:test";
 import type { Session } from "../src/adapters/sqlite/sessions.ts";
 import {
   listAllModels,
+  listChanges,
   listDecisions,
   listProcesses,
   listRepos,
@@ -249,4 +250,28 @@ test("listRepos: no bpmiq.yml (workspace absent or plain repo) → null counts",
   assert.equal(repos[0]?.processCount, null);
   assert.equal(repos[0]?.decisionCount, null);
   assert.equal(repos[0]?.dirtyCount, null);
+});
+
+// ── listChanges ─────────────────────────────────────────────────────────────
+
+test("listChanges: the release pool row carries live sessions and the catch-up conflict flag (#185)", async () => {
+  const base = setup();
+  const deps: OverviewDeps = {
+    ...base.deps,
+    workspaces: {
+      ...base.deps.workspaces,
+      changedFiles: async () => [
+        { path: "processes/order.bpmn", status: "modified" as const },
+        { path: "processes/rabatt.dmn", status: "modified" as const },
+      ],
+      conflicts: async () => ["processes/rabatt.dmn", "README.md"], // out-of-pool flags never invent rows
+    },
+  };
+  assert.deepEqual(await listChanges(deps, REPO, base.ws), [
+    { path: "processes/order.bpmn", status: "modified", liveSessions: 2, conflict: false },
+    { path: "processes/rabatt.dmn", status: "modified", liveSessions: 0, conflict: true },
+  ]);
+  // a workspace surface without the catch-up (fakes, older wiring) reports no conflicts
+  const rows = await listChanges(base.deps, REPO, base.ws);
+  assert.equal(rows[0]?.conflict, false);
 });

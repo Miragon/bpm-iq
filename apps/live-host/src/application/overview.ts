@@ -40,6 +40,9 @@ export interface OverviewDeps {
       repo: ConnectedRepo,
       pathspec: string,
     ): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>>;
+    /** files the catch-up kept although upstream changed them too (#185) —
+     *  optional: fakes without it report no conflicts */
+    conflicts?(repo: ConnectedRepo): Promise<string[]>;
   };
   access: { canWrite(session: Session, repo: ConnectedRepo): Promise<boolean> };
   /** repo-qualified document names of live rooms */
@@ -193,7 +196,8 @@ export async function decisionUsers(workspace: string, decisionId: string): Prom
  * to the bpmiq.yml processes scope (like live rooms; checkout files outside
  * it are not part of the platform's surface). liveSessions marks files a
  * colleague currently has open, so the release dialog can warn before
- * shipping somebody's work in progress.
+ * shipping somebody's work in progress; conflict marks files the default
+ * branch changed meanwhile, which the release refuses until resolved.
  */
 export async function listChanges(
   opts: OverviewDeps,
@@ -203,9 +207,11 @@ export async function listChanges(
   const cfg = loadContentConfig(workspace);
   if (!cfg) return [];
   const live = opts.liveDocs();
+  const conflicts = new Set((await opts.workspaces.conflicts?.(repo)) ?? []);
   return (await opts.workspaces.changedFiles(repo, cfg.processes)).map((c) => ({
     ...c,
     liveSessions: live.filter((d) => d === roomName(repo.fullName, c.path)).length,
+    conflict: conflicts.has(c.path),
   }));
 }
 
