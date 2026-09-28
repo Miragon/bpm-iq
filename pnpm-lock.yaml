@@ -179,11 +179,11 @@ importers:
         specifier: 0.2.1
         version: 0.2.1
       '@miragon/team-topologies-renderer':
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.8.0
+        version: 0.8.0(diagram-js@15.26.0)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.2)
       '@miragon/team-topologies-schema-model':
-        specifier: 0.6.0
-        version: 0.6.0
+        specifier: 0.8.0
+        version: 0.8.0(zod@4.6.2)
       '@miragon/wardley-renderer':
         specifier: 0.6.1
         version: 0.6.1
@@ -911,11 +911,18 @@ packages:
   '@miragon/event-storming-schema-model@0.2.0':
     resolution: {integrity: sha512-2lcs1U0fXg0i8iarSrU6kFGoJjkYjq8t81DtF4jUmGjavOafZwcw9/HcQwPYCPcUZvfrfpNMB1MJ35SSZ9zzYA==}
 
-  '@miragon/team-topologies-renderer@0.6.0':
-    resolution: {integrity: sha512-Z4CGp54+R+OMaaP5IUZ6Tkq8B9o/i9XzJm/yaeZtx4ssK5tlmDSTJR5m4yhn6b7/qeM+0lMNzrEJALpyIOa9Pw==}
+  '@miragon/team-topologies-renderer@0.8.0':
+    resolution: {integrity: sha512-33kMjUJkqHK7661jnHInGShLItq+92XE8az7EWKC64iNPZETqtShclKD/9/o4yn9xSZRwkgPrVz0BjqeGQ+z+Q==}
+    peerDependencies:
+      diagram-js: ^15.26.0
+      didi: ^11.0.0
+      tiny-svg: ^4.1.4
+      zod: ^4.6.0
 
-  '@miragon/team-topologies-schema-model@0.6.0':
-    resolution: {integrity: sha512-WHDMlvMwF0jGSmqhiCVT4FluHGc4mKUUq7Nx4d+bKFeY1F9nKcVkOv/alr2EXf7eKH2+egxknMFgqMWYRqRJ1Q==}
+  '@miragon/team-topologies-schema-model@0.8.0':
+    resolution: {integrity: sha512-mG+ER6VZIzwM0SoI+r99buAad/zPFRwGD68euydaOcvguGuESmOlk1rF47WEyFn0dZ2xKoTqcHQ9ab8ewrl5vg==}
+    peerDependencies:
+      zod: ^4.6.0
 
   '@miragon/wardley-dsl@0.5.1':
     resolution: {integrity: sha512-gwLzrTmJVx4ywgG7UiHu4OGatrWMsuUo1xcjCVmW0FZVoLEh0HkuxPn8mMx0j5QlRuPYvmDLfBTAEwvY8EpROQ==}
@@ -2075,9 +2082,6 @@ packages:
     peerDependencies:
       diagram-js: '*'
 
-  diagram-js@15.22.0:
-    resolution: {integrity: sha512-xcX1e4lmRCrpwlnNqNHVqY8Xp4i70tXUZwO39IzRJsXWq6F+/osNs4biehnb5ZlHIzjZcEHWzOx/vlIui4qS8w==}
-
   diagram-js@15.23.0:
     resolution: {integrity: sha512-cCgL+4Ep0xrLe6TtdvRVgo6bWYjUbrQg+ES/9rpltqmTD2YaPoC+NYcRsKYw/fDO+1RN0q16NzErP1svVZhNQg==}
 
@@ -2860,11 +2864,6 @@ packages:
   nanoid@3.3.19:
     resolution: {integrity: sha512-Y2tUNy4ouw6tq5oDSKeQYGOyhkUBhNOcGV/02KC+6kd9eDGqdZd++mjMiIDilrBYvjEnCYvVtsuHCuP+okSfug==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
-    hasBin: true
-
-  nanoid@5.1.16:
-    resolution: {integrity: sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ==}
-    engines: {node: ^18 || >=20}
     hasBin: true
 
   nanoid@6.0.1:
@@ -4070,19 +4069,18 @@ snapshots:
     dependencies:
       zod: 4.5.4
 
-  '@miragon/team-topologies-renderer@0.6.0':
+  '@miragon/team-topologies-renderer@0.8.0(diagram-js@15.26.0)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.2)':
     dependencies:
-      '@miragon/team-topologies-schema-model': 0.6.0
-      diagram-js: 15.22.0
+      '@miragon/team-topologies-schema-model': 0.8.0(zod@4.6.2)
+      diagram-js: 15.26.0
       didi: 11.0.0
       tiny-svg: 4.1.4
-    transitivePeerDependencies:
-      - preact-render-to-string
+      zod: 4.6.2
 
-  '@miragon/team-topologies-schema-model@0.6.0':
+  '@miragon/team-topologies-schema-model@0.8.0(zod@4.6.2)':
     dependencies:
-      nanoid: 5.1.16
-      zod: 4.4.3
+      nanoid: 6.0.1
+      zod: 4.6.2
 
   '@miragon/wardley-dsl@0.5.1':
     dependencies:
@@ -5074,20 +5072,6 @@ snapshots:
       min-dash: 5.1.0
       min-dom: 5.3.0
 
-  diagram-js@15.22.0:
-    dependencies:
-      '@bpmn-io/diagram-js-ui': 0.2.4
-      clsx: 2.1.1
-      didi: 11.0.0
-      inherits-browser: 0.1.0
-      min-dash: 5.1.0
-      min-dom: 5.3.0
-      object-refs: 0.4.0
-      path-intersection: 4.1.0
-      tiny-svg: 4.1.4
-    transitivePeerDependencies:
-      - preact-render-to-string
-
   diagram-js@15.23.0:
     dependencies:
       '@bpmn-io/diagram-js-ui': 0.2.4
@@ -5913,8 +5897,6 @@ snapshots:
   ms@2.1.3: {}
 
   nanoid@3.3.19: {}
-
-  nanoid@5.1.16: {}
 
   nanoid@6.0.1: {}
 

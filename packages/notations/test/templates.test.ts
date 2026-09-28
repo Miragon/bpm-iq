@@ -57,11 +57,12 @@ test("the event-storming template is a title-only .storm board — the serialize
 
 test("the team-topology template is the schema-model's CANONICAL empty document (byte-stable first save)", () => {
   // shape pinned against @miragon/team-topologies-schema-model serializeDocument(…, true):
-  // version 2, 2-space indent, key order version/title/nodes/interactions/flows, NO trailing newline
+  // version 3, 2-space indent, key order version/title/nodes/interactions/flows, an empty
+  // `annotations` list omitted, NO trailing newline
   const text = newTtJson("teams", "Team Landscape");
   assert.equal(
     text,
-    '{\n  "version": 2,\n  "title": "Team Landscape",\n  "nodes": [],\n  "interactions": [],\n  "flows": []\n}',
+    '{\n  "version": 3,\n  "title": "Team Landscape",\n  "nodes": [],\n  "interactions": [],\n  "flows": []\n}',
   );
 });
 

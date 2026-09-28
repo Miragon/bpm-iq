@@ -15,9 +15,10 @@
  *    `evolve`/`title` are ignored, so edges may reference ids with NO node
  *    (Business/Public below), and the `(outsource)` suffix is dropped;
  *  - team-topology: the extractor expects `{nodes, edges}` — the modeler's
- *    real version-2 TtDocument carries `interactions`/`flows` instead of
+ *    real version-3 TtDocument carries `interactions`/`flows` instead of
  *    `edges` (relations are spatial), so a real .tt yields ZERO edges and
- *    position/size/title are dropped;
+ *    position/size/title are dropped; its `annotations` (free-text notes)
+ *    are no nodes either;
  *  - value-chain: elementType/connectionType default to "element"/
  *    "connection", `label` wins over `name`, missing connection ids become
  *    `conn-<index>`.
@@ -87,32 +88,32 @@ test("extractTeamTopology: the shipped sample.tt example is pinned — real .tt 
       {
         id: "team_checkout",
         type: "stream-aligned",
-        name: "Checkout Stream",
-        extra: { description: "Owns the end-to-end checkout & payments journey." },
+        name: "Checkout & Payments",
+        extra: { description: "Owns the checkout and payment journey end-to-end." },
       },
       {
-        id: "team_enabling",
-        type: "enabling",
-        name: "Agile Enablement",
-        extra: { description: "Coaches teams on testing and continuous delivery practices." },
+        id: "team_discovery",
+        type: "stream-aligned",
+        name: "Product Discovery",
+        extra: { description: "Owns search, browsing and product pages end-to-end." },
       },
       {
         id: "team_fraud",
         type: "complicated-subsystem",
-        name: "Risk & Fraud Engine",
-        extra: { description: "Specialist ML team owning real-time fraud scoring." },
-      },
-      {
-        id: "team_mobile",
-        type: "stream-aligned",
-        name: "Mobile Experience",
-        extra: { description: "Owns the native mobile shopping experience." },
+        name: "Fraud Detection",
+        extra: { description: "Specialists for the real-time fraud scoring model." },
       },
       {
         id: "team_platform",
         type: "platform",
-        name: "Internal Developer Platform",
-        extra: { description: "Self-service CI/CD, observability and runtime for all streams." },
+        name: "Cloud Platform",
+        extra: { description: "Self-service CI/CD, runtime and observability for all teams." },
+      },
+      {
+        id: "team_test_automation",
+        type: "enabling",
+        name: "Test Automation",
+        extra: { description: "Coaches stream-aligned teams in test automation, then steps back." },
       },
     ],
     edges: [],

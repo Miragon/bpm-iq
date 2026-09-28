@@ -285,7 +285,7 @@ test("createNotationModel: team topology template is valid JSON matching the mod
   const created = await createNotationModel(REPO, ws, { notation: "team-topology", name: "Team Landscape" });
   assert.equal(created.path, "processes/team-landscape.tt");
   const doc = JSON.parse(readFileSync(join(ws, created.path), "utf8")) as Record<string, unknown>;
-  assert.deepEqual(doc, { version: 2, title: "Team Landscape", nodes: [], interactions: [], flows: [] });
+  assert.deepEqual(doc, { version: 3, title: "Team Landscape", nodes: [], interactions: [], flows: [] });
 });
 
 test("createNotationModel: event storming board from the title-only .storm template", async () => {
