@@ -3,17 +3,28 @@
  * wrapped, centered text. Registered ABOVE the BpmnRenderer's priority;
  * BpmnRenderer never claims stickies anyway (canRender is bpmn:BaseElement-
  * gated), the priority just keeps the dispatch unambiguous.
+ *
+ * The text auto-fits the note (#188, sticky-text.ts): the renderer lays the
+ * lines out itself in the diagram's label font — bpmn-js' TextRenderer only
+ * wraps at a fixed size and cuts long words without a hyphen.
  */
 import BaseRenderer from "diagram-js/lib/draw/BaseRenderer";
 
 import { isSticky, STICKY_COLORS, stickyKindOf } from "./sticky-model";
+import {
+  fitStickyText,
+  type MeasureText,
+  STICKY_TEXT_DEFAULTS,
+  type StickyTextLayout,
+  type StickyTextOptions,
+} from "./sticky-text";
 
 const PRIORITY = 1500;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-/** the slice of bpmn-js' TextRenderer we use (label line wrapping) */
+/** the slice of bpmn-js' TextRenderer we use: the diagram's label font */
 interface TextRendererLike {
-  createText(text: string, options: Record<string, unknown>): SVGElement;
+  getDefaultStyle(): { fontFamily: string; fontSize: number | string; fontWeight?: string; lineHeight?: number };
 }
 
 interface ShapeLike {
@@ -28,18 +39,47 @@ const svg = (tag: string, attrs: Record<string, string | number>): SVGElement =>
   return el;
 };
 
+/** canvas text metrics in the label font — the same measure diagram-js'
+ *  label layout uses; without a canvas (headless) a generous estimate */
+function canvasMeasure(fontFamily: string, fontWeight: string): MeasureText {
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return (text, fontSize) => Array.from(text).length * fontSize * 0.6;
+  let font = "";
+  return (text, fontSize) => {
+    const next = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    if (next !== font) ctx.font = font = next;
+    return ctx.measureText(text).width;
+  };
+}
+
 export class StickyRenderer extends BaseRenderer {
   static $inject = ["eventBus", "textRenderer"];
 
-  private readonly _textRenderer: TextRendererLike;
+  /** the label font, as the note's text is drawn */
+  readonly font: { family: string; weight: string };
+  readonly textOptions: StickyTextOptions;
+  private _measure: MeasureText | undefined;
 
   constructor(eventBus: never, textRenderer: TextRendererLike) {
     super(eventBus, PRIORITY);
-    this._textRenderer = textRenderer;
+    const style = textRenderer.getDefaultStyle();
+    this.font = { family: style.fontFamily, weight: style.fontWeight ?? "normal" };
+    // the text grows back up to the diagram's default label size, never beyond
+    this.textOptions = {
+      ...STICKY_TEXT_DEFAULTS,
+      maxFontSize: Number.parseFloat(String(style.fontSize)) || STICKY_TEXT_DEFAULTS.maxFontSize,
+      lineHeight: style.lineHeight ?? STICKY_TEXT_DEFAULTS.lineHeight,
+    };
   }
 
   override canRender(element: unknown): boolean {
     return isSticky(element);
+  }
+
+  /** the text layout a note of this size shows — derived, never stored */
+  fitText(text: string, box: { width: number; height: number }): StickyTextLayout {
+    this._measure ??= canvasMeasure(this.font.family, this.font.weight);
+    return fitStickyText(text, box, this._measure, this.textOptions);
   }
 
   override drawShape(parentGfx: SVGElement, element: ShapeLike): SVGElement {
@@ -57,14 +97,26 @@ export class StickyRenderer extends BaseRenderer {
       // a soft paper shadow (CSS filters apply to SVG) — the miro look
       style: "filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.22))",
     });
+    rect.classList.add("bpmiq-sticky-note");
     parentGfx.appendChild(rect);
-    const label = this._textRenderer.createText(bo.text ?? "", {
-      box: { width: element.width, height: element.height },
-      padding: 8,
-      align: "center-middle",
-      style: { fill: "#333333" },
+
+    const layout = this.fitText(bo.text ?? "", element);
+    const label = svg("text", {
+      "font-family": this.font.family,
+      "font-size": layout.fontSize,
+      "font-weight": this.font.weight,
+      fill: "#333333",
+      "text-anchor": "middle",
     });
-    label.classList.add("djs-label");
+    label.classList.add("djs-label", "bpmiq-sticky-text");
+    // the block centers vertically; a baseline sits 3/4 down its line (the
+    // offset diagram-js' own label layout uses)
+    const top = (element.height - layout.lines.length * layout.lineHeight) / 2;
+    layout.lines.forEach((line, index) => {
+      const tspan = svg("tspan", { x: element.width / 2, y: top + (index + 0.75) * layout.lineHeight });
+      tspan.textContent = line;
+      label.appendChild(tspan);
+    });
     parentGfx.appendChild(label);
     return rect;
   }

@@ -16,6 +16,7 @@ import { StickyElementFactory } from "./sticky-factory";
 import { StickyOrdering } from "./sticky-ordering";
 import { StickyPersistence } from "./sticky-persistence";
 import { StickyRenderer } from "./sticky-renderer";
+import { StickyResizePreview } from "./sticky-resize";
 import { StickyRules } from "./sticky-rules";
 import { StickyContextPad, StickyEditing, StickyPalette } from "./sticky-ui";
 
@@ -29,6 +30,7 @@ export const bpmnStickyModule = {
     "stickyEditing",
     "stickyPersistence",
     "stickyCopyPaste",
+    "stickyResizePreview",
     "groupNaming",
   ],
   elementFactory: ["type", StickyElementFactory],
@@ -40,6 +42,7 @@ export const bpmnStickyModule = {
   stickyEditing: ["type", StickyEditing],
   stickyPersistence: ["type", StickyPersistence],
   stickyCopyPaste: ["type", StickyCopyPaste],
+  stickyResizePreview: ["type", StickyResizePreview],
   groupNaming: ["type", GroupNaming],
 };
 
