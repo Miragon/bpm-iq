@@ -13,7 +13,7 @@
 import { existsSync } from "node:fs";
 
 import { cliRoot } from "@bpmiq/notations/cli";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
 

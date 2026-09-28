@@ -11,8 +11,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { readBody, send } from "@bpmiq/http-kit";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export async function mountStatelessMcp(
   req: IncomingMessage,
@@ -20,7 +20,7 @@ export async function mountStatelessMcp(
   server: McpServer,
   opts: { maxBytes: number },
 ): Promise<void> {
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  const transport = new NodeStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on("close", () => {
     void transport.close();
     void server.close();

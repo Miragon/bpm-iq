@@ -38,7 +38,7 @@ import {
 } from "@bpmiq/notations/content";
 import { deriveProcess, deriveView, hasDeriver } from "@bpmiq/notations/derive";
 import { extractModelGraph, type ModelGraph } from "@bpmiq/notations/extract";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 /** This file lives at packages/mcp/; the example content repo is process-documentation/. */
@@ -286,9 +286,9 @@ export function createMcpServer(
         "lanes = owning teams), steps (activities with their role), events, gateways, the " +
         "sequence/message flow, and the sub-processes it calls (callActivity → calledElement). " +
         "Use for walkthroughs and any deep question about a single process.",
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().describe("Process id = the .bpmn file name without extension, e.g. order-to-cash"),
-      },
+      }),
       annotations: READ_ONLY,
     },
     safe(async ({ id }) => {
@@ -308,10 +308,10 @@ export function createMcpServer(
         "Parse ANY model file into its generic graph: nodes (id, type, name), edges and meta — " +
         "BPMN flows and lanes, DMN requirements, Wardley components/dependencies, … " +
         "Use to see the raw structure, or to ground any 'how does X work' answer in the actual model.",
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().describe("Model id = file stem (from list_models), e.g. order-to-cash"),
         notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
-      },
+      }),
       annotations: READ_ONLY,
     },
     safe(async ({ id, notation }) => {
@@ -333,10 +333,10 @@ export function createMcpServer(
         `capabilities (${NOTATIONS.filter((n) => hasDeriver(n.id))
           .map((n) => n.id)
           .join(", ")}).`,
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().describe("Model id = file stem (from list_models), e.g. tea-shop"),
         notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
-      },
+      }),
       annotations: READ_ONLY,
     },
     safe(async ({ id, notation }) => {
@@ -360,11 +360,11 @@ export function createMcpServer(
         "BPMN sequence flows, Wardley dependencies, … per the notation's graph hints. Each path " +
         "is the ordered list of element names. Use for walkthroughs ('what are the ways an order " +
         "can go?'), test-case derivation, and spotting unexpected shortcuts or dead branches.",
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().describe("Model id = file stem, e.g. order-to-cash"),
         notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
         max: z.number().int().min(1).max(100).optional().describe("Maximum number of paths to return (default 20)"),
-      },
+      }),
       annotations: READ_ONLY,
     },
     safe(async ({ id, notation, max }) => {
@@ -398,10 +398,10 @@ export function createMcpServer(
         "dependencies, circular DMN requirements — per the notation's graph hints. Returns each " +
         "cycle as the ordered list of element names. Use when analyzing complexity, rework cost, " +
         "or 'why does this case never finish'.",
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().describe("Model id = file stem, e.g. order-to-cash"),
         notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
-      },
+      }),
       annotations: READ_ONLY,
     },
     safe(async ({ id, notation }) => {
@@ -425,7 +425,7 @@ export function createMcpServer(
         "(each lane, with the steps it contains) plus the pools (participants). Use for 'who owns " +
         "X', 'who does what in X', or handoff questions. Note: on the slim contract ownership is " +
         "whatever the model's lanes say; a process with no lanes has no modeled owner.",
-      inputSchema: { id: z.string().describe("Process id, e.g. order-to-cash") },
+      inputSchema: z.object({ id: z.string().describe("Process id, e.g. order-to-cash") }),
       annotations: READ_ONLY,
     },
     safe(async ({ id }) => {
@@ -455,9 +455,9 @@ export function createMcpServer(
         "names, step names, or sub-process calls (calledElement) match a query — case-insensitive " +
         "substring. Use for 'what calls invoice-handling', 'which processes have a Billing lane', " +
         "'what touches the credit check'.",
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().describe("Case-insensitive substring, e.g. 'invoice-handling', 'Billing', 'credit'"),
-      },
+      }),
       annotations: READ_ONLY,
     },
     safe(async ({ query }) => {
@@ -498,9 +498,9 @@ export function createMcpServer(
         "given model id (file stem, exact match) — the repo-wide reference index behind it also " +
         "flags dangling references. The registry-wide sibling of which_processes_use; use for " +
         "'what breaks if I change or delete this model?'.",
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().describe("Target model id = file stem (from list_models), e.g. 'credit-check'"),
-      },
+      }),
       annotations: READ_ONLY,
     },
     safe(async ({ id }) => {
@@ -540,9 +540,9 @@ export function createMcpServer(
           "id and URL, title, assignees, createdAt and the parsed anchor (process, model file, " +
           "anchored BPMN elements). Optional filter on one process. Use for 'what is open on " +
           "process X' or to cross-check a model answer against known open discrepancies.",
-        inputSchema: {
+        inputSchema: z.object({
           process: z.string().optional().describe("Only todos anchored to this process id, e.g. order-to-cash"),
-        },
+        }),
         // still read-only, but the ONE tool that leaves the checkout (tracker API)
         annotations: { readOnlyHint: true, openWorldHint: true },
       },

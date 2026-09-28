@@ -63,7 +63,7 @@ then the API returns a clear 403 explaining exactly that.
 
 ## MCP endpoint + live content API
 
-`POST /mcp` (official `@modelcontextprotocol/sdk`, stateless Streamable HTTP) serves the
+`POST /mcp` (official MCP TypeScript SDK v2, stateless Streamable HTTP) serves the
 tools over the **live** models: `list_repos`, `list_models`, `get_view`, `list_processes`,
 `get_process`, `get_bpmn_xml`, `validate_bpmn`, `list_changes`, the modeler widgets
 `open_modeler` / `open_decision_modeler` / `open_wardley_modeler` /

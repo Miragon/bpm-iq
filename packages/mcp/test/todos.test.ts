@@ -13,8 +13,7 @@ import { after, before, test } from "node:test";
 
 import { encodeAnchor } from "@bpmiq/contracts/todo-anchor";
 import { toolText } from "@bpmiq/mcp-kit/testing";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "../tools.ts";
 

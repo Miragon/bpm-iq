@@ -92,9 +92,10 @@ export default {
         "@bpmiq/mcp-kit/mount. A second copy is how packages/mcp and the Live " +
         "Host's /mcp drifted (one lost the else-res.end(); ADR 0005).",
       from: { path: "^(apps|packages)/", pathNot: ["^packages/mcp-kit/"] },
-      // the SERVER transport only — client-side streamableHttp (smoke scripts,
-      // future in-repo MCP clients) is not this rule's concern
-      to: { path: "node_modules/@modelcontextprotocol/sdk/.*/server/streamableHttp" },
+      // the SERVER transport only (SDK v2: @modelcontextprotocol/node is nothing
+      // but the node:http Streamable-HTTP adapter) — the client-side transport
+      // (smoke scripts, future in-repo MCP clients) is not this rule's concern
+      to: { path: "node_modules/@modelcontextprotocol/node/" },
     },
     {
       name: "mcp-kit-index-stays-browser-safe",
