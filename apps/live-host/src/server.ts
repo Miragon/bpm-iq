@@ -404,6 +404,8 @@ const httpServer = startApi(PORT, {
   // sync-to-default invalidates the lineage of every file it reset — same
   // LineageStore the reconcile hook drops through
   dropLineage: (room) => lineage.drop(room),
+  // a moved model (#182) takes its lineage to the new room
+  renameLineage: (from, to) => lineage.rename(from, to),
   connectionSource,
   issues,
   // control-plane origin (from the mint URL) — a cross-tenant OIDC login

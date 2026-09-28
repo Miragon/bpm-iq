@@ -33,8 +33,10 @@ import {
   ChartNetwork,
   ChevronDown,
   ChevronUp,
+  Ellipsis,
   FileText,
   Folder,
+  FolderInput,
   FolderPlus,
   Plus,
   Shapes,
@@ -43,7 +45,7 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
-import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ComponentType, type DragEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AssistMenu } from "@/components/assist-menu";
@@ -51,10 +53,11 @@ import { CreateDecisionDialog } from "@/components/create-decision-dialog";
 import { CreateFolderDialog } from "@/components/create-folder-dialog";
 import { CreateNotationModelDialog } from "@/components/create-notation-model-dialog";
 import { CreateProcessDialog } from "@/components/create-process-dialog";
+import { type MovableModel, MoveModelDialog } from "@/components/move-model-dialog";
 import { ReleaseDialog } from "@/components/release-dialog";
 import { SyncRepoDialog } from "@/components/sync-repo-dialog";
 import { type ProcessInfo } from "@/lib/api";
-import { useDecisions, useFolders, useModels, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
+import { useDecisions, useFolders, useModels, useMoveModels, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
 import { webPlugin } from "@/notations/registry";
 
 const route = getRouteApi("/r/$owner/$repo");
@@ -106,6 +109,20 @@ const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, p
 /** DOM id of a folder row — the just-created one is scrolled into view */
 const folderRowId = (path: string): string => `folder-row:${path}`;
 
+/** the drag payload of a model row (#182) — folder rows and the breadcrumb take it.
+ *  It names its repo: a row dragged in from ANOTHER repo's window must not move
+ *  whatever sits at the same path here */
+const DRAG_TYPE = "application/x-bpmiq-model";
+type DragPayload = MovableModel & { repo: string };
+
+/** what a move needs of any model row (process rows carry their path as `bpmn`) */
+const movable = (m: { name: string; folder: string; liveSessions: number }, path: string): MovableModel => ({
+  path,
+  name: m.name,
+  folder: m.folder,
+  liveSessions: m.liveSessions,
+});
+
 export function ProcessList() {
   const { owner, repo: name } = route.useParams();
   const { dir = "" } = route.useSearch();
@@ -146,6 +163,11 @@ export function ProcessList() {
     const timer = setTimeout(() => setCreatedFolder(null), 2500);
     return () => clearTimeout(timer);
   }, [createdFolder]);
+  // moving models (#182): the "Move to…" dialog, and drag & drop of a model
+  // row onto a folder row or a breadcrumb segment
+  const [moving, setMoving] = useState<MovableModel | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const move = useMoveModels(repo);
 
   // models (processes AND decisions) with unreleased live edits the reset
   // would discard, and repos being actively edited (Variant A: a reset can't
@@ -189,6 +211,42 @@ export function ProcessList() {
         }),
     [folderSet, list, decisions, otherModels, dir],
   );
+
+  const allFolders = useMemo(() => [...folderSet].sort(), [folderSet]);
+
+  // the view stays on this level; the toast leads to the model's new home
+  const announceMove = (modelName: string, folder: string) =>
+    toast.success(`Moved '${modelName}' to ${folder ? `${folder}/` : "the root"}`, {
+      action: {
+        label: "Open folder",
+        onClick: () => void navigate({ to: "/r/$owner/$repo", params: { owner, repo: name }, search: { dir: folder } }),
+      },
+    });
+  const dragModel = (e: DragEvent, model: MovableModel) => {
+    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ ...model, repo } satisfies DragPayload));
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const dropInto = (folder: string) => ({
+    onDragOver: (e: DragEvent) => {
+      if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDropTarget(folder);
+    },
+    onDragLeave: () => setDropTarget((t) => (t === folder ? null : t)),
+    onDrop: (e: DragEvent) => {
+      const raw = e.dataTransfer.getData(DRAG_TYPE);
+      setDropTarget(null);
+      if (!raw) return;
+      e.preventDefault();
+      const { repo: from, ...model } = JSON.parse(raw) as DragPayload;
+      if (from !== repo || model.folder === folder) return;
+      move.mutate(
+        { paths: [model.path], folder },
+        { onSuccess: () => announceMove(model.name, folder), onError: (err) => toast.error(err.message) },
+      );
+    },
+  });
 
   const visible = useMemo(() => list.filter((p) => p.folder === dir), [list, dir]);
   const visibleDecisions = useMemo(
@@ -290,7 +348,10 @@ export function ProcessList() {
         header: "",
         enableSorting: false,
         cell: ({ row }) => (
-          <AssistMenu repo={`${owner}/${name}`} path={row.original.bpmn} notation="bpmn" variant="row" />
+          <div className="flex items-center gap-0.5">
+            <AssistMenu repo={`${owner}/${name}`} path={row.original.bpmn} notation="bpmn" variant="row" />
+            <ModelRowMenu onMove={() => setMoving(movable(row.original, row.original.bpmn))} />
+          </div>
         ),
       },
     ],
@@ -383,7 +444,12 @@ export function ProcessList() {
 
       {segments.length > 0 && (
         <nav className="mb-3 flex flex-wrap items-center gap-1 text-sm" aria-label="Folder">
-          <Link to="/r/$owner/$repo" params={{ owner, repo: name }} className="text-muted-foreground hover:underline">
+          <Link
+            to="/r/$owner/$repo"
+            params={{ owner, repo: name }}
+            className={cn("text-muted-foreground rounded px-1 hover:underline", dropTarget === "" && "bg-primary/10")}
+            {...dropInto("")}
+          >
             {name}
           </Link>
           {segments.map((segment, i) => {
@@ -399,7 +465,11 @@ export function ProcessList() {
                     to="/r/$owner/$repo"
                     params={{ owner, repo: name }}
                     search={{ dir: path }}
-                    className="text-muted-foreground hover:underline"
+                    className={cn(
+                      "text-muted-foreground rounded px-1 hover:underline",
+                      dropTarget === path && "bg-primary/10",
+                    )}
+                    {...dropInto(path)}
                   >
                     {segment}
                   </Link>
@@ -451,8 +521,9 @@ export function ProcessList() {
                   id={folderRowId(f.path)}
                   className={cn(
                     "cursor-pointer transition-colors duration-700",
-                    f.path === createdFolder && "bg-primary/10",
+                    (f.path === createdFolder || f.path === dropTarget) && "bg-primary/10",
                   )}
+                  {...dropInto(f.path)}
                   onClick={() =>
                     navigate({ to: "/r/$owner/$repo", params: { owner, repo: name }, search: { dir: f.path } })
                   }
@@ -491,6 +562,9 @@ export function ProcessList() {
                 <TableRow
                   key={row.id}
                   className="cursor-pointer"
+                  draggable
+                  onDragStart={(e) => dragModel(e, movable(row.original, row.original.bpmn))}
+                  onDragEnd={() => setDropTarget(null)}
                   onClick={() =>
                     navigate({
                       to: "/r/$owner/$repo/p/$processId",
@@ -507,6 +581,9 @@ export function ProcessList() {
                 <TableRow
                   key={`decision:${d.path}`}
                   className="cursor-pointer"
+                  draggable
+                  onDragStart={(e) => dragModel(e, movable(d, d.path))}
+                  onDragEnd={() => setDropTarget(null)}
                   onClick={() => navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: d.path } })}
                 >
                   <TableCell>
@@ -537,7 +614,10 @@ export function ProcessList() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <AssistMenu repo={repo} path={d.path} notation="dmn" variant="row" />
+                    <div className="flex items-center gap-0.5">
+                      <AssistMenu repo={repo} path={d.path} notation="dmn" variant="row" />
+                      <ModelRowMenu onMove={() => setMoving(movable(d, d.path))} />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -551,6 +631,9 @@ export function ProcessList() {
                   <TableRow
                     key={`model:${m.path}`}
                     className="cursor-pointer"
+                    draggable
+                    onDragStart={(e) => dragModel(e, movable(m, m.path))}
+                    onDragEnd={() => setDropTarget(null)}
                     onClick={() =>
                       navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: m.path } })
                     }
@@ -583,9 +666,12 @@ export function ProcessList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {assistNotation && (
-                        <AssistMenu repo={repo} path={m.path} notation={assistNotation} variant="row" />
-                      )}
+                      <div className="flex items-center gap-0.5">
+                        {assistNotation && (
+                          <AssistMenu repo={repo} path={m.path} notation={assistNotation} variant="row" />
+                        )}
+                        <ModelRowMenu onMove={() => setMoving(movable(m, m.path))} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -669,7 +755,51 @@ export function ProcessList() {
         />
       )}
       {releaseOpen && <ReleaseDialog repo={repo} onClose={() => setReleaseOpen(false)} />}
+      {moving && (
+        <MoveModelDialog
+          repo={repo}
+          model={moving}
+          folders={allFolders}
+          onClose={() => setMoving(null)}
+          onMoved={(folder) => {
+            setMoving(null);
+            announceMove(moving.name, folder);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** the per-row "⋯" menu of a model row — rows navigate on click, so neither
+ *  the trigger nor the (portalled) content may let a click bubble into it */
+function ModelRowMenu({ onMove }: { onMove: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          title="More actions"
+          aria-label="More actions"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Ellipsis />
+        </Button>
+      </DropdownMenuTrigger>
+      {/* the item opens a DIALOG — mount it a tick after radix finished its
+          close/focus handling (the New menu's convention) */}
+      <DropdownMenuContent
+        align="end"
+        onClick={(e) => e.stopPropagation()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        <DropdownMenuItem onSelect={() => setTimeout(onMove, 0)}>
+          <FolderInput /> Move to…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

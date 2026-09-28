@@ -16,6 +16,8 @@ import type {
   FolderWire,
   Me,
   ModelInfo,
+  MoveModelsBody,
+  MoveModelsResult,
   ProcessInfo,
   ReleaseFilesBody,
   ReleaseResult,
@@ -45,6 +47,8 @@ export type {
   Me,
   ModelInfo,
   ModelRef,
+  MoveModelsBody,
+  MoveModelsResult,
   ProcessInfo,
   ReleaseFilesBody,
   ReleaseResult,
@@ -102,6 +106,13 @@ export const createDecision = (repo: string, body: CreateDecisionBody): Promise<
 export const fetchFolders = (repo: string): Promise<FolderListWire> => api(`/api/repos/${repo}/folders`);
 export const createFolder = (repo: string, body: CreateFolderBody): Promise<FolderWire> =>
   api(`/api/repos/${repo}/folders`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+/** move model files into another folder (a decision's tests sidecar follows) */
+export const moveModels = (repo: string, body: MoveModelsBody): Promise<MoveModelsResult> =>
+  api(`/api/repos/${repo}/move`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

@@ -2,12 +2,15 @@
  * "Release → PR" dialog — pick exactly the changed files to ship. The
  * workspace is SHARED per repo, so the pool (GET /changes) may contain
  * colleagues' in-progress edits: nothing beyond `preselect` is checked by
- * default, and files somebody currently has open carry a warning badge.
+ * default, and files somebody currently has open carry a warning badge. A
+ * MOVED model (#182) is a delete + add pair that ships whole, so it is
+ * selected whole too (moveUnits — the same rule the server applies).
  * Mounted on open, so state resets by unmounting (create-dialog convention).
  */
+import { moveUnits } from "@bpmiq/contracts/live-host";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { type ChangedFileWire } from "@/lib/api";
 import { useChanges, useReleaseFiles } from "@/lib/queries";
@@ -15,7 +18,8 @@ import { useChanges, useReleaseFiles } from "@/lib/queries";
 const fieldClass =
   "border-input bg-background focus-visible:ring-ring/50 focus-visible:border-ring mt-1 w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]";
 
-function statusBadge(file: ChangedFileWire) {
+function statusBadge(file: ChangedFileWire, moved: boolean) {
+  if (moved) return <Badge variant="secondary">{file.status === "deleted" ? "moved away" : "moved here"}</Badge>;
   if (file.status === "deleted") return <Badge variant="destructive">deleted</Badge>;
   if (file.status === "added") return <Badge variant="success">new</Badge>;
   return <Badge variant="outline">modified</Badge>;
@@ -49,16 +53,25 @@ export function ReleaseDialog({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose, release.isPending]);
 
-  const pool = changes.data ?? [];
+  const pool = useMemo(() => changes.data ?? [], [changes.data]);
+  const units = useMemo(() => moveUnits(pool), [pool]);
+  const unitOf = (path: string) => units.get(path) ?? [path];
+  // a move counts as selected when either half is (a preselected moved file
+  // brings its other half along)
+  const isSelected = (path: string) => unitOf(path).some((p) => selected.has(p));
   // only files that are actually in the pool count — a preselected path that
   // is not dirty (or healed meanwhile) silently drops out
-  const files = pool.filter((c) => selected.has(c.path)).map((c) => c.path);
+  const files = pool.filter((c) => isSelected(c.path)).map((c) => c.path);
 
   const toggle = (path: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
+      const unit = unitOf(path);
+      const on = unit.some((p) => next.has(p));
+      for (const p of unit) {
+        if (on) next.delete(p);
+        else next.add(p);
+      }
       return next;
     });
 
@@ -101,13 +114,13 @@ export function ReleaseDialog({
                 <input
                   type="checkbox"
                   className="accent-primary size-4 shrink-0"
-                  checked={selected.has(c.path)}
+                  checked={isSelected(c.path)}
                   onChange={() => toggle(c.path)}
                 />
                 <span className="min-w-0 flex-1 truncate font-mono text-xs" title={c.path}>
                   {c.path}
                 </span>
-                {statusBadge(c)}
+                {statusBadge(c, units.has(c.path))}
                 {c.liveSessions > 0 && <Badge variant="warning">{c.liveSessions} active</Badge>}
               </label>
             ))}

@@ -965,6 +965,7 @@ function apiOpts(d: McpDeps, sessions = new SessionStore(new DatabaseSync(":memo
     access: d.access as ApiOptions["access"],
     liveDocs: () => [],
     dropLineage: () => {},
+    renameLineage: () => {},
     openDoc: d.openDoc,
     maxDocBytes: d.maxDocBytes,
     oidc: {
