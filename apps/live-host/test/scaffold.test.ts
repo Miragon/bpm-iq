@@ -18,6 +18,7 @@ import {
   createNotationModel,
   createProcess,
   listFolders,
+  moveModels,
 } from "../src/application/scaffold.ts";
 import { escapeXml, newBpmnXml, xmlProcessId } from "../src/domain/bpmn-template.ts";
 import { newDmnXml } from "../src/domain/dmn-template.ts";
@@ -334,4 +335,99 @@ test("createNotationModel: markdown documents are creatable (a first-class notat
   const created = await createNotationModel(REPO, ws, { notation: "markdown", name: "Architecture Notes" });
   assert.equal(created.path, "processes/architecture-notes.md");
   assert.equal(readFileSync(join(ws, created.path), "utf8"), "# Architecture Notes\n");
+});
+
+// ── moveModels (#182) ───────────────────────────────────────────────────────
+
+/** a spy MoveDeps: the rooms currently live + every lineage rename */
+function moveDeps(live: string[] = []) {
+  const renamed: Array<[string, string]> = [];
+  return {
+    renamed,
+    deps: { liveDocs: () => live, renameLineage: (from: string, to: string) => renamed.push([from, to]) },
+  };
+}
+
+test("moveModels: a model moves into a (new) folder with its lineage, and back to the root", async () => {
+  const ws = workspace();
+  const { renamed, deps } = moveDeps();
+  const out = await moveModels(REPO, ws, { paths: ["processes/order.bpmn"], folder: "sales/orders" }, deps);
+  assert.deepEqual(out.moved, [{ from: "processes/order.bpmn", to: "processes/sales/orders/order.bpmn" }]);
+  assert.ok(!existsSync(join(ws, "processes", "order.bpmn")));
+  assert.equal(readFileSync(join(ws, "processes", "sales", "orders", "order.bpmn"), "utf8"), "<bpmn/>");
+  assert.deepEqual(renamed, [["acme/models/processes/order.bpmn", "acme/models/processes/sales/orders/order.bpmn"]]);
+  const back = await moveModels(REPO, ws, { paths: ["processes/sales/orders/order.bpmn"], folder: "" }, deps);
+  assert.deepEqual(back.moved, [{ from: "processes/sales/orders/order.bpmn", to: "processes/order.bpmn" }]);
+  assert.ok(existsSync(join(ws, "processes", "order.bpmn")));
+});
+
+test("moveModels: a decision takes its tests sidecar along; a model already there is skipped", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn/>");
+  writeFileSync(join(ws, "processes", "credit.tests.yaml"), "cases: []\n");
+  const { renamed, deps } = moveDeps();
+  const out = await moveModels(
+    REPO,
+    ws,
+    { paths: ["processes/credit.dmn", "processes/subprocesses/check-credit.bpmn"], folder: "subprocesses" },
+    deps,
+  );
+  assert.deepEqual(out.moved, [
+    { from: "processes/credit.dmn", to: "processes/subprocesses/credit.dmn" },
+    { from: "processes/credit.tests.yaml", to: "processes/subprocesses/credit.tests.yaml" },
+  ]);
+  assert.equal(readFileSync(join(ws, "processes", "subprocesses", "credit.tests.yaml"), "utf8"), "cases: []\n");
+  assert.equal(renamed.length, 2);
+});
+
+test("moveModels: an open model is refused (409) and NOTHING moves — nor any other file of the batch", async () => {
+  const ws = workspace();
+  const { renamed, deps } = moveDeps(["acme/models/processes/subprocesses/check-credit.bpmn"]);
+  await assert.rejects(
+    () =>
+      moveModels(
+        REPO,
+        ws,
+        { paths: ["processes/order.bpmn", "processes/subprocesses/check-credit.bpmn"], folder: "archive" },
+        deps,
+      ),
+    rejectsWith("move/live-session", 409),
+  );
+  assert.ok(existsSync(join(ws, "processes", "order.bpmn")), "the first file of the batch stayed");
+  assert.ok(!existsSync(join(ws, "processes", "archive")), "not even the target folder was created");
+  assert.deepEqual(renamed, []);
+});
+
+test("moveModels: an occupied destination is a 409 and nothing moves (an orphaned tests sidecar in the target)", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn/>");
+  writeFileSync(join(ws, "processes", "credit.tests.yaml"), "cases: []\n");
+  mkdirSync(join(ws, "processes", "archive"));
+  writeFileSync(join(ws, "processes", "archive", "credit.tests.yaml"), "orphan\n");
+  await assert.rejects(
+    () => moveModels(REPO, ws, { paths: ["processes/credit.dmn"], folder: "archive" }, moveDeps().deps),
+    rejectsWith("move/target-exists", 409),
+  );
+  assert.ok(existsSync(join(ws, "processes", "credit.dmn")), "the decision stayed");
+  assert.equal(readFileSync(join(ws, "processes", "archive", "credit.tests.yaml"), "utf8"), "orphan\n");
+});
+
+test("moveModels: only discovered models move — foreign files, traversal and bad folders are refused", async () => {
+  const ws = workspace();
+  const { deps } = moveDeps();
+  for (const path of ["bpmiq.yml", "processes/../bpmiq.yml", "processes/missing.bpmn"]) {
+    await assert.rejects(
+      () => moveModels(REPO, ws, { paths: [path], folder: "archive" }, deps),
+      rejectsWith("move/unknown-model", 404),
+      path,
+    );
+  }
+  await assert.rejects(
+    () => moveModels(REPO, ws, { paths: ["processes/order.bpmn"], folder: "../outside" }, deps),
+    rejectsWith("scaffold/invalid-folder", 400),
+  );
+  await assert.rejects(
+    () => moveModels(REPO, ws, { paths: [], folder: "archive" }, deps),
+    rejectsWith("move/no-paths", 400),
+  );
 });

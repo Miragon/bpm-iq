@@ -25,6 +25,8 @@ import {
   fetchTodos,
   type FolderListWire,
   logout,
+  moveModels,
+  type MoveModelsBody,
   releaseFiles,
   type ReleaseFilesBody,
   syncRepo,
@@ -161,6 +163,20 @@ export function useCreateFolder(repo: string) {
         return { isContentRepo: true, folders: [...folders, created.path].sort() };
       });
       void qc.invalidateQueries({ queryKey: ["folders", repo] });
+    },
+  });
+}
+
+/** move models into another folder (#182) — every listing that shows a path
+ *  changes (the rows, the folder counts, the release pool) */
+export function useMoveModels(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MoveModelsBody) => moveModels(repo, body),
+    onSuccess: () => {
+      for (const key of ["processes", "decisions", "models", "folders", "changes"]) {
+        void qc.invalidateQueries({ queryKey: [key, repo] });
+      }
     },
   });
 }

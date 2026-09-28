@@ -14,6 +14,10 @@
  *                          traversal — git never reports foreign paths), and
  *                          a file deleted in the workspace ships as a delete.
  *
+ * A MOVED model (#182) is a delete + add pair in the workspace; both entry
+ * points ship such a pair whole (moveUnits), so git records a rename and the
+ * default branch never holds the model twice — or not at all.
+ *
  * The git + network orchestration is integration-tested by test/release-e2e.sh;
  * the pure sub-logic below (push-token redaction, attribution strings, slugs)
  * is unit-tested in test/release.test.ts.
@@ -33,7 +37,7 @@ import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import type { ReleaseResult } from "@bpmiq/contracts/live-host";
+import { moveUnits, type ReleaseResult } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 import { modelStem, processIdFromName } from "@bpmiq/notations";
 
@@ -335,10 +339,14 @@ export async function release(
       expose: true,
     });
   }
+  // the released artifact is exactly this repo-root-relative file — or, for a
+  // moved process, the whole move (the new file AND the old one's deletion)
+  const changed = await opts.workspaces.changedFiles(repo, cfg.processes);
+  const deleted = new Set(changed.filter((c) => c.status === "deleted").map((c) => c.path));
+  const paths = moveUnits(changed).get(proc.path) ?? [proc.path];
   return publish(opts, session, provider, repo, workspace, {
     branch: releaseBranch(id, now),
-    // the released artifact is exactly this repo-root-relative file
-    files: [{ path: proc.path, deleted: false }],
+    files: paths.map((path) => ({ path, deleted: deleted.has(path) })),
     subject: `release(${id}): publish live model state`,
     prTitle: `release(${id}): publish live model state`,
     prBody: async (botAuthored, staged) =>
@@ -381,7 +389,8 @@ export async function releaseFiles(
     });
   }
   // the pool is confined to the bpmiq.yml content scope, like GET /changes
-  const changed = new Map((await opts.workspaces.changedFiles(repo, cfg.processes)).map((c) => [c.path, c.status]));
+  const pool = await opts.workspaces.changedFiles(repo, cfg.processes);
+  const changed = new Map(pool.map((c) => [c.path, c.status]));
   const unknown = requested.filter((f) => !changed.has(f));
   if (unknown.length > 0) {
     throw new AppError(
@@ -390,7 +399,10 @@ export async function releaseFiles(
       { status: 409, expose: true },
     );
   }
-  const files = requested.map((path) => ({ path, deleted: changed.get(path) === "deleted" }));
+  // a selected half of a move brings the other half along
+  const units = moveUnits(pool);
+  const shipped = [...new Set(requested.flatMap((path) => units.get(path) ?? [path]))];
+  const files = shipped.map((path) => ({ path, deleted: changed.get(path) === "deleted" }));
   return publish(opts, session, provider, repo, workspace, {
     branch: releaseFilesBranch(releaseFilesSlug(requested, body.title), now),
     files,

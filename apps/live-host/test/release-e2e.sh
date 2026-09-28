@@ -16,6 +16,9 @@
 #   D   folder + process creation over HTTP: folder create/list (empty folders
 #       survive), traversal/duplicate gates, created process is dirty
 #       (untracked) in the listing, and a brand-new file releases as a PR
+#   E   file-selection release: GET /changes statuses, gates, selections
+#   F   moving a model into another folder (#182): delete + add in /changes,
+#       and a release of either half ships the whole move as a git rename
 #
 # Run: bash test/release-e2e.sh   (or: pnpm --filter @bpmiq/live-host test)
 set -u
@@ -259,6 +262,33 @@ echo "$CH" | grep -q "NOTES.md" && bad "E: out-of-scope file leaked into the poo
 R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":["NOTES.md"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q "not changed" && ok "E: out-of-scope file refused (409)" || bad "E: expected not-changed for out-of-scope, got: $R"
+
+# ═══ Case F: move a model into another folder (#182) ═══
+OLD_IH="processes/order-to-cash/subprocesses/invoice-handling.bpmn"
+NEW_IH="processes/billing/invoice-handling.bpmn"
+MV=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
+  -d "{\"paths\":[\"$OLD_IH\"],\"folder\":\"billing\"}" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/move")
+echo "$MV" | grep -q "\"to\": *\"$NEW_IH\"" && ok "F: model moved over HTTP (folder created on the way)" || bad "F: move failed: $MV"
+[ -f "$WS1/$NEW_IH" ] && [ ! -e "$WS1/$OLD_IH" ] && ok "F: file moved in the workspace" || bad "F: workspace not moved"
+CH=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
+echo "$CH" | grep -q "\"path\": *\"$OLD_IH\", *\"status\": *\"deleted\"" && echo "$CH" | grep -q "\"path\": *\"$NEW_IH\", *\"status\": *\"added\"" \
+  && ok "F: the move shows as delete + add in /changes" || bad "F: move not in the pool: $CH"
+MVBAD=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
+  -d '{"paths":["bpmiq.yml"],"folder":"billing"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/move")
+echo "$MVBAD" | grep -q "not a model" && ok "F: a non-model file is refused (404)" || bad "F: expected not-a-model, got: $MVBAD"
+# selecting only the NEW half ships the whole move — git records a rename
+R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
+  -d "{\"files\":[\"$NEW_IH\"],\"title\":\"Move invoice handling\"}" "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+echo "$R" | grep -q '"pr"' && ok "F: moved model released → PR" || bad "F: release of the move failed: $R"
+FBRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/move-invoice-handling | tail -1 | tr -d ' *')
+FSHIP=$(git -C "$E2E/origin/acme/bpm-processes.git" show -M --name-status --format= "$FBRANCH")
+echo "$FSHIP" | grep -qE "^R[0-9]+	$OLD_IH	$NEW_IH\$" && ok "F: one half selected → the commit is a git rename" || bad "F: expected a rename: $FSHIP"
+# the per-process release (MCP release_process) ships the whole move as well
+R=$(release "$PORT_A" acme/bpm-processes invoice-handling)
+echo "$R" | grep -q '"pr"' && ok "F: moved process released by id → PR" || bad "F: per-process release failed: $R"
+PBRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/invoice-handling | tail -1 | tr -d ' *')
+PSHIP=$(git -C "$E2E/origin/acme/bpm-processes.git" show -M --name-status --format= "$PBRANCH")
+echo "$PSHIP" | grep -qE "^R[0-9]+	$OLD_IH	$NEW_IH\$" && ok "F: release by id is a git rename too" || bad "F: expected a rename: $PSHIP"
 
 echo; echo "── $PASS passed, $FAIL failed ──"
 exit "$FAIL"

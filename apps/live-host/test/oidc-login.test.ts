@@ -103,6 +103,7 @@ function boot(cellMode: boolean): { base: string; sessions: SessionStore } {
     access: { canWrite: async () => true } as unknown as ApiOptions["access"],
     liveDocs: () => [],
     dropLineage: () => {},
+    renameLineage: () => {},
     openDoc: () => Promise.reject(new Error("not used")),
     maxDocBytes: 8_000_000,
     controlPlaneUrl: cellMode ? CP_URL : undefined,

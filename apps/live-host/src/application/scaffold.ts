@@ -1,5 +1,5 @@
 /**
- * Create-side use-cases of the repository view, extracted like overview.ts:
+ * Write use-cases of the repository view, extracted like overview.ts:
  *
  *   listFolders    — every folder under the repo's bpmiq.yml processes root
  *                    (recursive, includes EMPTY ones — a just-created folder
@@ -7,8 +7,9 @@
  *   createFolder   — mkdir under the processes root
  *   createProcess  — write a fresh, validator-clean BPMN file (domain/bpmn-template)
  *   createDecision — write a fresh DMN file (domain/dmn-template)
+ *   moveModels     — move model files into another folder (#182)
  *
- * Both creates write into the repo's WORKSPACE tree only — exactly like the
+ * All of them write into the repo's WORKSPACE tree only — exactly like the
  * live write-through (collab.ts). Nothing is committed here: the file shows up
  * as dirty in the overview and travels upstream via release-as-PR.
  *
@@ -17,10 +18,19 @@
  * exposed to the authenticated caller.
  */
 import { existsSync } from "node:fs";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { mkdir, readdir, rename, writeFile } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
-import type { DecisionInfo, FolderListWire, ModelInfo, ProcessInfo } from "@bpmiq/contracts/live-host";
+import { roomName } from "@bpmiq/contracts/live";
+import type {
+  DecisionInfo,
+  FolderListWire,
+  ModelInfo,
+  MoveModelsBody,
+  MoveModelsResult,
+  ProcessInfo,
+} from "@bpmiq/contracts/live-host";
+import { testsPathFor } from "@bpmiq/decisions/tests";
 import { AppError } from "@bpmiq/http-kit";
 import { byExtension, byId, processIdFromName } from "@bpmiq/notations";
 import { newBpmnXml, newDmnXml, templateFor } from "@bpmiq/notations/templates";
@@ -312,4 +322,94 @@ export async function createDecision(
     dirty: true, // brand-new — by definition not on origin yet
     liveSessions: 0,
   };
+}
+
+/** hard cap on one move — far above any real reorganisation */
+const MAX_MOVE_FILES = 100;
+
+export interface MoveDeps {
+  /** repo-qualified names of rooms with a loaded live document */
+  liveDocs: () => string[];
+  /** re-key one room's Yjs lineage to the moved file's room */
+  renameLineage: (from: string, to: string) => void;
+}
+
+/** repo-root-relative, forward slashes — the room/wire path shape */
+const repoPath = (workspace: string, abs: string): string => relative(workspace, abs).split(sep).join("/");
+
+/**
+ * Move model files into another folder under the processes root (#182). A
+ * model keeps its file stem (= its id): calledElement / calledDecision links
+ * resolve by stem, so they keep resolving, and the per-notation stem
+ * uniqueness cannot be broken by a move. A decision's `<stem>.tests.yaml`
+ * travels with it.
+ *
+ * Every file is checked BEFORE the first rename (a known model, not open in a
+ * live session, destination free), so a refused move changes nothing. Rooms
+ * are keyed by path — an OPEN file is refused rather than pulled from under
+ * its editors; a closed one takes its Yjs lineage along, so unreleased live
+ * edits survive. A model already in the target folder is skipped.
+ */
+export async function moveModels(
+  repo: ConnectedRepo,
+  workspace: string,
+  body: MoveModelsBody,
+  deps: MoveDeps,
+): Promise<MoveModelsResult> {
+  const cfg = requireConfig(repo, workspace);
+  const requested = [...new Set(body.paths.map((p) => p.trim()).filter(Boolean))];
+  if (requested.length === 0) {
+    throw new AppError("move/no-paths", "select at least one model to move", { status: 400, expose: true });
+  }
+  if (requested.length > MAX_MOVE_FILES) {
+    throw new AppError("move/too-many", `a move takes at most ${MAX_MOVE_FILES} models`, {
+      status: 400,
+      expose: true,
+    });
+  }
+  const segments = folderSegments(body.folder);
+  const root = processesRoot(workspace, cfg);
+  const targetDir = resolve(root, ...segments);
+  assertInsideRoot(targetDir, root, `folder '${body.folder}'`);
+  assertRealInsideWorkspace(targetDir, workspace, `folder '${body.folder}'`, "scaffold/outside-processes-root");
+
+  // discovery is the allow-list: only registered model files under the
+  // processes root — no traversal, no foreign files
+  const models = new Map((await discoverModels(workspace, cfg)).map((m) => [m.path, m]));
+  const live = new Set(deps.liveDocs());
+  const plan: Array<{ from: string; to: string }> = [];
+  for (const path of requested) {
+    const model = models.get(path);
+    if (!model) {
+      throw new AppError("move/unknown-model", `not a model in ${repo.fullName}: ${path}`, {
+        status: 404,
+        expose: true,
+      });
+    }
+    const files = [path];
+    if (model.notation === "dmn" && existsSync(resolve(workspace, testsPathFor(path)))) files.push(testsPathFor(path));
+    for (const from of files) {
+      const to = repoPath(workspace, join(targetDir, basename(from)));
+      if (to === from) continue; // already there
+      if (live.has(roomName(repo.fullName, from))) {
+        throw new AppError("move/live-session", `'${from}' is open in a live editing session — close it first`, {
+          status: 409,
+          expose: true,
+        });
+      }
+      if (existsSync(resolve(workspace, to)) || plan.some((p) => p.to === to)) {
+        throw new AppError("move/target-exists", `'${to}' already exists`, { status: 409, expose: true });
+      }
+      plan.push({ from, to });
+    }
+  }
+
+  if (plan.length > 0) {
+    await writeGuarded(`folder '${segments.join("/")}'`, () => mkdir(targetDir, { recursive: true }));
+  }
+  for (const { from, to } of plan) {
+    await rename(resolve(workspace, from), resolve(workspace, to));
+    deps.renameLineage(roomName(repo.fullName, from), roomName(repo.fullName, to));
+  }
+  return { moved: plan };
 }

@@ -29,6 +29,7 @@ export class LineageStore {
   private readonly saveSeedState: StatementSync;
   private readonly isSeedState: StatementSync;
   private readonly dropState: StatementSync;
+  private readonly renameState: StatementSync;
 
   constructor(db: DatabaseSync, hostRepo: string) {
     db.exec(
@@ -60,6 +61,9 @@ export class LineageStore {
     );
     this.isSeedState = db.prepare("SELECT seed FROM documents WHERE name = ?");
     this.dropState = db.prepare("DELETE FROM documents WHERE name = ?");
+    // OR REPLACE: a stale row under the new name (a file that once lived
+    // there) gives way in the SAME statement — never a half-moved state
+    this.renameState = db.prepare("UPDATE OR REPLACE documents SET name = ? WHERE name = ?");
   }
 
   /** the persisted Yjs update blob for a room, or undefined if never stored */
@@ -86,5 +90,11 @@ export class LineageStore {
 
   drop(name: string): void {
     this.dropState.run(name);
+  }
+
+  /** a moved file (#182): its lineage follows it to the new room name — seed
+   *  flag and all — so unreleased history is never re-seeded or lost */
+  rename(from: string, to: string): void {
+    this.renameState.run(to, from);
   }
 }

@@ -105,6 +105,7 @@ before(async () => {
     access: { canWrite: async () => true, invalidate: () => {} },
     liveDocs: () => [],
     dropLineage: () => {},
+    renameLineage: () => {},
     openDoc: (room) => hp.hocuspocus.openDirectConnection(room),
     maxDocBytes: 8_000_000,
     oidc: {

@@ -75,6 +75,7 @@ before(async () => {
     local: makeLocalPrincipal("petra"),
     liveDocs: () => [],
     dropLineage: () => {},
+    renameLineage: () => {},
     openDoc: () => Promise.reject(new Error("not needed here")),
     maxDocBytes: 8_000_000,
   };

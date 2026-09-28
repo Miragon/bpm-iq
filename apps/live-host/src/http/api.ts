@@ -21,6 +21,7 @@
  *   POST /api/repos/:owner/:repo/models          → create a model of any template-capable notation (repo write required)
  *   GET  /api/repos/:owner/:repo/folders         → folders under the processes root (repo write required)
  *   POST /api/repos/:owner/:repo/folders         → create a folder   (repo write required)
+ *   POST /api/repos/:owner/:repo/move            → move models into another folder (repo write required)
  *   GET  /api/repos/:owner/:repo/changes         → files differing from origin (release selection pool)
  *   POST /api/repos/:owner/:repo/release         → release a FILE SELECTION as one PR (repo write required)
  *   POST /api/repos/:owner/:repo/sync            → hard-reset workspace to origin/<default> (repo write required)
@@ -65,6 +66,8 @@ import type {
   FolderWire,
   Me,
   ModelInfo,
+  MoveModelsBody,
+  MoveModelsResult,
   ProcessInfo,
   PutContentRequest,
   PutContentResultWire,
@@ -105,6 +108,7 @@ import {
   createNotationModel,
   createProcess,
   listFolders,
+  moveModels,
 } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
@@ -152,6 +156,8 @@ export interface ApiOptions {
   liveDocs: () => string[];
   /** invalidate a room's Yjs lineage — sync-to-default drops the reset files' lineage */
   dropLineage: (room: string) => void;
+  /** re-key a room's Yjs lineage — a moved model keeps its unreleased history */
+  renameLineage: (from: string, to: string) => void;
   /** provider seam for the connected-repo set: connect URL + webhook verification */
   connectionSource?: RepoConnectionSource;
   /** issue-tracker seam (model-anchored todos) — absent when the platform has
@@ -625,7 +631,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // address /content over REST (the URL is claimed by history/content) —
       // accepted keyword-collision edge; MCP tools and ws rooms are unaffected.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|changes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
+        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|move|changes|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
       );
       if (repoRoute) {
         const session = await sessionOf(req);
@@ -697,6 +703,23 @@ export function startApi(port: number, opts: ApiOptions): Server {
           }
           if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
           return send(res, 200, (await listFolders(workspace)) satisfies FolderListWire);
+        }
+        // move model files into another folder (#182) — a workspace write like
+        // the creates; 409 while a moved file is open in a live session
+        if (repoRoute[2] === "move") {
+          if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+          const body = await jsonBody<MoveModelsBody>(req, res);
+          if (body === undefined) return;
+          if (!Array.isArray(body?.paths) || !body.paths.every((p) => typeof p === "string")) {
+            return send(res, 400, { error: "paths must be an array of strings" });
+          }
+          if (typeof body.folder !== "string") return send(res, 400, { error: "folder must be a string" });
+          const workspace = await opts.workspaces.ensure(repo);
+          const result = await moveModels(repo, workspace, body, opts);
+          for (const m of result.moved) {
+            console.log(`moved in ${repo.fullName} by @${session.user.login}: ${m.from} → ${m.to}`);
+          }
+          return send(res, 200, result satisfies MoveModelsResult);
         }
         // hard-reset the workspace onto origin/<default> ("load latest from main")
         // — DISCARDS unreleased live edits (the web client confirms first). Refuses

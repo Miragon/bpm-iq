@@ -131,6 +131,27 @@ export interface FolderWire {
   path: string;
 }
 
+/**
+ * POST /api/repos/:fullName/move — move model files into another folder under
+ * the processes root. A model keeps its file stem (= its id), so calledElement
+ * / calledDecision links keep resolving; a decision's `<stem>.tests.yaml`
+ * moves with it. Nothing is committed: the move shows up in GET /changes as a
+ * delete + add pair, and a release ships the pair together (a git rename).
+ * 409 while a moved file is open in a live session.
+ */
+export interface MoveModelsBody {
+  /** repo-relative paths of the model files to move (non-empty) */
+  paths: string[];
+  /** target folder, processes-root-relative ("" = the root); created if missing */
+  folder: string;
+}
+
+export interface MoveModelsResult {
+  /** every file that moved, companions (tests sidecars) included; a model
+   *  already in the target folder is skipped, not listed */
+  moved: Array<{ from: string; to: string }>;
+}
+
 /** GET /api/repos — registry ∩ the session user's per-repo permission */
 export interface RepoInfo {
   fullName: string;
@@ -199,6 +220,32 @@ export interface ChangedFileWire {
   path: string;
   status: "modified" | "added" | "deleted";
   liveSessions: number;
+}
+
+/** the move key of a changed file: its file name, with a decision's tests
+ *  sidecar keyed to its decision (`x.tests.yaml` → `x.dmn`) */
+const moveKey = (path: string): string => (path.split("/").pop() ?? path).replace(/\.tests\.yaml$/i, ".dmn");
+
+/**
+ * The MOVE units of a GET /changes pool (#182). A moved model shows up as a
+ * deleted + added pair of the same file name; shipping one half alone would
+ * leave the model twice on the default branch, or not at all. Maps every path
+ * of a unit to the whole unit (a decision's moved tests sidecar included);
+ * paths outside a move are absent. The release ships units whole — git then
+ * records a rename — and the release dialog selects them whole.
+ */
+export function moveUnits(changes: ReadonlyArray<Pick<ChangedFileWire, "path" | "status">>): Map<string, string[]> {
+  const byKey = new Map<string, Array<Pick<ChangedFileWire, "path" | "status">>>();
+  for (const c of changes) {
+    if (c.status !== "modified") byKey.set(moveKey(c.path), [...(byKey.get(moveKey(c.path)) ?? []), c]);
+  }
+  const units = new Map<string, string[]>();
+  for (const group of byKey.values()) {
+    if (!group.some((c) => c.status === "added") || !group.some((c) => c.status === "deleted")) continue;
+    const paths = group.map((c) => c.path);
+    for (const path of paths) units.set(path, paths);
+  }
+  return units;
 }
 
 /** POST /api/repos/:fullName/release — release exactly the selected files.

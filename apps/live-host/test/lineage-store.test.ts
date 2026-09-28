@@ -37,6 +37,23 @@ test("drop removes a persisted lineage", () => {
   assert.equal(store.load("acme/repo/docs/readme.md"), undefined);
 });
 
+test("rename moves a lineage to its new room, seed flag included, and replaces a stale target row (#182)", () => {
+  const db = new DatabaseSync(":memory:");
+  const store = new LineageStore(db, HOST);
+  store.save("acme/repo/processes/x.bpmn", new Uint8Array([1, 2]));
+  store.save("acme/repo/processes/sales/x.bpmn", new Uint8Array([9])); // stale leftover at the target
+  store.rename("acme/repo/processes/x.bpmn", "acme/repo/processes/sales/x.bpmn");
+  assert.equal(store.load("acme/repo/processes/x.bpmn"), undefined);
+  assert.deepEqual([...(store.load("acme/repo/processes/sales/x.bpmn") ?? [])], [1, 2]);
+  assert.equal(store.isSeed("acme/repo/processes/sales/x.bpmn"), false, "an edited row stays edited");
+  store.saveSeed("acme/repo/processes/y.bpmn", new Uint8Array([3]));
+  store.rename("acme/repo/processes/y.bpmn", "acme/repo/processes/sales/y.bpmn");
+  assert.equal(store.isSeed("acme/repo/processes/sales/y.bpmn"), true, "a pure seed stays replaceable");
+  // renaming a room that never persisted is a no-op
+  store.rename("acme/repo/processes/never.bpmn", "acme/repo/processes/sales/never.bpmn");
+  assert.deepEqual(names(db), ["acme/repo/processes/sales/x.bpmn", "acme/repo/processes/sales/y.bpmn"]);
+});
+
 test("seed flag: saveSeed marks, the first real save clears — in the row itself (crash-atomic)", () => {
   const db = new DatabaseSync(":memory:");
   const store = new LineageStore(db, HOST);

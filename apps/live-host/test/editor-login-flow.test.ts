@@ -53,6 +53,7 @@ const baseOpts = (): ApiOptions => ({
   access: { canWrite: async () => true, invalidate: () => {} },
   liveDocs: () => [],
   dropLineage: () => {},
+  renameLineage: () => {},
   openDoc: () => Promise.reject(new Error("no live docs in this test")),
   maxDocBytes: 8_000_000,
   loginCodes: new LoginCodeStore(),
