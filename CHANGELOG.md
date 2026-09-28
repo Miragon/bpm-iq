@@ -1,5 +1,23 @@
 # Changelog
 
+## [4.1.0](https://github.com/Miragon/bpm-iq/compare/v4.0.1...v4.1.0) (2026-09-28)
+
+
+### Features
+
+* **live-host,web:** move models into another folder ([#182](https://github.com/Miragon/bpm-iq/issues/182)) ([#203](https://github.com/Miragon/bpm-iq/issues/203)) ([284fad0](https://github.com/Miragon/bpm-iq/commit/284fad0e3d14760d93bf818e3538cc0fc507b649))
+* **live-host,web:** the workspace catches up with main per file ([#185](https://github.com/Miragon/bpm-iq/issues/185)) ([#204](https://github.com/Miragon/bpm-iq/issues/204)) ([bfe3ea8](https://github.com/Miragon/bpm-iq/commit/bfe3ea86191ddbecd96872eac5f6da0ce88a1bb2))
+* **web,notations:** Team Topologies modeler 0.8.0 — multi-selection, annotations, in-place label editing ([#206](https://github.com/Miragon/bpm-iq/issues/206)) ([d86a1db](https://github.com/Miragon/bpm-iq/commit/d86a1dbdf5fe4c101767d515108684e2127bce3a))
+* **web:** colour BPMN elements from the context pad ([#189](https://github.com/Miragon/bpm-iq/issues/189)) ([#195](https://github.com/Miragon/bpm-iq/issues/195)) ([da9ce76](https://github.com/Miragon/bpm-iq/commit/da9ce76a01f45c7d683393ef731f802f9a85b996))
+* **web:** copy & paste sticky notes, keeping size, text and kind ([#187](https://github.com/Miragon/bpm-iq/issues/187)) ([#198](https://github.com/Miragon/bpm-iq/issues/198)) ([54e1266](https://github.com/Miragon/bpm-iq/commit/54e1266068cbe200220896e4fd4b5ad90b8cd73a))
+* **web:** groups in the t.BPM workshop palette, named right on creation ([#190](https://github.com/Miragon/bpm-iq/issues/190)) ([#194](https://github.com/Miragon/bpm-iq/issues/194)) ([1b8fdc7](https://github.com/Miragon/bpm-iq/commit/1b8fdc7988f8dc2ff800cf60790dcaa62e5a0012))
+* **web:** sticky note text auto-fits the note size ([#188](https://github.com/Miragon/bpm-iq/issues/188)) ([#205](https://github.com/Miragon/bpm-iq/issues/205)) ([607ed8e](https://github.com/Miragon/bpm-iq/commit/607ed8eef38a029e8ee4852f4f58c3c178e6a579))
+
+
+### Bug Fixes
+
+* **web:** creating a folder stays on the current level ([#181](https://github.com/Miragon/bpm-iq/issues/181)) ([#202](https://github.com/Miragon/bpm-iq/issues/202)) ([538cef4](https://github.com/Miragon/bpm-iq/commit/538cef4e2d2062a037a904f5443f2580a60c1b81))
+
 ## [4.0.1](https://github.com/Miragon/bpm-iq/compare/v4.0.0...v4.0.1) (2026-09-14)
 
 
