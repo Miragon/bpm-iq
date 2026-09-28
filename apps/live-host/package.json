@@ -26,12 +26,12 @@
     "@bpmiq/validator": "workspace:*",
     "@hocuspocus/server": "4.7.0",
     "@modelcontextprotocol/ext-apps": "1.7.5",
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.30.1",
     "jose": "6.2.12",
     "yaml": "2.9.1",
     "y-protocols": "1.0.7",
-    "yjs": "13.6.32",
-    "zod": "4.6.2"
+    "yjs": "13.6.33",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/ws": "8.18.1",
