@@ -31,7 +31,8 @@ export function CreateFolderDialog({
   const create = useCreateFolder(repo);
 
   // no close while the create runs — an unmounted dialog would drop the
-  // mutation's onSuccess (navigation + cache seeding), same as SyncRepoDialog
+  // mutation's onSuccess (cache seeding + the caller's toast), same as
+  // SyncRepoDialog
   const close = () => {
     if (!create.isPending) onClose();
   };

@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@bpmiq/ui-kit/components/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@bpmiq/ui-kit/components/table";
+import { cn } from "@bpmiq/ui-kit/lib/utils";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
   type Column,
@@ -42,7 +43,7 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
-import { type ComponentType, type ReactNode, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AssistMenu } from "@/components/assist-menu";
@@ -102,6 +103,9 @@ interface FolderRow {
 /** parent folder of a processes-root-relative path ("" = root) */
 const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
+/** DOM id of a folder row — the just-created one is scrolled into view */
+const folderRowId = (path: string): string => `folder-row:${path}`;
+
 export function ProcessList() {
   const { owner, repo: name } = route.useParams();
   const { dir = "" } = route.useSearch();
@@ -133,6 +137,15 @@ export function ProcessList() {
   const [decisionOpen, setDecisionOpen] = useState(false);
   const [modelNotation, setModelNotation] = useState<NotationDescriptor | null>(null);
   const [releaseOpen, setReleaseOpen] = useState(false);
+  // a created folder stays a row on THIS level (#181) — marked for a moment so
+  // the eye finds it; the toast's Open action is the way in
+  const [createdFolder, setCreatedFolder] = useState<string | null>(null);
+  useEffect(() => {
+    if (!createdFolder) return;
+    document.getElementById(folderRowId(createdFolder))?.scrollIntoView({ block: "nearest" });
+    const timer = setTimeout(() => setCreatedFolder(null), 2500);
+    return () => clearTimeout(timer);
+  }, [createdFolder]);
 
   // models (processes AND decisions) with unreleased live edits the reset
   // would discard, and repos being actively edited (Variant A: a reset can't
@@ -435,7 +448,11 @@ export function ProcessList() {
               {childFolders.map((f) => (
                 <TableRow
                   key={`folder:${f.path}`}
-                  className="cursor-pointer"
+                  id={folderRowId(f.path)}
+                  className={cn(
+                    "cursor-pointer transition-colors duration-700",
+                    f.path === createdFolder && "bg-primary/10",
+                  )}
                   onClick={() =>
                     navigate({ to: "/r/$owner/$repo", params: { owner, repo: name }, search: { dir: f.path } })
                   }
@@ -595,8 +612,14 @@ export function ProcessList() {
           onClose={() => setFolderOpen(false)}
           onCreated={(path) => {
             setFolderOpen(false);
-            toast.success(`Folder '${path}' created`);
-            void navigate({ to: "/r/$owner/$repo", params: { owner, repo: name }, search: { dir: path } });
+            setCreatedFolder(path);
+            toast.success(`Folder '${path}' created`, {
+              action: {
+                label: "Open",
+                onClick: () =>
+                  void navigate({ to: "/r/$owner/$repo", params: { owner, repo: name }, search: { dir: path } }),
+              },
+            });
           }}
         />
       )}
