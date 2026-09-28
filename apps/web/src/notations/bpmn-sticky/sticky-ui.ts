@@ -13,6 +13,7 @@ import {
   type StickyKind,
 } from "./sticky-model";
 import { STICKY_TYPE } from "./sticky-model";
+import type { StickyRenderer } from "./sticky-renderer";
 
 /** inline SVG icon (data uri) — a sticky square with a folded corner */
 function stickyIcon(fill: string, stroke: string): string {
@@ -205,10 +206,12 @@ export class StickyEditing {
     "bpmnjs",
     "keyboard",
     "create",
+    "stickyRenderer",
   ];
 
   private readonly _canvas: CanvasLike;
   private readonly _modeling: ModelingLike;
+  private readonly _stickyRenderer: StickyRenderer;
 
   constructor(
     directEditing: {
@@ -230,10 +233,26 @@ export class StickyEditing {
       isKey(keys: string[], event: KeyboardEvent): boolean;
     },
     create: CreateLike,
+    stickyRenderer: StickyRenderer,
   ) {
     this._canvas = canvas;
     this._modeling = modeling;
+    this._stickyRenderer = stickyRenderer;
     directEditing.registerProvider(this);
+
+    // the text box auto-fits while typing, like the note will (#188). The
+    // textbox's content element is reused across activations, so ONE
+    // listener, re-checking who is being edited on every keystroke
+    const de = directEditing as unknown as {
+      _active?: { element?: unknown };
+      _textbox: { content: HTMLElement };
+    };
+    de._textbox.content.addEventListener("input", () => {
+      const element = de._active?.element;
+      if (!isSticky(element)) return;
+      const { fontSize } = this._fitText(element, directEditing.getValue());
+      de._textbox.content.style.fontSize = `${fontSize * canvas.zoom()}px`;
+    });
 
     // miro gesture: "n" arms the sticky create tool — the sticky follows the
     // cursor, a click places it (identical to the lasso/hand key bindings:
@@ -282,17 +301,30 @@ export class StickyEditing {
     const bounds = this._canvas.getAbsoluteBBox(element);
     const zoom = this._canvas.zoom();
     const kind = ((bo.kind ?? "note") as StickyKind) in STICKY_COLORS ? ((bo.kind ?? "note") as StickyKind) : "note";
+    // the text box mirrors the note's text: font, auto-fitted size, padding —
+    // less the 1px border the text box draws inside the bounds, so it wraps
+    // where the note will
+    const { font, textOptions } = this._stickyRenderer;
+    const { fontSize } = this._fitText(element, bo.text ?? "");
     return {
       bounds,
       text: bo.text ?? "",
       style: {
         backgroundColor: STICKY_COLORS[kind].fill,
-        fontSize: `${Math.round(12 * zoom)}px`,
-        lineHeight: 1.25,
+        fontFamily: font.family,
+        fontWeight: font.weight,
+        fontSize: `${fontSize * zoom}px`,
+        lineHeight: textOptions.lineHeight,
+        padding: `${Math.max(0, textOptions.padding * zoom - 1)}px`,
         textAlign: "center",
       },
       options: { centerVertically: true },
     };
+  }
+
+  private _fitText(element: unknown, text: string): { fontSize: number } {
+    const { width, height } = element as { width: number; height: number };
+    return this._stickyRenderer.fitText(text, { width, height });
   }
 
   update(element: unknown, newText: string): void {

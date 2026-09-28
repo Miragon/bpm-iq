@@ -14,3 +14,15 @@
   mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M3%203h18v13l-5%205H3z%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22/%3E%3Cpath%20d%3D%22M21%2016h-5v5%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
+
+/* a sticky under resize steps aside for its live preview (#188,
+   sticky-resize.ts): the preview is the sticky at the new size, its text
+   re-fitted on every move */
+.djs-shape.djs-resizing > .djs-visual > .bpmiq-sticky-note,
+.djs-shape.djs-resizing > .djs-visual > .bpmiq-sticky-text {
+  visibility: hidden;
+}
+
+.bpmiq-sticky-resize-preview {
+  pointer-events: none;
+}
