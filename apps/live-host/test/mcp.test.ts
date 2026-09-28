@@ -20,8 +20,7 @@ import { after, test } from "node:test";
 import { presenceColor } from "@bpmiq/contracts/live";
 import { toolText } from "@bpmiq/mcp-kit/testing";
 import { Server as HocuspocusServer } from "@hocuspocus/server";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { LineageStore } from "../src/adapters/sqlite/lineage-store.ts";
 import { type Session, SessionStore } from "../src/adapters/sqlite/sessions.ts";

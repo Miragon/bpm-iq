@@ -7,8 +7,7 @@
 // Uses the official MCP SDK (resolved via node_modules) over Streamable HTTP.
 // Reads + no-op saves only — never create_process/release_process (a release
 // would open a REAL GitHub PR).
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
 const MCP_URL = process.argv[2] ?? "http://localhost:8301/mcp";
 const REPO = process.argv[3] ?? "Miragon/bpm-iq";

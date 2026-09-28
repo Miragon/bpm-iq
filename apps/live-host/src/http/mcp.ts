@@ -42,7 +42,7 @@ import { extractModelGraph } from "@bpmiq/notations/extract";
 import { hasTemplate } from "@bpmiq/notations/templates";
 import { checkModel } from "@bpmiq/validator";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
@@ -136,6 +136,9 @@ function loadWidget(webDist: string, file: string, name: string, configSalt: str
 }
 
 // ── input shapes (zod v4 raw shapes, ported from the retired apps/live-mcp) ──
+// Building blocks, spread into larger shapes; every registration wraps its
+// final shape in z.object() — SDK v2 takes Standard Schema objects (raw
+// shapes only via a deprecated overload).
 const repoArg = z.string().describe("repository full name, 'owner/repo'");
 const processRef = {
   repo: repoArg,
@@ -460,7 +463,7 @@ export function createLiveMcpServer(
   }): void => {
     server.registerTool(
       cfg.name,
-      { description: cfg.description, inputSchema: cfg.ref, annotations: READ },
+      { description: cfg.description, inputSchema: z.object(cfg.ref), annotations: READ },
       safe(async ({ repo, ...ref }: { repo: string } & RefArgs) => {
         const r = await requireRepo(repo);
         const { xml: _legacy, ...content } = await readContent(r, await cfg.resolve(r, ref));
@@ -481,11 +484,11 @@ export function createLiveMcpServer(
       cfg.name,
       {
         description: cfg.description,
-        inputSchema: {
+        inputSchema: z.object({
           repo: repoArg,
           name: z.string().describe("human title; the file stem is its kebab-case slug"),
           folder: z.string().optional().describe("target folder relative to the processes root"),
-        },
+        }),
         annotations: WRITE,
       },
       safe(async ({ repo, name, folder }: { repo: string; name: string; folder?: string }) => {
@@ -515,12 +518,12 @@ export function createLiveMcpServer(
       cfg.name,
       {
         description: cfg.description,
-        inputSchema: {
+        inputSchema: z.object({
           ...cfg.ref,
           [cfg.payloadKey]: z.string().describe(cfg.payloadDoc),
           baseVersion: z.string().describe(cfg.baseVersionDoc),
           lint: lintArg,
-        },
+        }),
         annotations: WRITE,
       },
       safe(
@@ -560,7 +563,7 @@ export function createLiveMcpServer(
     "list_processes",
     {
       description: "List the BPMN processes in a repository (id, name, path, dirty flag, live session count).",
-      inputSchema: { repo: repoArg },
+      inputSchema: z.object({ repo: repoArg }),
       annotations: READ,
     },
     safe(async ({ repo }: { repo: string }) => {
@@ -577,7 +580,7 @@ export function createLiveMcpServer(
         "List EVERY model file of the repository, grouped by notation (bpmn, dmn, wardley, " +
         "team-topology, …) — the registry-wide superset of list_processes/list_decisions. " +
         "Each row: id (file stem), path, dirty flag, live session count.",
-      inputSchema: { repo: repoArg },
+      inputSchema: z.object({ repo: repoArg }),
       annotations: READ,
     },
     safe(async ({ repo }: { repo: string }) => {
@@ -596,7 +599,7 @@ export function createLiveMcpServer(
       description:
         "Derived process view (name, roles from lanes, steps, flow, sub-process calls) from the LIVE BPMN — " +
         "the same shape the read-only content-repo MCP server derives.",
-      inputSchema: processRef,
+      inputSchema: z.object(processRef),
       annotations: READ,
     },
     safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
@@ -619,12 +622,12 @@ export function createLiveMcpServer(
         `(${NOTATIONS.filter((n) => hasDeriver(n.id))
           .map((n) => n.id)
           .join(", ")}).`,
-      inputSchema: {
+      inputSchema: z.object({
         repo: repoArg,
         id: z.string().optional().describe("model id = file stem (from list_models)"),
         path: z.string().optional().describe("repo-relative model path (alternative to id)"),
         notation: z.string().optional().describe("registry notation id — disambiguates a stem shared across notations"),
-      },
+      }),
       annotations: READ,
     },
     safe(async ({ repo, id, path, notation }: { repo: string; id?: string; path?: string; notation?: string }) => {
@@ -648,7 +651,7 @@ export function createLiveMcpServer(
         "acting in it (kind 'agent'). `you` marks the caller's own presence, i.e. the person you act " +
         "for: 'the element I selected' resolves to that peer's `selection`. Empty when nobody has " +
         "the model open. A read; it announces nothing itself.",
-      inputSchema: modelRef,
+      inputSchema: z.object(modelRef),
       annotations: READ,
     },
     safe(async ({ repo, ...ref }: { repo: string } & RefArgs) => {
@@ -676,11 +679,11 @@ export function createLiveMcpServer(
         "Dry-run the platform validator on BPMN XML WITHOUT writing anything — structure, BPMNDI " +
         "coverage, callActivity links (against the repo's processes when `repo` is given). " +
         "Iterate here until ok before calling save_bpmn_xml.",
-      inputSchema: {
+      inputSchema: z.object({
         xml: z.string().describe("the complete BPMN XML to check"),
         repo: repoArg.optional(),
         path: z.string().optional().describe("repo-relative path, used to label findings"),
-      },
+      }),
       annotations: READ,
     },
     safe(async ({ xml, repo, path }: { xml: string; repo?: string; path?: string }) => {
@@ -717,7 +720,7 @@ export function createLiveMcpServer(
         "notations, the baseline parse for the others, dangling references against the repo's models " +
         "when `repo` is given). The notation comes from `path`'s extension or an explicit `notation`. " +
         "Iterate here until ok before calling save_model_content.",
-      inputSchema: {
+      inputSchema: z.object({
         content: z.string().describe("the complete document text to check"),
         repo: repoArg.optional(),
         path: z
@@ -728,7 +731,7 @@ export function createLiveMcpServer(
           .string()
           .optional()
           .describe(`registry notation id (${NOTATION_IDS}) — required when \`path\` has no registered extension`),
-      },
+      }),
       annotations: READ,
     },
     safe(
@@ -762,7 +765,7 @@ export function createLiveMcpServer(
     "list_decisions",
     {
       description: "List the DMN decisions in a repository (id, name, path, dirty flag, live session count).",
-      inputSchema: { repo: repoArg },
+      inputSchema: z.object({ repo: repoArg }),
       annotations: READ,
     },
     safe(async ({ repo }: { repo: string }) => {
@@ -779,7 +782,7 @@ export function createLiveMcpServer(
         "Derived decision view from the LIVE DMN: every decision with its hit policy, input/output columns " +
         "and rules (FEEL source text, `when`/`then` aligned to the columns), plus the DRD wiring " +
         "(input data and required decisions). Read this instead of the XML to reason about the logic.",
-      inputSchema: decisionRef,
+      inputSchema: z.object(decisionRef),
       annotations: READ,
     },
     safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
@@ -819,7 +822,7 @@ export function createLiveMcpServer(
         "their matched rule ids, outputs and any hit-policy violation. Unknown or missing keys are " +
         "reported instead of silently matching nothing. Nothing is written; pass `xml` to try an edit " +
         "you have not saved yet.",
-      inputSchema: {
+      inputSchema: z.object({
         repo: repoArg.optional(),
         id: z.string().optional().describe("decision id = DMN file stem (from list_decisions)"),
         path: z.string().optional().describe("repo-relative DMN path (alternative to id)"),
@@ -827,7 +830,7 @@ export function createLiveMcpServer(
           .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
           .describe('input values keyed by variable name, e.g. {"kundentyp":"stamm","bestellwert":500}'),
         xml: z.string().optional().describe("simulate THIS DMN instead of the stored one (dry run)"),
-      },
+      }),
       annotations: READ,
     },
     safe(
@@ -859,12 +862,12 @@ export function createLiveMcpServer(
         "that can never fire or violate the hit policy, requirements whose variable nothing reads, " +
         "cycles. Also returns, per variable, the literals and numeric boundaries its rules use — the " +
         "raw material for writing test cases. Pass `xml` to check an unsaved edit.",
-      inputSchema: {
+      inputSchema: z.object({
         repo: repoArg.optional(),
         id: z.string().optional().describe("decision id = DMN file stem (from list_decisions)"),
         path: z.string().optional().describe("repo-relative DMN path (alternative to id)"),
         xml: z.string().optional().describe("analyze THIS DMN instead of the stored one (dry run)"),
-      },
+      }),
       annotations: READ,
     },
     safe(async ({ repo, id, path, xml }: { repo?: string; id?: string; path?: string; xml?: string }) => {
@@ -881,11 +884,11 @@ export function createLiveMcpServer(
         "or the `cases` you pass in (a trial run that saves nothing). Reports per case pass/fail/pending " +
         "with the value it actually produced, plus RULE COVERAGE: which rules no case ever made decide " +
         "the outcome. A decision without a suite comes back empty and passing — check uncoveredRules.",
-      inputSchema: {
+      inputSchema: z.object({
         ...decisionRef,
         cases: testCasesArg.optional().describe("run THESE cases instead of the stored suite (nothing is saved)"),
         xml: z.string().optional().describe("test THIS DMN instead of the stored one (dry run)"),
-      },
+      }),
       annotations: READ,
     },
     safe(
@@ -920,7 +923,7 @@ export function createLiveMcpServer(
       description:
         "The stored test suite of a decision (raw YAML + the baseVersion save_decision_tests needs). " +
         "Returns exists:false when the decision has no suite yet — then save without a baseVersion.",
-      inputSchema: decisionRef,
+      inputSchema: z.object(decisionRef),
       annotations: READ,
     },
     safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
@@ -936,7 +939,7 @@ export function createLiveMcpServer(
     "list_changes",
     {
       description: "Files that differ from origin (the release selection pool) in a repository.",
-      inputSchema: { repo: repoArg },
+      inputSchema: z.object({ repo: repoArg }),
       annotations: READ,
     },
     safe(async ({ repo }: { repo: string }) => {
@@ -1005,12 +1008,12 @@ export function createLiveMcpServer(
           "the registry-generic sibling of create_process/create_decision. Returns its ModelInfo incl. the " +
           "path for get_model_content/save_model_content. A notation without a template answers with an " +
           "error: its files arrive via git only.",
-        inputSchema: {
+        inputSchema: z.object({
           repo: repoArg,
           notation: z.string().describe(`registry notation id — one of: ${CREATABLE_IDS}`),
           name: z.string().describe("human title; the file stem is its kebab-case slug"),
           folder: z.string().optional().describe("target folder relative to the models root"),
-        },
+        }),
         annotations: WRITE,
       },
       safe(
@@ -1051,12 +1054,12 @@ export function createLiveMcpServer(
           "is created); later ones require the one from get_decision_tests. Pass record:true to freeze " +
           "what each case WITHOUT an `expect` currently produces (golden master) — that is the honest " +
           "way to author expectations mechanically; anything else should come from the business.",
-        inputSchema: {
+        inputSchema: z.object({
           ...decisionRef,
           cases: testCasesArg.describe("the complete suite — this REPLACES the stored cases"),
           baseVersion: z.string().optional().describe("from get_decision_tests; omit only for the first save"),
           record: z.boolean().optional().describe("fill cases without `expect` with the current behaviour"),
-        },
+        }),
         annotations: WRITE,
       },
       safe(
@@ -1100,12 +1103,12 @@ export function createLiveMcpServer(
         description:
           "Open a pull request releasing either one process (processId) or an explicit changed-file " +
           "selection. Merge rights stay at the git provider.",
-        inputSchema: {
+        inputSchema: z.object({
           repo: repoArg,
           processId: z.string().optional().describe("release exactly this process as one PR"),
           files: z.array(z.string()).optional().describe("or: release exactly these repo-relative files as one PR"),
           title: z.string().optional().describe("PR/commit title"),
-        },
+        }),
         annotations: WRITE,
       },
       safe(
@@ -1154,7 +1157,7 @@ export function createLiveMcpServer(
           "OPEN model-anchored todos of a repository — work items filed from the live model into the " +
           "repo's issue tracker. Pass `id`/`path` to narrow to ONE process, omit both for the whole repo. " +
           "Each row carries its tracker url, the anchored BPMN elements and the author.",
-        inputSchema: processRef,
+        inputSchema: z.object(processRef),
         annotations: READ,
       },
       safe(async ({ repo, id, path }: { repo: string; id?: string; path?: string }) => {
@@ -1175,7 +1178,7 @@ export function createLiveMcpServer(
             "File a model-anchored todo into the repository's issue tracker. Anchor it to concrete BPMN " +
             "elements via `elements` (ids from get_bpmn_xml/get_process) — the modeler then shows a badge " +
             "on each one; omit them for a process-level todo. The item is bot-authored, you stay attributed.",
-          inputSchema: {
+          inputSchema: z.object({
             ...processRef,
             title: z.string().describe("what needs to be done — the tracker item's title"),
             body: z.string().optional().describe("free-text description (markdown)"),
@@ -1188,7 +1191,7 @@ export function createLiveMcpServer(
               )
               .optional()
               .describe("BPMN elements this todo is about; omit for a process-level todo"),
-          },
+          }),
           annotations: WRITE,
         },
         safe(
@@ -1229,10 +1232,10 @@ export function createLiveMcpServer(
           description:
             "Close (complete) a todo in the repository's tracker. `todoId` is the tracker-native id from " +
             "list_todos — NOT a process id. The close is bot-authored with an attribution comment naming you.",
-          inputSchema: {
+          inputSchema: z.object({
             repo: repoArg,
             todoId: z.string().describe("tracker-native todo id from list_todos (GitHub: the issue number)"),
-          },
+          }),
           annotations: WRITE,
         },
         safe(async ({ repo, todoId }: { repo: string; todoId: string }) => {
@@ -1365,7 +1368,7 @@ export function createLiveMcpServer(
       spec.tool,
       {
         description: spec.description,
-        inputSchema: spec.inputSchema,
+        inputSchema: z.object(spec.inputSchema),
         annotations: READ,
         // "openai/outputTemplate" is ChatGPT's compatibility alias for
         // ui.resourceUri — current builds read the MCP-Apps key, older ones
@@ -1405,7 +1408,7 @@ export function createLiveMcpServer(
           "Mint a short-lived, single-use WebSocket ticket for the modeler widgets' live " +
           "co-editing connection (Hocuspocus/Yjs) to a model of ANY notation. Internal to the " +
           "widgets — agents edit via save_bpmn_xml / save_model_content instead.",
-        inputSchema: modelRef,
+        inputSchema: z.object(modelRef),
         annotations: READ,
         _meta: { ui: { resourceUri: first.uri, visibility: ["app"] } },
       },

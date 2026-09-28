@@ -100,8 +100,8 @@ then send `Authorization: Bearer <token>`. Local development: `PORT=8080 node pa
 
 ## Live Host MCP endpoint (`apps/live-host`)
 
-The Live Host serves its own MCP endpoint at `POST /mcp` (official
-`@modelcontextprotocol/sdk`, stateless Streamable HTTP) — same container, same port as
+The Live Host serves its own MCP endpoint at `POST /mcp` (official MCP
+TypeScript SDK v2, stateless Streamable HTTP) — same container, same port as
 sync, REST API and web app. Where `packages/mcp` reads a checkout, this endpoint reads and
 **writes the live collaborative state**: the same Y.Text the browser tabs and VS Code edit,
 accessed server-side via a Hocuspocus direct connection. `repo` is a **tool argument**
