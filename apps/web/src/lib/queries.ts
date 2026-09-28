@@ -177,6 +177,7 @@ export function useMoveModels(repo: string) {
       for (const key of ["processes", "decisions", "models", "folders", "changes"]) {
         void qc.invalidateQueries({ queryKey: [key, repo] });
       }
+      void qc.invalidateQueries({ queryKey: ["repos"] }); // a moved model is dirty — the dirty count changed
     },
   });
 }

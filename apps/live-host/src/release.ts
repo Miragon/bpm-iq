@@ -37,7 +37,7 @@ import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { moveUnits, type ReleaseResult } from "@bpmiq/contracts/live-host";
+import { moveSources, moveUnits, type ReleaseResult } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
 import { modelStem, processIdFromName } from "@bpmiq/notations";
 
@@ -351,7 +351,7 @@ export async function release(
     prTitle: `release(${id}): publish live model state`,
     prBody: async (botAuthored, staged) =>
       releasePrBody(id, repo.fullName, session.user.login, botAuthored) +
-      (await decisionImpact(opts, repo, workspace, staged)) +
+      (await decisionImpact(opts, repo, workspace, staged, moveSources(changed))) +
       (await referenceImpact(workspace, staged)),
   });
 }
@@ -417,7 +417,8 @@ export async function releaseFiles(
         session.user.login,
         botAuthored,
       ) +
-      (await decisionImpact(opts, repo, workspace, staged)) +
+      // a moved decision is compared against its old path, not reported new
+      (await decisionImpact(opts, repo, workspace, staged, moveSources(pool))) +
       (await referenceImpact(workspace, staged)),
   });
 }

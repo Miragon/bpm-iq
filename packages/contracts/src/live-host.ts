@@ -248,6 +248,25 @@ export function moveUnits(changes: ReadonlyArray<Pick<ChangedFileWire, "path" | 
   return units;
 }
 
+/**
+ * Where every moved file came from (#182): new path → old path, pairing a
+ * unit's added half with the deleted half of the SAME file name (a decision
+ * and its tests sidecar pair separately). Whatever compares a moved file with
+ * its default-branch version — the release's decision impact — looks the
+ * previous version up at the old path.
+ */
+export function moveSources(changes: ReadonlyArray<Pick<ChangedFileWire, "path" | "status">>): Map<string, string> {
+  const status = new Map(changes.map((c) => [c.path, c.status]));
+  const fileName = (path: string): string => path.split("/").pop() ?? path;
+  const sources = new Map<string, string>();
+  for (const [path, unit] of moveUnits(changes)) {
+    if (status.get(path) !== "added") continue;
+    const from = unit.find((p) => status.get(p) === "deleted" && fileName(p) === fileName(path));
+    if (from) sources.set(path, from);
+  }
+  return sources;
+}
+
 /** POST /api/repos/:fullName/release — release exactly the selected files.
  * Every entry must currently be changed vs origin (GET /changes), otherwise 409. */
 export interface ReleaseFilesBody {

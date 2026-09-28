@@ -44,13 +44,17 @@ const show = (value: unknown): string =>
  * ships no decision (or nothing worth saying about one).
  *
  * `files` are repo-root-relative paths as staged; both the `.dmn` and its
- * `<stem>.tests.yaml` count as touching a decision.
+ * `<stem>.tests.yaml` count as touching a decision. `movedFrom` maps the new
+ * path of every file this release MOVES to its old one (#182, moveSources): a
+ * moved decision is compared against its previous version THERE, and its old
+ * half is no deletion.
  */
 export async function decisionImpact(
   deps: DecisionImpactDeps,
   repo: ConnectedRepo,
   workspace: string,
   files: string[],
+  movedFrom: ReadonlyMap<string, string> = new Map(),
 ): Promise<string> {
   const decisions = new Set<string>();
   for (const file of files) {
@@ -58,11 +62,14 @@ export async function decisionImpact(
     // a suite changed on its own: report against the unchanged model
     else if (file.endsWith(".tests.yaml")) decisions.add(`${file.slice(0, -".tests.yaml".length)}.dmn`);
   }
+  // git stages a move as a rename (new path only) — unless the content changed
+  // too much to detect one; then the old half is listed as well
+  for (const from of movedFrom.values()) decisions.delete(from);
   if (decisions.size === 0) return "";
 
   const sections: string[] = [];
   for (const path of [...decisions].sort()) {
-    const section = await one(deps, repo, workspace, path).catch(() => undefined);
+    const section = await one(deps, repo, workspace, path, movedFrom.get(path)).catch(() => undefined);
     if (section) sections.push(section);
   }
   return sections.length > 0 ? `\n\n## Decision impact\n\n${sections.join("\n\n")}` : "";
@@ -73,13 +80,15 @@ async function one(
   repo: ConnectedRepo,
   workspace: string,
   path: string,
+  /** the old path of a moved decision — where its default-branch version lives */
+  from: string | undefined,
 ): Promise<string | undefined> {
   const xml = await readFile(join(workspace, path), "utf8").catch(() => undefined);
   if (xml === undefined) return `**\`${path}\`** — deleted.`;
   const next = view(path, xml);
   if (!next) return undefined;
 
-  const lines: string[] = [`**\`${path}\`**`];
+  const lines: string[] = [`**\`${path}\`**${from ? ` — moved from \`${from}\`` : ""}`];
 
   // the static findings of the NEW version — a released decision with broken
   // FEEL is worth a line in the PR, not a surprise in production
@@ -100,7 +109,7 @@ async function one(
 
   // …and the actual point: which cases decide differently than on the default branch
   const previousXml = await deps.workspaces
-    .fileAtCommit?.(repo, path, `origin/${repo.defaultBranch}`)
+    .fileAtCommit?.(repo, from ?? path, `origin/${repo.defaultBranch}`)
     .catch(() => null);
   if (!previousXml) {
     lines.push("- new decision — no previous version to compare against");

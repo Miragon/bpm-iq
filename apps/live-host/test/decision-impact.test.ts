@@ -120,3 +120,23 @@ test("only decisions produce a section — and a changed suite alone counts as o
   assert.match(blind, /2 test case\(s\): 2 pass/);
   assert.match(blind, /new decision — no previous version/);
 });
+
+test("a MOVED decision (#182) is compared against its old path — reported once, as a move", async () => {
+  const moved = "processes/finance/rabatt.dmn";
+  const ws = mkdtempSync(join(tmpdir(), "bpm-impact-"));
+  mkdirSync(join(ws, "processes", "finance"), { recursive: true });
+  writeFileSync(join(ws, moved), dmn("100"));
+  writeFileSync(join(ws, "processes", "finance", "rabatt.tests.yaml"), SUITE);
+  // the default branch knows the decision only under its OLD path
+  const deps = {
+    workspaces: {
+      fileAtCommit: async (_repo: ConnectedRepo, path: string) => (path === DMN_PATH ? dmn("1000") : null),
+    },
+  };
+  // both halves staged: git detects no rename when the content changed a lot
+  const body = await decisionImpact(deps, REPO, ws, [DMN_PATH, moved], new Map([[moved, DMN_PATH]]));
+  assert.match(body, /\*\*`processes\/finance\/rabatt\.dmn`\*\* — moved from `processes\/rabatt\.dmn`/);
+  assert.match(body, /\| Grosser Auftrag \| `0` \| `10` \|/, "the before/after table survives the move");
+  assert.doesNotMatch(body, /deleted/, "the old half is no deletion");
+  assert.doesNotMatch(body, /new decision/);
+});

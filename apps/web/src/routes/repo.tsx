@@ -109,8 +109,11 @@ const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, p
 /** DOM id of a folder row — the just-created one is scrolled into view */
 const folderRowId = (path: string): string => `folder-row:${path}`;
 
-/** the drag payload of a model row (#182) — folder rows and the breadcrumb take it */
+/** the drag payload of a model row (#182) — folder rows and the breadcrumb take it.
+ *  It names its repo: a row dragged in from ANOTHER repo's window must not move
+ *  whatever sits at the same path here */
 const DRAG_TYPE = "application/x-bpmiq-model";
+type DragPayload = MovableModel & { repo: string };
 
 /** what a move needs of any model row (process rows carry their path as `bpmn`) */
 const movable = (m: { name: string; folder: string; liveSessions: number }, path: string): MovableModel => ({
@@ -220,7 +223,7 @@ export function ProcessList() {
       },
     });
   const dragModel = (e: DragEvent, model: MovableModel) => {
-    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(model));
+    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ ...model, repo } satisfies DragPayload));
     e.dataTransfer.effectAllowed = "move";
   };
   const dropInto = (folder: string) => ({
@@ -236,8 +239,8 @@ export function ProcessList() {
       setDropTarget(null);
       if (!raw) return;
       e.preventDefault();
-      const model = JSON.parse(raw) as MovableModel;
-      if (model.folder === folder) return;
+      const { repo: from, ...model } = JSON.parse(raw) as DragPayload;
+      if (from !== repo || model.folder === folder) return;
       move.mutate(
         { paths: [model.path], folder },
         { onSuccess: () => announceMove(model.name, folder), onError: (err) => toast.error(err.message) },

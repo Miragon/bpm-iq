@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { moveUnits } from "../src/live-host.ts";
+import { moveSources, moveUnits } from "../src/live-host.ts";
 
 test("moveUnits: a deleted + added pair of the same file name is one unit", () => {
   const units = moveUnits([
@@ -47,4 +47,22 @@ test("moveUnits: a lone add or delete is no move, and notations never pair acros
     { path: "processes/credit.tests.yaml", status: "added" },
   ]);
   assert.equal(units.size, 0);
+});
+
+test("moveSources: every added half points at its old path — a tests sidecar at its own", () => {
+  const sources = moveSources([
+    { path: "processes/credit.dmn", status: "deleted" },
+    { path: "processes/credit.tests.yaml", status: "deleted" },
+    { path: "processes/finance/credit.dmn", status: "added" },
+    { path: "processes/finance/credit.tests.yaml", status: "added" },
+    { path: "processes/new.bpmn", status: "added" },
+    { path: "processes/invoice.bpmn", status: "modified" },
+  ]);
+  assert.deepEqual(
+    [...sources],
+    [
+      ["processes/finance/credit.dmn", "processes/credit.dmn"],
+      ["processes/finance/credit.tests.yaml", "processes/credit.tests.yaml"],
+    ],
+  );
 });
