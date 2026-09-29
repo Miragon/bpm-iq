@@ -173,6 +173,10 @@ export interface RenameModelBody {
 export interface RenameModelResult {
   /** the model's new id (file stem) */
   id: string;
+  /** a renamed PROCESS takes its open todos along — in the background, one
+   *  tracker write at a time (GET …/todo-jobs follows it); absent when the
+   *  model is no process or the host has no tracker */
+  todoJob?: TodoJobWire;
   /** its new repo-relative path */
   path: string;
   /** every file that was renamed, the tests sidecar included */
@@ -214,11 +218,46 @@ export interface DuplicateModelResult {
 export interface DeleteModelsBody {
   /** repo-relative paths of the model files (non-empty) */
   paths: string[];
+  /** also close the open todos of every deleted PROCESS (in the background,
+   *  one tracker write at a time) — default: they stay open */
+  closeTodos?: boolean;
 }
 
 export interface DeleteModelsResult {
   /** every file that was deleted, companions (tests sidecars) included */
   deleted: string[];
+  /** the todo-closing jobs `closeTodos` started (one per deleted process) */
+  todoJobs?: TodoJobWire[];
+}
+
+/**
+ * GET /api/repos/:fullName/todo-jobs — background work on a repo's todos
+ * (#208, #210): a renamed process's todos MOVE to its new id, a deleted
+ * process's todos CLOSE. The tracker takes one write at a time (GitHub asks
+ * for serial writes, a second apart), so a job runs in the background and
+ * reports progress. A job survives a host restart; a FAILED job keeps its
+ * todos where they are until POST …/todo-jobs/retry runs it again.
+ */
+export interface TodoJobWire {
+  /** stable per repo: "<kind>:<from>" */
+  id: string;
+  kind: "move" | "close";
+  /** the process id the todos are filed under */
+  from: string;
+  /** move: the process id they go to */
+  to?: string;
+  /** open todos the job found; -1 until it looked */
+  total: number;
+  /** todos handled so far */
+  done: number;
+  /** todos the tracker refused this run */
+  failed: number;
+  state: "queued" | "running" | "done" | "failed";
+}
+
+/** POST /api/repos/:fullName/todo-jobs/retry — run a failed job again */
+export interface RetryTodoJobBody {
+  id: string;
 }
 
 /** one model referencing another (a callActivity, a businessRuleTask …) */

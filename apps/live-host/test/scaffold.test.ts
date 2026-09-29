@@ -726,3 +726,64 @@ test("renameModel: a failed file rename keeps an OPEN model's live state under i
   assert.ok(existsSync(join(ws, "processes", "order.bpmn")));
   assert.equal(spy.ws.released, 1, "the new room is released again");
 });
+
+test("renameModel: a renamed PROCESS takes its todos along (a background job); a decision has none", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn/>");
+  const moved: Array<{ from: string; to: { process: string; file: string } }> = [];
+  const job = {
+    id: "move:order",
+    kind: "move",
+    from: "order",
+    to: "o2c",
+    total: -1,
+    done: 0,
+    failed: 0,
+    state: "queued",
+  } as const;
+  const deps = (): RenameDeps => ({
+    ...renameDeps().deps(ws),
+    todos: {
+      move: (from, to) => {
+        moved.push({ from, to });
+        return job;
+      },
+    },
+  });
+  const out = await renameModel(REPO, ws, { path: "processes/order.bpmn", name: "o2c" }, "Petra", deps());
+  assert.deepEqual(moved, [{ from: "order", to: { process: "o2c", file: "processes/o2c.bpmn" } }]);
+  assert.deepEqual(out.todoJob, job);
+  const dmn = await renameModel(REPO, ws, { path: "processes/credit.dmn", name: "limit" }, "Petra", deps());
+  assert.equal(dmn.todoJob, undefined);
+  assert.equal(moved.length, 1);
+});
+
+test("deleteModels: closeTodos closes the deleted PROCESSES' todos — only when asked", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn/>");
+  const closed: string[] = [];
+  const todos = {
+    close: (from: string) => {
+      closed.push(from);
+      return { id: `close:${from}`, kind: "close", from, total: -1, done: 0, failed: 0, state: "queued" } as const;
+    },
+  };
+  const kept = await deleteModels(
+    REPO,
+    ws,
+    { paths: ["processes/credit.dmn"] },
+    { liveDocs: () => [], dropLineage: () => {}, todos },
+  );
+  assert.equal(kept.todoJobs, undefined);
+  const out = await deleteModels(
+    REPO,
+    ws,
+    { paths: ["processes/order.bpmn", "processes/subprocesses/check-credit.bpmn"], closeTodos: true },
+    { liveDocs: () => [], dropLineage: () => {}, todos },
+  );
+  assert.deepEqual(closed, ["order", "check-credit"]);
+  assert.deepEqual(
+    out.todoJobs?.map((j) => j.id),
+    ["close:order", "close:check-credit"],
+  );
+});

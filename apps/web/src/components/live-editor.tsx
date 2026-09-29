@@ -543,6 +543,7 @@ export function LiveEditor({
         {hasTodos && panel === "todos" && (
           <TodoPanel
             repo={repo}
+            processId={processId}
             todos={todoList}
             isLoading={todosQuery.isLoading}
             error={todosQuery.error}

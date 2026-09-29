@@ -38,11 +38,12 @@ import type {
   ProcessInfo,
   RenameModelBody,
   RenameModelResult,
+  TodoJobWire,
 } from "@bpmiq/contracts/live-host";
 import { testsPathFor } from "@bpmiq/decisions/tests";
 import { AppError } from "@bpmiq/http-kit";
 import { readSnapshot } from "@bpmiq/live-client/structured";
-import { byExtension, byId, processIdFromName } from "@bpmiq/notations";
+import { byExtension, byId, modelStem, processIdFromName } from "@bpmiq/notations";
 import { retargetRefs } from "@bpmiq/notations/retarget";
 import { newBpmnXml, newDmnXml, templateFor } from "@bpmiq/notations/templates";
 import * as Y from "yjs";
@@ -552,6 +553,9 @@ export interface RenameDeps {
    *  open caller sees the change and nothing is overwritten on disk behind it */
   editContent: (path: string, edit: (content: string) => string) => Promise<void>;
   recordRenames?: MoveDeps["recordRenames"];
+  /** a renamed PROCESS's open todos follow its new id — in the background
+   *  (application/todo-jobs.ts); absent when the host has no tracker */
+  todos?: { move(from: string, to: { process: string; file: string }): TodoJobWire };
 }
 
 /**
@@ -624,6 +628,18 @@ export async function renameModel(
     release();
   }
   await journal(deps.recordRenames, repo, renamed);
+  const newPath = renamed[0]?.to ?? pathUnderId(model, model.path, id);
+
+  // todos are filed under the process id — they follow it (a job: the tracker
+  // takes one write at a time, the rename does not wait for that)
+  let todoJob: TodoJobWire | undefined;
+  if (model.notation === "bpmn" && deps.todos) {
+    try {
+      todoJob = deps.todos.move(model.id, { process: id, file: newPath });
+    } catch (e) {
+      console.log(`rename ${model.path} → ${id}: todos not moved: ${(e as Error).message}`);
+    }
+  }
 
   const updatedReferences: string[] = [];
   const failedReferences: string[] = [];
@@ -640,13 +656,7 @@ export async function renameModel(
       failedReferences.push(path);
     }
   }
-  return {
-    id,
-    path: renamed[0]?.to ?? pathUnderId(model, model.path, id),
-    renamed,
-    updatedReferences,
-    failedReferences,
-  };
+  return { id, path: newPath, renamed, updatedReferences, failedReferences, ...(todoJob ? { todoJob } : {}) };
 }
 
 export interface DuplicateDeps {
@@ -709,6 +719,9 @@ export interface DeleteDeps {
   liveDocs: () => string[];
   /** forget a deleted file's Yjs lineage */
   dropLineage: (room: string) => void;
+  /** close a deleted process's open todos in the background (`closeTodos`) —
+   *  absent when the host has no tracker */
+  todos?: { close(from: string): TodoJobWire };
 }
 
 /**
@@ -754,5 +767,18 @@ export async function deleteModels(
     await rm(resolve(workspace, file), { force: true });
     deps.dropLineage(roomName(repo.fullName, file));
   }
-  return { deleted: files };
+  // asked for: the deleted processes' todos are closed (they would point at
+  // nothing otherwise) — in the background, one tracker write at a time
+  const todoJobs: TodoJobWire[] = [];
+  if (body.closeTodos && deps.todos) {
+    for (const path of requested) {
+      if (byExtension(path)?.id !== "bpmn") continue;
+      try {
+        todoJobs.push(deps.todos.close(modelStem(path)));
+      } catch (e) {
+        console.log(`delete ${path}: todos not closed: ${(e as Error).message}`);
+      }
+    }
+  }
+  return { deleted: files, ...(todoJobs.length > 0 ? { todoJobs } : {}) };
 }

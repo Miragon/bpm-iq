@@ -9,7 +9,9 @@
  * Control endpoint (tests): POST /_control {"permission":"read"|"write"}
  * simulates a user with/without repo access; {"addIssue":…} seeds tracker rows
  * (incl. PR-shaped ones) and {"issuesForbidden":true} simulates an app missing
- * the Issues permission. GET /_control returns recorded pull-request payloads.
+ * the Issues permission, {"rateLimitWrites":N} makes the next N issue PATCHes
+ * a secondary rate limit. GET /_control returns recorded pull-request
+ * payloads, GET /_control/writes every issue PATCH in order.
  */
 import { createServer, type ServerResponse } from "node:http";
 
@@ -38,6 +40,10 @@ const repoIssues = new Map<string, StubIssue[]>();
 // comments per issue, keyed "<repo>#<number>" (GitHub keeps them off the issue row)
 const issueComments = new Map<string, Array<{ body: string }>>();
 let issuesForbidden = false;
+/** the next N issue PATCHes answer 403 + retry-after (a secondary rate limit) */
+let rateLimitedWrites = 0;
+/** every issue PATCH, in order — GET /_control/writes (re-anchoring tests) */
+const issueWrites: Array<{ number: number; labels?: string[]; body?: string; state?: string }> = [];
 const addIssue = (repo: string, i: { title: string; body?: string; labels?: string[]; pull_request?: boolean }) => {
   const list = repoIssues.get(repo) ?? [];
   repoIssues.set(repo, list);
@@ -186,11 +192,25 @@ createServer(async (req, res) => {
   if (commentsRoute && req.method === "GET") {
     return json(res, 200, issueComments.get(`${commentsRoute[1]}#${commentsRoute[2]}`) ?? []);
   }
+  if (issueRoute && req.method === "GET") {
+    const issue = issueOf(issueRoute[1]!, issueRoute[2]!);
+    return issue ? json(res, 200, issue) : json(res, 404, { message: "Not Found" });
+  }
   if (issueRoute && req.method === "PATCH") {
     const issue = issueOf(issueRoute[1]!, issueRoute[2]!);
     if (!issue) return json(res, 404, { message: "Not Found" });
-    const { state } = JSON.parse(body) as { state?: string };
-    if (state === "open" || state === "closed") issue.state = state;
+    // a secondary rate limit on the next N writes (todo re-anchoring tests)
+    if (rateLimitedWrites > 0) {
+      rateLimitedWrites--;
+      res.writeHead(403, { "content-type": "application/json", "retry-after": "1" });
+      return res.end(JSON.stringify({ message: "You have exceeded a secondary rate limit." }));
+    }
+    const patch = JSON.parse(body) as { state?: string; labels?: string[]; body?: string };
+    if (patch.state === "open" || patch.state === "closed") issue.state = patch.state;
+    // like GitHub: `labels` REPLACES the whole set
+    if (Array.isArray(patch.labels)) issue.labels = patch.labels.map((name) => ({ name }));
+    if (typeof patch.body === "string") issue.body = patch.body;
+    issueWrites.push({ number: issue.number, labels: patch.labels, body: patch.body, state: patch.state });
     return json(res, 200, issue);
   }
   if (labelsRoute && req.method === "POST") {
@@ -235,8 +255,11 @@ createServer(async (req, res) => {
       /** seed a tracker row directly — pull_request:true makes it a PR-shaped row */
       addIssue?: { repo: string; title: string; body?: string; labels?: string[]; pull_request?: boolean };
       issuesForbidden?: boolean;
+      /** the next N issue PATCHes are rate limited (403 + retry-after: 1) */
+      rateLimitWrites?: number;
     };
     if (ctl.permission) permission = ctl.permission;
+    if (typeof ctl.rateLimitWrites === "number") rateLimitedWrites = ctl.rateLimitWrites;
     if (ctl.addIssue) addIssue(ctl.addIssue.repo, ctl.addIssue);
     if (typeof ctl.issuesForbidden === "boolean") issuesForbidden = ctl.issuesForbidden;
     if (ctl.repos) installationRepos = ctl.repos;
@@ -249,6 +272,7 @@ createServer(async (req, res) => {
     if (ctl.removeInstallation) installations.delete(ctl.removeInstallation);
     return json(res, 200, { permission, installationRepos, installations: [...installations.keys()] });
   }
+  if (url.pathname === "/_control/writes") return json(res, 200, issueWrites);
   if (url.pathname === "/_control") return json(res, 200, { permission, pulls });
 
   json(res, 404, { error: `stub: no route for ${req.method} ${url.pathname}` });

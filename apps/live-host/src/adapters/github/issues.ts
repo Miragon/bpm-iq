@@ -14,7 +14,7 @@
  * implement the same contract against their own issue APIs.
  */
 import { processDeepLink } from "@bpmiq/contracts/deep-link";
-import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
+import { encodeAnchor, parseAnchor, replaceAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 import { GitHubHttpError, paginate, tokenRest } from "@bpmiq/github-app";
 import {
   type GitHubIssueRow,
@@ -25,7 +25,13 @@ import {
 } from "@bpmiq/github-app/todos";
 import { AppError } from "@bpmiq/http-kit";
 
-import type { IssueTracker, Todo, TodoInput } from "../../ports/issue-tracker.ts";
+import {
+  type IssueTracker,
+  type Todo,
+  type TodoInput,
+  type TodoTarget,
+  TrackerRateLimited,
+} from "../../ports/issue-tracker.ts";
 import { githubApi } from "./app-auth.ts";
 
 /** attribution line appended to every created issue (items are bot-authored) */
@@ -88,6 +94,45 @@ export function todoBody(input: TodoInput, deepLink?: DeepLinkTarget): string {
     .join("\n\n");
 }
 
+/**
+ * The body of a todo re-anchored from process `from` to `to` (#208): the
+ * anchor block names the new process and file, the element deep links point
+ * at the new process route — every other byte (the author's text, human
+ * edits made on GitHub, the attribution) stays as it is. A body whose anchor
+ * names another process (or none — filed by hand) comes back unchanged.
+ */
+export function retargetBody(body: string, from: string, to: TodoTarget, deepLink?: DeepLinkTarget): string {
+  const anchor = parseAnchor(body);
+  if (!anchor || anchor.process !== from) return body;
+  let out = replaceAnchor(body, { ...anchor, process: to.process, file: to.file });
+  if (deepLink) {
+    for (const el of anchor.elements) {
+      const link = (process: string) => processDeepLink(deepLink.publicUrl, deepLink.repoFullName, process, el.id);
+      out = out.split(`(${link(from)})`).join(`(${link(to.process)})`);
+    }
+  }
+  return out;
+}
+
+/** GitHub's "slow down": a 403/429 carrying retry-after, an exhausted primary
+ *  quota, or the secondary-rate-limit message — the wait it asks for, else
+ *  undefined (a real refusal). */
+export function rateLimitWait(
+  res: Pick<Response, "status" | "headers">,
+  text: string,
+  now = Date.now(),
+): number | undefined {
+  if (res.status !== 403 && res.status !== 429) return undefined;
+  const retryAfter = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1000;
+  if (res.headers.get("x-ratelimit-remaining") === "0") {
+    const reset = Number(res.headers.get("x-ratelimit-reset")) * 1000;
+    return Number.isFinite(reset) && reset > now ? reset - now : 60_000;
+  }
+  // secondary limits without headers: GitHub asks for at least a minute
+  return /rate limit/i.test(text) ? 60_000 : undefined;
+}
+
 export interface GitHubIssueRowsDeps {
   /** REST base, e.g. https://api.github.com */
   apiUrl: string;
@@ -118,12 +163,19 @@ export function createGitHubIssueTracker(deps: GitHubIssueRowsDeps): IssueTracke
   const rest = (token: string, path: string, init: RequestInit = {}): Promise<Response> =>
     tokenRest(token, ghApi, path, init);
 
-  /** read the error body and throw — mapping the missing-permission 403 to an AppError */
+  /** read the error body and throw — mapping the missing-permission 403 to an
+   *  AppError and a rate limit to TrackerRateLimited (the caller waits) */
   async function raise(res: Response, repoFullName: string, what: string): Promise<never> {
     const text = await res.text();
     if (res.status === 403 && text.includes("Resource not accessible")) throw issuesPermissionError(repoFullName);
+    const wait = rateLimitWait(res, text);
+    if (wait !== undefined) throw new TrackerRateLimited(wait, `${what} → rate limited (${res.status})`);
     throw new Error(`${what} → ${res.status} ${text}`);
   }
+
+  /** labels this process already made sure of — a re-anchoring batch would
+   *  otherwise spend one extra write per item on the same 422 */
+  const ensured = new Set<string>();
 
   /** create a label, tolerating "already exists" (422) — labels are idempotent state */
   async function ensureLabel(
@@ -195,6 +247,43 @@ export function createGitHubIssueTracker(deps: GitHubIssueRowsDeps): IssueTracke
         throw e;
       }
       return issues.filter((issue) => !isPullRequestRow(issue)).map(toTodo);
+    },
+
+    async retargetTodo(repoFullName, id, from, to) {
+      const token = await deps.tokenFor(repoFullName);
+      const res = await rest(token, `/repos/${repoFullName}/issues/${id}`);
+      if (!res.ok) await raise(res, repoFullName, `todo #${id} read`);
+      const issue = (await res.json()) as GitHubIssueRow & { labels?: Array<string | { name?: string }> };
+      const labels = (issue.labels ?? []).map((l) => (typeof l === "string" ? l : (l.name ?? ""))).filter(Boolean);
+      const nextLabels = [...new Set([...labels.filter((l) => l !== processLabel(from)), processLabel(to.process)])];
+      const body = issue.body ?? "";
+      const nextBody = retargetBody(
+        body,
+        from,
+        to,
+        deps.publicUrl ? { publicUrl: deps.publicUrl, repoFullName } : undefined,
+      );
+      const labelsChanged = nextLabels.length !== labels.length || nextLabels.some((l) => !labels.includes(l));
+      if (!labelsChanged && nextBody === body) return "unchanged";
+      const key = `${repoFullName}\n${processLabel(to.process)}`;
+      if (!ensured.has(key)) {
+        await ensureLabel(token, repoFullName, {
+          name: processLabel(to.process),
+          color: "ededed",
+          description: `bpmiq process ${to.process}`,
+        });
+        ensured.add(key);
+      }
+      // ONE write: GitHub replaces the label set as a whole — computed from
+      // the labels read a moment ago, so a label added by hand in between is
+      // the only thing that could get lost
+      const patch = await rest(token, `/repos/${repoFullName}/issues/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ labels: nextLabels, ...(nextBody !== body ? { body: nextBody } : {}) }),
+      });
+      if (!patch.ok) await raise(patch, repoFullName, `todo #${id} re-anchor`);
+      await patch.text();
+      return "moved";
     },
 
     async closeTodo(repoFullName, id, closedBy) {

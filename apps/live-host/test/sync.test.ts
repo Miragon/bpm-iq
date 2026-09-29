@@ -97,3 +97,31 @@ test("syncRepo: a foreign repo's live session does not block", async () => {
   await syncRepo(d, REPO);
   assert.equal(calls.reset, 1, "only THIS repo's sessions gate the reset");
 });
+
+test("syncRepo: a discarded process rename sends its todos back to the old id; decisions and moves need nothing (#208)", async () => {
+  const moves: Array<{ from: string; to: string; file: string }> = [];
+  const order: string[] = [];
+  const { deps: base } = deps();
+  const d: SyncDeps = {
+    ...base,
+    workspaces: {
+      ...base.workspaces,
+      renames: async () => {
+        order.push("renames");
+        return [
+          { from: "processes/invoice-handling.bpmn", to: "processes/billing.bpmn" },
+          { from: "processes/credit.dmn", to: "processes/credit-limit.dmn" },
+          { from: "processes/order.bpmn", to: "processes/archive/order.bpmn" },
+        ];
+      },
+      resetToDefault: async () => {
+        order.push("reset");
+        return [];
+      },
+    },
+    todoJobs: { move: (_repo, from, to) => void moves.push({ from, to: to.process, file: to.file }) },
+  };
+  await syncRepo(d, REPO, "petra");
+  assert.deepEqual(order, ["renames", "reset"], "the journal is read BEFORE the reset clears it");
+  assert.deepEqual(moves, [{ from: "billing", to: "invoice-handling", file: "processes/invoice-handling.bpmn" }]);
+});

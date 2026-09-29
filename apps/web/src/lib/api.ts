@@ -32,6 +32,7 @@ import type {
   ResolveConflictBody,
   ResolveConflictResult,
   SyncResult,
+  TodoJobWire,
   TodoWire,
 } from "@bpmiq/contracts/live-host";
 
@@ -75,6 +76,7 @@ export type {
   SyncResult,
   TodoAnchorWire,
   TodoElementWire,
+  TodoJobWire,
   TodoWire,
 } from "@bpmiq/contracts/live-host";
 
@@ -206,3 +208,12 @@ export const createTodo = (repo: string, body: CreateTodoBody): Promise<TodoWire
 /** close (resolve) a todo in its tracker — errors (403 permission, 501 no tracker) carry actionable messages */
 export const closeTodo = (repo: string, id: string): Promise<{ ok: true }> =>
   api(`/api/repos/${repo}/todos/${encodeURIComponent(id)}/close`, { method: "POST" });
+/** background todo work of a repo — a renamed process's todos moving, a deleted one's closing */
+export const fetchTodoJobs = (repo: string): Promise<TodoJobWire[]> => api(`/api/repos/${repo}/todo-jobs`);
+/** run a failed todo job again */
+export const retryTodoJob = (repo: string, id: string): Promise<TodoJobWire> =>
+  api(`/api/repos/${repo}/todo-jobs/retry`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });

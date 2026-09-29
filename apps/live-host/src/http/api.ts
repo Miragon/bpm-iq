@@ -34,6 +34,8 @@
  *   GET  /api/repos/:owner/:repo/todos           → open model-anchored todos (repo write required)
  *   POST /api/repos/:owner/:repo/todos           → create a todo in the repo's tracker (repo write required)
  *   POST /api/repos/:owner/:repo/todos/:id/close → close a todo in the tracker (repo write required)
+ *   GET  /api/repos/:owner/:repo/todo-jobs       → background todo moves/closes + progress (repo write required)
+ *   POST /api/repos/:owner/:repo/todo-jobs/retry → run a failed todo job again (repo write required)
  *   POST /api/repos/:owner/:repo/release/:id     → release AS THE USER (repo write required)
  *   GET  /api/repos/:owner/:repo/content?path=   → current LIVE model content + baseVersion (repo write required)
  *   PUT  /api/repos/:owner/:repo/content?path=   → validate + CAS-save into the live doc (repo write required)
@@ -86,7 +88,9 @@ import type {
   RenameModelResult,
   ResolveConflictBody,
   ResolveConflictResult,
+  RetryTodoJobBody,
   SyncResult,
+  TodoJobWire,
   TodoWire,
 } from "@bpmiq/contracts/live-host";
 import { AppError, bearerAuth, errorBody, readBody, redirect, securityHeaders, send } from "@bpmiq/http-kit";
@@ -130,7 +134,8 @@ import {
   renameModel,
 } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
-import { closeTodoFor, fileTodo } from "../application/todos.ts";
+import type { TodoJobs } from "../application/todo-jobs.ts";
+import { closeTodoFor, fileTodo, listOpenTodos } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
 import { isCrossSite } from "../auth/none.ts";
 import type { RepoConnectionSource } from "../ports/connection-source.ts";
@@ -187,6 +192,9 @@ export interface ApiOptions {
   /** issue-tracker seam (model-anchored todos) — absent when the platform has
    * no credentials to act on the tracker (the /todos routes then answer 501) */
   issues?: IssueTracker;
+  /** background todo work (#208/#210): a renamed process's todos move, a
+   * deleted one's close — present exactly when `issues` is */
+  todoJobs?: Pick<TodoJobs, "move" | "close" | "status" | "retry" | "sourcesOf">;
   /** cell mode (ADR 0002): the control-plane origin (derived from
    * TOKEN_MINT_URL) — a cross-tenant OIDC login redirects there for re-routing */
   controlPlaneUrl?: string;
@@ -655,7 +663,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // address /content over REST (the URL is claimed by history/content) —
       // accepted keyword-collision edge; MCP tools and ws rooms are unaffected.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|move|rename|duplicate|delete|references|changes|conflicts|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
+        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|move|rename|duplicate|delete|references|changes|conflicts|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|todo-jobs(?:\/retry)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
       );
       if (repoRoute) {
         const session = await sessionOf(req);
@@ -767,6 +775,9 @@ export function startApi(port: number, opts: ApiOptions): Server {
             lineage: { save: opts.saveLineage, drop: opts.dropLineage, rename: opts.renameLineage },
             editContent: (path, edit) => editContent(opts, repo, path, edit),
             recordRenames: (pairs) => opts.workspaces.recordRenames(repo, pairs),
+            todos: opts.todoJobs && {
+              move: (from, to) => opts.todoJobs!.move(repo.fullName, from, to, session.user.login),
+            },
           });
           for (const m of result.renamed) {
             console.log(`renamed in ${repo.fullName} by @${session.user.login}: ${m.from} → ${m.to}`);
@@ -800,7 +811,13 @@ export function startApi(port: number, opts: ApiOptions): Server {
             return send(res, 400, { error: "paths must be an array of strings" });
           }
           const workspace = await opts.workspaces.ensure(repo);
-          const result = await deleteModels(repo, workspace, body, opts);
+          if (body.closeTodos !== undefined && typeof body.closeTodos !== "boolean") {
+            return send(res, 400, { error: "closeTodos must be a boolean" });
+          }
+          const result = await deleteModels(repo, workspace, body, {
+            ...opts,
+            todos: opts.todoJobs && { close: (from) => opts.todoJobs!.close(repo.fullName, from, session.user.login) },
+          });
           for (const path of result.deleted) {
             console.log(`deleted in ${repo.fullName} by @${session.user.login}: ${path}`);
           }
@@ -820,7 +837,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
         // the in-place host checkout (422) and repos with open sessions (409).
         if (repoRoute[2] === "sync") {
           if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
-          const result = await syncRepo(opts, repo);
+          const result = await syncRepo(opts, repo, session.user.login);
           console.log(
             `synced ${repo.fullName} → origin/${repo.defaultBranch} by @${session.user.login}: ${result.changed.length} file(s) reset`,
           );
@@ -860,6 +877,23 @@ export function startApi(port: number, opts: ApiOptions): Server {
           const file = await fileAtCommit(opts, repo, path, url.searchParams.get("sha") ?? "");
           return send(res, 200, file satisfies FileAtCommitWire);
         }
+        // background todo work (#208/#210) — progress for the web client's
+        // toast and Todos panel, and the retry of a failed job
+        if (repoRoute[2]?.startsWith("todo-jobs")) {
+          if (!opts.todoJobs) return send(res, 200, [] satisfies TodoJobWire[]);
+          if (repoRoute[2] === "todo-jobs") {
+            if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
+            return send(res, 200, opts.todoJobs.status(repo.fullName) satisfies TodoJobWire[]);
+          }
+          if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+          const body = await jsonBody<RetryTodoJobBody>(req, res);
+          if (body === undefined) return;
+          if (typeof body?.id !== "string") return send(res, 400, { error: "id must be a string" });
+          const job = opts.todoJobs.retry(repo.fullName, body.id);
+          if (!job) return send(res, 404, { error: `no todo job '${body.id}' in ${repo.fullName}` });
+          console.log(`todo job retried in ${repo.fullName} by @${session.user.login}: ${job.id}`);
+          return send(res, 200, job satisfies TodoJobWire);
+        }
         if (repoRoute[2]?.startsWith("todos")) {
           // the tracker seam needs a platform credential (installation token) —
           // a credential-less local spike has no way to act on the repo's issues
@@ -876,7 +910,13 @@ export function startApi(port: number, opts: ApiOptions): Server {
             return send(res, 200, { ok: true });
           }
           if (req.method === "GET") {
-            const todos = await opts.issues.listTodos(repo.fullName, url.searchParams.get("process") ?? undefined);
+            // a renamed process's todos still on their way in are listed too (#208)
+            const todos = await listOpenTodos(
+              opts.issues,
+              opts.todoJobs,
+              repo,
+              url.searchParams.get("process") ?? undefined,
+            );
             return send(res, 200, todos satisfies TodoWire[]);
           }
           if (req.method === "POST") {

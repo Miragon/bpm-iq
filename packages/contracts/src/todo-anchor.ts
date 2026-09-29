@@ -63,6 +63,17 @@ export function stripAnchor(text: string): string {
   return text.slice(0, start) + text.slice(end + CLOSE.length);
 }
 
+/** the text with its anchor block replaced by `anchor`'s — everything around
+ *  the block stays byte for byte (a re-anchored todo, #208); text without a
+ *  block comes back unchanged */
+export function replaceAnchor(text: string, anchor: TodoAnchor): string {
+  const start = text.indexOf(OPEN);
+  if (start === -1) return text;
+  const end = text.indexOf(CLOSE, start);
+  if (end === -1) return text;
+  return text.slice(0, start) + encodeAnchor(anchor) + text.slice(end + CLOSE.length);
+}
+
 export function parseAnchor(text: string): TodoAnchor | null {
   const start = text.indexOf(OPEN);
   if (start === -1) return null;

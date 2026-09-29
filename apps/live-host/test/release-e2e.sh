@@ -354,5 +354,38 @@ echo "$R" | grep -q '"keep": *"main"' && ok "G: conflict resolved — take main'
 CH=$(curl -s --max-time 60 "$CHANGES")
 echo "$CH" | grep -q "$OTC" && bad "G: resolved file still in the pool: $CH" || ok "G: the resolved file left the release pool"
 
+# ═══ Case H: rename a process — callers, todos and the release follow (#208) ═══
+API="http://localhost:$PORT_A/api/repos/acme/bpm-processes"
+T=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
+  -d '{"title":"Dunning wording","anchor":{"process":"invoice-handling"}}' "$API/todos")
+echo "$T" | grep -q '"process": *"invoice-handling"' && ok "H: a todo is filed on invoice-handling" || bad "H: todo create failed: $T"
+RN=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
+  -d "{\"path\":\"$NEW_IH\",\"name\":\"Billing run\"}" "$API/rename")
+RENAMED="processes/billing/billing-run.bpmn"
+echo "$RN" | grep -q "\"path\": *\"$RENAMED\"" && ok "H: renamed over HTTP (slugged)" || bad "H: rename failed: $RN"
+echo "$RN" | grep -q '"todoJob"' && ok "H: the rename started the todo move" || bad "H: no todo job: $RN"
+[ -f "$WS1/$RENAMED" ] && [ ! -e "$WS1/$NEW_IH" ] && ok "H: file renamed in the workspace" || bad "H: workspace not renamed"
+grep -q 'calledElement="billing-run"' "$WS1/processes/order-to-cash/order-to-cash.bpmn" && ok "H: the caller's calledElement follows" || bad "H: caller not rewritten"
+for _ in $(seq 1 30); do
+  J=$(curl -s --max-time 10 "$API/todo-jobs")
+  echo "$J" | grep -q '"state": *"done"' && break
+  sleep 0.5
+done
+echo "$J" | grep -q '"id": *"move:invoice-handling".*"state": *"done"' && ok "H: the todo job finished" || bad "H: todo job not done: $J"
+L=$(curl -s --max-time 60 "$API/todos?process=billing-run")
+echo "$L" | grep -q '"title": *"Dunning wording"' && ok "H: the todo is listed under the new id" || bad "H: todo not under billing-run: $L"
+echo "$L" | grep -q '"process": *"billing-run"' && ok "H: its anchor names the new id" || bad "H: anchor not re-anchored: $L"
+L=$(curl -s --max-time 60 "$API/todos?process=invoice-handling")
+echo "$L" | grep -q "Dunning wording" && bad "H: todo still under the old id: $L" || ok "H: nothing left under the old id"
+CH=$(curl -s --max-time 60 "$API/changes")
+echo "$CH" | grep -q "\"path\": *\"$RENAMED\", *\"status\": *\"added\"[^}]*\"renamedFrom\": *\"$OLD_IH\"" \
+  && ok "H: /changes names where the renamed file came from (chain: move + rename)" || bad "H: no renamedFrom: $CH"
+R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
+  -d "{\"files\":[\"$RENAMED\"],\"title\":\"Rename invoice handling\"}" "$API/release")
+echo "$R" | grep -q '"pr"' && ok "H: renamed process released → PR" || bad "H: release of the rename failed: $R"
+HBRANCH=$(git -C "$E2E/origin/acme/bpm-processes.git" branch | grep release/rename-invoice-handling | tail -1 | tr -d ' *')
+HSHIP=$(git -C "$E2E/origin/acme/bpm-processes.git" show -M --name-status --format= "$HBRANCH")
+echo "$HSHIP" | grep -qE "^R[0-9]+	$OLD_IH	$RENAMED\$" && ok "H: one half selected → the commit is a git rename" || bad "H: expected a rename: $HSHIP"
+
 echo; echo "── $PASS passed, $FAIL failed ──"
 exit "$FAIL"

@@ -16,7 +16,7 @@ import { AppError } from "@bpmiq/http-kit";
 import { byExtension, modelStem } from "@bpmiq/notations";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
-import type { IssueTracker } from "../ports/issue-tracker.ts";
+import type { IssueTracker, Todo } from "../ports/issue-tracker.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 import { type FindModelDeps, findProcessPath } from "./find-model.ts";
 
@@ -94,4 +94,24 @@ export async function closeTodoFor(
   console.log(
     `todo closed in ${repo.fullName} by @${session.user.login}${via === "mcp" ? " via mcp" : ""}: #${todoId}`,
   );
+}
+
+/**
+ * The OPEN todos of a repo, optionally of one process — including those still
+ * on their way in from a renamed process's old id (#208: the move runs in the
+ * background, one tracker write at a time, and nothing may disappear from the
+ * process's Todos panel meanwhile).
+ */
+export async function listOpenTodos(
+  issues: IssueTracker,
+  moving: { sourcesOf(repo: string, process: string): string[] } | undefined,
+  repo: ConnectedRepo,
+  process?: string,
+): Promise<Todo[]> {
+  const own = await issues.listTodos(repo.fullName, process);
+  const sources = process ? (moving?.sourcesOf(repo.fullName, process) ?? []) : [];
+  if (sources.length === 0) return own;
+  const seen = new Set(own.map((t) => t.id));
+  const incoming = (await Promise.all(sources.map((from) => issues.listTodos(repo.fullName, from)))).flat();
+  return [...own, ...incoming.filter((t) => !seen.has(t.id) && seen.add(t.id))];
 }

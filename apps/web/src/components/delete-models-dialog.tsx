@@ -4,14 +4,19 @@
  * what the deletion breaks before it happens: links from models that stay
  * behind dangle, unreleased changes are lost. A model open in a live session
  * blocks the delete (the server refuses it too — all or nothing), so the
- * dialog says which one instead of failing on submit.
+ * dialog says which one instead of failing on submit. A deleted process's
+ * open todos would point at nothing: the dialog counts them and offers to
+ * close them along (in the background — the tracker takes one change at a
+ * time); unticked, they stay open in the tracker.
  */
 import type { DeleteModelsResult } from "@bpmiq/contracts/live-host";
-import { CircleAlert, Link2Off, PencilLine } from "lucide-react";
+import { CircleAlert, Link2Off, ListTodo, PencilLine } from "lucide-react";
+import { useState } from "react";
 
 import { Consequence, DialogShell } from "@/components/dialog-shell";
 import { isReferenceable, type ModelTarget, nounOf } from "@/lib/model-target";
-import { useDeleteModels, useReferences } from "@/lib/queries";
+import { useDeleteModels, useReferences, useTodos } from "@/lib/queries";
+import { todoCount, todoJobEstimate } from "@/lib/todo-jobs";
 
 const fileName = (path: string): string => path.split("/").pop() ?? path;
 const names = (models: ModelTarget[]): string => models.map((m) => m.id).join(", ");
@@ -38,6 +43,13 @@ export function DeleteModelsDialog({
       (references.data ?? []).flatMap((r) => r.referencedBy.filter((by) => !doomed.has(by.path)).map((by) => by.path)),
     ),
   ];
+  // a deleted PROCESS's open todos lose their process — count them (anchored
+  // ones; the tracker is asked only when a process is in the selection)
+  const processes = new Set(models.filter((m) => m.notation === "bpmn").map((m) => m.id));
+  const todos = useTodos(repo, undefined, processes.size > 0);
+  const orphaned = (todos.data ?? []).filter((t) => t.anchor && processes.has(t.anchor.process)).length;
+  const [closeTodos, setCloseTodos] = useState(false);
+  const estimate = todoJobEstimate(orphaned, "close");
   const open = models.filter((m) => m.liveSessions > 0);
   const dirty = models.filter((m) => m.dirty);
   const single = models.length === 1 ? models[0] : undefined;
@@ -61,7 +73,9 @@ export function DeleteModelsDialog({
       submitDisabled={open.length > 0 || models.length === 0}
       destructive
       wide={!single}
-      onSubmit={() => remove.mutate({ paths }, { onSuccess: onDeleted })}
+      onSubmit={() =>
+        remove.mutate({ paths, ...(closeTodos && orphaned > 0 ? { closeTodos } : {}) }, { onSuccess: onDeleted })
+      }
       onClose={onClose}
     >
       <ul className="bg-muted/40 mt-3 max-h-48 min-h-0 overflow-y-auto rounded-md border px-3 py-2 text-xs">
@@ -95,6 +109,26 @@ export function DeleteModelsDialog({
         {dirty.length > 0 && (
           <Consequence icon={PencilLine} tone="warning">
             Unreleased changes to {single ? "it" : names(dirty)} are lost.
+          </Consequence>
+        )}
+        {orphaned > 0 && (
+          <Consequence icon={ListTodo} tone="warning">
+            {todoCount(orphaned).replace("todo", "open todo")} would point at a process that no longer exists.
+            <label className="mt-1.5 flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                className="accent-primary mt-px size-3.5 shrink-0"
+                checked={closeTodos}
+                onChange={(e) => setCloseTodos(e.target.checked)}
+              />
+              <span>
+                Close {orphaned === 1 ? "it" : "them"} in the tracker too
+                <span className="text-muted-foreground">
+                  {" "}
+                  — in the background{estimate ? `, ${estimate}` : ""}; unticked, they stay open
+                </span>
+              </span>
+            </label>
           </Consequence>
         )}
       </ul>

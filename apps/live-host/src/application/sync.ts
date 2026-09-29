@@ -19,6 +19,7 @@
 import { roomName, roomPrefix } from "@bpmiq/contracts/live";
 import type { SyncResult } from "@bpmiq/contracts/live-host";
 import { AppError } from "@bpmiq/http-kit";
+import { byExtension, modelStem } from "@bpmiq/notations";
 
 import type { ConnectedRepo } from "../repos/registry.ts";
 
@@ -30,14 +31,19 @@ export interface SyncDeps {
     ensure(repo: ConnectedRepo): Promise<string>;
     /** fetch + hard-reset onto origin/<defaultBranch>; returns overwritten/removed paths */
     resetToDefault(repo: ConnectedRepo): Promise<string[]>;
+    /** the platform's unreleased renames — the reset discards them (#208) */
+    renames?(repo: ConnectedRepo): Promise<Array<{ from: string; to: string }>>;
   };
+  /** a discarded process rename sends its todos back to the old id (#208) —
+   *  absent when the host has no tracker */
+  todoJobs?: { move(repo: string, from: string, to: { process: string; file: string }, by: string): unknown };
   /** repo-qualified document names of live rooms — a non-empty match blocks the reset */
   liveDocs: () => string[];
   /** invalidate one room's Yjs lineage so the next open reseeds from the new tree */
   dropLineage: (room: string) => void;
 }
 
-export async function syncRepo(opts: SyncDeps, repo: ConnectedRepo): Promise<SyncResult> {
+export async function syncRepo(opts: SyncDeps, repo: ConnectedRepo, by = "platform"): Promise<SyncResult> {
   if (opts.workspaces.isHostRepo(repo.fullName)) {
     throw new AppError(
       "sync/host-repo",
@@ -53,7 +59,14 @@ export async function syncRepo(opts: SyncDeps, repo: ConnectedRepo): Promise<Syn
     );
   }
   await opts.workspaces.ensure(repo);
+  // the reset brings back every renamed process's OLD file — its todos, which
+  // followed the rename, go back with it (read before the reset clears the journal)
+  const renamed = opts.todoJobs ? ((await opts.workspaces.renames?.(repo).catch(() => [])) ?? []) : [];
   const changed = await opts.workspaces.resetToDefault(repo);
+  for (const { from, to } of renamed) {
+    if (byExtension(from)?.id !== "bpmn" || modelStem(from) === modelStem(to)) continue;
+    opts.todoJobs?.move(repo.fullName, modelStem(to), { process: modelStem(from), file: from }, by);
+  }
   // drop the lineage of every file the reset changed so the next open reseeds
   // from the fetched tree instead of write-through resurrecting the stale state
   // (the same invalidation reconcile does via hooks.onReconciled)

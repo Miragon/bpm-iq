@@ -28,6 +28,7 @@ import {
   fetchProcesses,
   fetchReferences,
   fetchRepos,
+  fetchTodoJobs,
   fetchTodos,
   type FolderListWire,
   logout,
@@ -41,9 +42,11 @@ import {
   type RenameModelBody,
   resolveConflict,
   type ResolveConflictBody,
+  retryTodoJob,
   syncRepo,
   type TodoWire,
 } from "@/lib/api";
+import { followTodoJob } from "@/lib/todo-jobs";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -271,8 +274,11 @@ function patchModelLists(
 export function useRenameModel(repo: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: RenameModelBody) => renameModel(repo, body),
+    // expectedTodos is client-side only: the count the dialog showed, for the
+    // progress toast while the todo job still waits its turn
+    mutationFn: ({ path, name }: RenameModelBody & { expectedTodos?: number }) => renameModel(repo, { path, name }),
     onSuccess: (result, body) => {
+      if (result.todoJob) followTodoJob(repo, result.todoJob, qc, body.expectedTodos);
       const old = qc.getQueryData<ModelInfo[]>(["models", repo])?.find((m) => m.path === body.path);
       if (old)
         patchModelLists(qc, repo, {
@@ -310,7 +316,35 @@ export function useDeleteModels(repo: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: DeleteModelsBody) => deleteModels(repo, body),
-    onSuccess: () => invalidateModelLists(qc, repo),
+    onSuccess: (result) => {
+      invalidateModelLists(qc, repo);
+      for (const job of result.todoJobs ?? []) followTodoJob(repo, job, qc);
+    },
+  });
+}
+
+/** background todo work of a repo (#208/#210) — polled every second while a
+ *  job runs, so the Todos panel shows its progress */
+export function useTodoJobs(repo: string, enabled = true) {
+  return useQuery({
+    queryKey: ["todo-jobs", repo],
+    queryFn: () => fetchTodoJobs(repo),
+    enabled: enabled && repo.length > 0,
+    staleTime: 0,
+    refetchInterval: (query) =>
+      query.state.data?.some((j) => j.state === "queued" || j.state === "running") ? 1000 : false,
+  });
+}
+
+/** run a failed todo job again — and follow it like the first run */
+export function useRetryTodoJob(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => retryTodoJob(repo, id),
+    onSuccess: (job) => {
+      void qc.invalidateQueries({ queryKey: ["todo-jobs", repo] });
+      followTodoJob(repo, job, qc);
+    },
   });
 }
 

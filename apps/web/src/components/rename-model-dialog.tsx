@@ -4,9 +4,11 @@
  * IS the model's id, the file name every link resolves by. So instead of an
  * inline field that commits on blur, the dialog says what will happen BEFORE
  * it happens — the new file, the models whose links get rewritten, that open
- * editors move along, the test cases that follow, the todos that stay behind
- * — and commits only on an explicit Rename (Enter). Server gates (a taken id,
- * a target still closing) surface inline.
+ * editors move along, the test cases and todos that follow — and commits
+ * only on an explicit Rename (Enter). Server gates (a taken id, a target
+ * still closing) surface inline. The todos move in the background (the
+ * tracker takes one change at a time): the dialog says so up front, with the
+ * time it will take once that is noticeable, and a toast follows it.
  */
 import type { RenameModelResult } from "@bpmiq/contracts/live-host";
 import { processIdFromName } from "@bpmiq/notations";
@@ -16,6 +18,7 @@ import { useState } from "react";
 import { Consequence, DialogShell, fieldClass } from "@/components/dialog-shell";
 import { expectMove, isReferenceable, type ModelTarget, nounOf, pathUnderId } from "@/lib/model-target";
 import { useReferences, useRenameModel, useTodos } from "@/lib/queries";
+import { todoCount, todoJobEstimate } from "@/lib/todo-jobs";
 
 const fileName = (path: string): string => path.split("/").pop() ?? path;
 
@@ -37,9 +40,10 @@ export function RenameModelDialog({
   const referenceable = isReferenceable(model.notation);
   const references = useReferences(repo, [model.path], referenceable);
   const callers = [...new Set((references.data?.[0]?.referencedBy ?? []).map((r) => r.path))];
-  // todos are filed under the process id — they do not follow a rename
+  // todos are filed under the process id — a job moves them to the new one
   const todos = useTodos(repo, model.id, model.notation === "bpmn");
   const openTodos = todos.data?.length ?? 0;
+  const estimate = todoJobEstimate(openTodos, "move");
 
   const id = processIdFromName(name.trim());
   const unchanged = id === model.id;
@@ -47,7 +51,10 @@ export function RenameModelDialog({
 
   const submit = () => {
     expectMove(target);
-    rename.mutate({ path: model.path, name: name.trim() }, { onSuccess: (result) => onRenamed?.(result) });
+    rename.mutate(
+      { path: model.path, name: name.trim(), expectedTodos: openTodos },
+      { onSuccess: (result) => onRenamed?.(result) },
+    );
   };
 
   return (
@@ -112,9 +119,9 @@ export function RenameModelDialog({
         )}
         {model.notation === "dmn" && <Consequence icon={FlaskConical}>Its test cases are renamed along.</Consequence>}
         {openTodos > 0 && (
-          <Consequence icon={ListTodo} tone="warning">
-            {openTodos === 1 ? "1 open todo stays" : `${openTodos} open todos stay`} filed under '{model.id}' — the
-            Todos panel of the renamed {noun} won't list {openTodos === 1 ? "it" : "them"}.
+          <Consequence icon={ListTodo}>
+            Moves its {todoCount(openTodos).replace("todo", "open todo")} along — in the background
+            {estimate ? `, ${estimate}` : ""}. The tracker takes one change at a time; you can keep working.
           </Consequence>
         )}
       </ul>

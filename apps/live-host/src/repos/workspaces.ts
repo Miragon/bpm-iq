@@ -624,6 +624,12 @@ export class WorkspaceManager {
     });
   }
 
+  /** the platform's renames/moves not yet released (#208) — what a reset
+   *  (load latest from main) undoes; [] for a checkout without the journal */
+  async renames(repo: ConnectedRepo): Promise<Array<{ from: string; to: string }>> {
+    return this.readRenames(this.dir(repo));
+  }
+
   /** never throws — a lost journal only costs the pairing, never the changes list */
   private async readRenames(dir: string): Promise<Array<{ from: string; to: string }>> {
     let parsed: unknown;
