@@ -72,7 +72,6 @@ import { type MovableModel, MoveModelDialog } from "@/components/move-model-dial
 import { ReleaseDialog } from "@/components/release-dialog";
 import { RenameModelDialog } from "@/components/rename-model-dialog";
 import { SyncRepoDialog } from "@/components/sync-repo-dialog";
-import { type ProcessInfo } from "@/lib/api";
 import { type ModelTarget, modelTarget, useOpenModel } from "@/lib/model-target";
 import { useDecisions, useFolders, useModels, useMoveModels, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
 import { webPlugin } from "@/notations/registry";
@@ -89,6 +88,8 @@ const CREATABLE_NOTATIONS = NOTATIONS.filter((n) => hasTemplate(n.id) && n.id !=
  *  falls back to the neutral Shapes, so a new registry entry never ships
  *  icon-less */
 const NOTATION_ICONS = new Map<string, ComponentType<{ className?: string }>>([
+  ["bpmn", Workflow],
+  ["dmn", Table2],
   ["wardley", ChartNetwork],
   ["team-topology", Users],
   ["event-storming", StickyNote],
@@ -98,7 +99,7 @@ const NOTATION_ICONS = new Map<string, ComponentType<{ className?: string }>>([
 
 /**
  * The table features this route opts into — v9 ships nothing but the core, so
- * anything beyond plain rows is registered here. Sorting only: the process
+ * anything beyond plain rows is registered here. Sorting only: the model
  * table sorts client-side over one page of rows. The two sort fns are the ones
  * `sortFn: "auto"` resolves to for our columns (strings — names and file
  * paths); numeric columns fall back to the built-in basic comparator, which
@@ -109,6 +110,24 @@ const features = tableFeatures({
   sortedRowModel: createSortedRowModel(),
   sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
 });
+
+/** one model row of the listing, whatever its notation — processes,
+ *  decisions and every other notation are ONE list, so a sort by name, file,
+ *  type or status orders them together (they used to be three blocks, and
+ *  only the processes followed the sort) */
+interface ModelRow {
+  /** repo-relative path of the model file */
+  path: string;
+  id: string;
+  name: string;
+  notation: string;
+  folder: string;
+  dirty: boolean;
+  liveSessions: number;
+}
+
+/** the Type column: the notation's registry label */
+const typeLabel = (notation: string): string => byId(notation)?.label ?? notation;
 
 /** one sub-folder row of the current directory, with aggregated child stats */
 interface FolderRow {
@@ -311,15 +330,31 @@ export function ProcessList() {
     },
   });
 
-  const visible = useMemo(() => list.filter((p) => p.folder === dir), [list, dir]);
-  const visibleDecisions = useMemo(
-    () => decisions.filter((d) => d.folder === dir).sort((a, b) => a.name.localeCompare(b.name)),
-    [decisions, dir],
+  // the models of THIS level, every notation in one list (the table sorts it)
+  const rows = useMemo<ModelRow[]>(
+    () =>
+      [
+        ...list.map((p) => ({ ...p, path: p.bpmn, notation: "bpmn" })),
+        ...decisions.map((d) => ({ ...d, notation: "dmn" })),
+        ...otherModels,
+      ]
+        .filter((m) => m.folder === dir)
+        .map(({ path, id, name, notation, folder, dirty, liveSessions }) => ({
+          path,
+          id,
+          name,
+          notation,
+          folder,
+          dirty,
+          liveSessions,
+        })),
+    [list, decisions, otherModels, dir],
   );
-  const visibleOthers = useMemo(
-    () => otherModels.filter((m) => m.folder === dir).sort((a, b) => a.name.localeCompare(b.name)),
-    [otherModels, dir],
-  );
+  /** a process opens on its /p/<id> route, every other model on /f/<path> */
+  const openRow = (row: ModelRow) =>
+    row.notation === "bpmn"
+      ? navigate({ to: "/r/$owner/$repo/p/$processId", params: { owner, repo: name, processId: row.id } })
+      : navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: row.path } });
   const segments = dir === "" ? [] : dir.split("/");
 
   const runSync = () =>
@@ -345,77 +380,86 @@ export function ProcessList() {
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
 
-  const columns = useMemo<ColumnDef<typeof features, ProcessInfo>[]>(
+  const columns = useMemo<ColumnDef<typeof features, ModelRow>[]>(
     () => [
       {
         accessorKey: "name",
-        header: ({ column }) => <SortHeader column={column}>Process</SortHeader>,
-        cell: ({ row }) => (
-          <Link
-            to="/r/$owner/$repo/p/$processId"
-            params={{ owner, repo: name, processId: row.original.id }}
-            className="font-medium hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {row.original.name}
-          </Link>
-        ),
+        header: ({ column }) => <SortHeader column={column}>Name</SortHeader>,
+        cell: ({ row }) => {
+          const m = row.original;
+          // the same icon the "New" menu shows for this notation
+          const Icon = NOTATION_ICONS.get(m.notation) ?? Shapes;
+          const link = { className: "flex items-center gap-2 font-medium hover:underline" };
+          const body = (
+            <>
+              <Icon className="text-muted-foreground size-4 shrink-0" />
+              {m.name}
+            </>
+          );
+          return m.notation === "bpmn" ? (
+            <Link
+              to="/r/$owner/$repo/p/$processId"
+              params={{ owner, repo: name, processId: m.id }}
+              {...link}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {body}
+            </Link>
+          ) : (
+            <Link
+              to="/r/$owner/$repo/f/$"
+              params={{ owner, repo: name, _splat: m.path }}
+              {...link}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {body}
+            </Link>
+          );
+        },
       },
       {
-        accessorKey: "bpmn",
+        accessorKey: "path",
         header: ({ column }) => <SortHeader column={column}>File</SortHeader>,
         cell: ({ getValue }) => <span className="text-muted-foreground font-mono text-xs">{getValue<string>()}</span>,
       },
       {
-        id: "models",
-        header: "Models",
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.models.length === 0 ? (
-            <span className="text-muted-foreground">—</span>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {row.original.models.map((m) => (
-                <Link
-                  key={m.path}
-                  to="/r/$owner/$repo/f/$"
-                  params={{ owner, repo: name, _splat: m.path }}
-                  title={m.path}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Badge variant="outline" className="hover:bg-accent">
-                    {m.notation}: {m.path.split("/").pop()}
-                  </Badge>
-                </Link>
-              ))}
-            </div>
-          ),
+        id: "type",
+        accessorFn: (m) => typeLabel(m.notation),
+        header: ({ column }) => <SortHeader column={column}>Type</SortHeader>,
+        cell: ({ getValue }) => <Badge variant="outline">{getValue<string>()}</Badge>,
       },
       {
         id: "status",
-        header: "Status",
-        accessorFn: (p) => (p.dirty ? 1 : 0) + (p.liveSessions > 0 ? 1 : 0),
+        accessorFn: (m) => (m.dirty ? 1 : 0) + (m.liveSessions > 0 ? 1 : 0),
+        header: ({ column }) => <SortHeader column={column}>Status</SortHeader>,
         cell: ({ row }) => {
-          const p = row.original;
-          if (!p.dirty && p.liveSessions === 0) return <span className="text-muted-foreground">—</span>;
+          const m = row.original;
+          if (!m.dirty && m.liveSessions === 0) return <span className="text-muted-foreground">—</span>;
           return (
             <div className="flex flex-wrap gap-1.5">
-              {p.dirty && <Badge variant="warning">live changes</Badge>}
-              {p.liveSessions > 0 && <Badge>{p.liveSessions} active</Badge>}
+              {m.dirty && <Badge variant="warning">live changes</Badge>}
+              {m.liveSessions > 0 && <Badge>{m.liveSessions} active</Badge>}
             </div>
           );
         },
       },
       {
-        id: "analyse",
+        id: "actions",
         header: "",
         enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-0.5">
-            <AssistMenu repo={`${owner}/${name}`} path={row.original.bpmn} notation="bpmn" variant="row" />
-            <ModelRowMenu actions={rowActionsRef.current(row.original.bpmn)} />
-          </div>
-        ),
+        cell: ({ row }) => {
+          const m = row.original;
+          // the same gate as the editor toolbar: a notation without a widget
+          // never offers the handoff
+          const assist =
+            m.notation === "bpmn" || m.notation === "dmn" ? m.notation : webPlugin(m.notation)?.assistNotation;
+          return (
+            <div className="flex items-center gap-0.5">
+              {assist && <AssistMenu repo={`${owner}/${name}`} path={m.path} notation={assist} variant="row" />}
+              <ModelRowMenu actions={rowActionsRef.current(m.path)} />
+            </div>
+          );
+        },
       },
     ],
     [owner, name],
@@ -423,20 +467,22 @@ export function ProcessList() {
 
   const table = useTable({
     features,
-    data: visible,
+    data: rows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
   });
 
-  // every model row of this level in DISPLAY order (the sorted process table,
-  // then decisions, then the other notations) — shift-click ranges over it
-  const processRows = table.getRowModel().rows;
-  const visibleModels: VisibleModel[] = [
-    ...processRows.map((r) => r.original).map((p) => ({ path: p.bpmn, row: p })),
-    ...visibleDecisions.map((d) => ({ path: d.path, row: d })),
-    ...visibleOthers.map((m) => ({ path: m.path, row: m })),
-  ].map(({ path, row }) => ({ path, target: modelTarget(path, row), movable: movable(row, path) }));
+  // every model row of this level in DISPLAY (= sorted) order — shift-click ranges over it
+  const tableRows = table.getRowModel().rows;
+  const visibleModels: VisibleModel[] = tableRows.map(({ original: m }) => ({
+    path: m.path,
+    target: modelTarget(m.path, m),
+    movable: movable(m, m.path),
+  }));
+  // folders stay on top (file-manager convention) and follow a NAME sort's direction
+  const nameSort = sorting[0]?.id === "name" ? sorting[0] : undefined;
+  const folderRows = nameSort?.desc ? [...childFolders].reverse() : childFolders;
   const byPath = new Map(visibleModels.map((m) => [m.path, m]));
   const selectedModels = visibleModels.filter((m) => selected.has(m.path));
 
@@ -512,8 +558,7 @@ export function ProcessList() {
     </TableCell>
   );
 
-  const empty =
-    childFolders.length === 0 && visible.length === 0 && visibleDecisions.length === 0 && visibleOthers.length === 0;
+  const empty = childFolders.length === 0 && rows.length === 0;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
@@ -671,7 +716,7 @@ export function ProcessList() {
               ))}
             </TableHeader>
             <TableBody>
-              {childFolders.map((f) => (
+              {folderRows.map((f) => (
                 <TableRow
                   key={`folder:${f.path}`}
                   id={folderRowId(f.path)}
@@ -702,7 +747,7 @@ export function ProcessList() {
                   </TableCell>
                   <TableCell>
                     <span className="text-muted-foreground">
-                      {f.modelCount === 0 ? "empty" : `${f.modelCount} model${f.modelCount === 1 ? "" : "s"}`}
+                      Folder · {f.modelCount === 0 ? "empty" : `${f.modelCount} model${f.modelCount === 1 ? "" : "s"}`}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -715,87 +760,8 @@ export function ProcessList() {
                   <TableCell />
                 </TableRow>
               ))}
-              {processRows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  id={modelRowId(row.original.bpmn)}
-                  className={cn(
-                    "cursor-pointer transition-colors duration-700",
-                    highlighted === row.original.bpmn && "bg-primary/10",
-                  )}
-                  data-state={selected.has(row.original.bpmn) ? "selected" : undefined}
-                  draggable
-                  onDragStart={(e) => dragModel(e, movable(row.original, row.original.bpmn))}
-                  onDragEnd={() => setDropTarget(null)}
-                  onClick={() =>
-                    navigate({
-                      to: "/r/$owner/$repo/p/$processId",
-                      params: { owner, repo: name, processId: row.original.id },
-                    })
-                  }
-                >
-                  {selectCell(row.original.bpmn)}
-                  {row.getAllCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                  ))}
-                </TableRow>
-              ))}
-              {visibleDecisions.map((d) => (
-                <TableRow
-                  key={`decision:${d.path}`}
-                  id={modelRowId(d.path)}
-                  className={cn(
-                    "cursor-pointer transition-colors duration-700",
-                    highlighted === d.path && "bg-primary/10",
-                  )}
-                  data-state={selected.has(d.path) ? "selected" : undefined}
-                  draggable
-                  onDragStart={(e) => dragModel(e, movable(d, d.path))}
-                  onDragEnd={() => setDropTarget(null)}
-                  onClick={() => navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: d.path } })}
-                >
-                  {selectCell(d.path)}
-                  <TableCell>
-                    <Link
-                      to="/r/$owner/$repo/f/$"
-                      params={{ owner, repo: name, _splat: d.path }}
-                      className="flex items-center gap-2 font-medium hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Table2 className="text-muted-foreground size-4" />
-                      {d.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-muted-foreground font-mono text-xs">{d.path}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">DMN</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {!d.dirty && d.liveSessions === 0 ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {d.dirty && <Badge variant="warning">live changes</Badge>}
-                        {d.liveSessions > 0 && <Badge>{d.liveSessions} active</Badge>}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-0.5">
-                      <AssistMenu repo={repo} path={d.path} notation="dmn" variant="row" />
-                      <ModelRowMenu actions={rowActions(d.path)} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {visibleOthers.map((m) => {
-                // the same icon the "New" menu showed for this notation
-                const Icon = NOTATION_ICONS.get(m.notation) ?? Shapes;
-                // the same gate as the editor toolbar: a notation without a
-                // widget never offers the handoff
-                const assistNotation = webPlugin(m.notation)?.assistNotation;
+              {tableRows.map((row) => {
+                const m = row.original;
                 return (
                   <TableRow
                     key={`model:${m.path}`}
@@ -808,46 +774,12 @@ export function ProcessList() {
                     draggable
                     onDragStart={(e) => dragModel(e, movable(m, m.path))}
                     onDragEnd={() => setDropTarget(null)}
-                    onClick={() =>
-                      navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: m.path } })
-                    }
+                    onClick={() => void openRow(m)}
                   >
                     {selectCell(m.path)}
-                    <TableCell>
-                      <Link
-                        to="/r/$owner/$repo/f/$"
-                        params={{ owner, repo: name, _splat: m.path }}
-                        className="flex items-center gap-2 font-medium hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Icon className="text-muted-foreground size-4" />
-                        {m.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-muted-foreground font-mono text-xs">{m.path}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{byId(m.notation)?.label ?? m.notation}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {!m.dirty && m.liveSessions === 0 ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {m.dirty && <Badge variant="warning">live changes</Badge>}
-                          {m.liveSessions > 0 && <Badge>{m.liveSessions} active</Badge>}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-0.5">
-                        {assistNotation && (
-                          <AssistMenu repo={repo} path={m.path} notation={assistNotation} variant="row" />
-                        )}
-                        <ModelRowMenu actions={rowActions(m.path)} />
-                      </div>
-                    </TableCell>
+                    {row.getAllCells().map((cell) => (
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    ))}
                   </TableRow>
                 );
               })}
@@ -1116,7 +1048,7 @@ function ModelRowMenu({ actions }: { actions: RowActions }) {
   );
 }
 
-function SortHeader({ column, children }: { column: Column<typeof features, ProcessInfo>; children: ReactNode }) {
+function SortHeader({ column, children }: { column: Column<typeof features, ModelRow>; children: ReactNode }) {
   const sorted = column.getIsSorted();
   return (
     <Button
