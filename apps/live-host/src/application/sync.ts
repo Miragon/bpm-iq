@@ -60,11 +60,13 @@ export async function syncRepo(opts: SyncDeps, repo: ConnectedRepo, by = "platfo
   }
   await opts.workspaces.ensure(repo);
   // the reset brings back every renamed process's OLD file — its todos, which
-  // followed the rename, go back with it (read before the reset clears the journal)
+  // followed the rename, go back with it (read before the reset clears the journal).
+  // Only where the reset really restored it: a rename released and merged
+  // meanwhile stays, and so do its todos
   const renamed = opts.todoJobs ? ((await opts.workspaces.renames?.(repo).catch(() => [])) ?? []) : [];
   const changed = await opts.workspaces.resetToDefault(repo);
   for (const { from, to } of renamed) {
-    if (byExtension(from)?.id !== "bpmn" || modelStem(from) === modelStem(to)) continue;
+    if (byExtension(from)?.id !== "bpmn" || modelStem(from) === modelStem(to) || !changed.includes(from)) continue;
     opts.todoJobs?.move(repo.fullName, modelStem(to), { process: modelStem(from), file: from }, by);
   }
   // drop the lineage of every file the reset changed so the next open reseeds

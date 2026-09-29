@@ -608,12 +608,19 @@ export class WorkspaceManager {
    * their delete + add halves (changedFiles → renamedFrom) and git records a
    * rename. Chains collapse (a → b, then b → c is a → c), a rename back to
    * the original drops the pair, and a pair whose new file is gone is pruned.
+   * So is a pair whose old path the default branch no longer has (released
+   * and merged, or never released): it pairs nothing any more, and a later
+   * rename must not chain onto it — a → b merged, then b → c would record
+   * a → c, and b → c would ship as two unrelated halves.
    */
   async recordRenames(repo: ConnectedRepo, pairs: Array<{ from: string; to: string }>): Promise<void> {
     if (pairs.length === 0) return;
     const dir = this.dir(repo);
     await this.serial(repo, async () => {
-      const journal = await this.readRenames(dir);
+      const recorded = await this.readRenames(dir);
+      const origins = recorded.map((r) => r.from);
+      const gone = await this.absentOnDefault(repo, dir, origins);
+      const journal = recorded.filter((r) => !gone.has(r.from));
       for (const { from, to } of pairs) {
         const chained = journal.find((r) => r.to === from);
         if (chained) chained.to = to;
@@ -624,10 +631,28 @@ export class WorkspaceManager {
     });
   }
 
-  /** the platform's renames/moves not yet released (#208) — what a reset
-   *  (load latest from main) undoes; [] for a checkout without the journal */
+  /** the platform's renames/moves (#208) — what a reset (load latest from
+   *  main) may undo; [] for a checkout without the journal. A pair released
+   *  since may still be listed (pruned on the next recordRenames): check it
+   *  against what the reset actually changed */
   async renames(repo: ConnectedRepo): Promise<Array<{ from: string; to: string }>> {
     return this.readRenames(this.dir(repo));
+  }
+
+  /** those of `paths` origin/<defaultBranch> does not have — empty when git
+   *  cannot tell (no origin yet): best effort, like the journal itself */
+  private async absentOnDefault(repo: ConnectedRepo, dir: string, paths: string[]): Promise<Set<string>> {
+    if (paths.length === 0) return new Set();
+    try {
+      const { stdout } = await runGit(
+        ["-C", dir, "ls-tree", "-z", "--name-only", `origin/${repo.defaultBranch}`, "--", ...paths],
+        { maxBuffer: GIT_OUT_MAX },
+      );
+      const present = new Set(stdout.split("\0").filter(Boolean));
+      return new Set(paths.filter((p) => !present.has(p)));
+    } catch {
+      return new Set();
+    }
   }
 
   /** never throws — a lost journal only costs the pairing, never the changes list */

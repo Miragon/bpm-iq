@@ -498,3 +498,22 @@ test("recordRenames: a platform rename pairs its delete + add in changedFiles; c
   await f.wm.resetToDefault(f.repo);
   assert.ok(!existsSync(join(f.ws, ".git", "bpmiq-renames.json")), "load-latest ends every pending rename");
 });
+
+test("recordRenames: a rename released and merged ends its pair — renaming the new name again pairs on its own", async () => {
+  const f = catchUpFixture({ "processes/a.bpmn": "a0" });
+  f.write({ "processes/b.bpmn": "a0", "processes/a.bpmn": null });
+  await f.wm.recordRenames(f.repo, [{ from: "processes/a.bpmn", to: "processes/b.bpmn" }]);
+  await f.release({ "processes/b.bpmn": "a0", "processes/a.bpmn": null }, "rename-a-b");
+  f.squashMerge("rename-a-b");
+  await f.catchUp();
+  assert.deepEqual(await f.wm.changedFiles(f.repo, "processes"), [], "the merged rename is no change any more");
+  // b → c must NOT chain onto the merged a → b (that would record a → c, and
+  // a is no deletion — b → c would ship as two unrelated halves)
+  f.write({ "processes/c.bpmn": "a0", "processes/b.bpmn": null });
+  await f.wm.recordRenames(f.repo, [{ from: "processes/b.bpmn", to: "processes/c.bpmn" }]);
+  assert.deepEqual(await f.wm.renames(f.repo), [{ from: "processes/b.bpmn", to: "processes/c.bpmn" }]);
+  assert.deepEqual(await f.wm.changedFiles(f.repo, "processes"), [
+    { path: "processes/b.bpmn", status: "deleted" },
+    { path: "processes/c.bpmn", status: "added", renamedFrom: "processes/b.bpmn" },
+  ]);
+});

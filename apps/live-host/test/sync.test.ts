@@ -98,7 +98,7 @@ test("syncRepo: a foreign repo's live session does not block", async () => {
   assert.equal(calls.reset, 1, "only THIS repo's sessions gate the reset");
 });
 
-test("syncRepo: a discarded process rename sends its todos back to the old id; decisions and moves need nothing (#208)", async () => {
+test("syncRepo: a discarded process rename sends its todos back to the old id; decisions, moves and merged renames need nothing (#208)", async () => {
   const moves: Array<{ from: string; to: string; file: string }> = [];
   const order: string[] = [];
   const { deps: base } = deps();
@@ -112,11 +112,21 @@ test("syncRepo: a discarded process rename sends its todos back to the old id; d
           { from: "processes/invoice-handling.bpmn", to: "processes/billing.bpmn" },
           { from: "processes/credit.dmn", to: "processes/credit-limit.dmn" },
           { from: "processes/order.bpmn", to: "processes/archive/order.bpmn" },
+          // released and merged meanwhile — the reset keeps delivery.bpmn
+          { from: "processes/shipping.bpmn", to: "processes/delivery.bpmn" },
         ];
       },
       resetToDefault: async () => {
         order.push("reset");
-        return [];
+        // what the reset restores or removes — the merged rename is no change
+        return [
+          "processes/archive/order.bpmn",
+          "processes/billing.bpmn",
+          "processes/credit-limit.dmn",
+          "processes/credit.dmn",
+          "processes/invoice-handling.bpmn",
+          "processes/order.bpmn",
+        ];
       },
     },
     todoJobs: { move: (_repo, from, to) => void moves.push({ from, to: to.process, file: to.file }) },
