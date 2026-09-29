@@ -6,15 +6,22 @@
  * "Done" closes the todo in the tracker (confirm-less): the row dims while
  * the POST is pending, disappears on success (badges/counts follow via the
  * shared query cache), and close errors surface inline above the list.
+ *
+ * After a rename (#208) the process's todos move to its new id in the
+ * background, one tracker change at a time: the panel lists them all along
+ * (the server merges the ones still under the old id) and says how far the
+ * move is — or, when the tracker refused some, which old id still holds
+ * them, with a Retry.
  */
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
-import { Check, ExternalLink, ListTodo } from "lucide-react";
+import { Check, CircleAlert, ExternalLink, ListTodo, Loader2 } from "lucide-react";
 
 import { SidePanel } from "@/components/side-panel";
 import type { TodoWire } from "@/lib/api";
-import { useCloseTodo } from "@/lib/queries";
+import { useCloseTodo, useRetryTodoJob, useTodoJobs } from "@/lib/queries";
+import { todoCount } from "@/lib/todo-jobs";
 import {
   closeInTrackerTitle,
   elementLabel,
@@ -79,8 +86,52 @@ function TodoItem({
   );
 }
 
+/** the move of a renamed process's todos INTO this process — running or failed */
+function IncomingTodos({ repo, processId }: { repo: string; processId: string }) {
+  const jobs = useTodoJobs(repo);
+  const retry = useRetryTodoJob(repo);
+  const incoming = (jobs.data ?? []).filter((j) => j.kind === "move" && j.to === processId && j.state !== "done");
+  if (incoming.length === 0) return null;
+  return (
+    <div className="space-y-1.5 border-b px-3 py-2 text-xs" role="status">
+      {incoming.map((j) =>
+        j.state === "failed" ? (
+          <div key={j.id} className="flex items-start gap-2">
+            <CircleAlert className="text-warning mt-px size-3.5 shrink-0" />
+            <p className="min-w-0 flex-1">
+              {j.total <= 0
+                ? `The tracker could not be reached — the todos of '${j.from}' are not moved yet.`
+                : `${todoCount(j.failed)} could not be moved and ${j.failed === 1 ? "is" : "are"} still filed under '${j.from}'.`}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 shrink-0 px-2 text-xs"
+              disabled={retry.isPending}
+              onClick={() => retry.mutate(j.id)}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <div key={j.id} className="text-muted-foreground flex items-start gap-2">
+            <Loader2 className="mt-px size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
+            <p className="min-w-0 flex-1">
+              {j.total > 0
+                ? `Moving the todos of '${j.from}' here — ${j.done} of ${j.total}.`
+                : `Moving the todos of '${j.from}' here…`}{" "}
+              They are listed already.
+            </p>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
 export function TodoPanel({
   repo,
+  processId,
   todos,
   isLoading,
   error,
@@ -90,6 +141,8 @@ export function TodoPanel({
   onClose,
 }: {
   repo: string;
+  /** the process the panel lists — a rename's todo move INTO it shows here */
+  processId: string;
   todos: TodoWire[] | undefined;
   isLoading: boolean;
   error: Error | null;
@@ -123,6 +176,7 @@ export function TodoPanel({
           </Button>
         </div>
       )}
+      <IncomingTodos repo={repo} processId={processId} />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
         {closeTodo.error && (
           <p className="text-destructive text-sm">

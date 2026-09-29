@@ -54,6 +54,8 @@ const baseOpts = (): ApiOptions => ({
   liveDocs: () => [],
   dropLineage: () => {},
   renameLineage: () => {},
+  saveLineage: () => {},
+  rooms: { retire: () => undefined, hold: () => () => {} },
   openDoc: () => Promise.reject(new Error("no live docs in this test")),
   maxDocBytes: 8_000_000,
   loginCodes: new LoginCodeStore(),

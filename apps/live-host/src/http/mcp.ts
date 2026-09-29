@@ -62,7 +62,7 @@ import {
 } from "../application/overview.ts";
 import { roomPresence, type RoomPresenceDeps } from "../application/room-presence.ts";
 import { createDecision, createNotationModel, createProcess } from "../application/scaffold.ts";
-import { closeTodoFor, fileTodo } from "../application/todos.ts";
+import { closeTodoFor, fileTodo, listOpenTodos } from "../application/todos.ts";
 import type { WsTicketStore } from "../application/ws-tickets.ts";
 import { changedElementIds } from "../domain/model-diff.ts";
 import type { GitProvider } from "../ports/git-provider.ts";
@@ -82,6 +82,9 @@ export type McpDeps = OverviewDeps &
     /** issue-tracker seam (model-anchored todos) — absent when the platform has
      * no credentials to act on the tracker; the todo tools then do not register */
     issues?: IssueTracker;
+    /** todos still on their way from a renamed process's old id (#208) are
+     *  listed with its own — absent without a tracker */
+    todoJobs?: { sourcesOf(repo: string, process: string): string[] };
     mcpReadOnly?: boolean;
     /** built web assets — the MCP-App widgets (WIDGET_FILES, one single-file
      *  bundle per modeler) are read from here */
@@ -1165,7 +1168,8 @@ export function createLiveMcpServer(
         // a filter needs no existence check — an unknown process is simply an
         // empty list, never an error (the tracker-side label filter decides)
         const process = id ?? (path ? processIdOf(path) : undefined);
-        const todos = await issues.listTodos(r.fullName, process);
+        // incl. a renamed process's todos still on their way in (#208)
+        const todos = await listOpenTodos(issues, opts.todoJobs, r, process);
         return ok({ repo: r.fullName, process: process ?? null, todos: todos satisfies TodoWire[] });
       }),
     );

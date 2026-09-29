@@ -152,6 +152,134 @@ export interface MoveModelsResult {
   moved: Array<{ from: string; to: string }>;
 }
 
+/**
+ * POST /api/repos/:fullName/rename — give a model a new id (#208). The id IS
+ * the file stem, so this renames the file (same folder, same extension); a
+ * decision's `<stem>.tests.yaml` is renamed along. The new stem follows the
+ * create rules (slug of `name`, unique per notation repo-wide → 409). Models
+ * that reference the old id (callActivity calledElement, businessRuleTask
+ * decisionRef …) are rewritten to the new one in their live documents. An
+ * OPEN model is migrated: its editors get a notice (MovedNotice in ./live.ts)
+ * and continue on the new path, unreleased edits included. Nothing is
+ * committed — the rename ships as a git rename with the next release.
+ */
+export interface RenameModelBody {
+  /** repo-relative path of the model file */
+  path: string;
+  /** the new name — its kebab-case slug becomes the file stem */
+  name: string;
+}
+
+export interface RenameModelResult {
+  /** the model's new id (file stem) */
+  id: string;
+  /** a renamed PROCESS takes its open todos along — in the background, one
+   *  tracker write at a time (GET …/todo-jobs follows it); absent when the
+   *  model is no process or the host has no tracker */
+  todoJob?: TodoJobWire;
+  /** its new repo-relative path */
+  path: string;
+  /** every file that was renamed, the tests sidecar included */
+  renamed: Array<{ from: string; to: string }>;
+  /** models whose references now name the new id */
+  updatedReferences: string[];
+  /** referencing models that could not be rewritten — their links dangle
+   *  (the validator warns); empty when every caller followed */
+  failedReferences: string[];
+}
+
+/**
+ * POST /api/repos/:fullName/duplicate — copy a model into the same folder
+ * under a new id (#209). The copy is the source's CURRENT LIVE content
+ * (unreleased edits included), byte for byte: element and model ids are
+ * file-scoped, references resolve by file stem. A decision's tests sidecar is
+ * copied along — same logic, same cases. Response: the new model's row.
+ */
+export interface DuplicateModelBody {
+  /** repo-relative path of the model to copy */
+  path: string;
+  /** the copy's name — its kebab-case slug becomes the file stem */
+  name: string;
+}
+
+export interface DuplicateModelResult {
+  model: ModelInfo;
+  /** every file written, the copied tests sidecar included */
+  created: string[];
+}
+
+/**
+ * POST /api/repos/:fullName/delete — delete model files (#210); a decision's
+ * tests sidecar goes along. All or nothing: every file is checked first (a
+ * known model, not open in a live session → 409), so a refused delete changes
+ * nothing. The deletion ships with the next release; a model that was never
+ * released is simply gone.
+ */
+export interface DeleteModelsBody {
+  /** repo-relative paths of the model files (non-empty) */
+  paths: string[];
+  /** also close the open todos of every deleted PROCESS (in the background,
+   *  one tracker write at a time) — default: they stay open */
+  closeTodos?: boolean;
+}
+
+export interface DeleteModelsResult {
+  /** every file that was deleted, companions (tests sidecars) included */
+  deleted: string[];
+  /** the todo-closing jobs `closeTodos` started (one per deleted process) */
+  todoJobs?: TodoJobWire[];
+}
+
+/**
+ * GET /api/repos/:fullName/todo-jobs — background work on a repo's todos
+ * (#208, #210): a renamed process's todos MOVE to its new id, a deleted
+ * process's todos CLOSE. The tracker takes one write at a time (GitHub asks
+ * for serial writes, a second apart), so a job runs in the background and
+ * reports progress. A job survives a host restart; a FAILED job keeps its
+ * todos where they are until POST …/todo-jobs/retry runs it again.
+ */
+export interface TodoJobWire {
+  /** stable per repo: "<kind>:<from>" */
+  id: string;
+  kind: "move" | "close";
+  /** the process id the todos are filed under */
+  from: string;
+  /** move: the process id they go to */
+  to?: string;
+  /** open todos the job found; -1 until it looked */
+  total: number;
+  /** todos handled so far */
+  done: number;
+  /** todos the tracker refused this run */
+  failed: number;
+  state: "queued" | "running" | "done" | "failed";
+}
+
+/** POST /api/repos/:fullName/todo-jobs/retry — run a failed job again */
+export interface RetryTodoJobBody {
+  id: string;
+}
+
+/** one model referencing another (a callActivity, a businessRuleTask …) */
+export interface ReferenceWire {
+  /** repo-relative path of the referencing model */
+  path: string;
+  /** the element carrying the reference, when it hangs on one */
+  element?: string;
+  /** the relation: "calls", "decides", … (@bpmiq/notations/refs) */
+  rel: string;
+}
+
+/**
+ * GET /api/repos/:fullName/references?path=<model>[&path=<model>…] — which
+ * models point at each requested model (the incoming half of the repo index,
+ * workspace state). What a rename rewrites and a delete leaves dangling.
+ */
+export interface ModelReferencesWire {
+  path: string;
+  referencedBy: ReferenceWire[];
+}
+
 /** GET /api/repos — registry ∩ the session user's per-repo permission */
 export interface RepoInfo {
   fullName: string;
@@ -223,48 +351,96 @@ export interface ChangedFileWire {
   /** changed on the default branch while the workspace held unreleased edits
    *  of it (#185) — the release refuses it until resolved (POST …/conflicts) */
   conflict: boolean;
+  /** an ADDED file that a rename or move in the platform gave this path (#208)
+   *  — the deleted file it came from; absent for everything else */
+  renamedFrom?: string;
 }
+
+/** the slice of a changed file the move/rename pairing reads */
+type Movable = Pick<ChangedFileWire, "path" | "status"> & { renamedFrom?: string };
 
 /** the move key of a changed file: its file name, with a decision's tests
  *  sidecar keyed to its decision (`x.tests.yaml` → `x.dmn`) */
 const moveKey = (path: string): string => (path.split("/").pop() ?? path).replace(/\.tests\.yaml$/i, ".dmn");
 
+/** a decision's tests sidecar → the decision file next to it */
+const sidecarOwner = (path: string): string | undefined =>
+  /\.tests\.yaml$/i.test(path) ? path.replace(/\.tests\.yaml$/i, ".dmn") : undefined;
+
 /**
- * The MOVE units of a GET /changes pool (#182). A moved model shows up as a
- * deleted + added pair of the same file name; shipping one half alone would
- * leave the model twice on the default branch, or not at all. Maps every path
- * of a unit to the whole unit (a decision's moved tests sidecar included);
- * paths outside a move are absent. The release ships units whole — git then
- * records a rename — and the release dialog selects them whole.
+ * The MOVE units of a GET /changes pool (#182, #208). A moved or renamed model
+ * shows up as a deleted + added pair; shipping one half alone would leave the
+ * model twice on the default branch, or not at all. A move pairs by file name
+ * (the model keeps its stem), a rename by the added file's `renamedFrom`, and
+ * a decision's tests sidecar joins its decision's unit. Maps every path of a
+ * unit to the whole unit; paths outside a move are absent. The release ships
+ * units whole — git then records a rename — and the release dialog selects
+ * them whole.
  */
-export function moveUnits(changes: ReadonlyArray<Pick<ChangedFileWire, "path" | "status">>): Map<string, string[]> {
-  const byKey = new Map<string, Array<Pick<ChangedFileWire, "path" | "status">>>();
-  for (const c of changes) {
-    if (c.status !== "modified") byKey.set(moveKey(c.path), [...(byKey.get(moveKey(c.path)) ?? []), c]);
-  }
-  const units = new Map<string, string[]>();
+export function moveUnits(changes: ReadonlyArray<Movable>): Map<string, string[]> {
+  const moving = changes.filter((c) => c.status !== "modified");
+  const status = new Map(moving.map((c) => [c.path, c.status]));
+  // union-find over the paths: every link below merges two groups
+  const parent = new Map(moving.map((c) => [c.path, c.path]));
+  const find = (p: string): string => {
+    let root = p;
+    while (parent.get(root) !== root) root = parent.get(root) ?? root;
+    parent.set(p, root);
+    return root;
+  };
+  const union = (a: string, b: string): void => {
+    if (parent.has(a) && parent.has(b)) parent.set(find(a), find(b));
+  };
+  const bothHalves = (paths: string[]): boolean =>
+    paths.some((p) => status.get(p) === "added") && paths.some((p) => status.get(p) === "deleted");
+
+  // a move: the same file name on both sides
+  const byKey = new Map<string, string[]>();
+  for (const c of moving) byKey.set(moveKey(c.path), [...(byKey.get(moveKey(c.path)) ?? []), c.path]);
   for (const group of byKey.values()) {
-    if (!group.some((c) => c.status === "added") || !group.some((c) => c.status === "deleted")) continue;
-    const paths = group.map((c) => c.path);
+    if (!bothHalves(group)) continue;
+    for (const p of group) union(p, group[0]!);
+  }
+  // a rename: the added file names where it came from
+  for (const c of moving) {
+    if (c.status === "added" && c.renamedFrom && status.get(c.renamedFrom) === "deleted") union(c.path, c.renamedFrom);
+  }
+  // a renamed decision's sidecar travels in its decision's unit
+  for (const c of moving) {
+    const owner = sidecarOwner(c.path);
+    if (owner && status.get(owner) === c.status) union(c.path, owner);
+  }
+
+  const groups = new Map<string, string[]>();
+  for (const c of moving) groups.set(find(c.path), [...(groups.get(find(c.path)) ?? []), c.path]);
+  const units = new Map<string, string[]>();
+  for (const paths of groups.values()) {
+    if (!bothHalves(paths)) continue;
     for (const path of paths) units.set(path, paths);
   }
   return units;
 }
 
 /**
- * Where every moved file came from (#182): new path → old path, pairing a
- * unit's added half with the deleted half of the SAME file name (a decision
- * and its tests sidecar pair separately). Whatever compares a moved file with
- * its default-branch version — the release's decision impact — looks the
- * previous version up at the old path.
+ * Where every moved or renamed file came from (#182, #208): new path → old
+ * path. A rename names it (`renamedFrom`); a move pairs a unit's added half
+ * with the deleted half of the SAME file name (a decision and its tests
+ * sidecar pair separately). Whatever compares a moved file with its
+ * default-branch version — the release's decision impact — looks the previous
+ * version up at the old path.
  */
-export function moveSources(changes: ReadonlyArray<Pick<ChangedFileWire, "path" | "status">>): Map<string, string> {
+export function moveSources(changes: ReadonlyArray<Movable>): Map<string, string> {
   const status = new Map(changes.map((c) => [c.path, c.status]));
+  const renamedFrom = new Map(changes.flatMap((c) => (c.renamedFrom ? [[c.path, c.renamedFrom] as const] : [])));
   const fileName = (path: string): string => path.split("/").pop() ?? path;
   const sources = new Map<string, string>();
   for (const [path, unit] of moveUnits(changes)) {
     if (status.get(path) !== "added") continue;
-    const from = unit.find((p) => status.get(p) === "deleted" && fileName(p) === fileName(path));
+    const named = renamedFrom.get(path);
+    const from =
+      named && unit.includes(named)
+        ? named
+        : unit.find((p) => status.get(p) === "deleted" && fileName(p) === fileName(path));
     if (from) sources.set(path, from);
   }
   return sources;

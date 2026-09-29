@@ -66,3 +66,42 @@ test("moveSources: every added half points at its old path — a tests sidecar a
     ],
   );
 });
+
+test("moveUnits: a RENAME pairs by renamedFrom, its tests sidecar pair joins the same unit (#208)", () => {
+  const units = moveUnits([
+    { path: "p/credit.dmn", status: "deleted" },
+    { path: "p/credit.tests.yaml", status: "deleted" },
+    { path: "p/credit-limit.dmn", status: "added", renamedFrom: "p/credit.dmn" },
+    { path: "p/credit-limit.tests.yaml", status: "added", renamedFrom: "p/credit.tests.yaml" },
+    { path: "p/other.bpmn", status: "modified" },
+  ]);
+  const unit = ["p/credit.dmn", "p/credit.tests.yaml", "p/credit-limit.dmn", "p/credit-limit.tests.yaml"];
+  for (const path of unit) assert.deepEqual(new Set(units.get(path)), new Set(unit), path);
+  assert.equal(units.has("p/other.bpmn"), false);
+});
+
+test("moveUnits: a renamedFrom whose old half is no deletion (re-created, released) pairs nothing", () => {
+  const units = moveUnits([
+    { path: "p/order.bpmn", status: "modified" },
+    { path: "p/o2c.bpmn", status: "added", renamedFrom: "p/order.bpmn" },
+    { path: "p/new.dmn", status: "added" },
+    { path: "p/new.tests.yaml", status: "added" },
+  ]);
+  assert.equal(units.size, 0, "a created decision with its created sidecar is no move either");
+});
+
+test("moveSources: a renamed file points at its old path by renamedFrom, a moved one by file name", () => {
+  const sources = moveSources([
+    { path: "p/credit.dmn", status: "deleted" },
+    { path: "p/credit-limit.dmn", status: "added", renamedFrom: "p/credit.dmn" },
+    { path: "p/old/order.bpmn", status: "deleted" },
+    { path: "p/new/order.bpmn", status: "added" },
+  ]);
+  assert.deepEqual(
+    Object.fromEntries(sources),
+    Object.fromEntries([
+      ["p/credit-limit.dmn", "p/credit.dmn"],
+      ["p/new/order.bpmn", "p/old/order.bpmn"],
+    ]),
+  );
+});

@@ -50,6 +50,12 @@ const CONFLICTS_FILE = "bpmiq-conflicts.json";
  *  conflict. Kept like the conflict list; the catch-up drains it. */
 const RELEASED_FILE = "bpmiq-released.json";
 
+/** the platform's renames and moves not yet released (#208), `from → to`
+ *  with chains collapsed — git sees them as a delete + an add; this is what
+ *  pairs the two halves again (ChangedFileWire.renamedFrom). Kept like the
+ *  conflict list; stale pairs simply stop matching the changes. */
+const RENAMES_FILE = "bpmiq-renames.json";
+
 /** path → blobs, oldest first (null = a shipped deletion) */
 type ReleasedLists = Map<string, Array<string | null>>;
 
@@ -345,17 +351,17 @@ export class WorkspaceManager {
   }
 
   /** a JSON state file inside the clone's .git — undefined when absent or unreadable */
-  private async readState(dir: string, name: string): Promise<unknown> {
+  private async readState(dir: string, name: string, gitDir = join(dir, ".git")): Promise<unknown> {
     try {
-      return JSON.parse(await readFile(join(dir, ".git", name), "utf8"));
+      return JSON.parse(await readFile(join(gitDir, name), "utf8"));
     } catch {
       return undefined; // not written yet
     }
   }
 
   /** undefined removes the file */
-  private async writeState(dir: string, name: string, value: unknown): Promise<void> {
-    const file = join(dir, ".git", name);
+  private async writeState(dir: string, name: string, value: unknown, gitDir = join(dir, ".git")): Promise<void> {
+    const file = join(gitDir, name);
     if (value === undefined) return rm(file, { force: true });
     // write + rename: a torn conflict list would read as "no conflicts" — the
     // one state whose loss could let a release silently revert upstream work
@@ -540,12 +546,13 @@ export class WorkspaceManager {
    * checkout's server sources). `--no-renames` keeps a rename visible as
    * delete + add (the release stages per file, so that is exactly how it
    * would ship). Same untracked idiom and same silent-[] error contract as
-   * changedPaths.
+   * changedPaths. An added file a platform rename/move produced names its
+   * deleted origin (`renamedFrom`, #208) — the release ships the pair whole.
    */
   async changedFiles(
     repo: ConnectedRepo,
     pathspec: string,
-  ): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>> {
+  ): Promise<Array<{ path: string; status: "modified" | "added" | "deleted"; renamedFrom?: string }>> {
     try {
       const dir = this.dir(repo);
       const { stdout: diff } = await runGit(
@@ -577,11 +584,99 @@ export class WorkspaceManager {
         const path = line.trim();
         if (path) out.set(path, "added");
       }
-      return [...out].map(([path, status]) => ({ path, status })).sort((a, b) => a.path.localeCompare(b.path));
+      // a platform rename/move names the file an added path came from — only
+      // while BOTH halves are still changes (a released or undone half ends it)
+      const renamedFrom = new Map(
+        (await this.readRenames(dir))
+          .filter((r) => out.get(r.to) === "added" && out.get(r.from) === "deleted")
+          .map((r) => [r.to, r.from]),
+      );
+      return [...out]
+        .map(([path, status]) => {
+          const from = renamedFrom.get(path);
+          return from ? { path, status, renamedFrom: from } : { path, status };
+        })
+        .sort((a, b) => a.path.localeCompare(b.path));
     } catch {
       /* no git/origin — leave clean */
       return [];
     }
+  }
+
+  /**
+   * Remember renames and moves the platform made (#208), so the release pairs
+   * their delete + add halves (changedFiles → renamedFrom) and git records a
+   * rename. Chains collapse (a → b, then b → c is a → c), a rename back to
+   * the original drops the pair, and a pair whose new file is gone is pruned.
+   * So is a pair whose old path the default branch no longer has (released
+   * and merged, or never released): it pairs nothing any more, and a later
+   * rename must not chain onto it — a → b merged, then b → c would record
+   * a → c, and b → c would ship as two unrelated halves.
+   */
+  async recordRenames(repo: ConnectedRepo, pairs: Array<{ from: string; to: string }>): Promise<void> {
+    if (pairs.length === 0) return;
+    const dir = this.dir(repo);
+    await this.serial(repo, async () => {
+      const recorded = await this.readRenames(dir);
+      const origins = recorded.map((r) => r.from);
+      const gone = await this.absentOnDefault(repo, dir, origins);
+      const journal = recorded.filter((r) => !gone.has(r.from));
+      for (const { from, to } of pairs) {
+        const chained = journal.find((r) => r.to === from);
+        if (chained) chained.to = to;
+        else journal.push({ from, to });
+      }
+      const open = journal.filter((r) => r.from !== r.to && existsSync(join(dir, r.to)));
+      await this.writeState(dir, RENAMES_FILE, open.length > 0 ? open : undefined, await this.gitDir(dir));
+    });
+  }
+
+  /** the platform's renames/moves (#208) — what a reset (load latest from
+   *  main) may undo; [] for a checkout without the journal. A pair released
+   *  since may still be listed (pruned on the next recordRenames): check it
+   *  against what the reset actually changed */
+  async renames(repo: ConnectedRepo): Promise<Array<{ from: string; to: string }>> {
+    return this.readRenames(this.dir(repo));
+  }
+
+  /** those of `paths` origin/<defaultBranch> does not have — empty when git
+   *  cannot tell (no origin yet): best effort, like the journal itself */
+  private async absentOnDefault(repo: ConnectedRepo, dir: string, paths: string[]): Promise<Set<string>> {
+    if (paths.length === 0) return new Set();
+    try {
+      const { stdout } = await runGit(
+        ["-C", dir, "ls-tree", "-z", "--name-only", `origin/${repo.defaultBranch}`, "--", ...paths],
+        { maxBuffer: GIT_OUT_MAX },
+      );
+      const present = new Set(stdout.split("\0").filter(Boolean));
+      return new Set(paths.filter((p) => !present.has(p)));
+    } catch {
+      return new Set();
+    }
+  }
+
+  /** never throws — a lost journal only costs the pairing, never the changes list */
+  private async readRenames(dir: string): Promise<Array<{ from: string; to: string }>> {
+    let parsed: unknown;
+    try {
+      parsed = await this.readState(dir, RENAMES_FILE, await this.gitDir(dir));
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (r): r is { from: string; to: string } =>
+        typeof r === "object" && r !== null && typeof r.from === "string" && typeof r.to === "string",
+    );
+  }
+
+  /** the checkout's git directory — `.git` itself, or wherever a `.git` FILE
+   *  points (the in-place host checkout may be a linked worktree) */
+  private async gitDir(dir: string): Promise<string> {
+    const dotGit = join(dir, ".git");
+    if (lstatSync(dotGit, { throwIfNoEntry: false })?.isFile() !== true) return dotGit;
+    const { stdout } = await runGit(["-C", dir, "rev-parse", "--absolute-git-dir"]);
+    return stdout.trim();
   }
 
   /**
@@ -632,6 +727,7 @@ export class WorkspaceManager {
     // later is plain upstream work for the reset tree (the catch-up takes it)
     await this.writeConflicts(dir, []);
     await this.writeReleased(dir, new Map());
+    await this.writeState(dir, RENAMES_FILE, undefined);
     // the tree now matches the ref we just fetched — keep provision()'s 60s
     // throttle honest so it doesn't immediately re-fetch/reconcile behind us
     this.ensured.set(repo.fullName, Date.now());

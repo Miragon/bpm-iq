@@ -20,6 +20,7 @@ import * as Y from "yjs";
 import { LineageStore } from "../src/adapters/sqlite/lineage-store.ts";
 import type { Session } from "../src/adapters/sqlite/sessions.ts";
 import { type CollabDeps, makeCollabHooks } from "../src/application/collab.ts";
+import { RoomMigrations } from "../src/application/room-migrations.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
@@ -374,4 +375,43 @@ test("beforeHandleAwareness: only the server asserts kind:'agent' — a ws peer 
   assert.equal(impostor.user.kind, "human", "rewritten in place — the update peers receive carries it");
   assert.deepEqual(human, { user: { name: "kai", color: "#000" } }, "untouched");
   assert.deepEqual(anonymous, { selection: { anchor: 1 } }, "untouched");
+});
+
+// ── room migrations (#208) ──────────────────────────────────────────────────
+
+test("a RETIRED room never writes through or persists again — its file was renamed away; unload forgets it", async () => {
+  const migrations = new RoomMigrations();
+  const { ws, deps, hooks } = setup({ migrations });
+  const doc = new Y.Doc();
+  doc.getText("content").insert(0, "<bpmn edited/>");
+  migrations.retire(ROOM);
+  await hooks.onStoreDocument({ document: doc, documentName: ROOM });
+  assert.equal(deps.lineage.load(ROOM), undefined, "no lineage row under the old name");
+  assert.equal(
+    await readFile(join(ws, "processes", "order", "order.bpmn"), "utf8").catch(() => null),
+    null,
+    "the old file is not recreated",
+  );
+  await hooks.afterUnloadDocument({ documentName: ROOM });
+  assert.equal(migrations.isRetired(ROOM), false, "a file created at that path later is a new room");
+});
+
+test("a HELD room's load waits for its migration — no seed from a file that is not in place yet", async () => {
+  const migrations = new RoomMigrations();
+  const { ws, deps, hooks } = setup({ migrations });
+  const release = migrations.hold([ROOM]);
+  const loading = hooks.onLoadDocument({ document: new Y.Doc(), documentName: ROOM });
+  let loaded = false;
+  void loading.then(() => (loaded = true)).catch(() => undefined);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(loaded, false, "still waiting");
+  // the migration puts file + lineage in place, then releases the room
+  const moved = new Y.Doc();
+  moved.getText("content").insert(0, "<bpmn migrated/>");
+  writeFileSync(join(ws, "processes", "order", "order.bpmn"), "<bpmn migrated/>");
+  deps.lineage.save(ROOM, Y.encodeStateAsUpdate(moved));
+  release();
+  const doc = await loading;
+  assert.equal(doc.getText("content").toString(), "<bpmn migrated/>");
+  assert.ok(deps.liveDocs.has(ROOM));
 });

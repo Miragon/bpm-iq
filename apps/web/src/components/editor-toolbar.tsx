@@ -16,7 +16,13 @@
  *   actions    what you can do here (add todo, analyse with AI)
  *   menu       the ⋯ overflow, last: the occasional moves — panel toggles that
  *              earn no permanent button (Notes, History; open state shows as a
- *              check) and Release → PR
+ *              check), the model's own Rename… / Duplicate… and Release → PR
+ *
+ * The model name itself is the rename handle (#208): a quiet button that
+ * shows a pencil on hover/focus and opens the Rename dialog on click. Not a
+ * double-click-to-edit field — that has no affordance, collides with
+ * selecting the name to copy it, and would commit a rename (new id, rewritten
+ * links, migrated editors) on a stray blur.
  *
  * Tool labels collapse to icon + tooltip through container queries as the bar
  * narrows, cheapest first: the actions go at @7xl (a sparkle and a list-plus
@@ -36,8 +42,19 @@ import {
 } from "@bpmiq/ui-kit/components/dropdown-menu";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Code, Ellipsis, GitPullRequest, ListPlus, Loader2, Shapes, Sparkles } from "lucide-react";
-import { type ComponentType, type ReactNode, useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Code,
+  Copy,
+  Ellipsis,
+  GitPullRequest,
+  ListPlus,
+  Loader2,
+  Pencil,
+  Shapes,
+  Sparkles,
+} from "lucide-react";
+import { type ComponentType, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { safeAvatarUrl, safePresenceColor } from "@/lib/presence-format";
 import type { EditorToolbarAction } from "@/notations/registry";
@@ -77,6 +94,8 @@ export function EditorToolbar({
   addTodo,
   assist,
   onRelease,
+  onRename,
+  onDuplicate,
 }: {
   /** repository full name, "owner/name" */
   repo: string;
@@ -102,8 +121,18 @@ export function EditorToolbar({
   /** the Analyse-with-AI menu (owns its own trigger button) */
   assist?: ReactNode;
   onRelease(): void;
+  /** open the Rename dialog — the title becomes its handle */
+  onRename?: () => void;
+  onDuplicate?: () => void;
 }) {
   const [owner = "", name = ""] = repo.split("/");
+  // a menu item that opens a DIALOG must not have radix hand the focus back
+  // to the ⋯ trigger — it would steal the dialog field's autoFocus
+  const openingDialog = useRef(false);
+  const openDialog = (open: () => void) => () => {
+    openingDialog.current = true;
+    setTimeout(open, 0);
+  };
   const shownPeers = presence.slice(0, MAX_AVATARS);
   const hiddenPeers = presence.slice(MAX_AVATARS);
 
@@ -132,7 +161,23 @@ export function EditorToolbar({
           <span className="text-muted-foreground/40 @max-4xl:hidden mx-1.5 shrink-0">/</span>
           {/* shrinks at a twentieth of the repo's rate: the repo gives up its
               characters first, the model name only once there is nothing left */}
-          <span className="min-w-0 shrink-[.05] truncate font-medium">{title}</span>
+          {onRename ? (
+            <button
+              type="button"
+              onClick={onRename}
+              title="Rename…"
+              aria-label={`Rename ${title}`}
+              className="group hover:bg-accent focus-visible:ring-ring/50 -mx-1 flex min-w-0 shrink-[.05] cursor-pointer items-center gap-1 rounded px-1 font-medium outline-none focus-visible:ring-[3px]"
+            >
+              <span className="truncate">{title}</span>
+              <Pencil
+                aria-hidden="true"
+                className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+              />
+            </button>
+          ) : (
+            <span className="min-w-0 shrink-[.05] truncate font-medium">{title}</span>
+          )}
           {subtitle ? (
             <span className="text-muted-foreground ml-1.5 min-w-0 shrink-[.05] truncate">{subtitle}</span>
           ) : null}
@@ -224,7 +269,14 @@ export function EditorToolbar({
               <Ellipsis />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent
+            align="end"
+            onCloseAutoFocus={(e) => {
+              if (!openingDialog.current) return;
+              openingDialog.current = false;
+              e.preventDefault();
+            }}
+          >
             {menuPanels.map((p) => (
               <DropdownMenuCheckboxItem
                 key={p.id}
@@ -238,7 +290,22 @@ export function EditorToolbar({
               </DropdownMenuCheckboxItem>
             ))}
             <DropdownMenuSeparator />
-            {/* inset: the icon lines up with the panel entries' icons above */}
+            {/* inset: the icon lines up with the panel entries' icons above.
+                Rename/Duplicate open DIALOGS — mounted a tick after radix
+                finished its close handling (the New menu's convention) */}
+            {onRename && (
+              <DropdownMenuItem inset onSelect={openDialog(onRename)}>
+                <Pencil />
+                Rename…
+              </DropdownMenuItem>
+            )}
+            {onDuplicate && (
+              <DropdownMenuItem inset onSelect={openDialog(onDuplicate)}>
+                <Copy />
+                Duplicate…
+              </DropdownMenuItem>
+            )}
+            {(onRename || onDuplicate) && <DropdownMenuSeparator />}
             <DropdownMenuItem inset onSelect={onRelease}>
               <GitPullRequest />
               Release → PR

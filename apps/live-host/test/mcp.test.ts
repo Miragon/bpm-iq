@@ -198,6 +198,12 @@ function fakeIssues(): IssueTracker & { created: Array<{ repo: string; input: To
       if (!hit) throw new Error(`no such todo: ${id}`);
       hit.state = "done";
     },
+    async retargetTodo(_repo, id, _from, to) {
+      const hit = items.find((t) => t.id === id);
+      if (!hit?.anchor || hit.anchor.process === to.process) return "unchanged";
+      hit.anchor = { ...hit.anchor, process: to.process, file: to.file };
+      return "moved";
+    },
   };
 }
 
@@ -965,6 +971,8 @@ function apiOpts(d: McpDeps, sessions = new SessionStore(new DatabaseSync(":memo
     liveDocs: () => [],
     dropLineage: () => {},
     renameLineage: () => {},
+    saveLineage: () => {},
+    rooms: { retire: () => undefined, hold: () => () => {} },
     openDoc: d.openDoc,
     maxDocBytes: d.maxDocBytes,
     oidc: {

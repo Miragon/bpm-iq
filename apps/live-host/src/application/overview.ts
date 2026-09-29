@@ -35,11 +35,12 @@ export interface OverviewDeps {
     dir(repo: ConnectedRepo): string;
     /** files under `pathspec` differing from origin/<defaultBranch>; [] on error */
     changedPaths(repo: ConnectedRepo, pathspec: string): Promise<string[]>;
-    /** changed files under `pathspec` with status; [] on error */
+    /** changed files under `pathspec` with status (+ where a platform rename
+     *  came from); [] on error */
     changedFiles(
       repo: ConnectedRepo,
       pathspec: string,
-    ): Promise<Array<{ path: string; status: "modified" | "added" | "deleted" }>>;
+    ): Promise<Array<{ path: string; status: "modified" | "added" | "deleted"; renamedFrom?: string }>>;
     /** files the catch-up kept although upstream changed them too (#185) —
      *  optional: fakes without it report no conflicts */
     conflicts?(repo: ConnectedRepo): Promise<string[]>;

@@ -42,6 +42,28 @@ export interface Todo {
   createdAt: string;
 }
 
+/** where a todo is re-anchored to — a renamed process (#208) */
+export interface TodoTarget {
+  /** the process id (the .bpmn file stem) */
+  process: string;
+  /** its repo-relative model file */
+  file: string;
+}
+
+/**
+ * The tracker asked us to slow down (GitHub: a secondary rate limit, 403/429
+ * with retry-after). Not a failure of the item — the caller waits
+ * `retryAfterMs` and tries the same item again.
+ */
+export class TrackerRateLimited extends Error {
+  readonly retryAfterMs: number;
+  constructor(retryAfterMs: number, message = "the tracker asked to slow down") {
+    super(message);
+    this.name = "TrackerRateLimited";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
 export interface IssueTracker {
   /** id used in logs ("github-issues") */
   readonly id: string;
@@ -51,4 +73,10 @@ export interface IssueTracker {
   listTodos(repoFullName: string, processId?: string): Promise<Todo[]>;
   /** close one todo; closedBy = platform login (attribution is textual, items stay bot-authored) */
   closeTodo(repoFullName: string, id: string, closedBy: string): Promise<void>;
+  /** re-anchor ONE todo from process `from` to `to` (a rename, #208): the
+   *  tracker-side process filter and the anchor both name `to` afterwards.
+   *  Idempotent — an item already on `to` comes back "unchanged". Throws
+   *  TrackerRateLimited when the tracker asks to slow down; the pacing of a
+   *  batch is the caller's (application/todo-jobs.ts). */
+  retargetTodo(repoFullName: string, id: string, from: string, to: TodoTarget): Promise<"moved" | "unchanged">;
 }

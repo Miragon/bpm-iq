@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { roomName, roomPrefix } from "@bpmiq/contracts/live";
 import { loadPrivateKey } from "@bpmiq/github-app";
 import { Server } from "@hocuspocus/server";
+import * as Y from "yjs";
 
 import type { AppCredentials } from "./adapters/github/app-auth.ts";
 import { createGitHubAppSource } from "./adapters/github/app-source.ts";
@@ -33,10 +34,13 @@ import { createGitHubIssueTracker } from "./adapters/github/issues.ts";
 import { createGitHubProvider } from "./adapters/github/provider.ts";
 import { LineageStore } from "./adapters/sqlite/lineage-store.ts";
 import { SessionStore } from "./adapters/sqlite/sessions.ts";
+import { SqliteTodoJobStore } from "./adapters/sqlite/todo-job-store.ts";
 import { AgentPresence } from "./application/agent-presence.ts";
 import { makeCollabHooks } from "./application/collab.ts";
 import { LoginCodeStore } from "./application/login-codes.ts";
+import { RoomMigrations } from "./application/room-migrations.ts";
 import { peersOfDocument } from "./application/room-presence.ts";
+import { TodoJobs } from "./application/todo-jobs.ts";
 import { WsTicketStore } from "./application/ws-tickets.ts";
 import { allowAllAccess, makeLocalPrincipal } from "./auth/none.ts";
 import { makeOidcVerifier } from "./auth/oidc.ts";
@@ -80,6 +84,9 @@ const DATA_DIR = process.env.LIVE_DATA_DIR ?? join(MONO_ROOT, ".live");
 const GH_BASE = process.env.GITHUB_BASE_URL ?? "https://github.com";
 const GH_API = process.env.GITHUB_API_URL ?? "https://api.github.com";
 const liveDocs = new Set<string>();
+// renames of OPEN models (#208): retired rooms never persist again, a renamed
+// document's new room waits for its migration (application/room-migrations.ts)
+const migrations = new RoomMigrations();
 // cap the size of a single room (DoS guard), enforced twice: at INGEST (an update
 // that would push the doc past the cap is rejected in beforeHandleMessage — bounds
 // in-memory growth, a CRDT can't be shrunk after the fact) and at PERSIST (an
@@ -354,6 +361,10 @@ if (!NO_AUTH && !connectionSource?.checkUserPermission) {
 // boot refused above leaves live.db as the previous image left it, so a
 // rollback keeps working
 sessions.migrate();
+// background todo work (#208/#210): a renamed process's todos follow it, a
+// deleted one's close on request — one tracker write at a time, persisted
+// until done so a restart resumes it (resumed below, once the registry synced)
+const todoJobs = issues ? new TodoJobs({ issues, store: new SqliteTodoJobStore(db) }) : undefined;
 const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
 
 // single-use ws tickets for the MCP-App widget's live connection — minted by
@@ -380,6 +391,7 @@ const server = new Server({
     publicUrl: PUBLIC_URL,
     liveDocs,
     wsTickets,
+    migrations,
   }),
 });
 
@@ -410,8 +422,25 @@ const httpServer = startApi(PORT, {
   dropLineage: (room) => lineage.drop(room),
   // a moved model (#182) takes its lineage to the new room
   renameLineage: (from, to) => lineage.rename(from, to),
+  // a renamed OPEN model (#208): its final live state becomes the new room's
+  saveLineage: (room, state) => lineage.save(room, state),
+  rooms: {
+    // retire a LOADED room: tell its peers where the document went, close
+    // their connections (no more edits can land), and hand back the state —
+    // synchronous from the notice to the snapshot, so nothing slips between
+    retire: (room, notice) => {
+      const doc = server.hocuspocus.documents.get(room);
+      if (!doc) return undefined;
+      migrations.retire(room);
+      doc.broadcastStateless(notice);
+      server.hocuspocus.closeConnections(room);
+      return Y.encodeStateAsUpdate(doc);
+    },
+    hold: (rooms) => migrations.hold(rooms),
+  },
   connectionSource,
   issues,
+  todoJobs,
   // control-plane origin (from the mint URL) — a cross-tenant OIDC login
   // redirects there so the platform can rescope the session to this tenant
   controlPlaneUrl: MINT_URL ? new URL(MINT_URL).origin : undefined,
@@ -503,6 +532,8 @@ void (async () => {
     // denial cached against the not-yet-synced row must not outlive it
     access.invalidate();
   }
+  // tokens resolve through the synced registry — only now resume todo jobs
+  todoJobs?.resume();
   console.log("──────────────────────────────────────────────────");
   console.log(
     `Live Host ready (${TENANT_INSTALLATION_ID ? `cell — installation ${TENANT_INSTALLATION_ID}` : "multi-repo"}, single port)`,

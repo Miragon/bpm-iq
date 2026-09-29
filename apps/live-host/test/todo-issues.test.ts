@@ -20,8 +20,11 @@ import {
   closeAttributionLine,
   createGitHubIssueTracker,
   parseBody,
+  rateLimitWait,
+  retargetBody,
   todoBody,
 } from "../src/adapters/github/issues.ts";
+import { TrackerRateLimited } from "../src/ports/issue-tracker.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const STUB_PORT = Number(process.env.TODO_STUB_PORT ?? 8531);
@@ -243,4 +246,124 @@ test("parseBody: strips deep links with `]` in the element name and `)` in the U
   const stored = todoBody(input, { publicUrl: "https://bpm.example", repoFullName: "acme/bpm-processes" });
   assert.ok(stored.includes("📍 [Prüfen [manuell]]"), `precondition — the raw name is in the link:\n${stored}`);
   assert.equal(parseBody(stored), "The threshold looks stale.");
+});
+
+// ── retargetTodo (#208): a renamed process's todo follows its new id ────────
+
+const RENAME_REPO = "acme/renames";
+const linked = createGitHubIssueTracker({
+  apiUrl: STUB_URL,
+  tokenFor: async () => "stub-installation-token-1",
+  publicUrl: "https://bpm.example",
+});
+
+test("retargetTodo: ONE write swaps the process label and re-anchors the body; a second run is a no-op", async () => {
+  const created = await linked.createTodo(RENAME_REPO, {
+    title: "Check the dunning step",
+    body: "Reminder wording is outdated.",
+    anchor: {
+      process: "invoice-handling",
+      file: "processes/sub/invoice-handling.bpmn",
+      elements: [{ id: "Task_Remind", name: "Send reminder" }],
+      processVersion: null,
+    },
+    author: "petra",
+  });
+  const writesBefore = ((await (await fetch(`${STUB_URL}/_control/writes`)).json()) as unknown[]).length;
+  const moved = await linked.retargetTodo(RENAME_REPO, created.id, "invoice-handling", {
+    process: "billing",
+    file: "processes/sub/billing.bpmn",
+  });
+  assert.equal(moved, "moved");
+  const writes = (await (await fetch(`${STUB_URL}/_control/writes`)).json()) as Array<{ labels?: string[] }>;
+  assert.equal(writes.length - writesBefore, 1, "labels and body change in ONE PATCH");
+  assert.deepEqual(writes.at(-1)?.labels, ["todo", "process:billing"]);
+
+  assert.equal((await linked.listTodos(RENAME_REPO, "invoice-handling")).length, 0, "gone from the old process");
+  const [todo] = await linked.listTodos(RENAME_REPO, "billing");
+  assert.equal(todo?.id, created.id);
+  assert.deepEqual(todo?.anchor, {
+    process: "billing",
+    file: "processes/sub/billing.bpmn",
+    elements: [{ id: "Task_Remind", name: "Send reminder" }],
+    processVersion: null,
+  });
+  assert.equal(todo?.body, "Reminder wording is outdated.", "the author's text is untouched");
+  const raw = (await (await fetch(`${STUB_URL}/repos/${RENAME_REPO}/issues/${created.id}`)).json()) as {
+    body: string;
+  };
+  assert.ok(raw.body.includes("https://bpm.example/r/acme/renames/p/billing?element=Task_Remind"), raw.body);
+  assert.ok(!raw.body.includes("/p/invoice-handling"), "no deep link left on the old id");
+
+  assert.equal(
+    await linked.retargetTodo(RENAME_REPO, created.id, "invoice-handling", {
+      process: "billing",
+      file: "processes/sub/billing.bpmn",
+    }),
+    "unchanged",
+  );
+});
+
+test("retargetTodo: a hand-filed item (no anchor) only changes its labels; other labels survive", async () => {
+  await control({
+    addIssue: { repo: RENAME_REPO, title: "by hand", body: "plain text", labels: ["todo", "process:a", "urgent"] },
+  });
+  const [item] = await linked.listTodos(RENAME_REPO, "a");
+  assert.ok(item);
+  await linked.retargetTodo(RENAME_REPO, item.id, "a", { process: "b", file: "processes/b.bpmn" });
+  const raw = (await (await fetch(`${STUB_URL}/repos/${RENAME_REPO}/issues/${item.id}`)).json()) as {
+    body: string;
+    labels: Array<{ name: string }>;
+  };
+  assert.equal(raw.body, "plain text");
+  assert.deepEqual(
+    raw.labels.map((l) => l.name),
+    ["todo", "urgent", "process:b"],
+  );
+});
+
+test("retargetTodo: a secondary rate limit surfaces as TrackerRateLimited with the asked-for wait", async () => {
+  const [item] = await linked.listTodos(RENAME_REPO, "b");
+  assert.ok(item);
+  await control({ rateLimitWrites: 1 });
+  await assert.rejects(
+    () => linked.retargetTodo(RENAME_REPO, item.id, "b", { process: "c", file: "processes/c.bpmn" }),
+    (e: unknown) => e instanceof TrackerRateLimited && e.retryAfterMs === 1000,
+  );
+  // the next attempt goes through
+  assert.equal(
+    await linked.retargetTodo(RENAME_REPO, item.id, "b", { process: "c", file: "processes/c.bpmn" }),
+    "moved",
+  );
+});
+
+test("retargetBody: only a body anchored to `from` changes — anchor block and deep links, nothing else", () => {
+  const body = todoBody(deepLinkInput, { publicUrl: "https://bpm.example", repoFullName: "acme/x" });
+  const out = retargetBody(
+    body,
+    "order-to-cash",
+    { process: "o2c", file: "processes/o2c.bpmn" },
+    { publicUrl: "https://bpm.example", repoFullName: "acme/x" },
+  );
+  assert.equal(
+    out,
+    todoBody(
+      { ...deepLinkInput, anchor: { ...deepLinkInput.anchor, process: "o2c", file: "processes/o2c.bpmn" } },
+      { publicUrl: "https://bpm.example", repoFullName: "acme/x" },
+    ),
+  );
+  assert.equal(retargetBody(body, "other", { process: "o2c", file: "x" }), body, "anchored elsewhere: untouched");
+  assert.equal(retargetBody("hand-written", "order-to-cash", { process: "o2c", file: "x" }), "hand-written");
+});
+
+test("rateLimitWait: retry-after, an exhausted quota and the secondary message are waits; a plain 403 is not", () => {
+  const res = (status: number, headers: Record<string, string>) => ({ status, headers: new Headers(headers) });
+  assert.equal(rateLimitWait(res(403, { "retry-after": "30" }), ""), 30_000);
+  assert.equal(rateLimitWait(res(429, {}), "You have exceeded a secondary rate limit"), 60_000);
+  assert.equal(
+    rateLimitWait(res(403, { "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1010" }), "", 1_000_000),
+    10_000,
+  );
+  assert.equal(rateLimitWait(res(403, {}), "Resource not accessible by integration"), undefined);
+  assert.equal(rateLimitWait(res(500, { "retry-after": "5" }), ""), undefined);
 });

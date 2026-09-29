@@ -222,6 +222,38 @@ export async function putContent(
   return outcome;
 }
 
+/**
+ * Rewrite a document's LIVE content through `edit` (#208: a renamed model's
+ * callers follow its new id) — the co-editor path: minimal diff into the
+ * room, broadcast to anyone who has it open, written through on disconnect.
+ * No CAS and no validation gate: `edit` is a deterministic transformation of
+ * whatever the document holds at that instant, applied inside one transact.
+ * Text rooms only — a structured room is left as it is.
+ */
+export async function editContent(
+  opts: ContentDeps,
+  repo: ConnectedRepo,
+  path: string,
+  edit: (content: string) => string,
+): Promise<void> {
+  const safePath = modelPath(opts.registry, repo, path, "content/invalid-path");
+  await assertOnDisk(opts, repo, safePath);
+  if ((opts.docCodec ?? docCodecForPath)(safePath)) return;
+  await withDoc(opts, repo, safePath, async (conn) => {
+    await conn.transact((doc) => {
+      const ytext = doc.getText(CONTENT_KEY);
+      const next = edit(ytext.toString());
+      if (Buffer.byteLength(next, "utf8") > opts.maxDocBytes) {
+        throw new AppError("content/too-large", `content exceeds the ${opts.maxDocBytes}-byte document cap`, {
+          status: 413,
+          expose: true,
+        });
+      }
+      updateText(ytext, next);
+    });
+  });
+}
+
 /** the platform validator for whatever notation this path is — checkModel is
  *  THE one dispatch the CLI also runs, so a live save and `pnpm validate`
  *  always agree; `undefined` when the path is no registered notation (the

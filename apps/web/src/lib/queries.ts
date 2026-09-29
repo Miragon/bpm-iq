@@ -13,6 +13,11 @@ import {
   type CreateProcessBody,
   createTodo,
   type CreateTodoBody,
+  type DecisionInfo,
+  deleteModels,
+  type DeleteModelsBody,
+  duplicateModel,
+  type DuplicateModelBody,
   fetchChanges,
   fetchConfig,
   fetchDecisions,
@@ -21,19 +26,27 @@ import {
   fetchMe,
   fetchModels,
   fetchProcesses,
+  fetchReferences,
   fetchRepos,
+  fetchTodoJobs,
   fetchTodos,
   type FolderListWire,
   logout,
+  type ModelInfo,
   moveModels,
   type MoveModelsBody,
+  type ProcessInfo,
   releaseFiles,
   type ReleaseFilesBody,
+  renameModel,
+  type RenameModelBody,
   resolveConflict,
   type ResolveConflictBody,
+  retryTodoJob,
   syncRepo,
   type TodoWire,
 } from "@/lib/api";
+import { followTodoJob } from "@/lib/todo-jobs";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -198,6 +211,152 @@ export function useMoveModels(repo: string) {
       }
       void qc.invalidateQueries({ queryKey: ["repos"] }); // a moved model is dirty — the dirty count changed
     },
+  });
+}
+
+/** every listing a model's path or id shows up in — after a rename, duplicate
+ *  or delete all of them are stale (rows, folder counts, the release pool,
+ *  the overview's counts) */
+export function invalidateModelLists(qc: ReturnType<typeof useQueryClient>, repo: string): void {
+  for (const key of ["processes", "decisions", "models", "folders", "changes", "references"]) {
+    void qc.invalidateQueries({ queryKey: [key, repo] });
+  }
+  void qc.invalidateQueries({ queryKey: ["repos"] });
+}
+
+/** a model row in every cached list it belongs to — the create's seeding
+ *  rationale: the response is authoritative, so the row (a duplicate's copy,
+ *  a renamed model under its new name) shows up with the toast, not after
+ *  the refetch; the invalidation reconciles */
+function patchModelLists(
+  qc: ReturnType<typeof useQueryClient>,
+  repo: string,
+  patch: {
+    /** replace the row at `from` (a rename) — absent = append (a new model) */
+    from?: string;
+    row: ModelInfo;
+  },
+): void {
+  const { from, row } = patch;
+  const upsert = <T>(list: T[] | undefined, pathOf: (t: T) => string, next: T): T[] | undefined => {
+    if (!list) return list;
+    if (from === undefined) return list.some((t) => pathOf(t) === row.path) ? list : [...list, next];
+    return list.map((t) => (pathOf(t) === from ? next : t));
+  };
+  const base = { repo: row.repo, id: row.id, name: row.name, folder: row.folder, dirty: true };
+  qc.setQueryData<ModelInfo[]>(["models", repo], (old) =>
+    upsert(old, (m) => m.path, { ...row, liveSessions: old?.find((m) => m.path === from)?.liveSessions ?? 0 }),
+  );
+  if (row.notation === "bpmn") {
+    qc.setQueryData<ProcessInfo[]>(["processes", repo], (old) =>
+      upsert(old, (p) => p.bpmn, {
+        ...base,
+        bpmn: row.path,
+        models: [{ notation: "bpmn", path: row.path }],
+        liveSessions: old?.find((p) => p.bpmn === from)?.liveSessions ?? 0,
+      }),
+    );
+  }
+  if (row.notation === "dmn") {
+    qc.setQueryData<DecisionInfo[]>(["decisions", repo], (old) =>
+      upsert(old, (d) => d.path, {
+        ...base,
+        path: row.path,
+        liveSessions: old?.find((d) => d.path === from)?.liveSessions ?? 0,
+      }),
+    );
+  }
+}
+
+/** rename a model (#208). The success toast lives HERE (hook level): renaming
+ *  the open model sends its editor to the new path — the dialog unmounts
+ *  mid-request, and a rename that rewrote other models must still say so. */
+export function useRenameModel(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    // expectedTodos is client-side only: the count the dialog showed, for the
+    // progress toast while the todo job still waits its turn
+    mutationFn: ({ path, name }: RenameModelBody & { expectedTodos?: number }) => renameModel(repo, { path, name }),
+    onSuccess: (result, body) => {
+      if (result.todoJob) followTodoJob(repo, result.todoJob, qc, body.expectedTodos);
+      const old = qc.getQueryData<ModelInfo[]>(["models", repo])?.find((m) => m.path === body.path);
+      if (old)
+        patchModelLists(qc, repo, {
+          from: body.path,
+          row: { ...old, id: result.id, name: result.id, path: result.path },
+        });
+      invalidateModelLists(qc, repo);
+      const updated = result.updatedReferences.length;
+      toast.success(`Renamed to '${result.id}'`, {
+        description:
+          result.failedReferences.length > 0
+            ? `The link in ${result.failedReferences.join(", ")} could not be updated — fix it by hand.`
+            : updated > 0
+              ? `Updated the link in ${updated} model${updated === 1 ? "" : "s"}.`
+              : undefined,
+      });
+    },
+  });
+}
+
+/** duplicate a model (#209) — the copy is a new row in every list */
+export function useDuplicateModel(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: DuplicateModelBody) => duplicateModel(repo, body),
+    onSuccess: ({ model }) => {
+      patchModelLists(qc, repo, { row: model });
+      invalidateModelLists(qc, repo);
+    },
+  });
+}
+
+/** delete models (#210) */
+export function useDeleteModels(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: DeleteModelsBody) => deleteModels(repo, body),
+    onSuccess: (result) => {
+      invalidateModelLists(qc, repo);
+      for (const job of result.todoJobs ?? []) followTodoJob(repo, job, qc);
+    },
+  });
+}
+
+/** background todo work of a repo (#208/#210) — polled every second while a
+ *  job runs, so the Todos panel shows its progress */
+export function useTodoJobs(repo: string, enabled = true) {
+  return useQuery({
+    queryKey: ["todo-jobs", repo],
+    queryFn: () => fetchTodoJobs(repo),
+    enabled: enabled && repo.length > 0,
+    staleTime: 0,
+    refetchInterval: (query) =>
+      query.state.data?.some((j) => j.state === "queued" || j.state === "running") ? 1000 : false,
+  });
+}
+
+/** run a failed todo job again — and follow it like the first run */
+export function useRetryTodoJob(repo: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => retryTodoJob(repo, id),
+    onSuccess: (job) => {
+      void qc.invalidateQueries({ queryKey: ["todo-jobs", repo] });
+      followTodoJob(repo, job, qc);
+    },
+  });
+}
+
+/** which models point at `paths` — what a rename rewrites, what a delete
+ *  leaves dangling. Fresh on every dialog open (a colleague may have just
+ *  added a call). */
+export function useReferences(repo: string, paths: string[], enabled = true) {
+  return useQuery({
+    queryKey: ["references", repo, [...paths].sort()],
+    queryFn: () => fetchReferences(repo, paths),
+    enabled: enabled && repo.length > 0 && paths.length > 0,
+    staleTime: 0,
   });
 }
 

@@ -88,3 +88,42 @@ export interface CanvasPresence {
   /** selected element ids */
   selection: string[];
 }
+
+// ── room migration (#208) — a stateless message, NEVER in the Y.Doc ──────────
+// A rename gives an open model a new file, and rooms are keyed by path: the
+// Live Host tells every peer of the old room where the document went, then
+// closes the room. A client reopens the document at `to` (same Yjs history —
+// the lineage moved along); an older client simply sees its document close.
+
+export const MOVED_NOTICE = "bpmiq/moved";
+
+/** the document of this room now lives at `to` */
+export interface MovedNotice {
+  type: typeof MOVED_NOTICE;
+  /** the new repo-relative path of the document */
+  to: string;
+  /** the new room — what a client that addresses rooms (VS Code) reopens */
+  room: string;
+  /** who renamed it (display name) */
+  by: string;
+}
+
+/** the stateless payload the Live Host broadcasts into the old room */
+export const movedNotice = (repoFullName: string, to: string, by: string): string =>
+  JSON.stringify({ type: MOVED_NOTICE, to, room: roomName(repoFullName, to), by });
+
+/** a stateless payload read as a MovedNotice — undefined for anything else
+ *  (other stateless traffic, malformed JSON). The payload is server-sent, but
+ *  the shape is still checked: `to` becomes a navigation target. */
+export const parseMovedNotice = (payload: string): MovedNotice | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return undefined;
+  }
+  const p = parsed as Partial<MovedNotice> | null;
+  if (p?.type !== MOVED_NOTICE || typeof p.to !== "string" || p.to === "" || p.to.includes("..")) return undefined;
+  if (typeof p.room !== "string" || !p.room.endsWith(`/${p.to}`)) return undefined;
+  return { type: MOVED_NOTICE, to: p.to, room: p.room, by: typeof p.by === "string" ? p.by : "" };
+};

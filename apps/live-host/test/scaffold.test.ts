@@ -5,20 +5,26 @@
  * the release/sync test conventions.
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
+import { CONTENT_KEY } from "@bpmiq/contracts/live";
 import { AppError } from "@bpmiq/http-kit";
+import * as Y from "yjs";
 
 import {
   createDecision,
   createFolder,
   createNotationModel,
   createProcess,
+  deleteModels,
+  duplicateModel,
   listFolders,
   moveModels,
+  type RenameDeps,
+  renameModel,
 } from "../src/application/scaffold.ts";
 import { escapeXml, newBpmnXml, xmlProcessId } from "../src/domain/bpmn-template.ts";
 import { newDmnXml } from "../src/domain/dmn-template.ts";
@@ -429,5 +435,355 @@ test("moveModels: only discovered models move — foreign files, traversal and b
   await assert.rejects(
     () => moveModels(REPO, ws, { paths: [], folder: "archive" }, deps),
     rejectsWith("move/no-paths", 400),
+  );
+});
+
+test("moveModels: the moves are journaled for the release pairing (#208)", async () => {
+  const ws = workspace();
+  const journaled: Array<{ from: string; to: string }> = [];
+  await moveModels(
+    REPO,
+    ws,
+    { paths: ["processes/order.bpmn"], folder: "archive" },
+    { ...moveDeps().deps, recordRenames: async (pairs) => void journaled.push(...pairs) },
+  );
+  assert.deepEqual(journaled, [{ from: "processes/order.bpmn", to: "processes/archive/order.bpmn" }]);
+});
+
+// ── renameModel (#208) ──────────────────────────────────────────────────────
+
+const callerXml = (calls: string, decides: string) =>
+  `<definitions><process id="caller"><callActivity id="Call_1" calledElement="${calls}" /><businessRuleTask id="Rule_1" decisionRef="${decides}" /></process></definitions>`;
+
+/** a spy RenameDeps over an in-memory "live content" of the callers */
+function renameDeps(opts: { live?: Record<string, string>; failEdit?: string[] } = {}) {
+  const ws = { retired: [] as Array<[string, string]>, held: [] as string[][], released: 0 };
+  const lineage = { saved: [] as string[], dropped: [] as string[], renamed: [] as Array<[string, string]> };
+  const edits = new Map<string, string>();
+  const journaled: Array<{ from: string; to: string }> = [];
+  const deps = (root: string): RenameDeps => ({
+    liveDocs: () => Object.keys(opts.live ?? {}),
+    rooms: {
+      retire: (room, notice) => {
+        ws.retired.push([room, notice]);
+        const content = opts.live?.[room];
+        if (content === undefined) return undefined;
+        const doc = new Y.Doc();
+        doc.getText(CONTENT_KEY).insert(0, content);
+        return Y.encodeStateAsUpdate(doc);
+      },
+      hold: (rooms) => {
+        ws.held.push(rooms);
+        return () => void ws.released++;
+      },
+    },
+    lineage: {
+      save: (room) => void lineage.saved.push(room),
+      drop: (room) => void lineage.dropped.push(room),
+      rename: (from, to) => void lineage.renamed.push([from, to]),
+    },
+    editContent: async (path, edit) => {
+      if (opts.failEdit?.includes(path)) throw new Error("boom");
+      edits.set(path, edit(readFileSync(join(root, path), "utf8")));
+    },
+    recordRenames: async (pairs) => void journaled.push(...pairs),
+  });
+  return { ws, lineage, edits, journaled, deps };
+}
+
+test("renameModel: a closed process gets a new stem, its lineage follows and its callers are rewritten", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "main.bpmn"), callerXml("check-credit", "none"));
+  const spy = renameDeps();
+  const out = await renameModel(
+    REPO,
+    ws,
+    { path: "processes/subprocesses/check-credit.bpmn", name: "Credit Check" },
+    "Petra",
+    spy.deps(ws),
+  );
+  assert.equal(out.id, "credit-check");
+  assert.equal(out.path, "processes/subprocesses/credit-check.bpmn");
+  assert.deepEqual(out.renamed, [
+    { from: "processes/subprocesses/check-credit.bpmn", to: "processes/subprocesses/credit-check.bpmn" },
+  ]);
+  assert.ok(!existsSync(join(ws, "processes", "subprocesses", "check-credit.bpmn")));
+  assert.equal(readFileSync(join(ws, "processes", "subprocesses", "credit-check.bpmn"), "utf8"), "<bpmn/>");
+  assert.deepEqual(spy.lineage.renamed, [
+    ["acme/models/processes/subprocesses/check-credit.bpmn", "acme/models/processes/subprocesses/credit-check.bpmn"],
+  ]);
+  assert.deepEqual(out.updatedReferences, ["processes/main.bpmn"]);
+  assert.deepEqual(out.failedReferences, []);
+  assert.match(spy.edits.get("processes/main.bpmn") ?? "", /calledElement="credit-check"/);
+  assert.deepEqual(spy.journaled, out.renamed);
+  // the new room was held while the file moved, and released again
+  assert.deepEqual(spy.ws.held, [["acme/models/processes/subprocesses/credit-check.bpmn"]]);
+  assert.equal(spy.ws.released, 1);
+});
+
+test("renameModel: an OPEN decision migrates — notice, final live state to disk + lineage, sidecar along", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn>on disk</dmn>");
+  writeFileSync(join(ws, "processes", "credit.tests.yaml"), "cases: []\n");
+  writeFileSync(join(ws, "processes", "main.bpmn"), callerXml("order", "credit"));
+  const spy = renameDeps({ live: { "acme/models/processes/credit.dmn": "<dmn>live, not yet written</dmn>" } });
+  const out = await renameModel(
+    REPO,
+    ws,
+    { path: "processes/credit.dmn", name: "credit-limit" },
+    "Petra",
+    spy.deps(ws),
+  );
+  assert.deepEqual(out.renamed, [
+    { from: "processes/credit.dmn", to: "processes/credit-limit.dmn" },
+    { from: "processes/credit.tests.yaml", to: "processes/credit-limit.tests.yaml" },
+  ]);
+  // the retired room's peers were told where the document went
+  assert.deepEqual(spy.ws.retired[0], [
+    "acme/models/processes/credit.dmn",
+    JSON.stringify({
+      type: "bpmiq/moved",
+      to: "processes/credit-limit.dmn",
+      room: "acme/models/processes/credit-limit.dmn",
+      by: "Petra",
+    }),
+  ]);
+  // the LIVE state (ahead of the debounced write-through) is what lands
+  assert.equal(readFileSync(join(ws, "processes", "credit-limit.dmn"), "utf8"), "<dmn>live, not yet written</dmn>");
+  assert.deepEqual(spy.lineage.saved, ["acme/models/processes/credit-limit.dmn"]);
+  assert.deepEqual(spy.lineage.dropped, ["acme/models/processes/credit.dmn"]);
+  // the closed sidecar simply took its lineage along
+  assert.deepEqual(spy.lineage.renamed, [
+    ["acme/models/processes/credit.tests.yaml", "acme/models/processes/credit-limit.tests.yaml"],
+  ]);
+  assert.equal(readFileSync(join(ws, "processes", "credit-limit.tests.yaml"), "utf8"), "cases: []\n");
+  assert.match(spy.edits.get("processes/main.bpmn") ?? "", /decisionRef="credit-limit"/);
+  assert.match(spy.edits.get("processes/main.bpmn") ?? "", /calledElement="order"/, "the call link stays");
+});
+
+test("renameModel: a caller that cannot be rewritten is reported, the rename stands", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "main.bpmn"), callerXml("order", "none"));
+  const spy = renameDeps({ failEdit: ["processes/main.bpmn"] });
+  const out = await renameModel(REPO, ws, { path: "processes/order.bpmn", name: "o2c" }, "Petra", spy.deps(ws));
+  assert.ok(existsSync(join(ws, "processes", "o2c.bpmn")));
+  assert.deepEqual(out.updatedReferences, []);
+  assert.deepEqual(out.failedReferences, ["processes/main.bpmn"]);
+});
+
+test("renameModel: a model calling ITSELF is rewritten at its new path", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "loop.bpmn"), callerXml("loop", "none"));
+  const spy = renameDeps();
+  const out = await renameModel(REPO, ws, { path: "processes/loop.bpmn", name: "retry" }, "Petra", spy.deps(ws));
+  assert.deepEqual(out.updatedReferences, ["processes/retry.bpmn"]);
+  assert.match(spy.edits.get("processes/retry.bpmn") ?? "", /calledElement="retry"/);
+});
+
+test("renameModel: same name, empty slug, a taken id, an occupied or still-open target are refused — nothing moves", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn/>");
+  writeFileSync(join(ws, "processes", "credit.tests.yaml"), "cases: []\n");
+  writeFileSync(join(ws, "processes", "archive.tests.yaml"), "orphan\n");
+  const spy = renameDeps();
+  const cases: Array<[RenameDeps, { path: string; name: string }, string, number]> = [
+    [spy.deps(ws), { path: "processes/order.bpmn", name: "Order" }, "rename/unchanged", 400],
+    [spy.deps(ws), { path: "processes/order.bpmn", name: "!!!" }, "scaffold/invalid-name", 400],
+    // process ids are unique repo-wide — the sub-folder's check-credit counts
+    [spy.deps(ws), { path: "processes/order.bpmn", name: "Check credit" }, "rename/model-exists", 409],
+    [spy.deps(ws), { path: "processes/missing.bpmn", name: "x" }, "rename/unknown-model", 404],
+    [spy.deps(ws), { path: "bpmiq.yml", name: "x" }, "rename/unknown-model", 404],
+    // an orphaned sidecar squats on the new tests path
+    [spy.deps(ws), { path: "processes/credit.dmn", name: "archive" }, "rename/target-exists", 409],
+    [
+      { ...spy.deps(ws), liveDocs: () => ["acme/models/processes/o2c.bpmn"] },
+      { path: "processes/order.bpmn", name: "o2c" },
+      "rename/target-exists",
+      409,
+    ],
+  ];
+  for (const [deps, body, code, status] of cases) {
+    await assert.rejects(() => renameModel(REPO, ws, body, "Petra", deps), rejectsWith(code, status), body.name);
+  }
+  assert.ok(existsSync(join(ws, "processes", "order.bpmn")));
+  assert.ok(existsSync(join(ws, "processes", "credit.dmn")));
+  assert.deepEqual(spy.ws.retired, []);
+  // a decision MAY share a process's id (separate namespaces, like create)
+  const ok = await renameModel(REPO, ws, { path: "processes/credit.dmn", name: "order" }, "Petra", spy.deps(ws));
+  assert.equal(ok.path, "processes/order.dmn");
+});
+
+// ── duplicateModel (#209) ───────────────────────────────────────────────────
+
+test("duplicateModel: the LIVE content lands next to the source under the new id, the tests sidecar too", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "subprocesses", "credit.dmn"), "<dmn>disk</dmn>");
+  writeFileSync(join(ws, "processes", "subprocesses", "credit.tests.yaml"), "cases: [disk]\n");
+  const live: Record<string, string> = {
+    "processes/subprocesses/credit.dmn": "<dmn>live</dmn>",
+    "processes/subprocesses/credit.tests.yaml": "cases: [live]\n",
+  };
+  const out = await duplicateModel(
+    REPO,
+    ws,
+    { path: "processes/subprocesses/credit.dmn", name: "credit-copy" },
+    { readContent: async (path) => live[path] ?? "" },
+  );
+  assert.deepEqual(out.created, [
+    "processes/subprocesses/credit-copy.dmn",
+    "processes/subprocesses/credit-copy.tests.yaml",
+  ]);
+  assert.deepEqual(out.model, {
+    repo: "acme/models",
+    id: "credit-copy",
+    name: "credit-copy",
+    path: "processes/subprocesses/credit-copy.dmn",
+    notation: "dmn",
+    folder: "subprocesses",
+    dirty: true,
+    liveSessions: 0,
+  });
+  assert.equal(readFileSync(join(ws, "processes", "subprocesses", "credit-copy.dmn"), "utf8"), "<dmn>live</dmn>");
+  assert.equal(
+    readFileSync(join(ws, "processes", "subprocesses", "credit-copy.tests.yaml"), "utf8"),
+    "cases: [live]\n",
+  );
+  // the source is untouched
+  assert.equal(readFileSync(join(ws, "processes", "subprocesses", "credit.dmn"), "utf8"), "<dmn>disk</dmn>");
+});
+
+test("duplicateModel: a taken id is a 409, a failed read leaves no half copy", async () => {
+  const ws = workspace();
+  await assert.rejects(
+    () => duplicateModel(REPO, ws, { path: "processes/order.bpmn", name: "order" }, { readContent: async () => "" }),
+    rejectsWith("duplicate/model-exists", 409),
+  );
+  await assert.rejects(() =>
+    duplicateModel(
+      REPO,
+      ws,
+      { path: "processes/order.bpmn", name: "order-copy" },
+      {
+        readContent: async () => {
+          throw new Error("room gone");
+        },
+      },
+    ),
+  );
+  assert.ok(!existsSync(join(ws, "processes", "order-copy.bpmn")));
+});
+
+// ── deleteModels (#210) ─────────────────────────────────────────────────────
+
+test("deleteModels: models go with their tests sidecar and lineage", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn/>");
+  writeFileSync(join(ws, "processes", "credit.tests.yaml"), "cases: []\n");
+  const dropped: string[] = [];
+  const out = await deleteModels(
+    REPO,
+    ws,
+    { paths: ["processes/credit.dmn", "processes/order.bpmn", "processes/credit.dmn"] },
+    { liveDocs: () => [], dropLineage: (room) => void dropped.push(room) },
+  );
+  assert.deepEqual(out.deleted, ["processes/credit.dmn", "processes/credit.tests.yaml", "processes/order.bpmn"]);
+  for (const path of out.deleted) assert.ok(!existsSync(join(ws, path)), path);
+  assert.deepEqual(
+    dropped,
+    out.deleted.map((p) => `acme/models/${p}`),
+  );
+  assert.ok(existsSync(join(ws, "processes", "subprocesses", "check-credit.bpmn")), "the rest stays");
+});
+
+test("deleteModels: one open or unknown model refuses the whole batch — nothing is deleted", async () => {
+  const ws = workspace();
+  const deps = { liveDocs: () => ["acme/models/processes/subprocesses/check-credit.bpmn"], dropLineage: () => {} };
+  await assert.rejects(
+    () => deleteModels(REPO, ws, { paths: ["processes/order.bpmn", "processes/subprocesses/check-credit.bpmn"] }, deps),
+    rejectsWith("delete/live-session", 409),
+  );
+  await assert.rejects(
+    () => deleteModels(REPO, ws, { paths: ["processes/order.bpmn", "bpmiq.yml"] }, deps),
+    rejectsWith("delete/unknown-model", 404),
+  );
+  await assert.rejects(() => deleteModels(REPO, ws, { paths: [" "] }, deps), rejectsWith("delete/no-paths", 400));
+  assert.ok(existsSync(join(ws, "processes", "order.bpmn")));
+  assert.ok(existsSync(join(ws, "bpmiq.yml")));
+});
+
+test("renameModel: a failed file rename keeps an OPEN model's live state under its old name", async () => {
+  const ws = workspace();
+  const spy = renameDeps({ live: { "acme/models/processes/order.bpmn": "<bpmn>unsaved</bpmn>" } });
+  // a read-only folder makes the fs rename fail AFTER the retire
+  const failing: RenameDeps = { ...spy.deps(ws), liveDocs: () => [] };
+  chmodSync(join(ws, "processes"), 0o555);
+  try {
+    await assert.rejects(() => renameModel(REPO, ws, { path: "processes/order.bpmn", name: "o2c" }, "Petra", failing));
+  } finally {
+    chmodSync(join(ws, "processes"), 0o755);
+  }
+  assert.deepEqual(spy.lineage.saved, ["acme/models/processes/order.bpmn"], "the edits stay with the old room");
+  assert.ok(existsSync(join(ws, "processes", "order.bpmn")));
+  assert.equal(spy.ws.released, 1, "the new room is released again");
+});
+
+test("renameModel: a renamed PROCESS takes its todos along (a background job); a decision has none", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn/>");
+  const moved: Array<{ from: string; to: { process: string; file: string } }> = [];
+  const job = {
+    id: "move:order",
+    kind: "move",
+    from: "order",
+    to: "o2c",
+    total: -1,
+    done: 0,
+    failed: 0,
+    state: "queued",
+  } as const;
+  const deps = (): RenameDeps => ({
+    ...renameDeps().deps(ws),
+    todos: {
+      move: (from, to) => {
+        moved.push({ from, to });
+        return job;
+      },
+    },
+  });
+  const out = await renameModel(REPO, ws, { path: "processes/order.bpmn", name: "o2c" }, "Petra", deps());
+  assert.deepEqual(moved, [{ from: "order", to: { process: "o2c", file: "processes/o2c.bpmn" } }]);
+  assert.deepEqual(out.todoJob, job);
+  const dmn = await renameModel(REPO, ws, { path: "processes/credit.dmn", name: "limit" }, "Petra", deps());
+  assert.equal(dmn.todoJob, undefined);
+  assert.equal(moved.length, 1);
+});
+
+test("deleteModels: closeTodos closes the deleted PROCESSES' todos — only when asked", async () => {
+  const ws = workspace();
+  writeFileSync(join(ws, "processes", "credit.dmn"), "<dmn/>");
+  const closed: string[] = [];
+  const todos = {
+    close: (from: string) => {
+      closed.push(from);
+      return { id: `close:${from}`, kind: "close", from, total: -1, done: 0, failed: 0, state: "queued" } as const;
+    },
+  };
+  const kept = await deleteModels(
+    REPO,
+    ws,
+    { paths: ["processes/credit.dmn"] },
+    { liveDocs: () => [], dropLineage: () => {}, todos },
+  );
+  assert.equal(kept.todoJobs, undefined);
+  const out = await deleteModels(
+    REPO,
+    ws,
+    { paths: ["processes/order.bpmn", "processes/subprocesses/check-credit.bpmn"], closeTodos: true },
+    { liveDocs: () => [], dropLineage: () => {}, todos },
+  );
+  assert.deepEqual(closed, ["order", "check-credit"]);
+  assert.deepEqual(
+    out.todoJobs?.map((j) => j.id),
+    ["close:order", "close:check-credit"],
   );
 });

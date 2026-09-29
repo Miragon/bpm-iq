@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@bpmiq/ui-kit/components/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@bpmiq/ui-kit/components/table";
@@ -33,19 +34,31 @@ import {
   ChartNetwork,
   ChevronDown,
   ChevronUp,
+  Copy,
   Ellipsis,
   FileText,
   Folder,
   FolderInput,
   FolderPlus,
+  Pencil,
   Plus,
   Shapes,
   StickyNote,
   Table2,
+  Trash2,
   Users,
   Workflow,
 } from "lucide-react";
-import { type ComponentType, type DragEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type ComponentType,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { AssistMenu } from "@/components/assist-menu";
@@ -53,10 +66,13 @@ import { CreateDecisionDialog } from "@/components/create-decision-dialog";
 import { CreateFolderDialog } from "@/components/create-folder-dialog";
 import { CreateNotationModelDialog } from "@/components/create-notation-model-dialog";
 import { CreateProcessDialog } from "@/components/create-process-dialog";
+import { DeleteModelsDialog } from "@/components/delete-models-dialog";
+import { DuplicateModelDialog } from "@/components/duplicate-model-dialog";
 import { type MovableModel, MoveModelDialog } from "@/components/move-model-dialog";
 import { ReleaseDialog } from "@/components/release-dialog";
+import { RenameModelDialog } from "@/components/rename-model-dialog";
 import { SyncRepoDialog } from "@/components/sync-repo-dialog";
-import { type ProcessInfo } from "@/lib/api";
+import { type ModelTarget, modelTarget, useOpenModel } from "@/lib/model-target";
 import { useDecisions, useFolders, useModels, useMoveModels, useProcesses, useRepos, useSyncRepo } from "@/lib/queries";
 import { webPlugin } from "@/notations/registry";
 
@@ -72,6 +88,8 @@ const CREATABLE_NOTATIONS = NOTATIONS.filter((n) => hasTemplate(n.id) && n.id !=
  *  falls back to the neutral Shapes, so a new registry entry never ships
  *  icon-less */
 const NOTATION_ICONS = new Map<string, ComponentType<{ className?: string }>>([
+  ["bpmn", Workflow],
+  ["dmn", Table2],
   ["wardley", ChartNetwork],
   ["team-topology", Users],
   ["event-storming", StickyNote],
@@ -81,7 +99,7 @@ const NOTATION_ICONS = new Map<string, ComponentType<{ className?: string }>>([
 
 /**
  * The table features this route opts into — v9 ships nothing but the core, so
- * anything beyond plain rows is registered here. Sorting only: the process
+ * anything beyond plain rows is registered here. Sorting only: the model
  * table sorts client-side over one page of rows. The two sort fns are the ones
  * `sortFn: "auto"` resolves to for our columns (strings — names and file
  * paths); numeric columns fall back to the built-in basic comparator, which
@@ -92,6 +110,24 @@ const features = tableFeatures({
   sortedRowModel: createSortedRowModel(),
   sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
 });
+
+/** one model row of the listing, whatever its notation — processes,
+ *  decisions and every other notation are ONE list, so a sort by name, file,
+ *  type or status orders them together (they used to be three blocks, and
+ *  only the processes followed the sort) */
+interface ModelRow {
+  /** repo-relative path of the model file */
+  path: string;
+  id: string;
+  name: string;
+  notation: string;
+  folder: string;
+  dirty: boolean;
+  liveSessions: number;
+}
+
+/** the Type column: the notation's registry label */
+const typeLabel = (notation: string): string => byId(notation)?.label ?? notation;
 
 /** one sub-folder row of the current directory, with aggregated child stats */
 interface FolderRow {
@@ -109,11 +145,23 @@ const parentOf = (path: string): string => (path.includes("/") ? path.slice(0, p
 /** DOM id of a folder row — the just-created one is scrolled into view */
 const folderRowId = (path: string): string => `folder-row:${path}`;
 
+/** DOM id of a model row — a duplicated or renamed one is scrolled into view */
+const modelRowId = (path: string): string => `model-row:${path}`;
+
 /** the drag payload of a model row (#182) — folder rows and the breadcrumb take it.
- *  It names its repo: a row dragged in from ANOTHER repo's window must not move
+ *  A row that is part of the selection drags the whole selection (#210). It
+ *  names its repo: a row dragged in from ANOTHER repo's window must not move
  *  whatever sits at the same path here */
 const DRAG_TYPE = "application/x-bpmiq-model";
-type DragPayload = MovableModel & { repo: string };
+type DragPayload = { repo: string; models: MovableModel[] };
+
+/** one model row of the current level, whatever its kind — the unit the
+ *  selection, the row menu and the dialogs work on */
+interface VisibleModel {
+  path: string;
+  target: ModelTarget;
+  movable: MovableModel;
+}
 
 /** what a move needs of any model row (process rows carry their path as `bpmn`) */
 const movable = (m: { name: string; folder: string; liveSessions: number }, path: string): MovableModel => ({
@@ -165,9 +213,30 @@ export function ProcessList() {
   }, [createdFolder]);
   // moving models (#182): the "Move to…" dialog, and drag & drop of a model
   // row onto a folder row or a breadcrumb segment
-  const [moving, setMoving] = useState<MovableModel | null>(null);
+  const [moving, setMoving] = useState<MovableModel[] | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const move = useMoveModels(repo);
+  // the row actions (#208–#210): one dialog at a time
+  const [renaming, setRenaming] = useState<ModelTarget | null>(null);
+  const [duplicating, setDuplicating] = useState<ModelTarget | null>(null);
+  const [deleting, setDeleting] = useState<ModelTarget[] | null>(null);
+  const openModel = useOpenModel(repo);
+  // a duplicated or renamed model's row is marked for a moment (#181's idiom)
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  useEffect(() => {
+    if (!highlighted) return;
+    document.getElementById(modelRowId(highlighted))?.scrollIntoView({ block: "nearest" });
+    const timer = setTimeout(() => setHighlighted(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlighted]);
+  // multi-select (#210): selected model paths of THIS level; shift-click
+  // extends from the last toggled row
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const anchorRef = useRef<string | null>(null);
+  useEffect(() => {
+    setSelected(new Set());
+    anchorRef.current = null;
+  }, [dir]);
 
   // models (processes AND decisions) with unreleased live edits the reset
   // would discard, and repos being actively edited (Variant A: a reset can't
@@ -214,16 +283,22 @@ export function ProcessList() {
 
   const allFolders = useMemo(() => [...folderSet].sort(), [folderSet]);
 
-  // the view stays on this level; the toast leads to the model's new home
-  const announceMove = (modelName: string, folder: string) =>
-    toast.success(`Moved '${modelName}' to ${folder ? `${folder}/` : "the root"}`, {
+  // the view stays on this level; the toast leads to the models' new home
+  const announceMove = (models: MovableModel[], folder: string) => {
+    const what = models.length === 1 ? `'${models[0]?.name}'` : `${models.length} models`;
+    toast.success(`Moved ${what} to ${folder ? `${folder}/` : "the root"}`, {
       action: {
         label: "Open folder",
         onClick: () => void navigate({ to: "/r/$owner/$repo", params: { owner, repo: name }, search: { dir: folder } }),
       },
     });
+  };
   const dragModel = (e: DragEvent, model: MovableModel) => {
-    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ ...model, repo } satisfies DragPayload));
+    // a selected row carries the whole selection along
+    const models = selected.has(model.path)
+      ? visibleModels.filter((m) => selected.has(m.path)).map((m) => m.movable)
+      : [model];
+    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ repo, models } satisfies DragPayload));
     e.dataTransfer.effectAllowed = "move";
   };
   const dropInto = (folder: string) => ({
@@ -239,24 +314,47 @@ export function ProcessList() {
       setDropTarget(null);
       if (!raw) return;
       e.preventDefault();
-      const { repo: from, ...model } = JSON.parse(raw) as DragPayload;
-      if (from !== repo || model.folder === folder) return;
+      const payload = JSON.parse(raw) as DragPayload;
+      const models = (payload.models ?? []).filter((m) => m.folder !== folder);
+      if (payload.repo !== repo || models.length === 0) return;
       move.mutate(
-        { paths: [model.path], folder },
-        { onSuccess: () => announceMove(model.name, folder), onError: (err) => toast.error(err.message) },
+        { paths: models.map((m) => m.path), folder },
+        {
+          onSuccess: () => {
+            setSelected(new Set());
+            announceMove(models, folder);
+          },
+          onError: (err) => toast.error(err.message),
+        },
       );
     },
   });
 
-  const visible = useMemo(() => list.filter((p) => p.folder === dir), [list, dir]);
-  const visibleDecisions = useMemo(
-    () => decisions.filter((d) => d.folder === dir).sort((a, b) => a.name.localeCompare(b.name)),
-    [decisions, dir],
+  // the models of THIS level, every notation in one list (the table sorts it)
+  const rows = useMemo<ModelRow[]>(
+    () =>
+      [
+        ...list.map((p) => ({ ...p, path: p.bpmn, notation: "bpmn" })),
+        ...decisions.map((d) => ({ ...d, notation: "dmn" })),
+        ...otherModels,
+      ]
+        .filter((m) => m.folder === dir)
+        .map(({ path, id, name, notation, folder, dirty, liveSessions }) => ({
+          path,
+          id,
+          name,
+          notation,
+          folder,
+          dirty,
+          liveSessions,
+        })),
+    [list, decisions, otherModels, dir],
   );
-  const visibleModels = useMemo(
-    () => otherModels.filter((m) => m.folder === dir).sort((a, b) => a.name.localeCompare(b.name)),
-    [otherModels, dir],
-  );
+  /** a process opens on its /p/<id> route, every other model on /f/<path> */
+  const openRow = (row: ModelRow) =>
+    row.notation === "bpmn"
+      ? navigate({ to: "/r/$owner/$repo/p/$processId", params: { owner, repo: name, processId: row.id } })
+      : navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: row.path } });
   const segments = dir === "" ? [] : dir.split("/");
 
   const runSync = () =>
@@ -282,77 +380,86 @@ export function ProcessList() {
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
 
-  const columns = useMemo<ColumnDef<typeof features, ProcessInfo>[]>(
+  const columns = useMemo<ColumnDef<typeof features, ModelRow>[]>(
     () => [
       {
         accessorKey: "name",
-        header: ({ column }) => <SortHeader column={column}>Process</SortHeader>,
-        cell: ({ row }) => (
-          <Link
-            to="/r/$owner/$repo/p/$processId"
-            params={{ owner, repo: name, processId: row.original.id }}
-            className="font-medium hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {row.original.name}
-          </Link>
-        ),
+        header: ({ column }) => <SortHeader column={column}>Name</SortHeader>,
+        cell: ({ row }) => {
+          const m = row.original;
+          // the same icon the "New" menu shows for this notation
+          const Icon = NOTATION_ICONS.get(m.notation) ?? Shapes;
+          const link = { className: "flex items-center gap-2 font-medium hover:underline" };
+          const body = (
+            <>
+              <Icon className="text-muted-foreground size-4 shrink-0" />
+              {m.name}
+            </>
+          );
+          return m.notation === "bpmn" ? (
+            <Link
+              to="/r/$owner/$repo/p/$processId"
+              params={{ owner, repo: name, processId: m.id }}
+              {...link}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {body}
+            </Link>
+          ) : (
+            <Link
+              to="/r/$owner/$repo/f/$"
+              params={{ owner, repo: name, _splat: m.path }}
+              {...link}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {body}
+            </Link>
+          );
+        },
       },
       {
-        accessorKey: "bpmn",
+        accessorKey: "path",
         header: ({ column }) => <SortHeader column={column}>File</SortHeader>,
         cell: ({ getValue }) => <span className="text-muted-foreground font-mono text-xs">{getValue<string>()}</span>,
       },
       {
-        id: "models",
-        header: "Models",
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.models.length === 0 ? (
-            <span className="text-muted-foreground">—</span>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {row.original.models.map((m) => (
-                <Link
-                  key={m.path}
-                  to="/r/$owner/$repo/f/$"
-                  params={{ owner, repo: name, _splat: m.path }}
-                  title={m.path}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Badge variant="outline" className="hover:bg-accent">
-                    {m.notation}: {m.path.split("/").pop()}
-                  </Badge>
-                </Link>
-              ))}
-            </div>
-          ),
+        id: "type",
+        accessorFn: (m) => typeLabel(m.notation),
+        header: ({ column }) => <SortHeader column={column}>Type</SortHeader>,
+        cell: ({ getValue }) => <Badge variant="outline">{getValue<string>()}</Badge>,
       },
       {
         id: "status",
-        header: "Status",
-        accessorFn: (p) => (p.dirty ? 1 : 0) + (p.liveSessions > 0 ? 1 : 0),
+        accessorFn: (m) => (m.dirty ? 1 : 0) + (m.liveSessions > 0 ? 1 : 0),
+        header: ({ column }) => <SortHeader column={column}>Status</SortHeader>,
         cell: ({ row }) => {
-          const p = row.original;
-          if (!p.dirty && p.liveSessions === 0) return <span className="text-muted-foreground">—</span>;
+          const m = row.original;
+          if (!m.dirty && m.liveSessions === 0) return <span className="text-muted-foreground">—</span>;
           return (
             <div className="flex flex-wrap gap-1.5">
-              {p.dirty && <Badge variant="warning">live changes</Badge>}
-              {p.liveSessions > 0 && <Badge>{p.liveSessions} active</Badge>}
+              {m.dirty && <Badge variant="warning">live changes</Badge>}
+              {m.liveSessions > 0 && <Badge>{m.liveSessions} active</Badge>}
             </div>
           );
         },
       },
       {
-        id: "analyse",
+        id: "actions",
         header: "",
         enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-0.5">
-            <AssistMenu repo={`${owner}/${name}`} path={row.original.bpmn} notation="bpmn" variant="row" />
-            <ModelRowMenu onMove={() => setMoving(movable(row.original, row.original.bpmn))} />
-          </div>
-        ),
+        cell: ({ row }) => {
+          const m = row.original;
+          // the same gate as the editor toolbar: a notation without a widget
+          // never offers the handoff
+          const assist =
+            m.notation === "bpmn" || m.notation === "dmn" ? m.notation : webPlugin(m.notation)?.assistNotation;
+          return (
+            <div className="flex items-center gap-0.5">
+              {assist && <AssistMenu repo={`${owner}/${name}`} path={m.path} notation={assist} variant="row" />}
+              <ModelRowMenu actions={rowActionsRef.current(m.path)} />
+            </div>
+          );
+        },
       },
     ],
     [owner, name],
@@ -360,14 +467,98 @@ export function ProcessList() {
 
   const table = useTable({
     features,
-    data: visible,
+    data: rows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
   });
 
-  const empty =
-    childFolders.length === 0 && visible.length === 0 && visibleDecisions.length === 0 && visibleModels.length === 0;
+  // every model row of this level in DISPLAY (= sorted) order — shift-click ranges over it
+  const tableRows = table.getRowModel().rows;
+  const visibleModels: VisibleModel[] = tableRows.map(({ original: m }) => ({
+    path: m.path,
+    target: modelTarget(m.path, m),
+    movable: movable(m, m.path),
+  }));
+  // folders stay on top (file-manager convention) and follow a NAME sort's direction
+  const nameSort = sorting[0]?.id === "name" ? sorting[0] : undefined;
+  const folderRows = nameSort?.desc ? [...childFolders].reverse() : childFolders;
+  const byPath = new Map(visibleModels.map((m) => [m.path, m]));
+  const selectedModels = visibleModels.filter((m) => selected.has(m.path));
+
+  const toggle = (path: string, range: boolean) => {
+    const order = visibleModels.map((m) => m.path);
+    const anchor = anchorRef.current;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      // a range takes the state the clicked row gets (Gmail's rule)
+      const on = !prev.has(path);
+      const here = order.indexOf(path);
+      const there = range && anchor ? order.indexOf(anchor) : -1;
+      const [from, to] = there === -1 ? [here, here] : [Math.min(here, there), Math.max(here, there)];
+      for (const p of order.slice(from, to + 1)) {
+        if (on) next.add(p);
+        else next.delete(p);
+      }
+      return next;
+    });
+    anchorRef.current = path;
+  };
+  const allSelected = visibleModels.length > 0 && selectedModels.length === visibleModels.length;
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(visibleModels.map((m) => m.path)));
+  // Escape drops the selection — unless a dialog is open (it closes first)
+  const dialogOpen = Boolean(renaming || duplicating || deleting || moving);
+  useEffect(() => {
+    if (selected.size === 0 || dialogOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(new Set());
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selected.size, dialogOpen]);
+
+  // the row ⋯ menu's actions for a model path; read through a ref so the
+  // memoized process columns always reach the CURRENT rows and setters
+  const rowActions = (path: string): RowActions => {
+    const m = byPath.get(path);
+    return {
+      onRename: () => m && setRenaming(m.target),
+      onDuplicate: () => m && setDuplicating(m.target),
+      onMove: () => m && setMoving([m.movable]),
+      onDelete: () => m && setDeleting([m.target]),
+    };
+  };
+  const rowActionsRef = useRef(rowActions);
+  rowActionsRef.current = rowActions;
+  // ids already taken per notation — a duplicate's suggested name avoids them
+  const takenIds = (notation: string): Set<string> =>
+    new Set(
+      notation === "bpmn"
+        ? list.map((p) => p.id)
+        : notation === "dmn"
+          ? decisions.map((d) => d.id)
+          : otherModels.filter((m) => m.notation === notation).map((m) => m.id),
+    );
+
+  /** the leading selection cell of a model row — the whole cell is the hit
+   *  area; labelled by FILE name (order.bpmn and order.storm share a name) */
+  const selectCell = (path: string) => (
+    <TableCell
+      className="w-8 cursor-default pr-0"
+      onClick={(e) => {
+        e.stopPropagation();
+        toggle(path, e.shiftKey);
+      }}
+    >
+      <SelectBox
+        checked={selected.has(path)}
+        label={`Select ${path.split("/").pop() ?? path}`}
+        onToggle={(shift) => toggle(path, shift)}
+      />
+    </TableCell>
+  );
+
+  const empty = childFolders.length === 0 && rows.length === 0;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
@@ -506,6 +697,16 @@ export function ProcessList() {
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
                 <TableRow key={hg.id} className="hover:bg-transparent">
+                  <TableHead className="w-8 pr-0">
+                    {visibleModels.length > 0 && (
+                      <SelectBox
+                        checked={allSelected}
+                        indeterminate={selectedModels.length > 0 && !allSelected}
+                        label={allSelected ? "Clear the selection" : "Select every model in this folder"}
+                        onToggle={toggleAll}
+                      />
+                    )}
+                  </TableHead>
                   {hg.headers.map((header) => (
                     <TableHead key={header.id}>
                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
@@ -515,7 +716,7 @@ export function ProcessList() {
               ))}
             </TableHeader>
             <TableBody>
-              {childFolders.map((f) => (
+              {folderRows.map((f) => (
                 <TableRow
                   key={`folder:${f.path}`}
                   id={folderRowId(f.path)}
@@ -528,6 +729,7 @@ export function ProcessList() {
                     navigate({ to: "/r/$owner/$repo", params: { owner, repo: name }, search: { dir: f.path } })
                   }
                 >
+                  <TableCell className="w-8 pr-0" />
                   <TableCell>
                     <Link
                       to="/r/$owner/$repo"
@@ -545,7 +747,7 @@ export function ProcessList() {
                   </TableCell>
                   <TableCell>
                     <span className="text-muted-foreground">
-                      {f.modelCount === 0 ? "empty" : `${f.modelCount} model${f.modelCount === 1 ? "" : "s"}`}
+                      Folder · {f.modelCount === 0 ? "empty" : `${f.modelCount} model${f.modelCount === 1 ? "" : "s"}`}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -558,121 +760,26 @@ export function ProcessList() {
                   <TableCell />
                 </TableRow>
               ))}
-              {table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="cursor-pointer"
-                  draggable
-                  onDragStart={(e) => dragModel(e, movable(row.original, row.original.bpmn))}
-                  onDragEnd={() => setDropTarget(null)}
-                  onClick={() =>
-                    navigate({
-                      to: "/r/$owner/$repo/p/$processId",
-                      params: { owner, repo: name, processId: row.original.id },
-                    })
-                  }
-                >
-                  {row.getAllCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                  ))}
-                </TableRow>
-              ))}
-              {visibleDecisions.map((d) => (
-                <TableRow
-                  key={`decision:${d.path}`}
-                  className="cursor-pointer"
-                  draggable
-                  onDragStart={(e) => dragModel(e, movable(d, d.path))}
-                  onDragEnd={() => setDropTarget(null)}
-                  onClick={() => navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: d.path } })}
-                >
-                  <TableCell>
-                    <Link
-                      to="/r/$owner/$repo/f/$"
-                      params={{ owner, repo: name, _splat: d.path }}
-                      className="flex items-center gap-2 font-medium hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Table2 className="text-muted-foreground size-4" />
-                      {d.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-muted-foreground font-mono text-xs">{d.path}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">DMN</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {!d.dirty && d.liveSessions === 0 ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {d.dirty && <Badge variant="warning">live changes</Badge>}
-                        {d.liveSessions > 0 && <Badge>{d.liveSessions} active</Badge>}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-0.5">
-                      <AssistMenu repo={repo} path={d.path} notation="dmn" variant="row" />
-                      <ModelRowMenu onMove={() => setMoving(movable(d, d.path))} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {visibleModels.map((m) => {
-                // the same icon the "New" menu showed for this notation
-                const Icon = NOTATION_ICONS.get(m.notation) ?? Shapes;
-                // the same gate as the editor toolbar: a notation without a
-                // widget never offers the handoff
-                const assistNotation = webPlugin(m.notation)?.assistNotation;
+              {tableRows.map((row) => {
+                const m = row.original;
                 return (
                   <TableRow
                     key={`model:${m.path}`}
-                    className="cursor-pointer"
+                    id={modelRowId(m.path)}
+                    className={cn(
+                      "cursor-pointer transition-colors duration-700",
+                      highlighted === m.path && "bg-primary/10",
+                    )}
+                    data-state={selected.has(m.path) ? "selected" : undefined}
                     draggable
                     onDragStart={(e) => dragModel(e, movable(m, m.path))}
                     onDragEnd={() => setDropTarget(null)}
-                    onClick={() =>
-                      navigate({ to: "/r/$owner/$repo/f/$", params: { owner, repo: name, _splat: m.path } })
-                    }
+                    onClick={() => void openRow(m)}
                   >
-                    <TableCell>
-                      <Link
-                        to="/r/$owner/$repo/f/$"
-                        params={{ owner, repo: name, _splat: m.path }}
-                        className="flex items-center gap-2 font-medium hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Icon className="text-muted-foreground size-4" />
-                        {m.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-muted-foreground font-mono text-xs">{m.path}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{byId(m.notation)?.label ?? m.notation}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {!m.dirty && m.liveSessions === 0 ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {m.dirty && <Badge variant="warning">live changes</Badge>}
-                          {m.liveSessions > 0 && <Badge>{m.liveSessions} active</Badge>}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-0.5">
-                        {assistNotation && (
-                          <AssistMenu repo={repo} path={m.path} notation={assistNotation} variant="row" />
-                        )}
-                        <ModelRowMenu onMove={() => setMoving(movable(m, m.path))} />
-                      </div>
-                    </TableCell>
+                    {selectCell(m.path)}
+                    {row.getAllCells().map((cell) => (
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    ))}
                   </TableRow>
                 );
               })}
@@ -758,22 +865,150 @@ export function ProcessList() {
       {moving && (
         <MoveModelDialog
           repo={repo}
-          model={moving}
+          models={moving}
           folders={allFolders}
           onClose={() => setMoving(null)}
           onMoved={(folder) => {
             setMoving(null);
-            announceMove(moving.name, folder);
+            setSelected(new Set());
+            announceMove(moving, folder);
           }}
+        />
+      )}
+      {renaming && (
+        <RenameModelDialog
+          repo={repo}
+          model={renaming}
+          onClose={() => setRenaming(null)}
+          onRenamed={(result) => {
+            setRenaming(null);
+            setSelected((prev) => new Set([...prev].filter((p) => p !== renaming.path)));
+            setHighlighted(result.path);
+          }}
+        />
+      )}
+      {duplicating && (
+        <DuplicateModelDialog
+          repo={repo}
+          model={duplicating}
+          takenIds={takenIds(duplicating.notation)}
+          onClose={() => setDuplicating(null)}
+          onDuplicated={({ model }) => {
+            setDuplicating(null);
+            setHighlighted(model.path);
+            toast.success(`Duplicated as '${model.id}'`, {
+              action: { label: "Open", onClick: () => void openModel(model.path) },
+            });
+          }}
+        />
+      )}
+      {deleting && (
+        <DeleteModelsDialog
+          repo={repo}
+          models={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            const gone = deleting;
+            setDeleting(null);
+            setSelected(new Set());
+            toast.success(gone.length === 1 ? `Deleted '${gone[0]?.id}'` : `Deleted ${gone.length} models`, {
+              description: "The deletion ships with your next release.",
+            });
+          }}
+        />
+      )}
+      {selectedModels.length > 0 && !dialogOpen && (
+        <SelectionBar
+          count={selectedModels.length}
+          onMove={() => setMoving(selectedModels.map((m) => m.movable))}
+          onDelete={() => setDeleting(selectedModels.map((m) => m.target))}
+          onClear={() => setSelected(new Set())}
         />
       )}
     </div>
   );
 }
 
+/** the bulk action bar (#210) — floats over the list while models are
+ *  selected: "N selected · Move to… · Delete… · Clear" */
+function SelectionBar({
+  count,
+  onMove,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  onMove: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      role="toolbar"
+      aria-label="Selected models"
+      className="bg-background animate-in fade-in slide-in-from-bottom-2 fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-xl border p-1.5 pl-3.5 shadow-lg motion-reduce:animate-none"
+    >
+      <span className="text-sm font-medium tabular-nums" role="status">
+        {count} selected
+      </span>
+      <span className="bg-border mx-1.5 h-5 w-px" aria-hidden="true" />
+      <Button variant="ghost" size="sm" onClick={onMove}>
+        <FolderInput /> Move to…
+      </Button>
+      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onDelete}>
+        <Trash2 /> Delete…
+      </Button>
+      <span className="bg-border mx-1.5 h-5 w-px" aria-hidden="true" />
+      <Button variant="ghost" size="sm" title="Clear the selection (Esc)" onClick={onClear}>
+        Clear
+      </Button>
+    </div>
+  );
+}
+
+/** a native checkbox that also reports the shift key (range selection) and
+ *  shows the mixed state of the select-all box */
+function SelectBox({
+  checked,
+  indeterminate = false,
+  label,
+  onToggle,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  label: string;
+  onToggle: (shift: boolean) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="accent-primary size-4 cursor-pointer align-middle"
+      checked={checked}
+      aria-label={label}
+      onClick={(e: MouseEvent<HTMLInputElement>) => {
+        e.stopPropagation();
+        onToggle(e.shiftKey);
+      }}
+      onChange={() => undefined}
+    />
+  );
+}
+
+interface RowActions {
+  onRename: () => void;
+  onDuplicate: () => void;
+  onMove: () => void;
+  onDelete: () => void;
+}
+
 /** the per-row "⋯" menu of a model row — rows navigate on click, so neither
  *  the trigger nor the (portalled) content may let a click bubble into it */
-function ModelRowMenu({ onMove }: { onMove: () => void }) {
+function ModelRowMenu({ actions }: { actions: RowActions }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -788,22 +1023,32 @@ function ModelRowMenu({ onMove }: { onMove: () => void }) {
           <Ellipsis />
         </Button>
       </DropdownMenuTrigger>
-      {/* the item opens a DIALOG — mount it a tick after radix finished its
+      {/* the items open DIALOGS — mount them a tick after radix finished its
           close/focus handling (the New menu's convention) */}
       <DropdownMenuContent
         align="end"
         onClick={(e) => e.stopPropagation()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        <DropdownMenuItem onSelect={() => setTimeout(onMove, 0)}>
+        <DropdownMenuItem onSelect={() => setTimeout(actions.onRename, 0)}>
+          <Pencil /> Rename…
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setTimeout(actions.onDuplicate, 0)}>
+          <Copy /> Duplicate…
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setTimeout(actions.onMove, 0)}>
           <FolderInput /> Move to…
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => setTimeout(actions.onDelete, 0)}>
+          <Trash2 /> Delete…
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function SortHeader({ column, children }: { column: Column<typeof features, ProcessInfo>; children: ReactNode }) {
+function SortHeader({ column, children }: { column: Column<typeof features, ModelRow>; children: ReactNode }) {
   const sorted = column.getIsSorted();
   return (
     <Button
