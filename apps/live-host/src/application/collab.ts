@@ -35,6 +35,7 @@ import {
 } from "../domain/rooms.ts";
 import { growsDocument } from "../domain/sync-message.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
+import type { RoomMigrations } from "./room-migrations.ts";
 
 /** per-message cap for doc-exempt (awareness/stateless) traffic — a real
  *  cursor+selection state is < 2 KB, this is headroom, not a target */
@@ -64,6 +65,9 @@ export interface CollabDeps {
    * to the registry resolution (domain/rooms.ts docCodecForPath: undefined
    * for every shipped notation, the lane is dark); tests inject their own */
   docCodec?: (path: string) => DocCodec | undefined;
+  /** rename bookkeeping (#208): a retired room never persists again, a held
+   *  room's load waits for its migration — absent = no renames in flight */
+  migrations?: Pick<RoomMigrations, "isRetired" | "forget" | "settled">;
 }
 
 export function makeCollabHooks(deps: CollabDeps) {
@@ -80,6 +84,7 @@ export function makeCollabHooks(deps: CollabDeps) {
     publicUrl,
     liveDocs,
     wsTickets,
+    migrations,
   } = deps;
 
   /**
@@ -138,6 +143,9 @@ export function makeCollabHooks(deps: CollabDeps) {
     },
 
     async onLoadDocument({ document, documentName }: { document: Y.Doc; documentName: string }) {
+      // a rename is moving this document here right now (#208) — wait for its
+      // file + lineage instead of seeding a second history from a half state
+      await migrations?.settled(documentName);
       const disk = await resolveRoom(documentName);
       if (!existsSync(disk)) throw new Error(`no such file: ${documentName}`);
       // NB docGuard.load() below must stay AFTER every throw site in this hook: a
@@ -259,6 +267,9 @@ export function makeCollabHooks(deps: CollabDeps) {
 
     // Debounced by Hocuspocus itself (default: 2s after last change, max 10s).
     async onStoreDocument({ document, documentName }: { document: Y.Doc; documentName: string }) {
+      // renamed away (#208): its state moved to the new room — writing it
+      // through would recreate the old file, persisting it the old lineage row
+      if (migrations?.isRetired(documentName)) return;
       const update = Y.encodeStateAsUpdate(document);
       docGuard.stored(documentName, update.length); // re-anchor the ingest guard's estimate
       if (update.length > maxDocBytes) {
@@ -287,6 +298,7 @@ export function makeCollabHooks(deps: CollabDeps) {
     // without this, liveDocs only ever grows and the live counters stay wrong forever
     async afterUnloadDocument({ documentName }: { documentName: string }) {
       liveDocs.delete(documentName);
+      migrations?.forget(documentName);
       docGuard.drop(documentName); // symmetric with load() — the guard map must not grow
       console.log(`unloaded: ${documentName}`);
     },

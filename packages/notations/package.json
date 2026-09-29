@@ -13,6 +13,7 @@
     "./extract": "./extract.ts",
     "./derive": "./derive.ts",
     "./refs": "./refs.ts",
+    "./retarget": "./retarget.ts",
     "./templates": "./templates.ts",
     "./content": "./content.ts",
     "./cli": "./cli.ts",

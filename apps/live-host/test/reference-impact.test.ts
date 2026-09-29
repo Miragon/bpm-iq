@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { referenceImpact } from "../src/application/reference-impact.ts";
+import { referenceImpact, referencesTo } from "../src/application/reference-impact.ts";
 
 const CALLER = `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
@@ -49,4 +49,18 @@ test("referenceImpact: unreferenced files and non-content repos degrade to ''", 
   assert.equal(await referenceImpact(ws, ["processes/order.bpmn"]), "", "order.bpmn has no incoming refs");
   const bare = mkdtempSync(join(tmpdir(), "bpm-refimpact-bare-"));
   assert.equal(await referenceImpact(bare, ["anything.bpmn"]), "");
+});
+
+test("referencesTo: who points at each model — what a rename rewrites and a delete leaves dangling (#208/#210)", async () => {
+  const ws = repo();
+  assert.deepEqual(await referencesTo(ws, ["processes/credit-check.dmn", "processes/order.bpmn", "nope.bpmn"]), [
+    {
+      path: "processes/credit-check.dmn",
+      referencedBy: [{ path: "processes/order.bpmn", element: "Rule_1", rel: "decides" }],
+    },
+    { path: "processes/order.bpmn", referencedBy: [] },
+    { path: "nope.bpmn", referencedBy: [] },
+  ]);
+  const plain = mkdtempSync(join(tmpdir(), "bpm-refimpact-none-"));
+  assert.deepEqual(await referencesTo(plain, ["x.bpmn"]), [{ path: "x.bpmn", referencedBy: [] }]);
 });

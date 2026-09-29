@@ -9,9 +9,28 @@
  * Degrades quietly: no config, no refs, unreadable files → empty string. A
  * release must never fail because its commentary could not be produced.
  */
+import type { ModelReferencesWire } from "@bpmiq/contracts/live-host";
 import { byExtension, modelStem } from "@bpmiq/notations";
 
 import { buildRepoIndex, loadContentConfig } from "../repos/content.ts";
+
+/**
+ * Who points at each of `paths` (GET …/references) — the incoming half of the
+ * repo index over the workspace tree: what a rename rewrites (#208) and what
+ * a delete leaves dangling (#210). A path that is no model has no referrers.
+ */
+export async function referencesTo(workspace: string, paths: string[]): Promise<ModelReferencesWire[]> {
+  const cfg = loadContentConfig(workspace);
+  const index = cfg ? await buildRepoIndex(workspace, cfg) : undefined;
+  return paths.map((path) => ({
+    path,
+    referencedBy: (index?.incoming(path) ?? []).map((r) => ({
+      path: r.from.path,
+      ...(r.from.element ? { element: r.from.element } : {}),
+      rel: r.rel,
+    })),
+  }));
+}
 
 export async function referenceImpact(workspace: string, files: string[]): Promise<string> {
   try {

@@ -10,17 +10,24 @@ import type {
   CreateProcessBody,
   CreateTodoBody,
   DecisionInfo,
+  DeleteModelsBody,
+  DeleteModelsResult,
+  DuplicateModelBody,
+  DuplicateModelResult,
   FileAtCommitWire,
   FileCommitWire,
   FolderListWire,
   FolderWire,
   Me,
   ModelInfo,
+  ModelReferencesWire,
   MoveModelsBody,
   MoveModelsResult,
   ProcessInfo,
   ReleaseFilesBody,
   ReleaseResult,
+  RenameModelBody,
+  RenameModelResult,
   RepoInfo,
   ResolveConflictBody,
   ResolveConflictResult,
@@ -42,6 +49,10 @@ export type {
   CreateProcessBody,
   CreateTodoBody,
   DecisionInfo,
+  DeleteModelsBody,
+  DeleteModelsResult,
+  DuplicateModelBody,
+  DuplicateModelResult,
   FileAtCommitWire,
   FileCommitWire,
   FolderListWire,
@@ -49,11 +60,15 @@ export type {
   Me,
   ModelInfo,
   ModelRef,
+  ModelReferencesWire,
   MoveModelsBody,
   MoveModelsResult,
   ProcessInfo,
+  ReferenceWire,
   ReleaseFilesBody,
   ReleaseResult,
+  RenameModelBody,
+  RenameModelResult,
   RepoInfo,
   ResolveConflictBody,
   ResolveConflictResult,
@@ -121,6 +136,30 @@ export const moveModels = (repo: string, body: MoveModelsBody): Promise<MoveMode
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+/** give a model a new id (= file stem); callers follow, an open model's editors too */
+export const renameModel = (repo: string, body: RenameModelBody): Promise<RenameModelResult> =>
+  api(`/api/repos/${repo}/rename`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+/** copy a model's live content into the same folder under a new id */
+export const duplicateModel = (repo: string, body: DuplicateModelBody): Promise<DuplicateModelResult> =>
+  api(`/api/repos/${repo}/duplicate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+/** delete model files, all or nothing (a decision's tests sidecar goes along) */
+export const deleteModels = (repo: string, body: DeleteModelsBody): Promise<DeleteModelsResult> =>
+  api(`/api/repos/${repo}/delete`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+/** which models point at each of `paths` */
+export const fetchReferences = (repo: string, paths: string[]): Promise<ModelReferencesWire[]> =>
+  api(`/api/repos/${repo}/references?${paths.map((p) => `path=${encodeURIComponent(p)}`).join("&")}`);
 /** hard-reset the repo's workspace onto origin/<default> — discards unreleased live edits */
 export const syncRepo = (repo: string): Promise<SyncResult> => api(`/api/repos/${repo}/sync`, { method: "POST" });
 export const releaseProcess = (repo: string, id: string): Promise<ReleaseResult> =>

@@ -461,3 +461,40 @@ test("reconcile / markReleased: never touch the in-place host checkout", async (
   assert.deepEqual(await wm.conflicts(repo("Miragon/bpm-iq")), []);
   await assert.rejects(wm.takeUpstream(repo("Miragon/bpm-iq"), "processes/a.bpmn"), /in-place host checkout/);
 });
+
+// ── the rename journal (#208) ───────────────────────────────────────────────
+
+test("recordRenames: a platform rename pairs its delete + add in changedFiles; chains collapse, a way back ends it", async () => {
+  const f = catchUpFixture({ "processes/a.bpmn": "a0", "processes/c.dmn": "c0", "processes/c.tests.yaml": "t0" });
+  const mv = (from: string, to: string) => {
+    f.write({ [to]: f.read(from), [from]: null });
+    return { from, to };
+  };
+  await f.wm.recordRenames(f.repo, [mv("processes/a.bpmn", "processes/b.bpmn")]);
+  await f.wm.recordRenames(f.repo, [
+    mv("processes/c.dmn", "processes/d.dmn"),
+    mv("processes/c.tests.yaml", "processes/d.tests.yaml"),
+  ]);
+  // a → b, then b → sub/b (a move): still ONE pair from the released path
+  await f.wm.recordRenames(f.repo, [mv("processes/b.bpmn", "processes/sub/b.bpmn")]);
+  assert.deepEqual(await f.wm.changedFiles(f.repo, "processes"), [
+    { path: "processes/a.bpmn", status: "deleted" },
+    { path: "processes/c.dmn", status: "deleted" },
+    { path: "processes/c.tests.yaml", status: "deleted" },
+    { path: "processes/d.dmn", status: "added", renamedFrom: "processes/c.dmn" },
+    { path: "processes/d.tests.yaml", status: "added", renamedFrom: "processes/c.tests.yaml" },
+    { path: "processes/sub/b.bpmn", status: "added", renamedFrom: "processes/a.bpmn" },
+  ]);
+  // renamed back to where it started: no change, no pair
+  await f.wm.recordRenames(f.repo, [mv("processes/sub/b.bpmn", "processes/a.bpmn")]);
+  // a released path re-created (the old name is taken again) pairs nothing
+  f.write({ "processes/c.dmn": "brand new" });
+  assert.deepEqual(await f.wm.changedFiles(f.repo, "processes"), [
+    { path: "processes/c.dmn", status: "modified" },
+    { path: "processes/c.tests.yaml", status: "deleted" },
+    { path: "processes/d.dmn", status: "added" },
+    { path: "processes/d.tests.yaml", status: "added", renamedFrom: "processes/c.tests.yaml" },
+  ]);
+  await f.wm.resetToDefault(f.repo);
+  assert.ok(!existsSync(join(f.ws, ".git", "bpmiq-renames.json")), "load-latest ends every pending rename");
+});

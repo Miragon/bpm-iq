@@ -106,6 +106,8 @@ before(async () => {
     liveDocs: () => [],
     dropLineage: () => {},
     renameLineage: () => {},
+    saveLineage: () => {},
+    rooms: { retire: () => undefined, hold: () => () => {} },
     openDoc: (room) => hp.hocuspocus.openDirectConnection(room),
     maxDocBytes: 8_000_000,
     oidc: {

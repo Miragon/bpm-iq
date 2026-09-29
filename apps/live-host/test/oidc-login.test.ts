@@ -104,6 +104,8 @@ function boot(cellMode: boolean): { base: string; sessions: SessionStore } {
     liveDocs: () => [],
     dropLineage: () => {},
     renameLineage: () => {},
+    saveLineage: () => {},
+    rooms: { retire: () => undefined, hold: () => () => {} },
     openDoc: () => Promise.reject(new Error("not used")),
     maxDocBytes: 8_000_000,
     controlPlaneUrl: cellMode ? CP_URL : undefined,

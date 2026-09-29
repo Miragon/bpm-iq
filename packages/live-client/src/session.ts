@@ -14,6 +14,8 @@ import {
   AWARENESS_USER_KEY,
   type CanvasPresence,
   CONTENT_KEY,
+  type MovedNotice,
+  parseMovedNotice,
   type PresenceUser,
   roomName,
 } from "@bpmiq/contracts/live";
@@ -23,7 +25,7 @@ import type * as Y from "yjs";
 import { sanitizeCanvas, sanitizeUser } from "./presence.ts";
 
 // re-exported so session consumers don't need a second import for the contract
-export { type CanvasPresence, CONTENT_KEY, type PresenceUser, roomName };
+export { type CanvasPresence, CONTENT_KEY, type MovedNotice, type PresenceUser, roomName };
 
 export interface LiveSessionOptions {
   /** WebSocket URL of the Live Host */
@@ -68,6 +70,10 @@ export interface LiveSession {
    *  re-sync — that's onDisconnect's lane), even though the provider
    *  re-emits them on the same underlying "close" event. */
   onDocClose(cb: () => void): () => void;
+  /** fires when the document's file was renamed (#208): the Live Host closes
+   *  this room right after — reopen the document at `notice.to` (its history
+   *  moved along). Returns the unsubscribe. */
+  onMoved(cb: (notice: MovedNotice) => void): () => void;
   /** promise form — resolves on first sync, rejects on auth failure or timeout */
   whenSynced(timeoutMs?: number): Promise<void>;
   setUser(user: PresenceUser): void;
@@ -130,6 +136,15 @@ export function openLiveSession(opts: LiveSessionOptions): LiveSession {
       };
       provider.on("close", docClosed);
       return () => provider.off("close", docClosed);
+    },
+
+    onMoved(cb: (notice: MovedNotice) => void): () => void {
+      const onStateless = ({ payload }: { payload: string }) => {
+        const notice = parseMovedNotice(payload);
+        if (notice) cb(notice);
+      };
+      provider.on("stateless", onStateless);
+      return () => provider.off("stateless", onStateless);
     },
 
     whenSynced(timeoutMs = 10_000): Promise<void> {

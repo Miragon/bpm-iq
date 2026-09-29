@@ -22,6 +22,10 @@
  *   GET  /api/repos/:owner/:repo/folders         → folders under the processes root (repo write required)
  *   POST /api/repos/:owner/:repo/folders         → create a folder   (repo write required)
  *   POST /api/repos/:owner/:repo/move            → move models into another folder (repo write required)
+ *   POST /api/repos/:owner/:repo/rename          → give a model a new id, callers follow (repo write required)
+ *   POST /api/repos/:owner/:repo/duplicate       → copy a model's live content under a new id (repo write required)
+ *   POST /api/repos/:owner/:repo/delete          → delete models, all or nothing (repo write required)
+ *   GET  /api/repos/:owner/:repo/references      → which models point at ?path=… (repo write required)
  *   GET  /api/repos/:owner/:repo/changes         → files differing from origin (release selection pool)
  *   POST /api/repos/:owner/:repo/release         → release a FILE SELECTION as one PR (repo write required)
  *   POST /api/repos/:owner/:repo/sync            → hard-reset workspace to origin/<default> (repo write required)
@@ -59,6 +63,10 @@ import type {
   CreateProcessBody,
   CreateTodoBody,
   DecisionInfo,
+  DeleteModelsBody,
+  DeleteModelsResult,
+  DuplicateModelBody,
+  DuplicateModelResult,
   EditorLoginExchangeBody,
   FileAtCommitWire,
   FileCommitWire,
@@ -66,6 +74,7 @@ import type {
   FolderWire,
   Me,
   ModelInfo,
+  ModelReferencesWire,
   MoveModelsBody,
   MoveModelsResult,
   ProcessInfo,
@@ -73,6 +82,8 @@ import type {
   PutContentResultWire,
   ReleaseFilesBody,
   ReleaseResult,
+  RenameModelBody,
+  RenameModelResult,
   ResolveConflictBody,
   ResolveConflictResult,
   SyncResult,
@@ -100,18 +111,23 @@ import {
 import type { AgentPresence } from "../application/agent-presence.ts";
 import { authorizeRepo } from "../application/authz.ts";
 import { resolveConflict } from "../application/conflicts.ts";
-import { type DirectDoc, getContent, putContent } from "../application/content.ts";
+import { type DirectDoc, editContent, getContent, putContent } from "../application/content.ts";
 import { fileAtCommit, fileHistory } from "../application/history.ts";
 import type { LoginCodeStore } from "../application/login-codes.ts";
 import { listAllModels, listChanges, listDecisions, listProcesses, listRepos } from "../application/overview.ts";
+import { referencesTo } from "../application/reference-impact.ts";
 import type { RoomPresenceDeps } from "../application/room-presence.ts";
 import {
   createDecision,
   createFolder,
   createNotationModel,
   createProcess,
+  deleteModels,
+  duplicateModel,
   listFolders,
   moveModels,
+  type RenameDeps,
+  renameModel,
 } from "../application/scaffold.ts";
 import { syncRepo } from "../application/sync.ts";
 import { closeTodoFor, fileTodo } from "../application/todos.ts";
@@ -161,6 +177,11 @@ export interface ApiOptions {
   dropLineage: (room: string) => void;
   /** re-key a room's Yjs lineage — a moved model keeps its unreleased history */
   renameLineage: (from: string, to: string) => void;
+  /** a renamed model's room migration (#208): retire a loaded room (notice
+   *  its peers, close it, hand back its state) and hold the new room's loads */
+  rooms: RenameDeps["rooms"];
+  /** write a room's lineage outright — a renamed OPEN model's final state */
+  saveLineage: (room: string, state: Uint8Array) => void;
   /** provider seam for the connected-repo set: connect URL + webhook verification */
   connectionSource?: RepoConnectionSource;
   /** issue-tracker seam (model-anchored todos) — absent when the platform has
@@ -634,7 +655,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
       // address /content over REST (the URL is claimed by history/content) —
       // accepted keyword-collision edge; MCP tools and ws rooms are unaffected.
       const repoRoute = url.pathname.match(
-        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|move|changes|conflicts|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
+        /^\/api\/repos\/(.+)\/(processes|decisions|models|folders|move|rename|duplicate|delete|references|changes|conflicts|sync|history(?:\/content)?|todos(?:\/([0-9A-Za-z-]+)\/close)?|release(?:\/([^/]+))?|(?<!\/history\/)content)$/,
       );
       if (repoRoute) {
         const session = await sessionOf(req);
@@ -718,11 +739,81 @@ export function startApi(port: number, opts: ApiOptions): Server {
           }
           if (typeof body.folder !== "string") return send(res, 400, { error: "folder must be a string" });
           const workspace = await opts.workspaces.ensure(repo);
-          const result = await moveModels(repo, workspace, body, opts);
+          const result = await moveModels(repo, workspace, body, {
+            ...opts,
+            recordRenames: (pairs) => opts.workspaces.recordRenames(repo, pairs),
+          });
           for (const m of result.moved) {
             console.log(`moved in ${repo.fullName} by @${session.user.login}: ${m.from} → ${m.to}`);
           }
           return send(res, 200, result satisfies MoveModelsResult);
+        }
+        // rename a model (#208) — the file (= id) moves, callers follow; an
+        // OPEN model's room migrates and its editors continue on the new path
+        if (repoRoute[2] === "rename") {
+          if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+          const body = await jsonBody<RenameModelBody>(req, res);
+          if (body === undefined) return;
+          if (typeof body?.path !== "string" || body.path.length === 0) {
+            return send(res, 400, { error: "path must be a non-empty string" });
+          }
+          if (typeof body.name !== "string" || body.name.trim().length === 0) {
+            return send(res, 400, { error: "name must be a non-empty string" });
+          }
+          const workspace = await opts.workspaces.ensure(repo);
+          const result = await renameModel(repo, workspace, body, session.user.name || session.user.login, {
+            liveDocs: opts.liveDocs,
+            rooms: opts.rooms,
+            lineage: { save: opts.saveLineage, drop: opts.dropLineage, rename: opts.renameLineage },
+            editContent: (path, edit) => editContent(opts, repo, path, edit),
+            recordRenames: (pairs) => opts.workspaces.recordRenames(repo, pairs),
+          });
+          for (const m of result.renamed) {
+            console.log(`renamed in ${repo.fullName} by @${session.user.login}: ${m.from} → ${m.to}`);
+          }
+          return send(res, 200, result satisfies RenameModelResult);
+        }
+        // duplicate a model (#209) — a create whose content is the source's live state
+        if (repoRoute[2] === "duplicate") {
+          if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+          const body = await jsonBody<DuplicateModelBody>(req, res);
+          if (body === undefined) return;
+          if (typeof body?.path !== "string" || body.path.length === 0) {
+            return send(res, 400, { error: "path must be a non-empty string" });
+          }
+          if (typeof body.name !== "string" || body.name.trim().length === 0) {
+            return send(res, 400, { error: "name must be a non-empty string" });
+          }
+          const workspace = await opts.workspaces.ensure(repo);
+          const result = await duplicateModel(repo, workspace, body, {
+            readContent: async (path) => (await getContent(opts, repo, path)).content,
+          });
+          console.log(`duplicated in ${repo.fullName} by @${session.user.login}: ${body.path} → ${result.model.path}`);
+          return send(res, 201, result satisfies DuplicateModelResult);
+        }
+        // delete models (#210) — all or nothing; 409 while one is open live
+        if (repoRoute[2] === "delete") {
+          if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
+          const body = await jsonBody<DeleteModelsBody>(req, res);
+          if (body === undefined) return;
+          if (!Array.isArray(body?.paths) || !body.paths.every((p) => typeof p === "string")) {
+            return send(res, 400, { error: "paths must be an array of strings" });
+          }
+          const workspace = await opts.workspaces.ensure(repo);
+          const result = await deleteModels(repo, workspace, body, opts);
+          for (const path of result.deleted) {
+            console.log(`deleted in ${repo.fullName} by @${session.user.login}: ${path}`);
+          }
+          return send(res, 200, result satisfies DeleteModelsResult);
+        }
+        // who points at a model — what a rename rewrites, what a delete leaves dangling
+        if (repoRoute[2] === "references") {
+          if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
+          const paths = url.searchParams.getAll("path").filter(Boolean);
+          if (paths.length === 0) return send(res, 400, { error: "missing ?path=<model path>" });
+          if (paths.length > 100) return send(res, 400, { error: "at most 100 paths per request" });
+          const workspace = await opts.workspaces.ensure(repo);
+          return send(res, 200, (await referencesTo(workspace, paths)) satisfies ModelReferencesWire[]);
         }
         // hard-reset the workspace onto origin/<default> ("load latest from main")
         // — DISCARDS unreleased live edits (the web client confirms first). Refuses

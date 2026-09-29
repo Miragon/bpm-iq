@@ -3,8 +3,11 @@
  * workspace is SHARED per repo, so the pool (GET /changes) may contain
  * colleagues' in-progress edits: nothing beyond `preselect` is checked by
  * default, and files somebody currently has open carry a warning badge. A
- * MOVED model (#182) is a delete + add pair that ships whole, so it is
- * selected whole too (moveUnits — the same rule the server applies). A file
+ * MOVED or RENAMED model (#182, #208) is a delete + add pair that ships
+ * whole, so it is selected whole too (moveUnits — the same rule the server
+ * applies). A rename rewrote the links of its callers; shipping it without
+ * them would leave those links pointing nowhere on the default branch, so
+ * the dialog names them and offers to add them. A file
  * in CONFLICT (#185: changed on the default branch while the workspace held
  * unreleased edits of it) cannot be picked — releasing it would silently
  * revert that change — until it is resolved right here: keep this version
@@ -15,15 +18,25 @@
 import { moveUnits } from "@bpmiq/contracts/live-host";
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
+import { Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { type ChangedFileWire } from "@/lib/api";
-import { useChanges, useReleaseFiles, useRepos, useResolveConflict } from "@/lib/queries";
+import { useChanges, useReferences, useReleaseFiles, useRepos, useResolveConflict } from "@/lib/queries";
 
 const fieldClass =
   "border-input bg-background focus-visible:ring-ring/50 focus-visible:border-ring mt-1 w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px]";
 
-function statusBadge(file: ChangedFileWire, moved: boolean) {
+const fileName = (path: string): string => path.split("/").pop() ?? path;
+
+/** a rename (not a plain move): the file name changed along the way */
+const isRename = (file: ChangedFileWire): boolean =>
+  file.renamedFrom !== undefined && fileName(file.renamedFrom) !== fileName(file.path);
+
+/** `renamedAway`: this deleted file is the old name of a renamed one */
+function statusBadge(file: ChangedFileWire, moved: boolean, renamedAway = false) {
+  if (isRename(file)) return <Badge variant="secondary">renamed</Badge>;
+  if (renamedAway) return <Badge variant="secondary">old name</Badge>;
   if (moved) return <Badge variant="secondary">{file.status === "deleted" ? "moved away" : "moved here"}</Badge>;
   if (file.status === "deleted") return <Badge variant="destructive">deleted</Badge>;
   if (file.status === "added") return <Badge variant="success">new</Badge>;
@@ -65,6 +78,7 @@ export function ReleaseDialog({
 
   const pool = useMemo(() => changes.data ?? [], [changes.data]);
   const units = useMemo(() => moveUnits(pool), [pool]);
+  const oldNames = new Set(pool.filter(isRename).map((c) => c.renamedFrom));
   const unitOf = (path: string) => units.get(path) ?? [path];
   // a move counts as selected when either half is (a preselected moved file
   // brings its other half along)
@@ -73,6 +87,20 @@ export function ReleaseDialog({
   // is not dirty (or healed meanwhile) silently drops out, and so does one in
   // conflict (the server would refuse it)
   const files = pool.filter((c) => !c.conflict && isSelected(c.path)).map((c) => c.path);
+
+  // a selected RENAME whose callers (their links now name the new id) stay
+  // behind: on the default branch those links would point nowhere
+  const renamed = pool.filter((c) => isRename(c) && isSelected(c.path)).map((c) => c.path);
+  const references = useReferences(repo, renamed, renamed.length > 0);
+  const changed = new Set(pool.filter((c) => !c.conflict).map((c) => c.path));
+  const callersLeft = [
+    ...new Set(
+      (references.data ?? [])
+        .flatMap((r) => r.referencedBy.map((by) => by.path))
+        .filter((path) => changed.has(path) && !isSelected(path)),
+    ),
+  ];
+  const addCallers = () => setSelected((prev) => new Set([...prev, ...callersLeft]));
 
   const toggle = (path: string) =>
     setSelected((prev) => {
@@ -122,7 +150,7 @@ export function ReleaseDialog({
                 <ConflictRow
                   key={c.path}
                   file={c}
-                  badge={statusBadge(c, units.has(c.path))}
+                  badge={statusBadge(c, units.has(c.path), oldNames.has(c.path))}
                   branch={branch}
                   confirming={discarding === c.path}
                   pending={resolve.isPending}
@@ -147,11 +175,31 @@ export function ReleaseDialog({
                   <span className="min-w-0 flex-1 truncate font-mono text-xs" title={c.path}>
                     {c.path}
                   </span>
-                  {statusBadge(c, units.has(c.path))}
+                  {statusBadge(c, units.has(c.path), oldNames.has(c.path))}
                   {c.liveSessions > 0 && <Badge variant="warning">{c.liveSessions} active</Badge>}
                 </label>
               ),
             )}
+          </div>
+        )}
+
+        {callersLeft.length > 0 && (
+          <div className="mt-3 flex items-start gap-2 text-xs" role="status">
+            <Link2 className="text-warning mt-px size-3.5 shrink-0" />
+            <p className="min-w-0 flex-1">
+              <span className="font-mono">{callersLeft.map(fileName).join(", ")}</span>{" "}
+              {callersLeft.length === 1 ? "links" : "link"} to the renamed model under its new name — release{" "}
+              {callersLeft.length === 1 ? "it" : "them"} too, or the link points nowhere on {branch}.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 px-2.5 text-xs"
+              onClick={addCallers}
+            >
+              Add to release
+            </Button>
           </div>
         )}
 

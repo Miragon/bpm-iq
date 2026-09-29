@@ -12,12 +12,12 @@
  * imperative — the mounted plugin / Monaco / Yjs live in refs inside one effect
  * whose cleanup tears the whole live session down (provider, sockets, bindings).
  */
-import { type PresenceUser, roomName } from "@bpmiq/contracts/live";
+import { type MovedNotice, type PresenceUser, roomName } from "@bpmiq/contracts/live";
 import { openLiveSession } from "@bpmiq/live-client";
 import { updateText } from "@bpmiq/live-client/text";
-import { byExtension } from "@bpmiq/notations";
+import { byExtension, modelStem } from "@bpmiq/notations";
 import { cn } from "@bpmiq/ui-kit/lib/utils";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, ListTodo } from "lucide-react";
 import * as monaco from "monaco-editor";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -26,10 +26,12 @@ import { MonacoBinding } from "y-monaco";
 import type * as Y from "yjs";
 
 import { AssistMenu } from "@/components/assist-menu";
+import { DuplicateModelDialog } from "@/components/duplicate-model-dialog";
 import { EditorToolbar, type ToolbarPanelItem } from "@/components/editor-toolbar";
 import { HistoryDiffDialog } from "@/components/history-diff-dialog";
 import { HistoryPanel } from "@/components/history-panel";
 import { ReleaseDialog } from "@/components/release-dialog";
+import { RenameModelDialog } from "@/components/rename-model-dialog";
 import { TodoCreateDialog } from "@/components/todo-create-dialog";
 import { TodoPanel } from "@/components/todo-panel";
 import {
@@ -41,8 +43,9 @@ import {
   type TodoElementWire,
   type TodoWire,
 } from "@/lib/api";
+import { modelTarget, useOpenModel, wasExpected } from "@/lib/model-target";
 import type { PresenceSurface, RemotePresence } from "@/lib/presence-canvas";
-import { useFileHistory, useTodos } from "@/lib/queries";
+import { invalidateModelLists, useFileHistory, useModels, useTodos } from "@/lib/queries";
 import { createRemoteCaretStyles } from "@/lib/remote-carets";
 import type { TodoCanvas } from "@/lib/todo-canvas";
 import { type EditorToolbarAction, type MountedEditor, webPlugin } from "@/notations/registry";
@@ -94,6 +97,8 @@ export function LiveEditor({
   const [hasElements, setHasElements] = useState(false);
   /** header actions the mounted editor contributes (e.g. the t.BPM toggle) */
   const [editorActions, setEditorActions] = useState<EditorToolbarAction[]>([]);
+  /** where a rename moved this document (#208) — set by the session's notice */
+  const [movedTo, setMovedTo] = useState<MovedNotice | null>(null);
 
   // model-anchored todos — only for documents that belong to a process
   const hasTodos = processId.length > 0;
@@ -164,11 +169,19 @@ export function LiveEditor({
       color: presenceColor(me.user.login),
       avatarUrl: me.user.avatarUrl,
     });
+    // the model was renamed (#208): the Live Host closes this room right
+    // after the notice — the screen follows the document to its new path
+    let moved = false;
+    const offMoved = session.onMoved((notice) => {
+      if (cancelled) return;
+      moved = true;
+      setMovedTo(notice);
+    });
     // a doc-level CLOSE (e.g. an oversized update rejected server-side) kills
     // the document WITHOUT a ws reconnect — surfaced, or the session would
     // just silently stop syncing while looking live
     const offDocClose = session.onDocClose(() => {
-      if (cancelled) return;
+      if (cancelled || moved) return;
       setStatus("error");
       setError("The server closed this live document — reload the page to reconnect.");
     });
@@ -295,6 +308,7 @@ export function LiveEditor({
       offSynced();
       offPresence?.();
       offAwareness();
+      offMoved();
       offDocClose();
       caretStyles.destroy();
       contentRef.current = null;
@@ -330,6 +344,32 @@ export function LiveEditor({
 
   // release = pick files in the ReleaseDialog, THIS document preselected
   const [releaseOpen, setReleaseOpen] = useState(false);
+
+  // rename / duplicate THIS model (#208, #209) — the dialogs are shared with
+  // the overview; the editor knows the model is open (liveSessions ≥ 1)
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const self = modelTarget(docPath, { folder: backDir ?? "", liveSessions: 1, dirty: false });
+  const models = useModels(repo);
+  const takenIds = new Set((models.data ?? []).filter((m) => m.notation === self.notation).map((m) => m.id));
+  const openModel = useOpenModel(repo);
+  const qc = useQueryClient();
+  // the document moved (a rename — ours or a colleague's): follow it. The
+  // notice arrives exactly once per session; the ref keeps StrictMode's
+  // double-run from navigating (and announcing) twice
+  const followed = useRef<MovedNotice | null>(null);
+  useEffect(() => {
+    if (!movedTo || followed.current === movedTo) return;
+    followed.current = movedTo;
+    invalidateModelLists(qc, repo);
+    // our own rename already announced itself (useRenameModel's toast)
+    if (!wasExpected(movedTo.to)) {
+      toast(`${movedTo.by || "Someone"} renamed this model to '${modelStem(movedTo.to)}'`, {
+        description: "You continue editing it under the new name.",
+      });
+    }
+    void openModel(movedTo.to, { replace: true });
+  }, [movedTo, openModel, qc, repo]);
 
   // TanStack v5 runs hook-level onSuccess/onError even after unmount and for
   // superseded mutate() calls — guard both: only the LATEST action may apply,
@@ -456,6 +496,8 @@ export function LiveEditor({
           ) : undefined
         }
         onRelease={() => setReleaseOpen(true)}
+        onRename={() => setRenameOpen(true)}
+        onDuplicate={() => setDuplicateOpen(true)}
       />
       {error && <div className="bg-destructive/10 text-destructive border-b px-4 py-2 text-sm">{error}</div>}
       <div className="relative min-h-0 flex-1">
@@ -536,6 +578,31 @@ export function LiveEditor({
         />
       )}
       {releaseOpen && <ReleaseDialog repo={repo} preselect={[docPath]} onClose={() => setReleaseOpen(false)} />}
+      {renameOpen && (
+        <RenameModelDialog
+          repo={repo}
+          model={self}
+          onClose={() => setRenameOpen(false)}
+          // the moved notice usually gets here first — both lead to the same page
+          onRenamed={(result) => void openModel(result.path, { replace: true })}
+        />
+      )}
+      {duplicateOpen && (
+        <DuplicateModelDialog
+          repo={repo}
+          model={self}
+          takenIds={takenIds}
+          onClose={() => setDuplicateOpen(false)}
+          onDuplicated={({ model }) => {
+            setDuplicateOpen(false);
+            toast.success(`Duplicated as '${model.id}'`, {
+              description: "You are editing the copy now.",
+              action: { label: "Back to the original", onClick: () => void openModel(docPath) },
+            });
+            void openModel(model.path);
+          }}
+        />
+      )}
     </div>
   );
 }

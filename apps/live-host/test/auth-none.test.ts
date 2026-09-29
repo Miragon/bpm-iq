@@ -76,6 +76,8 @@ before(async () => {
     liveDocs: () => [],
     dropLineage: () => {},
     renameLineage: () => {},
+    saveLineage: () => {},
+    rooms: { retire: () => undefined, hold: () => () => {} },
     openDoc: () => Promise.reject(new Error("not needed here")),
     maxDocBytes: 8_000_000,
   };

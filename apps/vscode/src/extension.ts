@@ -19,7 +19,7 @@
  * Documents nobody has open only exist on the host; writeFile (a save) is the
  * same minimal diff, a no-op once bound.
  */
-import type { PresenceUser } from "@bpmiq/contracts/live";
+import type { MovedNotice, PresenceUser } from "@bpmiq/contracts/live";
 import type { Me, ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
 import { type LiveSession, openLiveSession } from "@bpmiq/live-client";
 import { updateText } from "@bpmiq/live-client/text";
@@ -51,6 +51,9 @@ interface LiveDeps {
   presence(): Promise<PresenceUser>;
   /** the host refused our credential (expired session, or not signed in to an authenticated host) */
   onAuthFailed(room: string, reason: string): void;
+  /** the document was renamed on the host (#208) — its room is closed; the
+   *  document now lives in `notice.room` */
+  onMoved(room: string, notice: MovedNotice): void;
 }
 
 class LiveFileSystem implements vscode.FileSystemProvider {
@@ -101,6 +104,16 @@ class LiveFileSystem implements vscode.FileSystemProvider {
       },
     });
     session.setUser(presence);
+    // renamed on the host (#208): this room closes right after the notice —
+    // forget the session, mark the file gone, and offer the new one
+    session.onMoved((notice) => {
+      if (this.docs.get(name)?.session !== session) return;
+      this.docs.delete(name);
+      this.detach(name);
+      session.destroy();
+      this.emitter.fire([{ type: vscode.FileChangeType.Deleted, uri }]);
+      this.deps.onMoved(name, notice);
+    });
     try {
       await session.whenSynced(10_000);
     } catch (err) {
@@ -218,6 +231,15 @@ export function activate(context: vscode.ExtensionContext): void {
         .showErrorMessage(`BPM Live: access to ${room} denied (${reason}).`, "Sign in")
         .then((choice) => {
           if (choice) void vscode.commands.executeCommand("bpmLive.login");
+        });
+    },
+    onMoved: (room, notice) => {
+      const from = room.split("/").pop() ?? room;
+      const to = notice.to.split("/").pop() ?? notice.to;
+      void vscode.window
+        .showInformationMessage(`BPM Live: ${notice.by || "Someone"} renamed ${from} to ${to}.`, `Open ${to}`)
+        .then((choice) => {
+          if (choice) void vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(`${SCHEME}:/${notice.room}`));
         });
     },
   });
