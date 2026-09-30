@@ -46,6 +46,7 @@ import {
   syncRepo,
   type TodoWire,
 } from "@/lib/api";
+import { clearRepoSnapshot, persistRepoSnapshots, readRepoSnapshot } from "@/lib/repos-snapshot";
 import { followTodoJob } from "@/lib/todo-jobs";
 
 export const queryClient = new QueryClient({
@@ -56,6 +57,7 @@ export const queryClient = new QueryClient({
     },
   },
 });
+persistRepoSnapshots(queryClient);
 
 /** current session identity + ws token; errors (401) drive the login gate */
 export function useMe() {
@@ -66,9 +68,20 @@ export function useConfig() {
   return useQuery({ queryKey: ["config"], queryFn: fetchConfig });
 }
 
-/** connected repositories (a forced registry re-sync is a view-level action) */
+/** connected repositories (a forced registry re-sync is a view-level action).
+ *  Starts from the list of the last visit (#212): rendered at once, and always
+ *  stale (dated 0), so every page load revalidates in the background — even a
+ *  reload seconds after the last fetch, the gesture people use to see a
+ *  colleague's new live session. Every view renders behind the login gate —
+ *  the login is known. */
 export function useRepos() {
-  return useQuery({ queryKey: ["repos"], queryFn: () => fetchRepos(false) });
+  const login = useMe().data?.user.login;
+  return useQuery({
+    queryKey: ["repos"],
+    queryFn: () => fetchRepos(false),
+    initialData: () => (login ? readRepoSnapshot(login)?.repos : undefined),
+    initialDataUpdatedAt: 0,
+  });
 }
 
 export function useProcesses(repo: string) {
@@ -457,5 +470,11 @@ export function useCloseTodo(repo: string) {
 
 export function useLogout() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: logout, onSuccess: () => qc.clear() });
+  return useMutation({
+    mutationFn: logout,
+    onSuccess: () => {
+      clearRepoSnapshot(); // the next person at this browser must not see this account's repos
+      qc.clear();
+    },
+  });
 }

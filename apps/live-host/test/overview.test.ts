@@ -252,6 +252,35 @@ test("listRepos: no bpmiq.yml (workspace absent or plain repo) → null counts",
   assert.equal(repos[0]?.dirtyCount, null);
 });
 
+test("listRepos: checks the repos in parallel, bounded, and keeps the registry order (#212)", async () => {
+  const empty = mkdtempSync(join(tmpdir(), "bpm-overview-par-"));
+  const registry = Array.from({ length: 20 }, (_, i): ConnectedRepo => ({ ...REPO, fullName: `acme/r${i}` }));
+  let running = 0;
+  let peak = 0;
+  const { deps } = setup({
+    registry: { list: () => registry },
+    workspaces: { dir: () => empty, changedPaths: async () => [], changedFiles: async () => [] },
+    access: {
+      canWrite: async (_s, repo) => {
+        running++;
+        peak = Math.max(peak, running);
+        const i = Number(repo.fullName.slice("acme/r".length));
+        // later repos answer FIRST — the result must still follow the registry
+        await new Promise((resolve) => setTimeout(resolve, 20 - i));
+        running--;
+        return i % 3 !== 0; // every third repo is invisible
+      },
+    },
+  });
+  const repos = await listRepos(deps, session("s1"));
+  assert.deepEqual(
+    repos.map((r) => r.fullName),
+    registry.map((r) => r.fullName).filter((_, i) => i % 3 !== 0),
+  );
+  assert.ok(peak > 1, "the permission checks overlap instead of running one after another");
+  assert.ok(peak <= 8, `at most 8 repos in flight, saw ${peak}`);
+});
+
 // ── listChanges ─────────────────────────────────────────────────────────────
 
 test("listChanges: the release pool row carries live sessions and the catch-up conflict flag (#185)", async () => {

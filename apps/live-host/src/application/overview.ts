@@ -216,15 +216,38 @@ export async function listChanges(
   }));
 }
 
-/** Repo overview: registry ∩ the session user's per-repo permission. */
+/**
+ * How many repos listRepos works on at once. On a cold access cache each repo
+ * costs a provider round trip (the permission check) plus two git
+ * subprocesses — walked one after another, the overview's latency grew
+ * linearly with the registry (#212). Bounded, so a large installation does
+ * not fire a burst of permission checks at the provider (GitHub's secondary
+ * rate limits) or fork dozens of git processes at once.
+ */
+const REPO_CONCURRENCY = 8;
+
+/** Promise.all over `items` with at most `limit` in flight — results keep the input order. */
+async function mapBounded<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i] as T);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/** Repo overview: registry ∩ the session user's per-repo permission, in registry order. */
 export async function listRepos(opts: OverviewDeps, session: Session): Promise<RepoInfo[]> {
   const live = opts.liveDocs();
-  const out: RepoInfo[] = [];
-  for (const repo of opts.registry.list()) {
+  const rows = await mapBounded(opts.registry.list(), REPO_CONCURRENCY, async (repo): Promise<RepoInfo | null> => {
     // per-repo permission (a LIVE_AUTH=none host injects an allow-all access)
     if (!(await opts.access.canWrite(session, repo))) {
       // no access → the repo does not exist for this user (private by default)
-      continue;
+      return null;
     }
     // counts only when the workspace already exists locally AND declares itself
     // a content repo (bpmiq.yml) — the overview must never trigger clones;
@@ -242,9 +265,12 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
         // endpoints used to pay never belonged on the overview. dirtyCount
         // deliberately includes dirty DECISIONS now: a repo whose only change
         // is a decision used to show no "live changes" badge at all.
-        const procs = await discoverProcesses(ws, cfg);
-        const decs = await discoverDecisions(ws, cfg);
-        const changed = new Set(await opts.workspaces.changedPaths(repo, cfg.processes));
+        const [procs, decs, changedList] = await Promise.all([
+          discoverProcesses(ws, cfg),
+          discoverDecisions(ws, cfg),
+          opts.workspaces.changedPaths(repo, cfg.processes),
+        ]);
+        const changed = new Set(changedList);
         processCount = procs.length;
         decisionCount = decs.length;
         dirtyCount = [...procs, ...decs].filter((m) => changed.has(m.path)).length;
@@ -256,7 +282,7 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
     // keep a slash too) — split() yields ≥1 element, so the fallbacks never fire
     // at runtime; they exist for noUncheckedIndexedAccess.
     const [ownerSegment = repo.fullName, nameSegment = repo.fullName] = repo.fullName.split("/");
-    out.push({
+    return {
       fullName: repo.fullName,
       owner: ownerSegment,
       name: nameSegment,
@@ -268,7 +294,7 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
       decisionCount,
       dirtyCount,
       liveSessions: live.filter((d) => d.startsWith(roomPrefix(repo.fullName))).length,
-    });
-  }
-  return out;
+    };
+  });
+  return rows.filter((r): r is RepoInfo => r !== null);
 }

@@ -106,3 +106,58 @@ test("nobody can vouch → closed: no source, a source without the check, a repo
   assert.equal(source.calls, 0, "there is no user-token fallback to fall back to");
   assert.equal(await cache.canWrite(session(), repo("host/repo", null)), false, "the denial is cached");
 });
+
+test("concurrent checks for the same (session, repo) share one round trip (#212)", async () => {
+  let release: (perm: RepoPermission) => void = () => {};
+  const source = fakeSource(() => new Promise<RepoPermission>((resolve) => (release = resolve)));
+  const cache = new AccessCache(source);
+  const checks = [cache.canWrite(session(), repo()), cache.canWrite(session(), repo())];
+  release("write");
+  assert.deepEqual(await Promise.all(checks), [true, true]);
+  assert.equal(source.calls, 1, "the second caller joined the first round trip");
+  assert.equal(await cache.canWrite(session(), repo()), true);
+  assert.equal(source.calls, 1, "…and its answer landed in the cache");
+});
+
+test("invalidate(sessionId) drops only that session's answers (the overview refresh, #212)", async () => {
+  const source = fakeSource(async () => "write");
+  const cache = new AccessCache(source);
+  await cache.canWrite(session("petra"), repo());
+  await cache.canWrite(session("paul"), repo());
+  assert.equal(source.calls, 2);
+  cache.invalidate("sess-petra");
+  await cache.canWrite(session("paul"), repo());
+  assert.equal(source.calls, 2, "paul's answer stays cached");
+  await cache.canWrite(session("petra"), repo());
+  assert.equal(source.calls, 3, "petra asks the provider again");
+});
+
+test("a round trip that straddles invalidate() answers its caller but is not cached", async () => {
+  let release: (perm: RepoPermission) => void = () => {};
+  const source = fakeSource(() => new Promise<RepoPermission>((resolve) => (release = resolve)));
+  const cache = new AccessCache(source);
+  const before = cache.canWrite(session(), repo());
+  cache.invalidate();
+  release("write");
+  assert.equal(await before, true);
+  const after = cache.canWrite(session(), repo());
+  assert.equal(source.calls, 2, "the pre-invalidate answer never reached the cache");
+  release("read");
+  assert.equal(await after, false);
+});
+
+test("invalidate(sessionId) discards only that session's in-flight round trips (#212)", async () => {
+  const releases: Array<(perm: RepoPermission) => void> = [];
+  const source = fakeSource(() => new Promise<RepoPermission>((resolve) => releases.push(resolve)));
+  const cache = new AccessCache(source);
+  const checks = [cache.canWrite(session("petra"), repo()), cache.canWrite(session("paul"), repo())];
+  cache.invalidate("sess-petra");
+  for (const release of releases) release("write");
+  assert.deepEqual(await Promise.all(checks), [true, true]);
+  assert.equal(await cache.canWrite(session("paul"), repo()), true);
+  assert.equal(source.calls, 2, "paul's round trip straddled petra's refresh — its answer still landed");
+  const again = cache.canWrite(session("petra"), repo());
+  assert.equal(source.calls, 3, "petra's pre-refresh answer never reached the cache");
+  releases[2]?.("write");
+  assert.equal(await again, true);
+});
