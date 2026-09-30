@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_PlaceOrder" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.40.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:error id="error_petNotFound" name="PET_NOT_FOUND" errorCode="PET_NOT_FOUND" />
+  <bpmn:error id="error_orderInvalid" name="ORDER_INVALID" errorCode="ORDER_INVALID" />
+  <bpmn:process id="Process_PlaceOrder" name="Place order" isExecutable="true">
+    <bpmn:documentation>Places an order for a pet in the petstore: loads the pet, lets the decision table Decision_CheckOrder approve, review or reject the order, asks a reviewer when in doubt, reserves the pet through Process_ReservePet and places the order. The caller passes the pet and the quantity it wants; it gets back the id of the placed order (null when nothing was ordered), whether the order was placed or rejected, and the reviewer's reason when a person rejected it.</bpmn:documentation>
+    <bpmn:startEvent id="startEvent_orderToBePlaced" name="Order to be placed">
+      <bpmn:extensionElements>
+        <zeebe:ioMapping>
+          <zeebe:output source="=petId" target="petId" />
+          <zeebe:output source="=quantity" target="quantity" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:outgoing>flow_orderToBePlacedToGetPet</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="flow_orderToBePlacedToGetPet" sourceRef="startEvent_orderToBePlaced" targetRef="serviceTask_getPet" />
+    <bpmn:serviceTask id="serviceTask_getPet" name="Get pet" zeebe:modelerTemplate="Petstore-GetPetById" zeebe:modelerTemplateVersion="107">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="io.camunda:http-json:1" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=petId" target="petId" />
+          <zeebe:input source="=20" target="connectionTimeoutInSeconds" />
+          <zeebe:input source="=20" target="readTimeoutInSeconds" />
+          <zeebe:input source="noAuth" target="authentication.type" />
+          <zeebe:input source="{{secrets.PETSTORE_BASE_URL}}" target="baseUrl" />
+          <zeebe:input source="getPetById" target="operationId" />
+          <zeebe:input source="=&#34;/pet/&#34;+string(petId)" target="operationPath" />
+          <zeebe:input source="={}" target="headers" />
+          <zeebe:input source="={}" target="queryParameters" />
+          <zeebe:input source="GET" target="method" />
+          <zeebe:input source="= baseUrl + operationPath" target="url" />
+        </zeebe:ioMapping>
+        <zeebe:taskHeaders>
+          <zeebe:header key="resultExpression" value="={ petName: response.body.name, petStatus: response.body.status }" />
+          <zeebe:header key="errorExpression" value="=if error.code = &#34;404&#34; then bpmnError(&#34;PET_NOT_FOUND&#34;, &#34;The pet does not exist&#34;) else null" />
+          <zeebe:header key="retryBackoff" value="PT10S" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_orderToBePlacedToGetPet</bpmn:incoming>
+      <bpmn:outgoing>flow_getPetToCheckOrder</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="errorEvent_petNotFound" name="Pet not found" attachedToRef="serviceTask_getPet">
+      <bpmn:outgoing>flow_petNotFoundToOrderRejected</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="errorEventDefinition_petNotFound" errorRef="error_petNotFound" />
+    </bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="flow_petNotFoundToOrderRejected" sourceRef="errorEvent_petNotFound" targetRef="gateway_orderRejected" />
+    <bpmn:sequenceFlow id="flow_getPetToCheckOrder" sourceRef="serviceTask_getPet" targetRef="businessRuleTask_checkOrder" />
+    <bpmn:businessRuleTask id="businessRuleTask_checkOrder" name="Check order">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="Decision_CheckOrder" resultVariable="orderDecision" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_getPetToCheckOrder</bpmn:incoming>
+      <bpmn:outgoing>flow_checkOrderToOrderDecision</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:sequenceFlow id="flow_checkOrderToOrderDecision" sourceRef="businessRuleTask_checkOrder" targetRef="gateway_orderDecision" />
+    <bpmn:exclusiveGateway id="gateway_orderDecision" name="Order decision?" default="flow_orderDecisionReject">
+      <bpmn:incoming>flow_checkOrderToOrderDecision</bpmn:incoming>
+      <bpmn:outgoing>flow_orderDecisionApprove</bpmn:outgoing>
+      <bpmn:outgoing>flow_orderDecisionReview</bpmn:outgoing>
+      <bpmn:outgoing>flow_orderDecisionReject</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_orderDecisionApprove" name="approve" sourceRef="gateway_orderDecision" targetRef="gateway_orderApproved">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=orderDecision = "approve"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_orderDecisionReview" name="review" sourceRef="gateway_orderDecision" targetRef="userTask_approveOrder">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=orderDecision = "review"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_orderDecisionReject" name="reject" sourceRef="gateway_orderDecision" targetRef="gateway_orderRejected" />
+    <bpmn:userTask id="userTask_approveOrder" name="Approve order">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:formDefinition formId="Form_ApproveOrder" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_orderDecisionReview</bpmn:incoming>
+      <bpmn:outgoing>flow_approveOrderToApproved</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="flow_approveOrderToApproved" sourceRef="userTask_approveOrder" targetRef="gateway_approved" />
+    <bpmn:exclusiveGateway id="gateway_approved" name="Approved?" default="flow_approvedNo">
+      <bpmn:incoming>flow_approveOrderToApproved</bpmn:incoming>
+      <bpmn:outgoing>flow_approvedYes</bpmn:outgoing>
+      <bpmn:outgoing>flow_approvedNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_approvedYes" name="yes" sourceRef="gateway_approved" targetRef="gateway_orderApproved">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=reviewDecision = "approve"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_approvedNo" name="no" sourceRef="gateway_approved" targetRef="gateway_orderRejected" />
+    <bpmn:exclusiveGateway id="gateway_orderApproved">
+      <bpmn:incoming>flow_orderDecisionApprove</bpmn:incoming>
+      <bpmn:incoming>flow_approvedYes</bpmn:incoming>
+      <bpmn:outgoing>flow_orderApprovedToReservePet</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_orderApprovedToReservePet" sourceRef="gateway_orderApproved" targetRef="callActivity_reservePet" />
+    <bpmn:callActivity id="callActivity_reservePet" name="Reserve pet">
+      <bpmn:extensionElements>
+        <zeebe:calledElement processId="Process_ReservePet" propagateAllChildVariables="false" propagateAllParentVariables="false" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=petId" target="petId" />
+          <zeebe:input source="=petName" target="petName" />
+          <zeebe:output source="=reservationStatus" target="reservationStatus" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_orderApprovedToReservePet</bpmn:incoming>
+      <bpmn:outgoing>flow_reservePetToPetReserved</bpmn:outgoing>
+    </bpmn:callActivity>
+    <bpmn:sequenceFlow id="flow_reservePetToPetReserved" sourceRef="callActivity_reservePet" targetRef="gateway_petReserved" />
+    <bpmn:exclusiveGateway id="gateway_petReserved" name="Pet reserved?" default="flow_petReservedNo">
+      <bpmn:incoming>flow_reservePetToPetReserved</bpmn:incoming>
+      <bpmn:outgoing>flow_petReservedYes</bpmn:outgoing>
+      <bpmn:outgoing>flow_petReservedNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_petReservedYes" name="yes" sourceRef="gateway_petReserved" targetRef="serviceTask_placeOrder">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=reservationStatus = "pending"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_petReservedNo" name="no" sourceRef="gateway_petReserved" targetRef="gateway_orderRejected" />
+    <bpmn:serviceTask id="serviceTask_placeOrder" name="Place order" zeebe:modelerTemplate="Petstore-PlaceOrder" zeebe:modelerTemplateVersion="107">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="io.camunda:http-json:1" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=petId" target="petId" />
+          <zeebe:input source="=quantity" target="quantity" />
+          <zeebe:input source="placed" target="status" />
+          <zeebe:input source="=false" target="complete" />
+          <zeebe:input source="=20" target="connectionTimeoutInSeconds" />
+          <zeebe:input source="=20" target="readTimeoutInSeconds" />
+          <zeebe:input source="noAuth" target="authentication.type" />
+          <zeebe:input source="{{secrets.PETSTORE_BASE_URL}}" target="baseUrl" />
+          <zeebe:input source="placeOrder" target="operationId" />
+          <zeebe:input source="=&#34;/store/order&#34;" target="operationPath" />
+          <zeebe:input source="={}" target="headers" />
+          <zeebe:input source="={}" target="queryParameters" />
+          <zeebe:input source="POST" target="method" />
+          <zeebe:input source="={id:id,petId:petId,quantity:quantity,shipDate:shipDate,status:status,complete:complete}" target="body" />
+          <zeebe:input source="= baseUrl + operationPath" target="url" />
+        </zeebe:ioMapping>
+        <zeebe:taskHeaders>
+          <zeebe:header key="resultExpression" value="={ orderId: response.body.id, orderStatus: response.body.status }" />
+          <zeebe:header key="errorExpression" value="=if error.code = &#34;400&#34; then bpmnError(&#34;ORDER_INVALID&#34;, &#34;The petstore rejected the order&#34;) else null" />
+          <zeebe:header key="retryBackoff" value="PT10S" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_petReservedYes</bpmn:incoming>
+      <bpmn:outgoing>flow_placeOrderToOrderPlaced</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="errorEvent_orderInvalid" name="Order refused by petstore" attachedToRef="serviceTask_placeOrder">
+      <bpmn:outgoing>flow_orderInvalidToOrderRejected</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="errorEventDefinition_orderInvalid" errorRef="error_orderInvalid" />
+    </bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="flow_orderInvalidToOrderRejected" sourceRef="errorEvent_orderInvalid" targetRef="gateway_orderRejected" />
+    <bpmn:exclusiveGateway id="gateway_orderRejected">
+      <bpmn:incoming>flow_petNotFoundToOrderRejected</bpmn:incoming>
+      <bpmn:incoming>flow_orderDecisionReject</bpmn:incoming>
+      <bpmn:incoming>flow_approvedNo</bpmn:incoming>
+      <bpmn:incoming>flow_petReservedNo</bpmn:incoming>
+      <bpmn:incoming>flow_orderInvalidToOrderRejected</bpmn:incoming>
+      <bpmn:outgoing>flow_orderRejectedToEnd</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_orderRejectedToEnd" sourceRef="gateway_orderRejected" targetRef="endEvent_orderRejected" />
+    <bpmn:sequenceFlow id="flow_placeOrderToOrderPlaced" sourceRef="serviceTask_placeOrder" targetRef="endEvent_orderPlaced" />
+    <bpmn:endEvent id="endEvent_orderPlaced" name="Order placed">
+      <bpmn:extensionElements>
+        <zeebe:ioMapping>
+          <zeebe:output source="=orderId" target="orderId" />
+          <zeebe:output source="=orderStatus" target="orderStatus" />
+          <zeebe:output source="=null" target="rejectionReason" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_placeOrderToOrderPlaced</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="endEvent_orderRejected" name="Order rejected">
+      <bpmn:extensionElements>
+        <zeebe:ioMapping>
+          <zeebe:output source="=null" target="orderId" />
+          <zeebe:output source="=&#34;rejected&#34;" target="orderStatus" />
+          <zeebe:output source="=if is defined(reviewComment) then reviewComment else null" target="rejectionReason" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_orderRejectedToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_PlaceOrder">
+    <bpmndi:BPMNPlane id="BPMNPlane_PlaceOrder" bpmnElement="Process_PlaceOrder">
+      <bpmndi:BPMNShape id="Shape_startEvent_orderToBePlaced" bpmnElement="startEvent_orderToBePlaced">
+        <dc:Bounds x="152" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="143" y="315" width="56" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_serviceTask_getPet" bpmnElement="serviceTask_getPet">
+        <dc:Bounds x="280" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_businessRuleTask_checkOrder" bpmnElement="businessRuleTask_checkOrder">
+        <dc:Bounds x="480" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_gateway_orderDecision" bpmnElement="gateway_orderDecision" isMarkerVisible="true">
+        <dc:Bounds x="680" y="265" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="611" y="263" width="78" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_userTask_approveOrder" bpmnElement="userTask_approveOrder">
+        <dc:Bounds x="840" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_gateway_approved" bpmnElement="gateway_approved" isMarkerVisible="true">
+        <dc:Bounds x="985" y="265" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1049" y="283" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_gateway_orderApproved" bpmnElement="gateway_orderApproved" isMarkerVisible="true">
+        <dc:Bounds x="985" y="115" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_callActivity_reservePet" bpmnElement="callActivity_reservePet">
+        <dc:Bounds x="1120" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_gateway_petReserved" bpmnElement="gateway_petReserved" isMarkerVisible="true">
+        <dc:Bounds x="1295" y="115" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1284" y="91" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_serviceTask_placeOrder" bpmnElement="serviceTask_placeOrder">
+        <dc:Bounds x="1420" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_gateway_orderRejected" bpmnElement="gateway_orderRejected" isMarkerVisible="true">
+        <dc:Bounds x="1485" y="415" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_endEvent_orderPlaced" bpmnElement="endEvent_orderPlaced">
+        <dc:Bounds x="1692" y="122" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1679" y="165" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_endEvent_orderRejected" bpmnElement="endEvent_orderRejected">
+        <dc:Bounds x="1692" y="422" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1675" y="465" width="71" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_errorEvent_orderInvalid" bpmnElement="errorEvent_orderInvalid">
+        <dc:Bounds x="1492" y="162" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1531" y="186" width="83" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_errorEvent_petNotFound" bpmnElement="errorEvent_petNotFound">
+        <dc:Bounds x="352" y="312" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="393" y="343" width="66" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_flow_orderToBePlacedToGetPet" bpmnElement="flow_orderToBePlacedToGetPet">
+        <di:waypoint x="188" y="290" />
+        <di:waypoint x="280" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_petNotFoundToOrderRejected" bpmnElement="flow_petNotFoundToOrderRejected">
+        <di:waypoint x="370" y="348" />
+        <di:waypoint x="370" y="440" />
+        <di:waypoint x="1485" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_getPetToCheckOrder" bpmnElement="flow_getPetToCheckOrder">
+        <di:waypoint x="380" y="290" />
+        <di:waypoint x="480" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_checkOrderToOrderDecision" bpmnElement="flow_checkOrderToOrderDecision">
+        <di:waypoint x="580" y="290" />
+        <di:waypoint x="680" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_orderDecisionApprove" bpmnElement="flow_orderDecisionApprove">
+        <di:waypoint x="705" y="265" />
+        <di:waypoint x="705" y="140" />
+        <di:waypoint x="985" y="140" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="710" y="206" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_orderDecisionReview" bpmnElement="flow_orderDecisionReview">
+        <di:waypoint x="730" y="290" />
+        <di:waypoint x="840" y="290" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="744" y="273" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_orderDecisionReject" bpmnElement="flow_orderDecisionReject">
+        <di:waypoint x="705" y="315" />
+        <di:waypoint x="705" y="440" />
+        <di:waypoint x="1485" y="440" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="708" y="363" width="43" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_approveOrderToApproved" bpmnElement="flow_approveOrderToApproved">
+        <di:waypoint x="940" y="290" />
+        <di:waypoint x="985" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_approvedYes" bpmnElement="flow_approvedYes">
+        <di:waypoint x="1010" y="265" />
+        <di:waypoint x="1010" y="165" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1017" y="206" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_approvedNo" bpmnElement="flow_approvedNo">
+        <di:waypoint x="1010" y="315" />
+        <di:waypoint x="1010" y="440" />
+        <di:waypoint x="1485" y="440" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1019" y="363" width="13" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_orderApprovedToReservePet" bpmnElement="flow_orderApprovedToReservePet">
+        <di:waypoint x="1035" y="140" />
+        <di:waypoint x="1120" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_reservePetToPetReserved" bpmnElement="flow_reservePetToPetReserved">
+        <di:waypoint x="1220" y="140" />
+        <di:waypoint x="1295" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_petReservedYes" bpmnElement="flow_petReservedYes">
+        <di:waypoint x="1345" y="140" />
+        <di:waypoint x="1420" y="140" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1374" y="122" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_petReservedNo" bpmnElement="flow_petReservedNo">
+        <di:waypoint x="1320" y="165" />
+        <di:waypoint x="1320" y="440" />
+        <di:waypoint x="1485" y="440" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1329" y="290" width="13" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_orderInvalidToOrderRejected" bpmnElement="flow_orderInvalidToOrderRejected">
+        <di:waypoint x="1510" y="198" />
+        <di:waypoint x="1510" y="415" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_orderRejectedToEnd" bpmnElement="flow_orderRejectedToEnd">
+        <di:waypoint x="1535" y="440" />
+        <di:waypoint x="1692" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_placeOrderToOrderPlaced" bpmnElement="flow_placeOrderToOrderPlaced">
+        <di:waypoint x="1520" y="140" />
+        <di:waypoint x="1692" y="140" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

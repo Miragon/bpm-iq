@@ -233,6 +233,8 @@ export interface ApiOptions {
   };
   /** omit the write tools (create/save/release) from /mcp */
   mcpReadOnly?: boolean;
+  /** register the semantic BPMN tools of ADR 0008 on /mcp (LIVE_MCP_BPMN_EDIT=1) */
+  bpmnEdit?: boolean;
   /** single-use ws tickets for the MCP-App widget's live Yjs connection
    * (application/ws-tickets.ts) — absent = the widget stays on bridge autosave */
   wsTickets?: WsTicketStore;

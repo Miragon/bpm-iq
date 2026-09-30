@@ -1,0 +1,35 @@
+{
+  "name": "@bpmiq/bpmn-edit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BPMN editing through bpmn-moddle (ADR 0008): a compact outline, semantic edit operations, automatic layout and layout metrics \u2014 a platform-free design core plus optional Camunda 7 / Camunda 8 implement adapters. ISOMORPHIC: the same operations run in the live host and in the browser.",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "//": "The exported entries are browser-safe (CI-enforced: `pnpm arch`, rule bpmn-edit-stays-isomorphic). src/main.ts is the ONLY Node entry and is deliberately not exported.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "bpmn": "node src/main.ts",
+    "bench": "node bench/tool-bench.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'test/**/*.test.ts'",
+    "bench:agent": "node bench/agent/run.ts",
+    "bench:report": "node bench/agent/report.ts"
+  },
+  "dependencies": {
+    "bpmn-moddle": "10.3.1",
+    "camunda-bpmn-moddle": "8.0.1",
+    "webcola": "3.4.0",
+    "zeebe-bpmn-moddle": "2.0.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "0.128.0",
+    "@bpmiq/notations": "workspace:*",
+    "@bpmiq/validator": "workspace:*",
+    "@modelcontextprotocol/client": "2.1.0",
+    "@types/node": "26.6.2"
+  }
+}

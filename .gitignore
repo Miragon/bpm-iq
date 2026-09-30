@@ -2,6 +2,9 @@
 .DS_Store
 Thumbs.db
 node_modules/
+# a pnpm content store inside the checkout (pnpm falls back to one when the
+# user-level store is not writable, e.g. in a sandbox) — never versioned
+.pnpm-store/
 
 # secrets — never commit (bpmiq platform credentials)
 **/.env

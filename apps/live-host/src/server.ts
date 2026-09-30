@@ -366,6 +366,9 @@ sessions.migrate();
 // until done so a restart resumes it (resumed below, once the registry synced)
 const todoJobs = issues ? new TodoJobs({ issues, store: new SqliteTodoJobStore(db) }) : undefined;
 const MCP_READONLY = process.env.LIVE_MCP_READONLY === "1";
+// ADR 0008: the semantic BPMN tools (get_process_outline, edit_process,
+// layout_process) are opt-in until the A/B benchmark gate is passed
+const MCP_BPMN_EDIT = process.env.LIVE_MCP_BPMN_EDIT === "1";
 
 // single-use ws tickets for the MCP-App widget's live connection — minted by
 // /mcp (mint_ws_ticket), redeemed in onAuthenticate (application/ws-tickets.ts)
@@ -461,6 +464,7 @@ const httpServer = startApi(PORT, {
   oidc,
   oidcLogin,
   mcpReadOnly: MCP_READONLY,
+  bpmnEdit: MCP_BPMN_EDIT,
 });
 
 // WebSocket connection ceiling (DoS guard): the upgrade path was uncapped, so an
@@ -558,6 +562,7 @@ void (async () => {
       : `auth      : OIDC — browser SSO + bearer JWT (${oidc?.issuer})`,
   );
   console.log(`mcp       : POST /mcp${MCP_READONLY ? " (read-only — write tools not registered)" : ""}`);
+  if (MCP_BPMN_EDIT) console.log("mcp       : + semantic BPMN tools (ADR 0008, LIVE_MCP_BPMN_EDIT=1)");
   console.log(`room name = <owner>/<repo>/<path>, Y.Text field 'content'`);
   console.log("──────────────────────────────────────────────────");
 })();
