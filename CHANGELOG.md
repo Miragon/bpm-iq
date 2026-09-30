@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.2.0](https://github.com/Miragon/bpm-iq/compare/v4.1.0...v4.2.0) (2026-09-30)
+
+
+### Features
+
+* **live-host,web:** rename, duplicate and delete models; multi-select in the overview ([#208](https://github.com/Miragon/bpm-iq/issues/208), [#209](https://github.com/Miragon/bpm-iq/issues/209), [#210](https://github.com/Miragon/bpm-iq/issues/210)) ([#215](https://github.com/Miragon/bpm-iq/issues/215)) ([6006ad3](https://github.com/Miragon/bpm-iq/commit/6006ad32e9221cbe7d799a17663aca47d617f397))
+* **live-host,web:** the repo overview renders instantly and revalidates in the background ([#212](https://github.com/Miragon/bpm-iq/issues/212)) ([#217](https://github.com/Miragon/bpm-iq/issues/217)) ([2641807](https://github.com/Miragon/bpm-iq/commit/2641807a66dc4e0c9644691faea220d79c990ba0))
+
 ## [4.1.0](https://github.com/Miragon/bpm-iq/compare/v4.0.1...v4.1.0) (2026-09-28)
 
 
