@@ -645,7 +645,9 @@ export function startApi(port: number, opts: ApiOptions): Server {
           await opts.registry
             .requestSync(true)
             .catch((e) => console.log(`refresh sync failed: ${(e as Error).message}`));
-          opts.access.invalidate();
+          // re-check THIS session's permissions only — everyone else's cached
+          // answers stay warm (webhooks still invalidate globally, #212)
+          opts.access.invalidate(session.id);
         }
         return send(res, 200, await listRepos(opts, session));
       }

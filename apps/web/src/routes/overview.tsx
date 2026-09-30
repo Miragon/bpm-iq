@@ -1,10 +1,11 @@
 import { Badge } from "@bpmiq/ui-kit/components/badge";
 import { Button } from "@bpmiq/ui-kit/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@bpmiq/ui-kit/components/card";
+import { Skeleton } from "@bpmiq/ui-kit/components/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Copy, Plus, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Copy, Loader2, Plus, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ApiError, fetchRepos, type RepoInfo } from "@/lib/api";
@@ -33,7 +34,11 @@ export function Overview() {
   const refresh = async () => {
     setRefreshing(true);
     try {
-      qc.setQueryData<RepoInfo[]>(["repos"], await fetchRepos(true));
+      const fresh = await fetchRepos(true);
+      // a background revalidation still in flight must not land AFTER this
+      // forced result and overwrite it with the pre-sync list
+      await qc.cancelQueries({ queryKey: ["repos"] });
+      qc.setQueryData<RepoInfo[]>(["repos"], fresh);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         void qc.invalidateQueries({ queryKey: ["me"] }); // session gone → flip to login
@@ -57,12 +62,38 @@ export function Overview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
+  // a failed load or background revalidation is never silent; an expired
+  // session flips to the login instead. One toast per failure — an error the
+  // cache still holds from before this visit is not announced again.
+  const reportedErrorAt = useRef(repos.errorUpdatedAt);
+  useEffect(() => {
+    const e = repos.error;
+    if (!e || repos.errorUpdatedAt <= reportedErrorAt.current) return;
+    reportedErrorAt.current = repos.errorUpdatedAt;
+    if (e instanceof ApiError && e.status === 401) {
+      void qc.invalidateQueries({ queryKey: ["me"] });
+      return;
+    }
+    toast.error("Could not update the repository list", { description: e.message });
+  }, [repos.error, repos.errorUpdatedAt, qc]);
+
   const list = repos.data ?? [];
+  // the list on screen is the last known one while the background refresh runs (#212)
+  const updating = repos.isFetching && !repos.isPending;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          Repositories
+          {updating && (
+            <Loader2
+              role="status"
+              aria-label="Updating the repository list"
+              className="text-muted-foreground size-4 animate-spin motion-reduce:animate-none"
+            />
+          )}
+        </h1>
         <div className="flex items-center gap-2">
           {installUrl && (
             <Button size="sm" onClick={() => openInstallPicker(installUrl, refresh)}>
@@ -89,7 +120,11 @@ export function Overview() {
       </p>
 
       {repos.isLoading ? (
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <RepoCardSkeletons />
+      ) : repos.isError && !repos.data ? (
+        <p className="text-muted-foreground max-w-prose text-sm">
+          The repository list could not be loaded — try <strong>Refresh</strong>.
+        </p>
       ) : list.length === 0 ? (
         <p className="text-muted-foreground max-w-prose text-sm">
           No repositories for your account yet. Use <strong>Add repository</strong> to install the app on one or more
@@ -127,6 +162,28 @@ export function Overview() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** the first load without a cached list: placeholders in the card grid's shape */
+function RepoCardSkeletons() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2" aria-busy="true" aria-label="Loading repositories">
+      {Array.from({ length: 4 }, (_, i) => (
+        <Card key={i}>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Skeleton className="size-5" />
+              <Skeleton className="h-4 w-40" />
+            </div>
+            <Skeleton className="h-4 w-52" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-5 w-20" />
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
