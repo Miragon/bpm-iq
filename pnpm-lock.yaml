@@ -12,8 +12,8 @@ importers:
         specifier: 10.0.1
         version: 10.0.1(eslint@10.11.0(jiti@2.7.0))
       '@types/node':
-        specifier: 26.6.2
-        version: 26.6.2
+        specifier: 26.6.3
+        version: 26.6.3
       dependency-cruiser:
         specifier: 18.4.0
         version: 18.4.0
@@ -36,8 +36,8 @@ importers:
         specifier: 9.1.7
         version: 9.1.7
       lint-staged:
-        specifier: 17.5.1
-        version: 17.5.1
+        specifier: 17.6.0
+        version: 17.6.0
       prettier:
         specifier: 3.9.9
         version: 3.9.9
@@ -109,8 +109,8 @@ importers:
         specifier: 8.18.1
         version: 8.18.1
       ws:
-        specifier: 8.21.3
-        version: 8.21.3
+        specifier: 8.22.0
+        version: 8.22.0
 
   apps/vscode:
     dependencies:
@@ -124,8 +124,8 @@ importers:
         specifier: 4.7.0
         version: 4.7.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
       ws:
-        specifier: 8.21.3
-        version: 8.21.3
+        specifier: 8.22.0
+        version: 8.22.0
       yjs:
         specifier: 13.6.33
         version: 13.6.33
@@ -171,7 +171,7 @@ importers:
         version: link:../../packages/ui-kit
       '@emaarco/dmn-js-simulation':
         specifier: 0.3.1
-        version: 0.3.1(diagram-js@15.27.0)(dmn-js@17.11.1)(inferno@5.6.3)
+        version: 0.3.1(diagram-js@15.27.1)(dmn-js@17.12.2)(inferno@5.6.3)
       '@miragon/context-maps-renderer':
         specifier: 0.2.0
         version: 0.2.0
@@ -180,16 +180,16 @@ importers:
         version: 0.2.0
       '@miragon/event-storming-renderer':
         specifier: 0.2.2
-        version: 0.2.2(diagram-js@15.27.0)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)
+        version: 0.2.2(diagram-js@15.27.1)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)
       '@miragon/team-topologies-renderer':
         specifier: 0.8.0
-        version: 0.8.0(diagram-js@15.27.0)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)
+        version: 0.8.0(diagram-js@15.27.1)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)
       '@miragon/team-topologies-schema-model':
         specifier: 0.8.0
         version: 0.8.0(zod@4.6.5)
       '@miragon/wardley-renderer':
         specifier: 0.6.2
-        version: 0.6.2(diagram-js@15.27.0)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)
+        version: 0.6.2(diagram-js@15.27.1)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)
       '@modelcontextprotocol/client':
         specifier: 2.1.0
         version: 2.1.0
@@ -198,34 +198,34 @@ importers:
         version: 2.0.3(@modelcontextprotocol/client@2.1.0)(@modelcontextprotocol/core@2.1.0)(@modelcontextprotocol/server@2.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(zod@4.6.5)
       '@tailwindcss/vite':
         specifier: 4.3.3
-        version: 4.3.3(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+        version: 4.3.3(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
       '@tanstack/react-query':
-        specifier: 5.103.2
-        version: 5.103.2(react@19.3.0)
+        specifier: 5.104.0
+        version: 5.104.0(react@19.3.0)
       '@tanstack/react-router':
-        specifier: 1.170.39
-        version: 1.170.39(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 1.170.40
+        version: 1.170.40(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@tanstack/react-table':
         specifier: 9.2.4
         version: 9.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       bpmn-js:
-        specifier: 18.30.0
-        version: 18.30.0
+        specifier: 18.30.1
+        version: 18.30.1
       bpmn-js-color-picker:
         specifier: 0.7.2
-        version: 0.7.2(bpmn-js@18.30.0)
+        version: 0.7.2(bpmn-js@18.30.1)
       bpmn-js-differ:
         specifier: 3.2.0
         version: 3.2.0
       diagram-js:
-        specifier: 15.27.0
-        version: 15.27.0
+        specifier: 15.27.1
+        version: 15.27.1
       dmn-js:
-        specifier: 17.11.1
-        version: 17.11.1
+        specifier: 17.12.2
+        version: 17.12.2
       lucide-react:
-        specifier: 1.47.0
-        version: 1.47.0(react@19.3.0)
+        specifier: 1.48.0
+        version: 1.48.0(react@19.3.0)
       monaco-editor:
         specifier: 0.55.1
         version: 0.55.1
@@ -259,16 +259,16 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: 6.1.1
-        version: 6.1.1(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+        version: 6.1.1(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
       postcss-prefix-selector:
         specifier: 2.2.1
         version: 2.2.1(postcss@8.5.28)
       vite:
         specifier: 8.3.1
-        version: 8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+        version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
       vite-plugin-singlefile:
         specifier: 2.3.3
-        version: 2.3.3(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+        version: 2.3.3(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/api-client:
     devDependencies:
@@ -281,8 +281,8 @@ importers:
   packages/contracts:
     devDependencies:
       '@types/node':
-        specifier: 26.6.2
-        version: 26.6.2
+        specifier: 26.6.3
+        version: 26.6.3
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -294,7 +294,7 @@ importers:
         version: link:../notations
       '@emaarco/dmn-js-simulation':
         specifier: 0.3.1
-        version: 0.3.1(diagram-js@15.27.0)(dmn-js@17.11.1)(inferno@5.6.3)
+        version: 0.3.1(diagram-js@15.27.1)(dmn-js@17.12.2)(inferno@5.6.3)
       feelin:
         specifier: 7.0.2
         version: 7.0.2
@@ -306,16 +306,16 @@ importers:
         version: 2.9.1
     devDependencies:
       '@types/node':
-        specifier: 26.6.2
-        version: 26.6.2
+        specifier: 26.6.3
+        version: 26.6.3
 
   packages/github-app: {}
 
   packages/http-kit:
     devDependencies:
       '@types/node':
-        specifier: 26.6.2
-        version: 26.6.2
+        specifier: 26.6.3
+        version: 26.6.3
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -333,8 +333,8 @@ importers:
         version: 13.6.33
     devDependencies:
       '@types/node':
-        specifier: 26.6.2
-        version: 26.6.2
+        specifier: 26.6.3
+        version: 26.6.3
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -395,8 +395,8 @@ importers:
         version: 4.6.5
     devDependencies:
       '@types/node':
-        specifier: 26.6.2
-        version: 26.6.2
+        specifier: 26.6.3
+        version: 26.6.3
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -411,8 +411,8 @@ importers:
         version: 2.9.1
     devDependencies:
       '@types/node':
-        specifier: 26.6.2
-        version: 26.6.2
+        specifier: 26.6.3
+        version: 26.6.3
 
   packages/ui-kit:
     dependencies:
@@ -432,8 +432,8 @@ importers:
         specifier: 2.1.1
         version: 2.1.1
       lucide-react:
-        specifier: 1.47.0
-        version: 1.47.0(react@19.3.0)
+        specifier: 1.48.0
+        version: 1.48.0(react@19.3.0)
       react:
         specifier: ^19.2.7
         version: 19.3.0
@@ -899,6 +899,9 @@ packages:
 
   '@lezer/highlight@1.2.4':
     resolution: {integrity: sha512-4UeRVFO0lsBaM7GA32zOqbmqNPme9jedo8Ey+5c5656MU3MLitMLIA8aCZTYjUMEpEsuSeXEm78Uea6Iq3bvSg==}
+
+  '@lezer/highlight@1.2.5':
+    resolution: {integrity: sha512-O1GMVKgtf5YspFaRzpmqkVgMtIk2HG9uMAbH6wdAIdNh3TVzCsch/+cRi+6l2//UGDKe6NB9BW3cvuR5ezMQ0w==}
 
   '@lezer/lr@1.4.10':
     resolution: {integrity: sha512-rnCpTIBafOx4mRp43xOxDJbFipJm/c0cia/V5TiGlhmMa+wsSdoGmUN3w5Bqrks/09Q/D4tNAmWaT8p6NRi77A==}
@@ -1588,16 +1591,16 @@ packages:
     resolution: {integrity: sha512-utTS5L2OkeYUzXGohL1Z8sefu1GLNOJcxe8Hd6iIdc/Xo1K1nDB2JEp4iSFhvYh33xKC9V91TxrS8qfrpoKobQ==}
     engines: {node: '>=20.19'}
 
-  '@tanstack/query-core@5.103.2':
-    resolution: {integrity: sha512-I8DkFXls5jXLqtm8+QpOhEmG07hIblhSZFzafg9wHsMSEvMzULy9hK17wU1T/ahfhMbtITJhbxutwwCoihkR7A==}
+  '@tanstack/query-core@5.104.0':
+    resolution: {integrity: sha512-JrC2r/JQlXt7khBSdUpsgxNvybzOg+aITa+ARRMlP2AFo93Y8vIqz077rp+e61mJetSZ0T6AJbwW1JHer1vrPQ==}
 
-  '@tanstack/react-query@5.103.2':
-    resolution: {integrity: sha512-B+fWiYZBc+0uUD5zDZAeLw9dKj7XEsdnuu6zRZ+no6LNKpeE3P3bJ+N6HINjcIlWR6fW3vUoTneEaGa2V6ehqw==}
+  '@tanstack/react-query@5.104.0':
+    resolution: {integrity: sha512-e1TZmDCQnWIfiDVryIHeA6Idj+Lfx1hORLOhXS/l5wcgvtVD4yYqbTDl378sGQKIi2cSgb0TEMC9cKK8GGoJEw==}
     peerDependencies:
       react: ^18 || ^19
 
-  '@tanstack/react-router@1.170.39':
-    resolution: {integrity: sha512-wLZi/hXW/kTeLlMIvI2VB8Oj38GLz8YkHmTM14lLScAzx79UZEwBHWMj6JZw/imuyuhrcmbe8KTFsFBHzJUftg==}
+  '@tanstack/react-router@1.170.40':
+    resolution: {integrity: sha512-vVr3va9Mcq05rZRrDZPGoptAClRMKHvekLbpg2GcfXvAAtOVhW6Q93tOz4dvS8j03vTVrU25VM6weP1SIHGEew==}
     engines: {node: '>=20.19'}
     peerDependencies:
       react: '>=18.0.0 || >=19.0.0'
@@ -1615,8 +1618,8 @@ packages:
     peerDependencies:
       react: '>=18'
 
-  '@tanstack/router-core@1.171.32':
-    resolution: {integrity: sha512-X86Jqk3vB2KJcUfS6oLi7B7yxbaa59QEhZRPPP1fRx3k+Jw/Fu1UYVBcRtdwK/OccQnrlQdVoKvNO3QXmyEBOw==}
+  '@tanstack/router-core@1.171.33':
+    resolution: {integrity: sha512-TK31LyRZuVwwmWrv3oSCBN7OuM4R1qQZePRTiexFyqQUuCo3ERHZgzArosynwZKtYlEf4qbFCvbW7UUfvGiiZw==}
     engines: {node: '>=20.19'}
 
   '@tanstack/store@0.11.1':
@@ -1635,8 +1638,8 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
-  '@types/node@26.6.2':
-    resolution: {integrity: sha512-X1P21scMv4zGKLYqjdGjaKa7COa0RKVYYZZN/NfvLQ1JegxFhdhpZG/Lyn8AXx6CDUavKAd11v6BvfpkDByK8g==}
+  '@types/node@26.6.3':
+    resolution: {integrity: sha512-dsqMQQoeTLqu9wynDD00q573mNzso3IdQOAfHRJqLCcmCFPoGo9A1bDpUcv/9tnKpErQWv9uKeGfl37EIS02Yg==}
 
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
@@ -1932,8 +1935,8 @@ packages:
   bpmn-js-differ@3.2.0:
     resolution: {integrity: sha512-FdLXHzoysjVL5mr0pIbbsPmVV04/qcHBxrQHsQxXb2blAw4u9sDnJmaHTh/PMGrPRRZyVVcKaY1sMFRNx64fCw==}
 
-  bpmn-js@18.30.0:
-    resolution: {integrity: sha512-x44scrdWZTtTrAGYmz1lajxNg4WsYaGS97Q5V1R0qzrvgZEsHUdpb2dcEB6AfCieAVUgP75I9Jd63SIZb1DfTA==}
+  bpmn-js@18.30.1:
+    resolution: {integrity: sha512-xQawvly/8bL9fIW14+RpYh2w+8eFUXDSgiCi/+YjBk3IxT3ZUIiDPZbDhDZjZqNuHSTeZ4J/n3vWjSYh+Y3eXQ==}
 
   bpmn-moddle@10.3.1:
     resolution: {integrity: sha512-xjJ8GzseRkjjM0MX/rODVB6iv+rhGLt8FCHJIovLAjJsDEAUjITfyiJZYczJ4pp3wmesbY3sQR7eRT+q5uroVA==}
@@ -2066,8 +2069,8 @@ packages:
   diagram-js@15.24.1:
     resolution: {integrity: sha512-0zlPffk8pGdbUmt0RQH32N7dIbgYuLwkFlZTCi28kRSkb37GdEjONjXKs+NluZvWeLsY1hqSyq4le19ZeFE19Q==}
 
-  diagram-js@15.27.0:
-    resolution: {integrity: sha512-GzE1Y4DTxJshBMJLKNsGqpcQRCL3Ma9v4DBRhyG96JN49tuh/ryfjDkv8vGC6kdV1EM0+MOR4FBJo1JgMtyfRA==}
+  diagram-js@15.27.1:
+    resolution: {integrity: sha512-bs0J/ZTPZeaYY4Yd0VUhnMHRF3kX2tk45aCB3k9sOcCIHqxaqJxxgMR3QO0hylV55Kq6r4Sbb0Ev8VFeZx8+KA==}
 
   didi@11.0.0:
     resolution: {integrity: sha512-PzCfRzQttvFpVcYMbSF7h8EsWjeJpVjWH4qDhB5LkMi1ILvHq4Ob0vhM2wLFziPkbUBi+PAo7ODbe2sacR7nJQ==}
@@ -2093,8 +2096,8 @@ packages:
   dmn-js-shared@17.12.2:
     resolution: {integrity: sha512-BNHeQw0/Wo+8XdRcPeVv3cf0zB/CXZJkXlxGfJiVsqhD+rwsh2gAnvufiVWGiY4hLw73AD+28KD3/cQ72mnO5w==}
 
-  dmn-js@17.11.1:
-    resolution: {integrity: sha512-uhJR3tHcb8eaeKgNFcYxhCWuqBsCU3E+2D2sFeTWaVbplSL2Uim5eCXlP18znFvZsuqda0ctqduf7gHzqRgjyw==}
+  dmn-js@17.12.2:
+    resolution: {integrity: sha512-GzHlTeteVKz4Kd/ZCKE7s4cERwNcFm4XXfydh6uVAnO1e91rpPRPm2g377mi5GHVzSv9xhshXnwUesgGlzwTEw==}
 
   dmn-moddle@12.2.1:
     resolution: {integrity: sha512-X0UmMGmF3klrDv3NPHq045InNBAE5whmK2GAmXZJ7QszsIWR2p/EHYcD4XiJSUr2n8F8VghY79yDY/eBeiAhxA==}
@@ -2663,8 +2666,8 @@ packages:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
 
-  lint-staged@17.5.1:
-    resolution: {integrity: sha512-7EDuco1xnBMeVpvAbeMq1U5KXwJGLmY8q6l+Ye78r36C4mPc+Vg1Z2SK8gHyRTyvPro90A0q5/FAZ+Au23d6QQ==}
+  lint-staged@17.6.0:
+    resolution: {integrity: sha512-nOhBfYkZEwkFtNzD5pK9s9LkcWoxJ+whLzEnhqi9nl7zTB5n7tg8+9iYgMGx2Wm3VlLu8cbNj0RACzY+nWi5iQ==}
     engines: {node: '>=22.22.1'}
     hasBin: true
 
@@ -2679,8 +2682,8 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
-  lucide-react@1.47.0:
-    resolution: {integrity: sha512-o8C23aXpNQypRY73W7fW02EyvWJinEMXgKeGjFoKym0zj3Q73hD97A1IQps1g8C14HTGsOpZL0Am+xjfgFZAbg==}
+  lucide-react@1.48.0:
+    resolution: {integrity: sha512-R0CIKY/fXiC6y9xRBADgsK+VW2p/pcTJOMhLZf1T+uG+vJUvyUR02nGOgmIIC7MPkiNK4Ox8QDnbqF8rJYWPZQ==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -3285,8 +3288,8 @@ packages:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
 
-  ws@8.21.3:
-    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -3458,7 +3461,7 @@ snapshots:
       '@codemirror/language': 6.12.4
       '@codemirror/state': 6.7.6
       '@codemirror/view': 6.43.13
-      '@lezer/highlight': 1.2.4
+      '@lezer/highlight': 1.2.5
 
   '@bpmn-io/diagram-js-ui@0.2.4':
     dependencies:
@@ -3487,7 +3490,7 @@ snapshots:
       '@codemirror/lint': 6.9.7
       '@codemirror/state': 6.7.6
       '@codemirror/view': 6.43.13
-      '@lezer/highlight': 1.2.4
+      '@lezer/highlight': 1.2.5
       min-dom: 5.3.0
       mitt: 3.0.1
 
@@ -3507,7 +3510,7 @@ snapshots:
 
   '@bpmn-io/lezer-feel@3.0.1':
     dependencies:
-      '@lezer/highlight': 1.2.4
+      '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.10
       min-dash: 5.1.0
 
@@ -3548,7 +3551,7 @@ snapshots:
       '@codemirror/state': 6.7.6
       '@codemirror/view': 6.43.13
       '@lezer/common': 1.5.3
-      '@lezer/highlight': 1.2.4
+      '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.10
       style-mod: 4.1.4
 
@@ -3569,10 +3572,10 @@ snapshots:
       style-mod: 4.1.4
       w3c-keyname: 2.2.8
 
-  '@emaarco/dmn-js-simulation@0.3.1(diagram-js@15.27.0)(dmn-js@17.11.1)(inferno@5.6.3)':
+  '@emaarco/dmn-js-simulation@0.3.1(diagram-js@15.27.1)(dmn-js@17.12.2)(inferno@5.6.3)':
     optionalDependencies:
-      diagram-js: 15.27.0
-      dmn-js: 17.11.1
+      diagram-js: 15.27.1
+      dmn-js: 17.12.2
       inferno: 5.6.3
 
   '@esbuild/aix-ppc64@0.28.2':
@@ -3781,6 +3784,10 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.3
 
+  '@lezer/highlight@1.2.5':
+    dependencies:
+      '@lezer/common': 1.5.3
+
   '@lezer/lr@1.4.10':
     dependencies:
       '@lezer/common': 1.5.3
@@ -3810,12 +3817,12 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@miragon/event-storming-renderer@0.2.2(diagram-js@15.27.0)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)':
+  '@miragon/event-storming-renderer@0.2.2(diagram-js@15.27.1)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)':
     dependencies:
       '@miragon/event-storming-dsl': 0.2.2(zod@4.6.5)
       '@miragon/event-storming-schema-model': 0.2.1(zod@4.6.5)
       clsx: 2.1.1
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       didi: 11.0.0
       tiny-svg: 4.1.4
     transitivePeerDependencies:
@@ -3825,10 +3832,10 @@ snapshots:
     dependencies:
       zod: 4.6.5
 
-  '@miragon/team-topologies-renderer@0.8.0(diagram-js@15.27.0)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)':
+  '@miragon/team-topologies-renderer@0.8.0(diagram-js@15.27.1)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)':
     dependencies:
       '@miragon/team-topologies-schema-model': 0.8.0(zod@4.6.5)
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       didi: 11.0.0
       tiny-svg: 4.1.4
       zod: 4.6.5
@@ -3843,12 +3850,12 @@ snapshots:
       '@miragon/wardley-schema-model': 0.5.1(zod@4.6.5)
       zod: 4.6.5
 
-  '@miragon/wardley-renderer@0.6.2(diagram-js@15.27.0)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)':
+  '@miragon/wardley-renderer@0.6.2(diagram-js@15.27.1)(didi@11.0.0)(tiny-svg@4.1.4)(zod@4.6.5)':
     dependencies:
       '@miragon/wardley-dsl': 0.5.2(zod@4.6.5)
       '@miragon/wardley-schema-model': 0.5.1(zod@4.6.5)
       clsx: 2.1.1
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       didi: 11.0.0
       tiny-svg: 4.1.4
       zod: 4.6.5
@@ -4314,27 +4321,27 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/vite@4.3.3(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))':
+  '@tailwindcss/vite@4.3.3(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vite: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
 
   '@tanstack/history@1.162.4': {}
 
-  '@tanstack/query-core@5.103.2': {}
+  '@tanstack/query-core@5.104.0': {}
 
-  '@tanstack/react-query@5.103.2(react@19.3.0)':
+  '@tanstack/react-query@5.104.0(react@19.3.0)':
     dependencies:
-      '@tanstack/query-core': 5.103.2
+      '@tanstack/query-core': 5.104.0
       react: 19.3.0
 
-  '@tanstack/react-router@1.170.39(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@tanstack/react-router@1.170.40(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@tanstack/history': 1.162.4
       '@tanstack/react-store': 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@tanstack/router-core': 1.171.32
+      '@tanstack/router-core': 1.171.33
       isbot: 5.2.2
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
@@ -4354,7 +4361,7 @@ snapshots:
     transitivePeerDependencies:
       - react-dom
 
-  '@tanstack/router-core@1.171.32':
+  '@tanstack/router-core@1.171.33':
     dependencies:
       '@tanstack/history': 1.162.4
       cookie-es: 3.1.1
@@ -4373,7 +4380,7 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
-  '@types/node@26.6.2':
+  '@types/node@26.6.3':
     dependencies:
       undici-types: 8.9.0
 
@@ -4392,7 +4399,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 26.6.2
+      '@types/node': 26.6.3
 
   '@typescript-eslint/eslint-plugin@8.70.1(@typescript-eslint/parser@8.70.1(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
@@ -4485,10 +4492,10 @@ snapshots:
       '@typescript-eslint/types': 8.70.1
       eslint-visitor-keys: 5.0.1
 
-  '@vitejs/plugin-react@6.1.1(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))':
+  '@vitejs/plugin-react@6.1.1(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vite: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
 
   '@vscode/test-electron@3.1.0':
     dependencies:
@@ -4619,20 +4626,20 @@ snapshots:
 
   baseline-browser-mapping@2.10.43: {}
 
-  bpmn-js-color-picker@0.7.2(bpmn-js@18.30.0):
+  bpmn-js-color-picker@0.7.2(bpmn-js@18.30.1):
     dependencies:
-      bpmn-js: 18.30.0
+      bpmn-js: 18.30.1
 
   bpmn-js-differ@3.2.0:
     dependencies:
       diffpatch: 0.6.0
       min-dash: 5.1.0
 
-  bpmn-js@18.30.0:
+  bpmn-js@18.30.1:
     dependencies:
       bpmn-moddle: 10.3.1
-      diagram-js: 15.27.0
-      diagram-js-direct-editing: 3.5.1(diagram-js@15.27.0)
+      diagram-js: 15.27.1
+      diagram-js-direct-editing: 3.5.1(diagram-js@15.27.1)
       ids: 3.0.2
       inherits-browser: 0.1.0
       min-dash: 5.1.0
@@ -4765,9 +4772,9 @@ snapshots:
       min-dash: 5.1.0
       min-dom: 5.3.0
 
-  diagram-js-direct-editing@3.5.1(diagram-js@15.27.0):
+  diagram-js-direct-editing@3.5.1(diagram-js@15.27.1):
     dependencies:
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       min-dash: 5.1.0
       min-dom: 5.3.0
 
@@ -4785,7 +4792,7 @@ snapshots:
     transitivePeerDependencies:
       - preact-render-to-string
 
-  diagram-js@15.27.0:
+  diagram-js@15.27.1:
     dependencies:
       '@bpmn-io/diagram-js-ui': 0.2.4
       clsx: 2.1.1
@@ -4808,12 +4815,12 @@ snapshots:
   dmn-js-boxed-expression@17.12.2:
     dependencies:
       '@bpmn-io/dmn-variable-resolver': 0.7.1
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       dmn-js-shared: 17.12.2
       inferno: 5.6.3
       min-dash: 5.1.0
       min-dom: 5.3.0
-      table-js: 9.4.0(diagram-js@15.27.0)(inferno@5.6.3)
+      table-js: 9.4.0(diagram-js@15.27.1)(inferno@5.6.3)
     transitivePeerDependencies:
       - preact-render-to-string
 
@@ -4821,21 +4828,21 @@ snapshots:
     dependencies:
       '@bpmn-io/dmn-variable-resolver': 0.7.1
       css.escape: 1.5.1
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       dmn-js-shared: 17.12.2
       escape-html: 1.0.3
       inferno: 5.6.3
       min-dash: 5.1.0
       min-dom: 5.3.0
       selection-ranges: 4.1.1
-      table-js: 9.4.0(diagram-js@15.27.0)(inferno@5.6.3)
+      table-js: 9.4.0(diagram-js@15.27.1)(inferno@5.6.3)
     transitivePeerDependencies:
       - preact-render-to-string
 
   dmn-js-drd@17.12.2:
     dependencies:
-      diagram-js: 15.27.0
-      diagram-js-direct-editing: 3.5.1(diagram-js@15.27.0)
+      diagram-js: 15.27.1
+      diagram-js-direct-editing: 3.5.1(diagram-js@15.27.1)
       dmn-js-shared: 17.12.2
       ids: 3.0.2
       inherits-browser: 0.1.0
@@ -4849,20 +4856,20 @@ snapshots:
   dmn-js-literal-expression@17.12.2:
     dependencies:
       '@bpmn-io/dmn-variable-resolver': 0.7.1
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       dmn-js-shared: 17.12.2
       escape-html: 1.0.3
       inferno: 5.6.3
       min-dash: 5.1.0
       min-dom: 5.3.0
-      table-js: 9.4.0(diagram-js@15.27.0)(inferno@5.6.3)
+      table-js: 9.4.0(diagram-js@15.27.1)(inferno@5.6.3)
     transitivePeerDependencies:
       - preact-render-to-string
 
   dmn-js-shared@17.12.2:
     dependencies:
       '@bpmn-io/feel-editor': 2.8.0
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       didi: 11.0.0
       dmn-moddle: 12.2.1
       ids: 3.0.2
@@ -4871,11 +4878,11 @@ snapshots:
       min-dom: 5.3.0
       selection-ranges: 4.1.1
       selection-update: 1.1.1
-      table-js: 9.4.0(diagram-js@15.27.0)(inferno@5.6.3)
+      table-js: 9.4.0(diagram-js@15.27.1)(inferno@5.6.3)
     transitivePeerDependencies:
       - preact-render-to-string
 
-  dmn-js@17.11.1:
+  dmn-js@17.12.2:
     dependencies:
       dmn-js-boxed-expression: 17.12.2
       dmn-js-decision-table: 17.12.2
@@ -5381,7 +5388,7 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
 
-  lint-staged@17.5.1:
+  lint-staged@17.6.0:
     dependencies:
       picomatch: 4.0.7
       string-argv: 0.3.2
@@ -5402,7 +5409,7 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucide-react@1.47.0(react@19.3.0):
+  lucide-react@1.48.0(react@19.3.0):
     dependencies:
       react: 19.3.0
 
@@ -5750,9 +5757,9 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  table-js@9.4.0(diagram-js@15.27.0)(inferno@5.6.3):
+  table-js@9.4.0(diagram-js@15.27.1)(inferno@5.6.3):
     dependencies:
-      diagram-js: 15.27.0
+      diagram-js: 15.27.1
       didi: 11.0.0
       inferno: 5.6.3
       min-dash: 5.1.0
@@ -5882,12 +5889,12 @@ snapshots:
 
   verkit@0.4.0: {}
 
-  vite-plugin-singlefile@2.3.3(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)):
+  vite-plugin-singlefile@2.3.3(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)):
     dependencies:
       micromatch: 4.0.8
-      vite: 8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vite: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
 
-  vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1):
+  vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -5895,7 +5902,7 @@ snapshots:
       rolldown: 1.2.11
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.6.2
+      '@types/node': 26.6.3
       esbuild: 0.28.2
       fsevents: 2.3.3
       jiti: 2.7.0
@@ -5911,7 +5918,7 @@ snapshots:
 
   word-wrap@1.2.5: {}
 
-  ws@8.21.3: {}
+  ws@8.22.0: {}
 
   xml-naming@0.3.0: {}
 
