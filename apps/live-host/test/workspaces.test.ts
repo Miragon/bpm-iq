@@ -35,16 +35,29 @@ function manager(hostRoot: string, dataDir: string) {
   });
 }
 
-test("isHostRepo: true only for the host repo WITH a root bpmiq.yml", () => {
+test("isHostRepo: true only for the host repo WITH a root contract file (legacy name)", () => {
   const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
   const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
   const wm = manager(hostRoot, data);
   // no bpmiq.yml yet → the host checkout is NOT served in place (cloned like any repo)
   assert.equal(wm.isHostRepo("Miragon/bpm-iq"), false);
-  writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n");
+  writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n"); // legacy-name-ok: pins the legacy path
   assert.equal(wm.isHostRepo("Miragon/bpm-iq"), true);
   assert.equal(wm.isHostRepo("miragon/BPM-IQ"), true, "host match is case-insensitive");
   assert.equal(wm.isHostRepo("acme/other"), false, "a different repo is never the host");
+});
+
+test("isHostRepo: a host root whose contract file is designiq.yml is served in place too", () => {
+  const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
+  const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
+  const wm = manager(hostRoot, data);
+  assert.equal(wm.isHostRepo("Miragon/bpm-iq"), false);
+  // the bind-mount case: a checkout that only carries the new name must not be
+  // bypassed (and GITHUB_REPO cloned instead) by a probe for the legacy file
+  writeFileSync(join(hostRoot, "designiq.yml"), "models: processes\n");
+  assert.equal(wm.isHostRepo("Miragon/bpm-iq"), true);
+  assert.equal(wm.isHostRepo("acme/other"), false, "a different repo is never the host");
+  assert.equal(wm.dir(repo("Miragon/bpm-iq")), hostRoot);
 });
 
 test("dir: host repo → its checkout in place; other repos → dataDir/workspaces/<owner>/<name>", () => {
@@ -211,6 +224,12 @@ function catchUpFixture(files: Record<string, string>) {
       git(ws, "rev-parse", "HEAD").toString().trim() === git(ws, "rev-parse", "origin/main").toString().trim(),
   };
 }
+
+/** a host-state file inside a clone's .git. The prefix is spelled in two halves
+ *  ON PURPOSE: a search/replace of the product name rewrites the constants in
+ *  workspaces.ts and every literal here in the same breath, and the suite
+ *  stays green — this spelling it cannot reach. */
+const hostState = (ws: string, name: string) => join(ws, ".git", "bpm" + "iq-" + name);
 
 function writeFiles(root: string, changes: Record<string, string | null>) {
   for (const [path, content] of Object.entries(changes)) {
@@ -495,8 +514,26 @@ test("recordRenames: a platform rename pairs its delete + add in changedFiles; c
     { path: "processes/d.dmn", status: "added" },
     { path: "processes/d.tests.yaml", status: "added", renamedFrom: "processes/c.tests.yaml" },
   ]);
+  assert.ok(existsSync(hostState(f.ws, "renames.json")), "the journal is on disk while a rename is pending");
   await f.wm.resetToDefault(f.repo);
-  assert.ok(!existsSync(join(f.ws, ".git", "bpmiq-renames.json")), "load-latest ends every pending rename");
+  assert.ok(!existsSync(hostState(f.ws, "renames.json")), "load-latest ends every pending rename");
+});
+
+test("host state names are frozen: what an older host left in .git is still read", async () => {
+  const f = catchUpFixture({ "processes/a.bpmn": "a0" });
+  // exactly the files an installation's clones already carry — a renamed state
+  // file reads as "no state", and a lost conflict list lets a release revert
+  // upstream work
+  writeFileSync(hostState(f.ws, "conflicts.json"), JSON.stringify(["processes/a.bpmn"]));
+  writeFileSync(
+    hostState(f.ws, "renames.json"),
+    JSON.stringify([{ from: "processes/a.bpmn", to: "processes/b.bpmn" }]),
+  );
+  assert.deepEqual(await f.wm.conflicts(f.repo), ["processes/a.bpmn"]);
+  assert.deepEqual(await f.wm.renames(f.repo), [{ from: "processes/a.bpmn", to: "processes/b.bpmn" }]);
+  // and the open-release list is written under its historical name
+  await f.release({ "processes/a.bpmn": "a1" }, "rel-a");
+  assert.ok(existsSync(hostState(f.ws, "released.json")));
 });
 
 test("recordRenames: a rename released and merged ends its pair — renaming the new name again pairs on its own", async () => {

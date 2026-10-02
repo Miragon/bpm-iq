@@ -41,7 +41,13 @@ import { hasRefs } from "@bpmiq/notations/refs";
 import { checkModel, type Finding } from "@bpmiq/validator";
 import type * as Y from "yjs";
 
-import { docCodecForPath, type RegistryLookup, toDiskPath, type WorkspaceEnsure } from "../domain/rooms.ts";
+import {
+  docCodecForPath,
+  NotAContentRepoError,
+  type RegistryLookup,
+  toDiskPath,
+  type WorkspaceEnsure,
+} from "../domain/rooms.ts";
 import { discoverModels, loadContentConfig } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 import { modelPath } from "./model-path.ts";
@@ -283,7 +289,7 @@ async function assertOnDisk(opts: ContentDeps, repo: ConnectedRepo, safePath: st
     disk = await toDiskPath(room, opts.registry, opts.workspaces, loadContentConfig);
   } catch (e) {
     const message = (e as Error).message;
-    if (message.includes("no bpmiq.yml")) {
+    if (e instanceof NotAContentRepoError) {
       throw new AppError("content/not-a-content-repo", message, { status: 422, expose: true });
     }
     throw new AppError("content/invalid-path", message, { status: 400, expose: true });

@@ -6,7 +6,10 @@
  * engine.
  */
 
-export const STICKY_TYPE = "bpmiq:Sticky";
+// FROZEN with the moddle descriptor (bpmiq-moddle.ts): moddle names a parsed
+// element "<descriptor prefix>:<type name>", so the left half MUST equal that
+// prefix — drift, and no sticky in any file is recognized any more.
+export const STICKY_TYPE = "bpmiq:Sticky"; // legacy-name-ok: left half = the frozen moddle prefix
 
 export const STICKY_KINDS = ["note", "question", "decision", "role"] as const;
 export type StickyKind = (typeof STICKY_KINDS)[number];

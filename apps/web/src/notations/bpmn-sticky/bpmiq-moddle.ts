@@ -11,9 +11,15 @@
  * opened in Camunda Modeler survives untouched.
  */
 export const bpmiqModdle = {
-  name: "bpmiq",
-  uri: "https://bpmiq.io/schema/1.0/bpmiq",
-  prefix: "bpmiq",
+  // FROZEN — these never follow a product rename. uri + prefix are written
+  // into every customer .bpmn that ever held a sticky or the workshop flag
+  // (the xmlns declaration, the sticky tag, the mode attribute). Rename both
+  // and such a file still opens without an error, but its stickies and the
+  // workshop mode silently vanish from canvas and Notes panel; rename only the
+  // uri and saveXML throws. Pinned by test/sticky-namespace.test.ts.
+  name: "bpmiq", // legacy-name-ok: moddle never reads it — kept equal to the frozen prefix
+  uri: "https://bpmiq.io/schema/1.0/bpmiq", // legacy-name-ok: persisted in customer .bpmn files
+  prefix: "bpmiq", // legacy-name-ok: persisted in customer .bpmn files
   xml: { tagAlias: "lowerCase" },
   types: [
     {

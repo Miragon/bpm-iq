@@ -37,7 +37,12 @@ export interface TodoAnchor {
   processVersion: string | null;
 }
 
-const OPEN = "<!-- bpmiq:todo v1";
+// FROZEN — the marker never follows a product rename. It opens the anchor
+// block in every todo issue already filed in customer trackers; under any
+// other spelling parseAnchor returns null for them, so those todos lose their
+// element anchor and stripAnchor leaves the raw block in the text shown to
+// people and agents. Pinned by apps/live-host/test/todo-anchor.test.ts.
+const OPEN = "<!-- bpmiq:todo v1"; // legacy-name-ok: stored in customer issue bodies
 const CLOSE = "-->";
 
 /** newlines/pipe would break the line format — flatten them out of names */

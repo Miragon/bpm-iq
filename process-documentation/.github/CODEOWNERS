@@ -9,6 +9,7 @@
 
 # ── Contract, skills & shared config — method owner ─────────────────
 /bpmiq.yml        @your-org/process-excellence
+/designiq.yml     @your-org/process-excellence
 /.claude/         @your-org/process-excellence
 /.github/         @your-org/process-excellence
 

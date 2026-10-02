@@ -6,7 +6,8 @@
  * Read-only by construction: only readFileSync + the content-repo discovery,
  * no write path. All tools carry readOnlyHint so clients may auto-approve them.
  * The one opt-in exception to "repo-local" is list_todos (registered ONLY when
- * BPM_TODOS_REPO + BPM_TODOS_TOKEN are set): a read-only GET against the content
+ * BPM_TODOS_REPO + BPM_TODOS_TOKEN are set — also read as DESIGNIQ_TODOS_REPO + // legacy-name-ok
+ * DESIGNIQ_TODOS_TOKEN, which win): a read-only GET against the content
  * repo's issue tracker — the zero-auth default stays untouched.
  *
  * The content contract is minimal (@bpmiq/notations/content): a repo is a BPM
@@ -16,8 +17,9 @@
  * BPMN on the fly (@bpmiq/notations/derive). A new notation with an extractor is
  * automatically analyzable here.
  *
- * Content root: pass --root <dir> (server.ts) or BPM_CONTENT_ROOT — any content
- * repo works, the bundled process-documentation is only the default.
+ * Content root: pass --root <dir> (server.ts) or BPM_CONTENT_ROOT (also read as // legacy-name-ok
+ * DESIGNIQ_CONTENT_ROOT, which wins) — any content repo works, the bundled
+ * process-documentation is only the default.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -41,9 +43,19 @@ import { extractModelGraph, type ModelGraph } from "@bpmiq/notations/extract";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+/** The content root the environment names — undefined when it names none. Read
+ * under two names: DESIGNIQ_CONTENT_ROOT wins, BPM_CONTENT_ROOT keeps working. // legacy-name-ok
+ * An EMPTY new name must not shadow a set old one (compose passes "" for an
+ * unset variable). An empty value with nothing behind it stays what it always
+ * was — "" (the cwd), NOT the bundled example — under either name, so swapping
+ * one name for the other never moves the root. */
+export function contentRootFromEnv(env: Record<string, string | undefined>): string | undefined {
+  return env.DESIGNIQ_CONTENT_ROOT || (env.BPM_CONTENT_ROOT ?? env.DESIGNIQ_CONTENT_ROOT); // legacy-name-ok: env fallback
+}
+
 /** This file lives at packages/mcp/; the example content repo is process-documentation/. */
 export const DEFAULT_ROOT =
-  process.env.BPM_CONTENT_ROOT ?? join(dirname(fileURLToPath(import.meta.url)), "..", "..", "process-documentation");
+  contentRootFromEnv(process.env) ?? join(dirname(fileURLToPath(import.meta.url)), "..", "..", "process-documentation");
 
 // ── File access — read-only, never throws ────────────────────────────────────
 const readText = (path: string): string | null => {
@@ -145,13 +157,20 @@ export interface TodosConfig {
 }
 
 /** The list_todos gate, used by BOTH entry points (server.ts, http.ts — the
- * composition roots read env, this module doesn't): undefined unless BOTH
- * BPM_TODOS_REPO and BPM_TODOS_TOKEN are set — the server stays zero-auth by
- * default, the tool simply does not exist without the opt-in. */
+ * composition roots read env, this module doesn't): undefined unless BOTH a
+ * tracker repo (BPM_TODOS_REPO) and a token (BPM_TODOS_TOKEN) are set — the // legacy-name-ok
+ * server stays zero-auth by default, the tool simply does not exist without
+ * the opt-in.
+ *
+ * Each of the two is also read as DESIGNIQ_TODOS_*, which wins, and resolved on
+ * its own: a half-migrated environment (repo under one name, token under the
+ * other) still opts in rather than silently losing the tool. Empty counts as
+ * unset (compose passes "" for an unset variable), so an empty new name never
+ * shadows a set old one. */
 export function todosConfigFromEnv(env: Record<string, string | undefined>): TodosConfig | undefined {
-  return env.BPM_TODOS_REPO && env.BPM_TODOS_TOKEN
-    ? { repo: env.BPM_TODOS_REPO, token: env.BPM_TODOS_TOKEN, apiUrl: env.GITHUB_API_URL }
-    : undefined;
+  const repo = env.DESIGNIQ_TODOS_REPO || env.BPM_TODOS_REPO; // legacy-name-ok: env fallback
+  const token = env.DESIGNIQ_TODOS_TOKEN || env.BPM_TODOS_TOKEN; // legacy-name-ok: env fallback
+  return repo && token ? { repo, token, apiUrl: env.GITHUB_API_URL } : undefined;
 }
 
 /** A per-capability tool contribution for the read-only server — the same
@@ -527,7 +546,8 @@ export function createMcpServer(
   // Model-anchored todos live as issues in the content repo's OWN tracker (see
   // apps/live-host). Listing them needs a credential, which this read-only
   // zero-auth server must never require — the tool only EXISTS when the entry
-  // point passed a TodosConfig (todosConfigFromEnv: BPM_TODOS_REPO + BPM_TODOS_TOKEN).
+  // point passed a TodosConfig (todosConfigFromEnv: BPM_TODOS_REPO + BPM_TODOS_TOKEN, // legacy-name-ok
+  // or the same two as DESIGNIQ_TODOS_*).
   if (todos) {
     const { repo: todosRepo, token: todosToken } = todos;
     const api = (todos.apiUrl ?? "https://api.github.com").replace(/\/$/, "");

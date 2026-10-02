@@ -12,10 +12,16 @@
  * process is the .bpmn special case, a decision the .dmn one. Nothing else
  * about the layout is assumed.
  *
+ * The contract file answers to two names (CONTENT_CONFIG_FILES, in precedence
+ * order): the first one that EXISTS at the root is THE config, the other is
+ * not even read. Selection is by existence only — a preferred file that is
+ * mid-edit or broken makes the repo "not a content repo" instead of silently
+ * handing the model folder to whatever the other file says.
+ *
  * Node-only (fs + yaml) — imported via the "@bpmiq/notations/content" subpath,
  * NEVER from the browser-safe package index.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, posix, relative } from "node:path";
 
@@ -25,7 +31,18 @@ import { extractModelGraph } from "./extract.ts";
 import { byExtension, modelStem } from "./index.ts";
 import { refsOf } from "./refs.ts";
 
+/** the documented name of the contract file — the one messages and docs say */
 export const CONTENT_CONFIG_FILE = "bpmiq.yml";
+
+/**
+ * Every name the contract file is accepted under, in precedence order. The
+ * second one is the legacy name and stays readable permanently: customer
+ * repos, the starter template and every released image <= 4.2.0 carry it.
+ */
+export const CONTENT_CONFIG_FILES = [
+  "designiq.yml",
+  "bpmiq.yml", // legacy-name-ok: persisted in customer repos, readable forever
+] as const;
 
 export interface ContentConfig {
   /** repo-root-relative folder holding ALL model files ("." = root) */
@@ -36,18 +53,42 @@ export interface ContentConfig {
 }
 
 /**
- * Read + validate <root>/bpmiq.yml — `models:` names the model folder, the
- * legacy `processes:` key stays a full alias (existing repos remain valid
- * unchanged). `undefined` means "not a content repo" — an unreadable/
- * unparseable/ill-typed config must degrade to that, never crash a listing
- * (the file is plausibly mid-edit in a live session).
+ * The NAME of the contract file at `root`: the first of CONTENT_CONFIG_FILES
+ * that exists. By existence ONLY — whether it parses is loadContentConfig's
+ * business. A present-but-broken first choice must NOT fall through to the
+ * next name: the file is plausibly mid-edit in a live session, and a fallback
+ * would silently flip the room-containment folder to a different one.
  */
-export function loadContentConfig(root: string): ContentConfig | undefined {
-  const file = join(root, CONTENT_CONFIG_FILE);
-  if (!existsSync(file)) return undefined;
+export function resolveContentConfigFile(root: string): string | undefined {
+  return CONTENT_CONFIG_FILES.find((name) => isContractFile(root, name));
+}
+
+/** a regular FILE of that name — a folder that merely carries a contract name
+ *  (anyone may create one in a repo whose models live at the root) must not
+ *  shadow the real contract file under the other name */
+function isContractFile(root: string, name: string): boolean {
+  try {
+    return statSync(join(root, name)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** a contract file EXISTS at the root (it may still name no usable folder) —
+ *  the "is this checkout meant to be a content repo" probe, no parsing */
+export function hasContentConfig(root: string): boolean {
+  return resolveContentConfigFile(root) !== undefined;
+}
+
+/**
+ * The folder ONE contract file names — `models:`, the legacy `processes:` key
+ * stays a full alias (existing repos remain valid unchanged). `undefined` for
+ * an unreadable/unparseable/ill-typed file.
+ */
+function readContentFolder(root: string, name: string): string | undefined {
   let parsed: unknown;
   try {
-    parsed = parseYaml(readFileSync(file, "utf8"));
+    parsed = parseYaml(readFileSync(join(root, name), "utf8"));
   } catch {
     return undefined;
   }
@@ -57,10 +98,49 @@ export function loadContentConfig(root: string): ContentConfig | undefined {
   // normalize so discovery and the room-containment gate agree on one spelling
   // ("a//b", "p/.", "./p" collapse); "." / "" mean "models live at the root"
   const normalized = posix.normalize(folder.trim()).replace(/\/+$/, "");
-  if (normalized === "" || normalized === ".") return { models: ".", processes: "." };
+  if (normalized === "" || normalized === ".") return ".";
   // the folder must stay inside the repo — no absolute paths, no traversal
   if (normalized.startsWith("/") || normalized.split("/").includes("..")) return undefined;
-  return { models: normalized, processes: normalized };
+  return normalized;
+}
+
+/**
+ * Read + validate the root contract file (resolveContentConfigFile picks which
+ * name). `undefined` means "not a content repo" — an unreadable/unparseable/
+ * ill-typed config must degrade to that, never crash a listing (the file is
+ * plausibly mid-edit in a live session).
+ */
+export function loadContentConfig(root: string): ContentConfig | undefined {
+  const name = resolveContentConfigFile(root);
+  const folder = name === undefined ? undefined : readContentFolder(root, name);
+  return folder === undefined ? undefined : { models: folder, processes: folder };
+}
+
+/** two contract files at one root that do not name the same folder */
+export interface ContentConfigConflict {
+  /** the file the platform reads (first in CONTENT_CONFIG_FILES) */
+  used: string;
+  /** the other one — the ONLY file a tool that predates `used` reads */
+  ignored: string;
+  /** undefined = that file names no usable folder */
+  usedFolder: string | undefined;
+  ignoredFolder: string | undefined;
+}
+
+/**
+ * The one situation that needs a human: BOTH names exist and do not resolve
+ * to the same folder (a file naming no usable folder differs from one that
+ * does). `used` still wins — but a tool that predates it reads `ignored` and
+ * sees other models. Agreeing files are silent on purpose: a repo that must
+ * stay readable by older tools carries both for a long time. Two files that
+ * BOTH name nothing agree as well — that repo is simply not a content repo.
+ */
+export function contentConfigConflict(root: string): ContentConfigConflict | undefined {
+  const [used, ignored] = CONTENT_CONFIG_FILES.filter((name) => isContractFile(root, name));
+  if (used === undefined || ignored === undefined) return undefined;
+  const usedFolder = readContentFolder(root, used);
+  const ignoredFolder = readContentFolder(root, ignored);
+  return usedFolder === ignoredFolder ? undefined : { used, ignored, usedFolder, ignoredFolder };
 }
 
 export interface DiscoveredProcess {

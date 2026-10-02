@@ -1,6 +1,7 @@
 /**
  * list_todos (packages/mcp/tools.ts) — the STRICTLY opt-in tracker tool.
- * Without BPM_TODOS_REPO + BPM_TODOS_TOKEN the tool must not exist (the server
+ * Without BPM_TODOS_REPO + BPM_TODOS_TOKEN (also read as DESIGNIQ_TODOS_*, which // legacy-name-ok
+ * win — todosConfigFromEnv) the tool must not exist (the server
  * stays zero-auth by default); with both set it lists open todos from a tiny
  * local GitHub-shaped HTTP stub: label filter (todo + process:<id>), PR-row
  * exclusion, anchor parsing via @bpmiq/contracts/todo-anchor, token forwarding.
@@ -131,8 +132,11 @@ async function call(client: Client, args: Record<string, unknown> = {}): Promise
 }
 
 test("zero-auth default: without BPM_TODOS_REPO + BPM_TODOS_TOKEN the tool does not exist", async () => {
-  delete process.env.BPM_TODOS_REPO;
-  delete process.env.BPM_TODOS_TOKEN;
+  // all four names: a shell that already exports the new ones must not opt this run in
+  delete process.env.BPM_TODOS_REPO; // legacy-name-ok: env fallback
+  delete process.env.BPM_TODOS_TOKEN; // legacy-name-ok: env fallback
+  delete process.env.DESIGNIQ_TODOS_REPO;
+  delete process.env.DESIGNIQ_TODOS_TOKEN;
   const { client, close } = await connect();
   const names = (await client.listTools()).tools.map((t) => t.name);
   assert.ok(!names.includes("list_todos"), "list_todos must not register without the opt-in env vars");
@@ -191,4 +195,103 @@ test("list_todos: the process argument narrows via the process:<id> label; misse
   assert.ok(!miss.isError, "an empty result is a success sentence, not an error");
   assert.match(miss.text, /No open todos for process 'does-not-exist'/);
   await close();
+});
+
+// ── the env gate itself: each value is read under two names ─────────────────
+
+test("todosConfigFromEnv: the old names alone opt in, exactly as before", () => {
+  assert.deepEqual(
+    todosConfigFromEnv({
+      BPM_TODOS_REPO: "acme/old", // legacy-name-ok: env fallback
+      BPM_TODOS_TOKEN: "old-token", // legacy-name-ok: env fallback
+      GITHUB_API_URL: "http://ghe.test/api/v3",
+    }),
+    { repo: "acme/old", token: "old-token", apiUrl: "http://ghe.test/api/v3" },
+  );
+});
+
+test("todosConfigFromEnv: the new names alone opt in", () => {
+  assert.deepEqual(
+    todosConfigFromEnv({
+      DESIGNIQ_TODOS_REPO: "acme/new",
+      DESIGNIQ_TODOS_TOKEN: "new-token",
+      GITHUB_API_URL: "http://ghe.test/api/v3",
+    }),
+    { repo: "acme/new", token: "new-token", apiUrl: "http://ghe.test/api/v3" },
+  );
+});
+
+test("todosConfigFromEnv: with both sets of names the new one wins", () => {
+  assert.deepEqual(
+    todosConfigFromEnv({
+      DESIGNIQ_TODOS_REPO: "acme/new",
+      DESIGNIQ_TODOS_TOKEN: "new-token",
+      BPM_TODOS_REPO: "acme/old", // legacy-name-ok: env fallback
+      BPM_TODOS_TOKEN: "old-token", // legacy-name-ok: env fallback
+    }),
+    { repo: "acme/new", token: "new-token", apiUrl: undefined },
+  );
+});
+
+test("todosConfigFromEnv: repo and token resolve independently — a half-migrated env still opts in", () => {
+  assert.deepEqual(
+    todosConfigFromEnv({
+      DESIGNIQ_TODOS_REPO: "acme/new",
+      BPM_TODOS_TOKEN: "old-token", // legacy-name-ok: env fallback
+    }),
+    { repo: "acme/new", token: "old-token", apiUrl: undefined },
+  );
+  assert.deepEqual(
+    todosConfigFromEnv({
+      BPM_TODOS_REPO: "acme/old", // legacy-name-ok: env fallback
+      DESIGNIQ_TODOS_TOKEN: "new-token",
+    }),
+    { repo: "acme/old", token: "new-token", apiUrl: undefined },
+  );
+});
+
+test("todosConfigFromEnv: an empty new name falls through to the old one (compose passes '' for unset)", () => {
+  assert.deepEqual(
+    todosConfigFromEnv({
+      DESIGNIQ_TODOS_REPO: "",
+      DESIGNIQ_TODOS_TOKEN: "",
+      BPM_TODOS_REPO: "acme/old", // legacy-name-ok: env fallback
+      BPM_TODOS_TOKEN: "old-token", // legacy-name-ok: env fallback
+    }),
+    { repo: "acme/old", token: "old-token", apiUrl: undefined },
+  );
+});
+
+test("todosConfigFromEnv: unset, empty or only half set → undefined under either name", () => {
+  assert.equal(todosConfigFromEnv({}), undefined);
+  assert.equal(todosConfigFromEnv({ DESIGNIQ_TODOS_REPO: "", DESIGNIQ_TODOS_TOKEN: "" }), undefined);
+  assert.equal(todosConfigFromEnv({ BPM_TODOS_REPO: "", BPM_TODOS_TOKEN: "" }), undefined); // legacy-name-ok: env fallback
+  assert.equal(todosConfigFromEnv({ DESIGNIQ_TODOS_REPO: "acme/new" }), undefined);
+  assert.equal(todosConfigFromEnv({ DESIGNIQ_TODOS_TOKEN: "new-token" }), undefined);
+  assert.equal(todosConfigFromEnv({ BPM_TODOS_REPO: "acme/old" }), undefined); // legacy-name-ok: env fallback
+  assert.equal(todosConfigFromEnv({ BPM_TODOS_TOKEN: "old-token" }), undefined); // legacy-name-ok: env fallback
+  // an empty token is no token — the repo alone never opts in
+  assert.equal(todosConfigFromEnv({ DESIGNIQ_TODOS_REPO: "acme/new", DESIGNIQ_TODOS_TOKEN: "" }), undefined);
+});
+
+test("list_todos: a token under the new name wins end to end and is the one forwarded", async () => {
+  // repo + API base are still set from the opt-in test above; BOTH token names
+  // are pinned here so the test keeps proving new-over-old whichever name that
+  // test sets
+  const names = ["DESIGNIQ_TODOS_TOKEN", "BPM_TODOS_TOKEN"] as const; // legacy-name-ok: env fallback
+  const saved = names.map((name) => process.env[name]);
+  process.env.BPM_TODOS_TOKEN = "old-token"; // legacy-name-ok: env fallback
+  process.env.DESIGNIQ_TODOS_TOKEN = "new-token";
+  try {
+    const { client, close } = await connect();
+    const { isError, text } = await call(client);
+    assert.ok(!isError, text);
+    assert.equal(lastAuth, "Bearer new-token", "DESIGNIQ_TODOS_TOKEN is forwarded, not the old name's value");
+    await close();
+  } finally {
+    names.forEach((name, i) => {
+      if (saved[i] === undefined) delete process.env[name];
+      else process.env[name] = saved[i];
+    });
+  }
 });

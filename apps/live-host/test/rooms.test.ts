@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { test } from "node:test";
 
-import { splitRoom, toDiskPath } from "../src/domain/rooms.ts";
+import { NotAContentRepoError, splitRoom, toDiskPath } from "../src/domain/rooms.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 function repo(fullName: string, extra: Partial<ConnectedRepo> = {}): ConnectedRepo {
@@ -124,7 +124,7 @@ test("toDiskPath: refuses rooms outside the configured processes folder", async 
   const workspaces = { ensure: async () => "/srv/ws/acme-models" };
   await assert.rejects(
     () => toDiskPath("acme/models/docs/readme.md", fakeRegistry(repo("acme/models")), workspaces, contentConfig),
-    /outside the configured processes folder/,
+    (e: Error) => /outside the configured processes folder/.test(e.message) && !(e instanceof NotAContentRepoError),
   );
 });
 
@@ -133,7 +133,9 @@ test("toDiskPath: a repo without bpmiq.yml has no live rooms", async () => {
   await assert.rejects(
     () =>
       toDiskPath("acme/models/processes/order.bpmn", fakeRegistry(repo("acme/models")), workspaces, () => undefined),
-    /not a BPM content repo/,
+    // the CLASS is the contract (the content use-case maps it to 422) — the
+    // message is wording, pinned only because clients see it
+    (e: Error) => e instanceof NotAContentRepoError && /not a BPM content repo \(.*\): acme\/models$/.test(e.message),
   );
 });
 

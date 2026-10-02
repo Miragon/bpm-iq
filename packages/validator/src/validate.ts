@@ -115,7 +115,9 @@ export function checkBpmnXml(
   // residue worth SURFACING before a release: warn-only, never blocks.
   // The prefix is resolved from the namespace DECLARATION — a foreign tool
   // may have re-bound the bpmiq URI to another alias.
-  const prefix = /xmlns:([A-Za-z_][\w.-]*)="https:\/\/bpmiq\.io\/schema\/1\.0\/bpmiq"/.exec(raw)?.[1] ?? "bpmiq";
+  // Namespace URI and default prefix are FROZEN identifiers: both are stored
+  // in customer .bpmn files and must never follow a product rename.
+  const prefix = /xmlns:([A-Za-z_][\w.-]*)="https:\/\/bpmiq\.io\/schema\/1\.0\/bpmiq"/.exec(raw)?.[1] ?? "bpmiq"; // legacy-name-ok: persisted in customer .bpmn files
   const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const stickyCount = raw.match(new RegExp(`<${escaped}:sticky[\\s/>]`, "g"))?.length ?? 0;
   if (stickyCount > 0) {
@@ -502,7 +504,7 @@ export async function runCli(): Promise<void> {
 
   const rel = (p: string): string => (p.startsWith("/") ? relative(ROOT, p) : p);
 
-  const { discoverModels, loadContentConfig } = await import("@bpmiq/notations/content");
+  const { contentConfigConflict, discoverModels, loadContentConfig } = await import("@bpmiq/notations/content");
   const cfg = loadContentConfig(ROOT);
   if (!cfg) {
     console.error(notContentRepoError(ROOT));
@@ -526,6 +528,22 @@ export async function runCli(): Promise<void> {
   const modelIds = new Map<string, Set<string>>();
   for (const m of models) (modelIds.get(m.notation) ?? modelIds.set(m.notation, new Set()).get(m.notation)!).add(m.id);
   const findings: Finding[] = [];
+  // two contract files naming different folders: this run (and the platform)
+  // reads one, a tool that predates its name reads the other and sees other
+  // models — a repo-level warning, whatever the single-model filter says
+  const conflict = contentConfigConflict(ROOT);
+  if (conflict) {
+    const show = (folder: string | undefined): string => (folder === undefined ? "no usable folder" : `'${folder}'`);
+    findings.push({
+      severity: "WARN",
+      ruleId: "content/config-conflict",
+      file: conflict.used,
+      message:
+        `names a different models folder than ${conflict.ignored} ` +
+        `(${show(conflict.usedFolder)} vs ${show(conflict.ignoredFolder)}) — ${conflict.used} wins; ` +
+        `tools that predate ${conflict.used} read only ${conflict.ignored}`,
+    });
+  }
   for (const model of [...processes, ...decisions, ...others]) {
     const abs = resolve(ROOT, model.path);
     findings.push(...(checkModel(readFileSync(abs, "utf8"), { path: rel(abs), modelIds }) ?? []));

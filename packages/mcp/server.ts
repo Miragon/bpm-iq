@@ -6,7 +6,8 @@
  * tools.ts, shared with the HTTP entry point (http.ts) that runs on fly.io.
  *
  * Content repo: `node server.ts --root /path/to/content-repo` or
- * BPM_CONTENT_ROOT — defaults to the bundled process-documentation example.
+ * BPM_CONTENT_ROOT (also read as DESIGNIQ_CONTENT_ROOT, which wins) — defaults // legacy-name-ok
+ * to the bundled process-documentation example.
  *
  * One command, no build step: node server.ts (Node >= 23.6, built-in type stripping).
  */
@@ -33,8 +34,9 @@ if (!existsSync(root)) {
   process.exit(2);
 }
 
-// list_todos is strictly opt-in (BPM_TODOS_REPO + BPM_TODOS_TOKEN) — without
-// both env vars the tool does not exist and the server stays zero-auth
+// list_todos is strictly opt-in (BPM_TODOS_REPO + BPM_TODOS_TOKEN, also read as // legacy-name-ok
+// DESIGNIQ_TODOS_*, which win) — without a repo AND a token the tool does not
+// exist and the server stays zero-auth
 const todos = todosConfigFromEnv(process.env);
 const server = createMcpServer(root, todos);
 await server.connect(new StdioServerTransport());

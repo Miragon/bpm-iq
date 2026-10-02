@@ -5,9 +5,10 @@
  * name-flattening that keeps the line format unambiguous.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { encodeAnchor, parseAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
+import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
 
 test("roundtrip: encode → parse yields the same anchor", () => {
   const anchor: TodoAnchor = {
@@ -53,17 +54,17 @@ test("element without a name round-trips as name null", () => {
 test("missing/unclosed block yields null", () => {
   assert.equal(parseAnchor("just an ordinary issue body"), null);
   assert.equal(parseAnchor(""), null);
-  assert.equal(parseAnchor("<!-- bpmiq:todo v1\nprocess: x"), null, "opened but never closed");
+  assert.equal(parseAnchor("<!-- bpmiq:todo v1\nprocess: x"), null, "opened but never closed"); // legacy-name-ok
 });
 
 test("a block without a process line yields null (process is the one required field)", () => {
-  assert.equal(parseAnchor("<!-- bpmiq:todo v1\nfile: some/file.bpmn\n-->"), null);
+  assert.equal(parseAnchor("<!-- bpmiq:todo v1\nfile: some/file.bpmn\n-->"), null); // legacy-name-ok: frozen marker
 });
 
 test("hand-written sloppy block parses (indentation, blank lines, unknown keys skipped)", () => {
   const body = [
     "Please double-check this.",
-    "<!-- bpmiq:todo v1",
+    "<!-- bpmiq:todo v1", // legacy-name-ok: frozen marker
     "   process: order-to-cash   ",
     "",
     "priority: high", // unknown key — skipped
@@ -81,4 +82,45 @@ test("hand-written sloppy block parses (indentation, blank lines, unknown keys s
     { id: "Task_1", name: null },
     { id: "Task_2", name: "Angebot senden" },
   ]);
+});
+
+test("the marker is frozen: a todo filed before any product rename keeps its anchor", () => {
+  // Spelled in two halves ON PURPOSE: a search/replace of the product name
+  // rewrites the constant and every fixture above in the same breath, and the
+  // round-trips stay green — this spelling it cannot reach.
+  const marker = "<!-- bpm" + "iq:todo v1";
+  const anchor: TodoAnchor = {
+    process: "order-to-cash",
+    file: "processes/order-to-cash.bpmn",
+    elements: [{ id: "Task_CheckCredit", name: "Bonität prüfen" }],
+    processVersion: null,
+  };
+  // what the platform writes into a tracker today …
+  assert.equal(encodeAnchor(anchor).split("\n")[0], marker);
+  // … and an issue body a customer's tracker already holds
+  const body = [
+    "Limit check is missing here.",
+    "",
+    marker,
+    "process: order-to-cash",
+    "file: processes/order-to-cash.bpmn",
+    "element: Task_CheckCredit | Bonität prüfen",
+    "-->",
+    "",
+    "_Created by @petra_",
+  ].join("\n");
+  assert.deepEqual(parseAnchor(body), anchor);
+  // the block is bookkeeping — it never reaches the text shown to people and agents
+  assert.equal(stripAnchor(body), "Limit check is missing here.\n\n\n\n_Created by @petra_");
+});
+
+test("the marker is frozen in the content repo's issue template too (the second writer)", () => {
+  // todos filed BY HAND go through this form, which pre-fills the block — and
+  // the template is mirrored into the starter, so customer repos carry it
+  const template = readFileSync(
+    new URL("../../../process-documentation/.github/ISSUE_TEMPLATE/todo.yml", import.meta.url),
+    "utf8",
+  );
+  assert.ok(template.includes("<!-- bpm" + "iq:todo v1"), "the template pre-fills the frozen marker");
+  assert.equal(parseAnchor(template)?.process, "order-to-cash");
 });

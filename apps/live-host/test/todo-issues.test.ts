@@ -4,7 +4,8 @@
  * (idempotent), issue creation with the anchor block + attribution, list
  * mapping (anchor roundtrip, PR exclusion, process filter), close (attribution
  * comment first, then the state transition), element deep links (todoBody with
- * publicUrl), and the missing-Issues-permission 403 → AppError mapping.
+ * publicUrl), the attribution read back in the legacy AND the future product
+ * wording, and the missing-Issues-permission 403 → AppError mapping.
  */
 import assert from "node:assert/strict";
 import { type ChildProcess, spawn } from "node:child_process";
@@ -19,6 +20,7 @@ import {
   attributionLine,
   closeAttributionLine,
   createGitHubIssueTracker,
+  parseAuthor,
   parseBody,
   rateLimitWait,
   retargetBody,
@@ -246,6 +248,73 @@ test("parseBody: strips deep links with `]` in the element name and `)` in the U
   const stored = todoBody(input, { publicUrl: "https://bpm.example", repoFullName: "acme/bpm-processes" });
   assert.ok(stored.includes("📍 [Prüfen [manuell]]"), `precondition — the raw name is in the link:\n${stored}`);
   assert.equal(parseBody(stored), "The threshold looks stale.");
+});
+
+// ── attribution wording: the legacy product name AND the future one ─────────
+// spelled out as literals on purpose: attributionLine() follows the product
+// name, while these are the bodies as they sit in a customer's tracker — filed
+// by a host before the rename, or by an already-renamed host next to this one.
+// The legacy name is spelled in two halves ON PURPOSE: a search/replace of the
+// product name rewrites the regex and a one-piece fixture in the same breath,
+// and every test stays green — this spelling it cannot reach.
+
+const LEGACY_NAME = "bpm" + "iq";
+const LEGACY_ATTRIBUTION = `_Created from the ${LEGACY_NAME} live model by @petra_`;
+const FUTURE_ATTRIBUTION = "_Created from the designIQ live model by @petra_";
+
+/** a stored body as todoBody builds it, signed in the given attribution wording */
+function storedWith(attribution: string): string {
+  const stored = todoBody(deepLinkInput, { publicUrl: "https://bpm.example", repoFullName: "acme/bpm-processes" });
+  const signed = stored.replace(attributionLine("petra"), attribution);
+  // precondition — without it a failed swap would leave today's line in place and pass every read below
+  assert.ok(signed.endsWith(`\n\n${attribution}`), `the body is signed in the wording under test:\n${signed}`);
+  return signed;
+}
+
+test("parseAuthor: the legacy wording and the future wording both name the author", () => {
+  assert.equal(parseAuthor(storedWith(LEGACY_ATTRIBUTION)), "petra");
+  assert.equal(parseAuthor(storedWith(FUTURE_ATTRIBUTION)), "petra");
+  // the new name re-cased (edited by hand on GitHub) keeps its author
+  for (const name of ["designiq", "DesignIQ", "DESIGNIQ"]) {
+    assert.equal(parseAuthor(storedWith(FUTURE_ATTRIBUTION.replace("designIQ", name))), "petra", name);
+  }
+  // the login pattern is the same in both wordings
+  assert.equal(parseAuthor(`_Created from the ${LEGACY_NAME} live model by @octo-cat99_`), "octo-cat99");
+  assert.equal(parseAuthor("_Created from the designIQ live model by @octo-cat99_"), "octo-cat99");
+});
+
+test("parseAuthor: a body with neither wording has no platform author", () => {
+  assert.equal(parseAuthor("plain issue text"), null);
+  assert.equal(parseAuthor("_Created from the acme live model by @petra_"), null, "another product name");
+  // only the product name widened — the rest of the sentence still matches exactly
+  assert.equal(parseAuthor("_created from the designIQ live model by @petra_"), null);
+  assert.equal(parseAuthor("_Created from the designIQ model by @petra_"), null);
+  assert.equal(parseAuthor("_Created from the design IQ live model by @petra_"), null);
+  // … and the legacy spelling reads exactly as it always did (case-sensitive)
+  assert.equal(parseAuthor("_Created from the BPMIQ live model by @petra_"), null); // legacy-name-ok: stored in customer trackers
+  // the close comment is not a creation attribution, in either wording
+  assert.equal(parseAuthor(closeAttributionLine("petra")), null);
+  assert.equal(parseAuthor("_Closed from the designIQ live model by @petra_"), null);
+});
+
+test("parseBody: strips the attribution line in the legacy and in the future wording", () => {
+  assert.equal(parseBody(storedWith(LEGACY_ATTRIBUTION)), "The threshold looks stale.");
+  assert.equal(parseBody(storedWith(FUTURE_ATTRIBUTION)), "The threshold looks stale.");
+  assert.equal(parseBody(storedWith(FUTURE_ATTRIBUTION.replace("designIQ", "designiq"))), "The threshold looks stale.");
+  // a line in neither wording is the author's own text and stays
+  const foreign = "_Created from the acme live model by @petra_";
+  assert.equal(parseBody(`The threshold looks stale.\n\n${foreign}`), `The threshold looks stale.\n\n${foreign}`);
+});
+
+test("listTodos: an issue filed under the future product name keeps its author, anchor and clean body", async () => {
+  const repo = "acme/future-name";
+  await control({
+    addIssue: { repo, title: "Filed by a newer host", body: storedWith(FUTURE_ATTRIBUTION), labels: ["todo"] },
+  });
+  const [todo] = await tracker.listTodos(repo);
+  assert.equal(todo?.author, "petra");
+  assert.equal(todo?.body, "The threshold looks stale.");
+  assert.deepEqual(todo?.anchor, deepLinkInput.anchor);
 });
 
 // ── retargetTodo (#208): a renamed process's todo follows its new id ────────

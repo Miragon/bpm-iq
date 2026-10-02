@@ -54,10 +54,10 @@ after(async () => {
 });
 
 /** tmpdir content repo + real Hocuspocus (hooks wired like server.ts) */
-function setup(over: { contentRepo?: boolean; maxDocBytes?: number } = {}) {
+function setup(over: { contentRepo?: boolean; configFile?: string; maxDocBytes?: number } = {}) {
   const ws = mkdtempSync(join(tmpdir(), "bpm-content-"));
   mkdirSync(join(ws, "processes"), { recursive: true });
-  if (over.contentRepo !== false) writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+  if (over.contentRepo !== false) writeFileSync(join(ws, over.configFile ?? "bpmiq.yml"), "processes: processes\n");
   const liveDocs = new Set<string>();
   const lineage = new LineageStore(new DatabaseSync(":memory:"), REPO.fullName);
   const registry = { get: (n: string) => (n.toLowerCase() === REPO.fullName ? REPO : undefined) };
@@ -135,6 +135,25 @@ test("getContent: missing file → 404, bad extension → 400, no bpmiq.yml → 
     () => getContent(bare.deps, REPO, PATH),
     (e: AppError) => e.code === "content/not-a-content-repo" && e.status === 422,
   );
+});
+
+test("getContent: 422 is decided by the error's TYPE — a path that merely reads like the message stays a 400", async () => {
+  // the rejection text quotes the room, so this one contains the very words
+  // the status used to be matched on; it is a bad path in a perfectly fine repo
+  const { deps } = setup();
+  await assert.rejects(
+    () => getContent(deps, REPO, "docs/no bpmiq.yml.bpmn"),
+    (e: AppError) =>
+      e.code === "content/invalid-path" &&
+      e.status === 400 &&
+      /outside the configured processes folder/.test(e.message),
+  );
+});
+
+test("getContent: a repo whose contract file is designiq.yml is a content repo", async () => {
+  const { ws, deps } = setup({ configFile: "designiq.yml" });
+  writeFileSync(join(ws, PATH), VALID);
+  assert.equal((await getContent(deps, REPO, PATH)).content, VALID);
 });
 
 // ── PUT: happy path + CAS ───────────────────────────────────────────────────
