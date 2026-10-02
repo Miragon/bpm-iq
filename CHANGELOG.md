@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.3.0](https://github.com/Miragon/bpm-iq/compare/v4.2.0...v4.3.0) (2026-10-02)
+
+
+### Features
+
+* **notations,live-host,mcp:** read the future designiq names alongside bpmiq ([#222](https://github.com/Miragon/bpm-iq/issues/222)) ([b73cb34](https://github.com/Miragon/bpm-iq/commit/b73cb34ddf9731f79b73a865d96e9fa847911b6b))
+
 ## [4.2.0](https://github.com/Miragon/bpm-iq/compare/v4.1.0...v4.2.0) (2026-09-30)
 
 
