@@ -27,6 +27,19 @@ export interface WorkspaceEnsure {
 export type ContentConfigLookup = (workspaceRoot: string) => { processes: string } | undefined;
 
 /**
+ * The repo has no content config, so it has no live rooms at all. A class —
+ * not a message to match — because the content use-case answers this one
+ * with its own status (422, "fix the repo") while every other rejection here
+ * is a bad path (400); the wording must stay free to change.
+ */
+export class NotAContentRepoError extends Error {
+  constructor(repoFullName: string) {
+    super(`not a BPM content repo (no bpmiq.yml): ${repoFullName}`);
+    this.name = "NotAContentRepoError";
+  }
+}
+
+/**
  * Parse a room into its repo + repo-relative path, or throw. Rejects:
  * malformed rooms, unknown repos, a mis-cased repo prefix (a differently-cased
  * room would fork the same file into a second divergent CRDT doc), suspended
@@ -84,7 +97,7 @@ export async function toDiskPath(
   const { repo, path } = splitRoom(documentName, registry, editable);
   const workspace = await workspaces.ensure(repo);
   const cfg = contentConfig(workspace);
-  if (!cfg) throw new Error(`not a BPM content repo (no bpmiq.yml): ${repo.fullName}`);
+  if (!cfg) throw new NotAContentRepoError(repo.fullName);
   const disk = resolve(workspace, path);
   // must live INSIDE the configured processes folder — resolve() normalizes both
   // sides so "." (root), "a//b", trailing slashes etc. all compare correctly

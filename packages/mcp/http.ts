@@ -20,8 +20,9 @@ import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const TOKEN = process.env.MCP_TOKEN;
-// list_todos is strictly opt-in (BPM_TODOS_REPO + BPM_TODOS_TOKEN) — without
-// both env vars the tool does not exist and the server stays zero-auth
+// list_todos is strictly opt-in (BPM_TODOS_REPO + BPM_TODOS_TOKEN, also read as // legacy-name-ok
+// DESIGNIQ_TODOS_*, which win) — without a repo AND a token the tool does not
+// exist and the server stays zero-auth
 const TODOS = todosConfigFromEnv(process.env);
 
 /** Stateless Streamable HTTP: one fresh server + transport per request (read-only tools, no session state). */

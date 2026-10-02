@@ -11,9 +11,12 @@ import { useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 import { SidePanel } from "@/components/side-panel";
+import { bpmiqModdle } from "@/notations/bpmn-sticky/bpmiq-moddle";
 import type { NotationPanelProps } from "@/notations/registry";
 
-const BPMIQ_NS = "https://bpmiq.io/schema/1.0/bpmiq";
+// the sticky namespace has ONE definition (frozen there) — a second copy of
+// the literal here could drift from what the modeler writes
+const BPMIQ_NS = bpmiqModdle.uri;
 
 /** facilitator priority: open ends first, context last */
 const KIND_ORDER = ["question", "decision", "note", "role"] as const;

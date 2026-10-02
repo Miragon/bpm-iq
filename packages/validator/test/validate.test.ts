@@ -79,6 +79,105 @@ test("--root without a bpmiq.yml fails gracefully (no stacktrace)", () => {
   assert.doesNotMatch(out, /at .*validate\.ts/);
 });
 
+// ── the contract file's two names (designiq.yml next to the legacy one) ──────
+
+/** the fixture with its contract file replaced by the given ones */
+function fixtureWithConfigs(files: Record<string, string>): string {
+  const dir = mutableFixture();
+  rmSync(join(dir, "bpmiq.yml")); // legacy-name-ok: the fixture ships the legacy name
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
+  return dir;
+}
+
+test("a repo with only designiq.yml validates exactly like the legacy-named fixture", () => {
+  const dir = fixtureWithConfigs({ "designiq.yml": "models: processes\n" });
+  try {
+    assert.deepEqual(run(["--root", dir]), run(["--root", FIXTURE]));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("both contract files agreeing is silent — same output as one file", () => {
+  const dir = fixtureWithConfigs({
+    "designiq.yml": "models: processes\n",
+    "bpmiq.yml": "processes: ./processes/\n", // legacy-name-ok: pins the legacy path
+  });
+  try {
+    assert.deepEqual(run(["--root", dir]), run(["--root", FIXTURE]));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("both contract files disagreeing is ONE warning — designiq.yml wins, the exit code stays", () => {
+  const warnings = (out: string): number => Number(/(\d+) warning\(s\)/.exec(out)?.[1]);
+  const dir = fixtureWithConfigs({
+    "designiq.yml": "models: processes\n",
+    "bpmiq.yml": "processes: elsewhere\n", // legacy-name-ok: pins the legacy path
+  });
+  try {
+    const baseline = run(["--root", FIXTURE]);
+    const { status, out } = run(["--root", dir]);
+    assert.equal(status, 0, out);
+    assert.match(
+      out,
+      /^\[WARN\] designiq\.yml: names a different models folder than bpmiq\.yml \('processes' vs 'elsewhere'\) — /m, // legacy-name-ok: pins the legacy path
+    );
+    assert.match(out, / — designiq\.yml wins; tools that predate designiq\.yml read only bpmiq\.yml$/m); // legacy-name-ok: pins the legacy path
+    // designiq.yml's folder was validated (the fixture's models), plus the one warning
+    assert.match(out, /3 process\(es\), 1 decision\(s\), 1 other model\(s\) checked/);
+    assert.equal(warnings(out), warnings(baseline.out) + 1);
+    // a repo-level finding: the single-model filter does not hide it
+    assert.match(run(["--root", dir, "two-pool"]).out, /\[WARN\] designiq\.yml: names a different models folder/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an unusable designiq.yml is named as the problem — no fallback to the legacy file", () => {
+  const dir = fixtureWithConfigs({
+    "designiq.yml": "models: [unclosed\n",
+    "bpmiq.yml": "processes: processes\n", // legacy-name-ok: pins the legacy path
+  });
+  try {
+    const { status, out } = run(["--root", dir]);
+    assert.equal(status, 1);
+    assert.match(out, /designiq\.yml at the root names no models folder — not a BPM content repo/);
+    // "no <legacy file>" would be false here: it exists, it is just not consulted
+    assert.doesNotMatch(out, /no bpmiq\.yml/); // legacy-name-ok: pins the legacy path
+    assert.match(out, /0 model\(s\) checked/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a broken legacy contract file keeps its historical error line", () => {
+  const dir = fixtureWithConfigs({ "bpmiq.yml": "processes: [unclosed\n" }); // legacy-name-ok: pins the legacy path
+  try {
+    const r = run(["--root", dir]);
+    assert.equal(r.status, 1);
+    assert.match(r.out, /no bpmiq\.yml at the root/); // legacy-name-ok: pins the legacy wording
+    assert.doesNotMatch(r.out, /names no models folder/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a legacy contract file that names no folder next to a valid designiq.yml is a conflict warning", () => {
+  const dir = fixtureWithConfigs({
+    "designiq.yml": "models: processes\n",
+    "bpmiq.yml": "processes: [unclosed\n", // legacy-name-ok: pins the legacy path
+  });
+  try {
+    const r = run(["--root", dir]);
+    assert.equal(r.status, 0);
+    assert.match(r.out, /\('processes' vs no usable folder\)/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("--root without a value fails with a clear message", () => {
   const { status, out } = run(["--root"]);
   assert.equal(status, 2);

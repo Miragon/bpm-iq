@@ -49,16 +49,22 @@ jobs:
       - name: Verify the mirrored starter is a valid content repo
         working-directory: starter-repo
         run: |
-          # the contract essentials must survive the mirror
-          for f in bpmiq.yml README.md LICENSE; do
+          # the contract essentials must survive the mirror — the contract file
+          # under either name; designiq.yml wins when both exist, like the loader
+          cfg=bpmiq.yml
+          if test -f designiq.yml; then cfg=designiq.yml; fi
+          for f in "$cfg" README.md LICENSE; do
             test -f "$f" || { echo "::error::starter is missing $f"; exit 1; }
           done
-          # bpmiq.yml must name a processes folder that exists and holds BPMN
-          grep -E "^processes: *[A-Za-z0-9._/-]+$" bpmiq.yml || { echo "::error::bpmiq.yml has no processes key"; exit 1; }
-          dir=$(grep -E "^processes:" bpmiq.yml | sed -E "s/^processes: *//")
-          test -d "$dir" || { echo "::error::processes folder '$dir' missing"; exit 1; }
+          # it must name a models folder that exists and holds BPMN — a models:
+          # value wins over the legacy alias processes: (the loader's models ?? processes)
+          key=processes
+          if grep -qE "^models: *[^[:space:]#]" "$cfg"; then key=models; fi
+          grep -E "^$key: *[A-Za-z0-9._/-]+$" "$cfg" || { echo "::error::$cfg has no models/processes key"; exit 1; }
+          dir=$(grep -E "^$key:" "$cfg" | sed -E "s/^$key: *//")
+          test -d "$dir" || { echo "::error::$key folder '$dir' missing"; exit 1; }
           find "$dir" -name '*.bpmn' | grep -q . || { echo "::error::no .bpmn files in '$dir'"; exit 1; }
-          echo "starter verified (bpmiq.yml → $dir)"
+          echo "starter verified ($cfg → $dir)"
 
       - name: Commit and push
         working-directory: starter-repo

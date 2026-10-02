@@ -57,8 +57,13 @@ test("verdicts are otherwise UNCHANGED by stickies (toolchain ignores bpmiq:*)",
 });
 
 test("a foreign tool re-binding the bpmiq URI to another prefix still counts (prefix resolved from xmlns)", () => {
+  // the URI is spelled in two halves ON PURPOSE — this is the one case that
+  // exercises the validator's own copy of the frozen namespace (every other
+  // fixture passes through the default-prefix fallback), and a search/replace
+  // of the product name must not be able to rewrite it together with the source
+  const uri = "https://bpm" + "iq.io/schema/1.0/bpm" + "iq";
   const aliased = fixture("order-to-cash/order-to-cash.bpmn")
-    .replace(/<bpmn:definitions /, `<bpmn:definitions xmlns:wk="https://bpmiq.io/schema/1.0/bpmiq" `)
+    .replace(/<bpmn:definitions /, `<bpmn:definitions xmlns:wk="${uri}" `)
     .replace(
       /(<bpmn:process[^>]*>)/,
       `$1<bpmn:extensionElements><wk:sticky id="S1" text="x" x="1" y="2" kind="question" /></bpmn:extensionElements>`,

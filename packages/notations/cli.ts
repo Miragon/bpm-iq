@@ -9,7 +9,7 @@
  */
 import { resolve } from "node:path";
 
-import { CONTENT_CONFIG_FILE } from "./content.ts";
+import { CONTENT_CONFIG_FILE, resolveContentConfigFile } from "./content.ts";
 
 /**
  * Parse `--root <dir>` out of argv (MUTATES argv, exactly like every caller
@@ -28,6 +28,17 @@ export function cliRoot(argv: string[], opts: { defaultRoot?: string } = {}): st
   return root;
 }
 
-/** the shared not-a-content-repo error line (byte-identical in two CLIs before) */
-export const notContentRepoError = (root: string): string =>
-  `[ERROR] ${root}: no ${CONTENT_CONFIG_FILE} at the root — not a BPM content repo (or wrong --root)`;
+/**
+ * The shared not-a-content-repo error line (byte-identical in two CLIs before).
+ * A contract file under its OTHER accepted name that exists but names no
+ * folder is reported as such: "no <file>" would send the reader looking for a
+ * missing file while the one they just wrote is what is broken (it is never
+ * skipped in favour of the documented name). The documented name keeps its
+ * historical wording in every case.
+ */
+export const notContentRepoError = (root: string): string => {
+  const found = resolveContentConfigFile(root);
+  return found !== undefined && found !== CONTENT_CONFIG_FILE
+    ? `[ERROR] ${root}: ${found} at the root names no models folder — not a BPM content repo (or wrong --root)`
+    : `[ERROR] ${root}: no ${CONTENT_CONFIG_FILE} at the root — not a BPM content repo (or wrong --root)`;
+};

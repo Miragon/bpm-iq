@@ -95,7 +95,12 @@ export interface CanvasPresence {
 // closes the room. A client reopens the document at `to` (same Yjs history —
 // the lineage moved along); an older client simply sees its document close.
 
-export const MOVED_NOTICE = "bpmiq/moved";
+// FROZEN — the value never follows a product rename. Clients are deployed
+// independently of the Live Host (installed VS Code extension builds, browser
+// tabs left open across a deploy, widgets open in a chat) and match on exactly
+// this string: under any other value they no longer follow a moved document
+// to its new path, it just closes on them. Pinned by test/live.test.ts.
+export const MOVED_NOTICE = "bpmiq/moved"; // legacy-name-ok: wire value older clients match on
 
 /** the document of this room now lives at `to` */
 export interface MovedNotice {

@@ -35,26 +35,31 @@ import {
   type UpstreamChange,
 } from "../domain/catch-up.ts";
 import { FILE_LOG_FORMAT, parseFileLog } from "../domain/file-history.ts";
-import { CONTENT_CONFIG_FILE } from "./content.ts";
+import { hasContentConfig } from "./content.ts";
 import type { ConnectedRepo, RepoRegistry } from "./registry.ts";
 
 /** model blobs can exceed execFile's 1 MB default (large BPMN diagrams) */
 const GIT_OUT_MAX = 16 * 1024 * 1024;
 
+// The host-state names below (and the parking folder in catchUp) are FROZEN:
+// they sit inside the .git of every clone a running installation already has.
+// A renamed file reads as "no state" after an upgrade — and a lost conflict
+// list lets the next release silently revert upstream work.
+
 /** files changed on BOTH sides that the catch-up kept locally (#185) — a JSON
  *  path list inside the clone's .git, so it lives and dies with the checkout */
-const CONFLICTS_FILE = "bpmiq-conflicts.json";
+const CONFLICTS_FILE = "bpmiq-conflicts.json"; // legacy-name-ok: state inside existing clones
 
 /** per file, the blobs its still-open releases shipped, oldest first (#185) —
  *  so an earlier release that merges while a later one is open is no
  *  conflict. Kept like the conflict list; the catch-up drains it. */
-const RELEASED_FILE = "bpmiq-released.json";
+const RELEASED_FILE = "bpmiq-released.json"; // legacy-name-ok: state inside existing clones
 
 /** the platform's renames and moves not yet released (#208), `from → to`
  *  with chains collapsed — git sees them as a delete + an add; this is what
  *  pairs the two halves again (ChangedFileWire.renamedFrom). Kept like the
  *  conflict list; stale pairs simply stop matching the changes. */
-const RENAMES_FILE = "bpmiq-renames.json";
+const RENAMES_FILE = "bpmiq-renames.json"; // legacy-name-ok: state inside existing clones
 
 /** path → blobs, oldest first (null = a shipped deletion) */
 type ReleasedLists = Map<string, Array<string | null>>;
@@ -107,7 +112,9 @@ export class WorkspaceManager {
     // Serve the local host checkout in place — no clone — when it actually is a
     // BPM content repo (bpmiq.yml at its root). In a deployed image without the
     // config, the host repo is cloned like any other via an installation token.
-    return fullName.toLowerCase() === this.hostRepo && existsSync(join(this.hostRoot, CONTENT_CONFIG_FILE));
+    // hasContentConfig, not a file-name probe: a bind-mounted checkout whose
+    // contract file carries the other accepted name is served in place as well.
+    return fullName.toLowerCase() === this.hostRepo && hasContentConfig(this.hostRoot);
   }
 
   /** git checkout location for a connected repo (clone target; no provisioning) */
@@ -244,7 +251,7 @@ export class WorkspaceManager {
       dir,
       plan.map((p) => ({ path: p.c.path, entry: indexTarget(p.c, p.action) })),
     );
-    const parking = join(dir, ".git", "bpmiq-parked");
+    const parking = join(dir, ".git", "bpmiq-parked"); // legacy-name-ok: frozen like the state files above
     await mkdir(parking, { recursive: true });
     for (const [i, path] of parked.entries()) await rename(join(dir, path), join(parking, String(i)));
     try {
