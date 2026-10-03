@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_planes" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Planes" isExecutable="true">
+    <bpmn:startEvent id="startEvent_started" name="Order received">
+      <bpmn:outgoing>flow_startedToWork</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="serviceTask_work" name="Do work">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="work" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_startedToWork</bpmn:incoming>
+      <bpmn:outgoing>flow_workToCollapsed</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="errorEvent_failed" name="Work failed" attachedToRef="serviceTask_work">
+      <bpmn:outgoing>flow_failedToAborted</bpmn:outgoing>
+      <bpmn:errorEventDefinition />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="endEvent_aborted">
+      <bpmn:incoming>flow_failedToAborted</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:subProcess id="subProcess_collapsed" name="Collapsed">
+      <bpmn:incoming>flow_workToCollapsed</bpmn:incoming>
+      <bpmn:outgoing>flow_collapsedToExpanded</bpmn:outgoing>
+      <bpmn:startEvent id="startEvent_inner">
+        <bpmn:outgoing>flow_innerStartToEnd</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:endEvent id="endEvent_inner" name="Inner done">
+        <bpmn:incoming>flow_innerStartToEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="flow_innerStartToEnd" sourceRef="startEvent_inner" targetRef="endEvent_inner" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="subProcess_expanded" name="Expanded">
+      <bpmn:incoming>flow_collapsedToExpanded</bpmn:incoming>
+      <bpmn:task id="task_insideExpanded" name="Inside" />
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="flow_startedToWork" sourceRef="startEvent_started" targetRef="serviceTask_work" />
+    <bpmn:sequenceFlow id="flow_workToCollapsed" sourceRef="serviceTask_work" targetRef="subProcess_collapsed" />
+    <bpmn:sequenceFlow id="flow_collapsedToExpanded" sourceRef="subProcess_collapsed" targetRef="subProcess_expanded" />
+    <bpmn:sequenceFlow id="flow_failedToAborted" sourceRef="errorEvent_failed" targetRef="endEvent_aborted" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_main">
+    <bpmndi:BPMNPlane id="BPMNPlane_main" bpmnElement="Process_Planes">
+      <bpmndi:BPMNShape id="startEvent_started_di" bpmnElement="startEvent_started">
+        <dc:Bounds x="100" y="122" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="80" y="165" width="76" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="serviceTask_work_di" bpmnElement="serviceTask_work">
+        <dc:Bounds x="200" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="errorEvent_failed_di" bpmnElement="errorEvent_failed">
+        <dc:Bounds x="272" y="162" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="310" y="205" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="subProcess_collapsed_di" bpmnElement="subProcess_collapsed">
+        <dc:Bounds x="400" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="subProcess_expanded_di" bpmnElement="subProcess_expanded" isExpanded="true">
+        <dc:Bounds x="600" y="40" width="300" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_insideExpanded_di" bpmnElement="task_insideExpanded">
+        <dc:Bounds x="700" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endEvent_aborted_di" bpmnElement="endEvent_aborted">
+        <dc:Bounds x="382" y="262" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_startedToWork_di" bpmnElement="flow_startedToWork">
+        <di:waypoint x="136" y="140" />
+        <di:waypoint x="200" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_workToCollapsed_di" bpmnElement="flow_workToCollapsed">
+        <di:waypoint x="300" y="140" />
+        <di:waypoint x="400" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_collapsedToExpanded_di" bpmnElement="flow_collapsedToExpanded">
+        <di:waypoint x="500" y="140" />
+        <di:waypoint x="600" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_failedToAborted_di" bpmnElement="flow_failedToAborted">
+        <di:waypoint x="290" y="198" />
+        <di:waypoint x="290" y="280" />
+        <di:waypoint x="382" y="280" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_collapsed">
+    <bpmndi:BPMNPlane id="BPMNPlane_collapsed" bpmnElement="subProcess_collapsed">
+      <bpmndi:BPMNShape id="startEvent_inner_di" bpmnElement="startEvent_inner">
+        <dc:Bounds x="100" y="100" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endEvent_inner_di" bpmnElement="endEvent_inner">
+        <dc:Bounds x="300" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="290" y="143" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_innerStartToEnd_di" bpmnElement="flow_innerStartToEnd">
+        <di:waypoint x="136" y="118" />
+        <di:waypoint x="300" y="118" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

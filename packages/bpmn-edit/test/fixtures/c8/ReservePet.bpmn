@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_ReservePet" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.40.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:error id="error_petNotFound" name="PET_NOT_FOUND" errorCode="PET_NOT_FOUND" />
+  <bpmn:process id="Process_ReservePet" name="Reserve pet" isExecutable="true">
+    <bpmn:documentation>Reserves a pet by marking it as pending in the petstore; called from Process_PlaceOrder. The caller names the pet by id and name (the petstore update needs both) and gets back whether the pet is now pending or the reservation failed because the petstore does not know the pet.</bpmn:documentation>
+    <bpmn:startEvent id="startEvent_petToBeReserved" name="Pet to be reserved">
+      <bpmn:extensionElements>
+        <zeebe:ioMapping>
+          <zeebe:output source="=petId" target="petId" />
+          <zeebe:output source="=petName" target="petName" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:outgoing>flow_petToBeReservedToUpdatePet</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="flow_petToBeReservedToUpdatePet" sourceRef="startEvent_petToBeReserved" targetRef="serviceTask_updatePet" />
+    <bpmn:serviceTask id="serviceTask_updatePet" name="Mark pet as pending" zeebe:modelerTemplate="Petstore-UpdatePet" zeebe:modelerTemplateVersion="107">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="io.camunda:http-json:1" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="={ id: petId, name: petName, photoUrls: [], status: &#34;pending&#34; }" target="body" />
+          <zeebe:input source="=20" target="connectionTimeoutInSeconds" />
+          <zeebe:input source="=20" target="readTimeoutInSeconds" />
+          <zeebe:input source="noAuth" target="authentication.type" />
+          <zeebe:input source="{{secrets.PETSTORE_BASE_URL}}" target="baseUrl" />
+          <zeebe:input source="updatePet" target="operationId" />
+          <zeebe:input source="=&#34;/pet&#34;" target="operationPath" />
+          <zeebe:input source="={}" target="headers" />
+          <zeebe:input source="={}" target="queryParameters" />
+          <zeebe:input source="PUT" target="method" />
+          <zeebe:input source="= baseUrl + operationPath" target="url" />
+        </zeebe:ioMapping>
+        <zeebe:taskHeaders>
+          <zeebe:header key="errorExpression" value="=if error.code = &#34;404&#34; then bpmnError(&#34;PET_NOT_FOUND&#34;, &#34;The pet does not exist&#34;) else null" />
+          <zeebe:header key="retryBackoff" value="PT10S" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_petToBeReservedToUpdatePet</bpmn:incoming>
+      <bpmn:outgoing>flow_updatePetToPetReserved</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="errorEvent_petNotFound" name="Pet not found" attachedToRef="serviceTask_updatePet">
+      <bpmn:outgoing>flow_petNotFoundToPetNotReserved</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="errorEventDefinition_petNotFound" errorRef="error_petNotFound" />
+    </bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="flow_petNotFoundToPetNotReserved" sourceRef="errorEvent_petNotFound" targetRef="endEvent_petNotReserved" />
+    <bpmn:sequenceFlow id="flow_updatePetToPetReserved" sourceRef="serviceTask_updatePet" targetRef="endEvent_petReserved" />
+    <bpmn:endEvent id="endEvent_petReserved" name="Pet reserved">
+      <bpmn:extensionElements>
+        <zeebe:ioMapping>
+          <zeebe:output source="=&#34;pending&#34;" target="reservationStatus" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_updatePetToPetReserved</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="endEvent_petNotReserved" name="Pet not reserved">
+      <bpmn:extensionElements>
+        <zeebe:ioMapping>
+          <zeebe:output source="=&#34;failed&#34;" target="reservationStatus" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_petNotFoundToPetNotReserved</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_ReservePet">
+    <bpmndi:BPMNPlane id="BPMNPlane_ReservePet" bpmnElement="Process_ReservePet">
+      <bpmndi:BPMNShape id="Shape_startEvent_petToBeReserved" bpmnElement="startEvent_petToBeReserved">
+        <dc:Bounds x="182" y="122" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="157" y="165" width="87" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_serviceTask_updatePet" bpmnElement="serviceTask_updatePet">
+        <dc:Bounds x="280" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_endEvent_petReserved" bpmnElement="endEvent_petReserved">
+        <dc:Bounds x="482" y="122" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="468" y="165" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_endEvent_petNotReserved" bpmnElement="endEvent_petNotReserved">
+        <dc:Bounds x="482" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="458" y="315" width="84" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_errorEvent_petNotFound" bpmnElement="errorEvent_petNotFound">
+        <dc:Bounds x="352" y="162" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="392" y="193" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_flow_petToBeReservedToUpdatePet" bpmnElement="flow_petToBeReservedToUpdatePet">
+        <di:waypoint x="218" y="140" />
+        <di:waypoint x="280" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_petNotFoundToPetNotReserved" bpmnElement="flow_petNotFoundToPetNotReserved">
+        <di:waypoint x="370" y="198" />
+        <di:waypoint x="370" y="290" />
+        <di:waypoint x="482" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_updatePetToPetReserved" bpmnElement="flow_updatePetToPetReserved">
+        <di:waypoint x="380" y="140" />
+        <di:waypoint x="482" y="140" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

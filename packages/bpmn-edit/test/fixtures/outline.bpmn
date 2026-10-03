@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_outline" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Outline" name="Outline fixture" isExecutable="true">
+    <bpmn:startEvent id="startEvent_received" name="Order received">
+      <bpmn:extensionElements>
+        <zeebe:ioMapping>
+          <zeebe:output source="=petId" target="petId" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:outgoing>flow_receivedToGetPet</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="serviceTask_getPet" name="Get pet" zeebe:modelerTemplate="Fixture-GetPet" zeebe:modelerTemplateVersion="3">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="io.camunda:http-json:1" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=petId" target="petId" />
+          <zeebe:input source="=&#34;0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789&#34;" target="long" />
+        </zeebe:ioMapping>
+        <zeebe:taskHeaders>
+          <zeebe:header key="resultExpression" value="={ petName: response.body.name }" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_receivedToGetPet</bpmn:incoming>
+      <bpmn:outgoing>flow_getPetToAvailable</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="timerEvent_slow" name="Too slow" attachedToRef="serviceTask_getPet">
+      <bpmn:outgoing>flow_slowToRejected</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration>PT1H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="gateway_available" name="Available?" default="flow_availableNo">
+      <bpmn:incoming>flow_getPetToAvailable</bpmn:incoming>
+      <bpmn:outgoing>flow_availableYes</bpmn:outgoing>
+      <bpmn:outgoing>flow_availableNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:subProcess id="subProcess_handle" name="Handle order">
+      <bpmn:incoming>flow_availableYes</bpmn:incoming>
+      <bpmn:outgoing>flow_handleToDone</bpmn:outgoing>
+      <bpmn:startEvent id="startEvent_handle">
+        <bpmn:outgoing>flow_handleStartToApprove</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:userTask id="userTask_approve" name="Approve order">
+        <bpmn:extensionElements>
+          <zeebe:userTask />
+          <zeebe:assignmentDefinition candidateGroups="sales" />
+          <zeebe:formDefinition formId="Form_Approve" />
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow_handleStartToApprove</bpmn:incoming>
+        <bpmn:outgoing>flow_approveToScore</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:scriptTask id="scriptTask_score" name="Compute score">
+        <bpmn:extensionElements>
+          <zeebe:script expression="=quantity * 2" resultVariable="score" />
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow_approveToScore</bpmn:incoming>
+        <bpmn:outgoing>flow_scoreToCall</bpmn:outgoing>
+      </bpmn:scriptTask>
+      <bpmn:callActivity id="callActivity_reserve" name="Reserve pet">
+        <bpmn:extensionElements>
+          <zeebe:calledElement processId="Process_Reserve" propagateAllChildVariables="false" />
+        </bpmn:extensionElements>
+        <bpmn:incoming>flow_scoreToCall</bpmn:incoming>
+        <bpmn:outgoing>flow_callToHandleEnd</bpmn:outgoing>
+      </bpmn:callActivity>
+      <bpmn:endEvent id="endEvent_handled">
+        <bpmn:incoming>flow_callToHandleEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="flow_handleStartToApprove" sourceRef="startEvent_handle" targetRef="userTask_approve" />
+      <bpmn:sequenceFlow id="flow_approveToScore" sourceRef="userTask_approve" targetRef="scriptTask_score" />
+      <bpmn:sequenceFlow id="flow_scoreToCall" sourceRef="scriptTask_score" targetRef="callActivity_reserve" />
+      <bpmn:sequenceFlow id="flow_callToHandleEnd" sourceRef="callActivity_reserve" targetRef="endEvent_handled" />
+    </bpmn:subProcess>
+    <bpmn:businessRuleTask id="businessRuleTask_check" name="Check order">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="Decision_Check" resultVariable="decision" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_handleToDone</bpmn:incoming>
+      <bpmn:outgoing>flow_checkToDone</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:endEvent id="endEvent_done" name="Order handled">
+      <bpmn:incoming>flow_checkToDone</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="endEvent_rejected" name="Order rejected">
+      <bpmn:incoming>flow_availableNo</bpmn:incoming>
+      <bpmn:incoming>flow_slowToRejected</bpmn:incoming>
+      <bpmn:errorEventDefinition errorRef="Error_Rejected" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_receivedToGetPet" sourceRef="startEvent_received" targetRef="serviceTask_getPet" />
+    <bpmn:sequenceFlow id="flow_getPetToAvailable" sourceRef="serviceTask_getPet" targetRef="gateway_available" />
+    <bpmn:sequenceFlow id="flow_availableYes" name="yes" sourceRef="gateway_available" targetRef="subProcess_handle">
+      <bpmn:conditionExpression xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="bpmn:tFormalExpression">=petStatus = "available"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_availableNo" name="no" sourceRef="gateway_available" targetRef="endEvent_rejected" />
+    <bpmn:sequenceFlow id="flow_slowToRejected" sourceRef="timerEvent_slow" targetRef="endEvent_rejected" />
+    <bpmn:sequenceFlow id="flow_handleToDone" sourceRef="subProcess_handle" targetRef="businessRuleTask_check" />
+    <bpmn:sequenceFlow id="flow_checkToDone" sourceRef="businessRuleTask_check" targetRef="endEvent_done" />
+  </bpmn:process>
+  <bpmn:error id="Error_Rejected" name="Rejected" errorCode="ORDER_REJECTED" />
+</bpmn:definitions>

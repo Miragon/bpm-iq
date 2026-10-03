@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_lanes" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_Lanes">
+    <bpmn:participant id="Pool_Order" name="Order" processRef="Process_Lanes" />
+    <bpmn:participant id="Pool_Customer" name="Customer" />
+    <bpmn:messageFlow id="flow_shippedToCustomer" sourceRef="endEvent_shipped" targetRef="Pool_Customer" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Lanes" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Lanes">
+      <bpmn:lane id="Lane_Sales" name="Sales">
+        <bpmn:flowNodeRef>startEvent_received</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>task_check</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Stock" name="Stock">
+        <bpmn:flowNodeRef>task_pick</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>endEvent_shipped</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="startEvent_received" name="Order received">
+      <bpmn:outgoing>flow_receivedToCheck</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="task_check" name="Check order">
+      <bpmn:incoming>flow_receivedToCheck</bpmn:incoming>
+      <bpmn:outgoing>flow_checkToPick</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="task_pick" name="Pick goods">
+      <bpmn:incoming>flow_checkToPick</bpmn:incoming>
+      <bpmn:outgoing>flow_pickToShipped</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="endEvent_shipped" name="Order shipped">
+      <bpmn:incoming>flow_pickToShipped</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_receivedToCheck" sourceRef="startEvent_received" targetRef="task_check" />
+    <bpmn:sequenceFlow id="flow_checkToPick" sourceRef="task_check" targetRef="task_pick" />
+    <bpmn:sequenceFlow id="flow_pickToShipped" sourceRef="task_pick" targetRef="endEvent_shipped" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_lanes">
+    <bpmndi:BPMNPlane id="BPMNPlane_lanes" bpmnElement="Collaboration_Lanes">
+      <bpmndi:BPMNShape id="Pool_Order_di" bpmnElement="Pool_Order" isHorizontal="true">
+        <dc:Bounds x="100" y="80" width="600" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Sales_di" bpmnElement="Lane_Sales" isHorizontal="true">
+        <dc:Bounds x="130" y="80" width="570" height="125" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Stock_di" bpmnElement="Lane_Stock" isHorizontal="true">
+        <dc:Bounds x="130" y="205" width="570" height="125" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="startEvent_received_di" bpmnElement="startEvent_received">
+        <dc:Bounds x="182" y="122" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_check_di" bpmnElement="task_check">
+        <dc:Bounds x="270" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_pick_di" bpmnElement="task_pick">
+        <dc:Bounds x="420" y="225" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endEvent_shipped_di" bpmnElement="endEvent_shipped">
+        <dc:Bounds x="582" y="247" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Pool_Customer_di" bpmnElement="Pool_Customer" isHorizontal="true">
+        <dc:Bounds x="100" y="380" width="600" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_receivedToCheck_di" bpmnElement="flow_receivedToCheck">
+        <di:waypoint x="218" y="140" />
+        <di:waypoint x="270" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_checkToPick_di" bpmnElement="flow_checkToPick">
+        <di:waypoint x="370" y="140" />
+        <di:waypoint x="395" y="140" />
+        <di:waypoint x="395" y="265" />
+        <di:waypoint x="420" y="265" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_pickToShipped_di" bpmnElement="flow_pickToShipped">
+        <di:waypoint x="520" y="265" />
+        <di:waypoint x="582" y="265" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_shippedToCustomer_di" bpmnElement="flow_shippedToCustomer">
+        <di:waypoint x="600" y="283" />
+        <di:waypoint x="600" y="380" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

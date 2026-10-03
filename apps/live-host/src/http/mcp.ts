@@ -28,6 +28,7 @@ import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 
+import { toOperations } from "@bpmiq/bpmn-edit";
 import { fileDeepLink, processDeepLink } from "@bpmiq/contracts/deep-link";
 import { type CanvasPresence, presenceColor, roomName } from "@bpmiq/contracts/live";
 import type { ContentConflictWire, RoomPresenceWire, TodoWire, WidgetBootWire } from "@bpmiq/contracts/live-host";
@@ -48,6 +49,7 @@ import { z } from "zod";
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import type { AgentPresence } from "../application/agent-presence.ts";
 import { authorizeRepo } from "../application/authz.ts";
+import { type BpmnEditIo, editProcess, layoutProcess, outlineProcess } from "../application/bpmn-edit.ts";
 import { type ContentDeps, getContent, putContent } from "../application/content.ts";
 import { readDecisionTests, runTestsFor, saveTestsFor } from "../application/decision-tests.ts";
 import { findDecisionPath, findModelPath, findProcessPath } from "../application/find-model.ts";
@@ -86,6 +88,10 @@ export type McpDeps = OverviewDeps &
      *  listed with its own — absent without a tracker */
     todoJobs?: { sourcesOf(repo: string, process: string): string[] };
     mcpReadOnly?: boolean;
+    /** LIVE_MCP_BPMN_EDIT=1: register the semantic BPMN tools of ADR 0008
+     *  (get_process_outline, edit_process, layout_process) — off by default
+     *  until the A/B benchmark gate is passed */
+    bpmnEdit?: boolean;
     /** built web assets — the MCP-App widgets (WIDGET_FILES, one single-file
      *  bundle per modeler) are read from here */
     webDist: string;
@@ -551,6 +557,159 @@ export function createLiveMcpServer(
       ),
     );
   };
+
+  // ── semantic BPMN editing (ADR 0008), behind LIVE_MCP_BPMN_EDIT=1: the agent
+  // names WHAT changes, @bpmiq/bpmn-edit computes the XML and the geometry, the
+  // ordinary content save validates and writes it ─────────────────────────────
+  if (opts.bpmnEdit) {
+    const bpmnIo = (r: ConnectedRepo): BpmnEditIo => ({
+      read: (path) => readContent(r, path),
+      write: (path, body) => writeContent(r, path, body),
+    });
+    const editResult = (out: Awaited<ReturnType<typeof editProcess>>) =>
+      out.ok ? ok(out) : ok({ ok: false, conflict: true, attempts: out.attempts, message: out.message });
+
+    server.registerTool(
+      "get_process_outline",
+      {
+        description:
+          "The semantics of a LIVE BPMN process without its XML or diagram geometry: platform (design | c7 | c8), " +
+          "lanes (roles), every element with type, name, lane, links (calledElement, calledDecision) and — in a " +
+          "Camunda 7/8 model — its implementation details, and the sequence flows with conditions. `around` + " +
+          "`depth` limit it to the neighbourhood of one element: the view for a local change. Pair with edit_process.",
+        inputSchema: z.object({
+          ...processRef,
+          around: z.string().optional().describe("only this element and its neighbours along sequence flows"),
+          depth: z.number().int().min(0).max(20).optional().describe("flow steps around `around` (default 2)"),
+          bounds: z.boolean().optional().describe("include the diagram bounds [x, y, width, height]"),
+          full: z.boolean().optional().describe("long values in full instead of shortened"),
+        }),
+        annotations: READ,
+      },
+      safe(
+        async (a: {
+          repo: string;
+          id?: string;
+          path?: string;
+          around?: string;
+          depth?: number;
+          bounds?: boolean;
+          full?: boolean;
+        }) => {
+          const r = await requireRepo(a.repo);
+          const path = await resolveBpmnPath(r, a.id, a.path);
+          return ok(
+            await outlineProcess(bpmnIo(r), path, {
+              around: a.around,
+              depth: a.depth ?? 2,
+              bounds: a.bounds === true,
+              full: a.full === true,
+            }),
+          );
+        },
+      ),
+    );
+
+    if (!opts.mcpReadOnly) {
+      server.registerTool(
+        "edit_process",
+        {
+          description:
+            "Change a LIVE BPMN process by semantic operations instead of rewriting its XML: the diagram geometry " +
+            "(placement, room-making, routing, labels) is computed, new nodes join their anchor's lane, ids follow " +
+            "the file's style, and nothing else in the file changes. The batch is all or nothing and saved like " +
+            "save_bpmn_xml (validated, co-editors see it at once); a concurrent change is handled by re-applying " +
+            "the operations — no baseVersion needed. Operations: insertAfter {after, element, via?, branch?, " +
+            "name?, condition?} (default: into the outgoing flow; branch: a new outcome, implied for an end event), " +
+            "insertBetween {flow, element}, remove {id, reconnect?}, connect {from, to, id?, name?, condition?}, " +
+            "rename {id, name}, changeType {id, type} (task kind ↔ task kind, gateway ↔ gateway), " +
+            "setCondition {flow, condition|null}, setDefault {gateway, " +
+            "flow}, addLane {id, name, process?} (a role; the first one takes every node), moveToLane {id, lane}, " +
+            "setCalledElement {id, process|null}, setCalledDecision {id, decision|null}, addErrorBoundary " +
+            "{attachTo, id, name, errorCode, to}; Camunda 7/8 models only: setInput/setOutput {id, target, " +
+            "source|null}, setHeader {id, key, value|null} (C8), element.template. element = {type, id, name, " +
+            "row?: same|below|bottom, lane?, calledElement?, calledDecision?}. Read get_process_outline first; " +
+            "after a larger change run layout_process.",
+          inputSchema: z.object({
+            ...processRef,
+            operations: z
+              .array(z.record(z.string(), z.unknown()))
+              .min(1)
+              .describe("the operations, applied in order, all or nothing"),
+            dryRun: z.boolean().optional().describe("compute and report, but do not save"),
+            lint: lintArg,
+          }),
+          annotations: WRITE,
+        },
+        safe(
+          async (a: {
+            repo: string;
+            id?: string;
+            path?: string;
+            operations: unknown[];
+            dryRun?: boolean;
+            lint?: "block" | "warn";
+          }) => {
+            const r = await requireRepo(a.repo);
+            const path = await resolveBpmnPath(r, a.id, a.path);
+            const out = await editProcess(bpmnIo(r), path, toOperations(a.operations, "operations"), {
+              dryRun: a.dryRun,
+              lint: a.lint,
+            });
+            if (out.ok && out.written) {
+              console.log(`process edited: ${r.fullName}/${path} by @${session.user.login} via mcp`);
+            }
+            return editResult(out);
+          },
+        ),
+      );
+
+      server.registerTool(
+        "layout_process",
+        {
+          description:
+            "Lay out a LIVE BPMN process's diagram; only the geometry changes. mode 'tidy' keeps the drawing and " +
+            "removes overlaps and cramped gaps (the default after edits); 'relayout' lays out the smallest " +
+            "fragment around `scope` anew; 'layout' lays out everything anew (imports, scaffolds, messy models). " +
+            "tidy/relayout keep a variant only when it scores better than the drawing.",
+          inputSchema: z.object({
+            ...processRef,
+            mode: z.enum(["tidy", "relayout", "layout"]),
+            scope: z.array(z.string()).optional().describe("relayout: the flow nodes whose fragment is laid out"),
+            dryRun: z.boolean().optional().describe("compute and report, but do not save"),
+            lint: lintArg,
+          }),
+          annotations: WRITE,
+        },
+        safe(
+          async (a: {
+            repo: string;
+            id?: string;
+            path?: string;
+            mode: "tidy" | "relayout" | "layout";
+            scope?: string[];
+            dryRun?: boolean;
+            lint?: "block" | "warn";
+          }) => {
+            const r = await requireRepo(a.repo);
+            const path = await resolveBpmnPath(r, a.id, a.path);
+            const scope =
+              a.scope && a.scope.length > 0 ? { kind: "fragmentOf" as const, ids: a.scope } : { kind: "all" as const };
+            const out = await layoutProcess(
+              bpmnIo(r),
+              path,
+              { mode: a.mode, scope },
+              { dryRun: a.dryRun, lint: a.lint },
+            );
+            if (out.ok && out.written) {
+              console.log(`process laid out (${a.mode}): ${r.fullName}/${path} by @${session.user.login} via mcp`);
+            }
+            return editResult(out);
+          },
+        ),
+      );
+    }
+  }
 
   server.registerTool(
     "list_repos",

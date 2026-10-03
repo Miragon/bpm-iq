@@ -85,6 +85,22 @@ export default {
       },
     },
     {
+      name: "bpmn-edit-stays-isomorphic",
+      severity: "error",
+      comment:
+        "@bpmiq/bpmn-edit runs in the live host AND in the browser (ADR 0008). " +
+        "src/main.ts (the CLI) and the benchmark are its only Node entries — " +
+        "nothing the package exports may touch an I/O builtin.",
+      from: {
+        path: "^packages/bpmn-edit/",
+        pathNot: ["^packages/bpmn-edit/src/main\\.ts$", "^packages/bpmn-edit/bench/", "(^|/)test/"],
+      },
+      to: {
+        dependencyTypesNot: ["type-only"],
+        path: "^(node:)?(child_process|fs|fs/promises|http|https|http2|net|tls|dns|sqlite|worker_threads|os|path)$",
+      },
+    },
+    {
       name: "mcp-servers-use-the-kit",
       severity: "error",
       comment:
