@@ -53,7 +53,7 @@
     "@bpmiq/contracts": "workspace:*",
     "@bpmiq/live-client": "workspace:*",
     "@hocuspocus/provider": "4.7.0",
-    "ws": "8.21.3",
+    "ws": "8.22.0",
     "yjs": "13.6.33"
   },
   "devDependencies": {
