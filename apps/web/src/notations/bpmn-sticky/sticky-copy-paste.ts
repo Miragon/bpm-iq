@@ -1,7 +1,7 @@
 /**
  * Sticky copy & paste (#187): Cmd/Ctrl+C, V, X and D work on stickies — the
  * copy keeps size, text and kind, the paste mints a NEW sticky id, so the
- * .bpmn never holds two <bpmiq:sticky/> with the same id.
+ * .bpmn never holds two <bpmiq:sticky/> with the same id (legacy-name-ok).
  *
  * bpmn-js' BpmnCopyPaste copies every element as businessObject + DI; a
  * sticky has no DI (its coordinates live on the extension element), so those
@@ -10,10 +10,11 @@
  *  - copyElement at 900: AFTER diagram-js' descriptor basics (1000: id,
  *    x/y/width/height), BEFORE BpmnCopyPaste's DI copy (750) — which the
  *    returned descriptor stops
- *  - pasteElement at 1500: BEFORE BpmnCopyPaste (1000) — a fresh
- *    bpmiq:Sticky businessObject WITHOUT an id, so StickyElementFactory mints
- *    one; the pasted shape then persists through the ordinary shape.create
- *    path (StickyPersistence), exactly like a sticky from the palette
+ *  - pasteElement at 1500: BEFORE BpmnCopyPaste (1000) — a fresh sticky
+ *    businessObject (bpmiq:Sticky, legacy-name-ok) WITHOUT an id, so
+ *    StickyElementFactory mints one; the pasted shape then persists through
+ *    the ordinary shape.create path (StickyPersistence), exactly like a
+ *    sticky from the palette
  */
 import { isSticky, type ModdleLike, STICKY_TYPE, stickyKindOf } from "./sticky-model";
 

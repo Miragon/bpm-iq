@@ -149,7 +149,7 @@ every audience matches trailing-slash tolerantly — RFC 8707 clients derive the
 ### 7. Connect a client
 
 ```sh
-claude mcp add --transport http bpm-live https://live.example.com/mcp
+claude mcp add --transport http designiq https://live.example.com/mcp
 ```
 
 The client hits `/mcp` → 401 + `WWW-Authenticate` → fetches

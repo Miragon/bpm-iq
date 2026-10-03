@@ -18,7 +18,7 @@ export interface ModelRef {
 
 /**
  * GET /api/repos/:fullName/processes — one row per .bpmn file under the
- * repo's bpmiq.yml processes folder (a process IS its BPMN file; id = file
+ * repo's designiq.yml processes folder (a process IS its BPMN file; id = file
  * name without extension).
  */
 export interface ProcessInfo {
@@ -47,7 +47,7 @@ export interface CreateProcessBody {
 
 /**
  * GET /api/repos/:fullName/decisions — one row per .dmn file under the
- * repo's bpmiq.yml processes folder (a decision IS its DMN file; id = file
+ * repo's designiq.yml processes folder (a decision IS its DMN file; id = file
  * name without extension, unique repo-wide like process ids).
  */
 export interface DecisionInfo {
@@ -88,7 +88,7 @@ export interface CreateModelBody {
 
 /**
  * GET /api/repos/:fullName/models — one row per model file of ANY registered
- * notation under the repo's bpmiq.yml models folder (id = file stem, unique
+ * notation under the repo's designiq.yml models folder (id = file stem, unique
  * per notation). The registry-wide superset of the processes/decisions lists,
  * which stay the typed views.
  */
@@ -108,12 +108,13 @@ export interface ModelInfo {
 
 /**
  * GET /api/repos/:fullName/folders — the repo's folder tree plus whether the
- * repo is a bpm content repo at all. `isContentRepo` is false when the repo has
- * NO root bpmiq.yml; the repo view hides its create/release actions then (a
- * create would 422, a release has nothing to ship — "not a matching repo").
+ * repo is a content repo at all. `isContentRepo` is false when the repo has
+ * NO usable root contract file (designiq.yml, or the legacy name); the repo
+ * view hides its create/release actions then (a create would 422, a release
+ * has nothing to ship — "not a matching repo").
  */
 export interface FolderListWire {
-  /** the repo declares itself a bpm content repo (a root bpmiq.yml is present) */
+  /** the repo declares itself a content repo (a usable root designiq.yml is present) */
   isContentRepo: boolean;
   /** every folder under the processes root (recursive, sorted, includes empty
    * ones), processes-root-relative — [] when there is no config or no folder */
@@ -632,7 +633,7 @@ export interface RoomPresenceWire {
 export interface WidgetBootWire {
   /** LIVE_MCP_READONLY — the widget mounts a viewer instead of the editor */
   readonly: boolean;
-  /** the instance's public origin — the base for "Open in bpmiq" deep links;
+  /** the instance's public origin — the base for "Open in designIQ" deep links;
    *  absent when an older Live Host injects a pre-publicUrl payload */
   publicUrl?: string;
 }

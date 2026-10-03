@@ -1,5 +1,5 @@
 /**
- * The content-repo contract (content.ts) — bpmiq.yml parsing + .bpmn discovery,
+ * The content-repo contract (content.ts) — designiq.yml parsing + .bpmn discovery,
  * the shared definition of "what is a process" that the Live Host, MCP and
  * validator all trust. The "degrade, never crash" contract and the path
  * normalization are pinned here (the canonical copy; live-host re-exports it).
@@ -11,27 +11,31 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import {
+  CONTENT_CONFIG_FILE,
   CONTENT_CONFIG_FILES,
+  CONTENT_CONFIG_NAMES,
   type ContentConfig,
   contentConfigConflict,
   discoverModels,
   discoverProcesses,
   hasContentConfig,
+  legacyContentConfigFile,
   loadContentConfig,
+  notAContentRepoReason,
   resolveContentConfigFile,
 } from "../content.ts";
 
-const ws = (): string => mkdtempSync(join(tmpdir(), "bpm-content-"));
+const ws = (): string => mkdtempSync(join(tmpdir(), "designiq-content-"));
 /** models and processes always name the same folder (the legacy alias) */
 const cfg = (folder: string): ContentConfig => ({ models: folder, processes: folder });
 
-test("loadContentConfig: reads the processes folder from bpmiq.yml", () => {
+test("loadContentConfig: reads the models folder from designiq.yml", () => {
   const w = ws();
-  writeFileSync(join(w, "bpmiq.yml"), "processes: processes\n");
+  writeFileSync(join(w, CONTENT_CONFIG_FILE), "models: processes\n");
   assert.deepEqual(loadContentConfig(w), cfg("processes"));
 });
 
-test("loadContentConfig: no bpmiq.yml → undefined (not a content repo)", () => {
+test("loadContentConfig: no contract file → undefined (not a content repo)", () => {
   assert.equal(loadContentConfig(ws()), undefined);
 });
 
@@ -45,7 +49,7 @@ test("loadContentConfig: normalizes equivalent spellings", () => {
     [".", "."],
     ["", undefined],
   ] as const) {
-    writeFileSync(join(w, "bpmiq.yml"), `processes: "${input}"\n`);
+    writeFileSync(join(w, CONTENT_CONFIG_FILE), `models: "${input}"\n`);
     assert.deepEqual(loadContentConfig(w)?.processes, expected, `input '${input}'`);
   }
 });
@@ -53,12 +57,12 @@ test("loadContentConfig: normalizes equivalent spellings", () => {
 test("loadContentConfig: rejects absolute paths, traversal, ill-typed, unparseable", () => {
   const w = ws();
   for (const bad of ["/etc", "../up", "a/../../b"]) {
-    writeFileSync(join(w, "bpmiq.yml"), `processes: "${bad}"\n`);
+    writeFileSync(join(w, CONTENT_CONFIG_FILE), `models: "${bad}"\n`);
     assert.equal(loadContentConfig(w), undefined, `'${bad}'`);
   }
-  writeFileSync(join(w, "bpmiq.yml"), "processes: [1,2]\n");
+  writeFileSync(join(w, CONTENT_CONFIG_FILE), "models: [1,2]\n");
   assert.equal(loadContentConfig(w), undefined, "not a string");
-  writeFileSync(join(w, "bpmiq.yml"), "processes: [unclosed\n");
+  writeFileSync(join(w, CONTENT_CONFIG_FILE), "models: [unclosed\n");
   assert.equal(loadContentConfig(w), undefined, "parse error");
 });
 
@@ -102,21 +106,52 @@ test("discoverProcesses: a duplicate file stem keeps the first (sorted)", async 
 
 test("loadContentConfig: `models:` is the new key, `processes:` stays a full alias", () => {
   const w = ws();
-  writeFileSync(join(w, "bpmiq.yml"), "models: models\n");
+  writeFileSync(join(w, CONTENT_CONFIG_FILE), "processes: processes\n");
+  assert.deepEqual(loadContentConfig(w), cfg("processes"));
+  writeFileSync(join(w, CONTENT_CONFIG_FILE), "models: models\n");
   assert.deepEqual(loadContentConfig(w), cfg("models"));
   // both keys present: models wins (the canonical spelling)
-  writeFileSync(join(w, "bpmiq.yml"), "models: models\nprocesses: legacy\n");
+  writeFileSync(join(w, CONTENT_CONFIG_FILE), "models: models\nprocesses: legacy\n");
   assert.deepEqual(loadContentConfig(w), cfg("models"));
 });
 
 // ── the contract file's two names (CONTENT_CONFIG_FILES) ────────────────────
 
-test("content config: the names in precedence order — designiq.yml first", () => {
+test("content config: the names in precedence order — designiq.yml first, and documented", () => {
   assert.deepEqual([...CONTENT_CONFIG_FILES], ["designiq.yml", "bpmiq.yml"]); // legacy-name-ok: pins the legacy name
+  // the name every writer creates is the one read first
+  assert.equal(CONTENT_CONFIG_FILE, "designiq.yml");
+  assert.equal(CONTENT_CONFIG_FILE, CONTENT_CONFIG_FILES[0]);
   const w = ws();
   assert.equal(resolveContentConfigFile(w), undefined);
   assert.equal(hasContentConfig(w), false);
   assert.equal(contentConfigConflict(w), undefined);
+  assert.equal(legacyContentConfigFile(w), undefined);
+});
+
+test("content config: messages name the documented file AND the legacy one", () => {
+  assert.equal(CONTENT_CONFIG_NAMES, "designiq.yml (or legacy bpmiq.yml)"); // legacy-name-ok: pins the legacy wording
+  assert.equal(
+    notAContentRepoReason("acme/models"),
+    "acme/models has no usable designiq.yml (or legacy bpmiq.yml) at its root — not a content repo", // legacy-name-ok: pins the legacy wording
+  );
+});
+
+test("legacyContentConfigFile: set exactly when the legacy file is the one in use", () => {
+  const w = ws();
+  writeFileSync(join(w, "bpmiq.yml"), "processes: processes\n"); // legacy-name-ok: pins the legacy path
+  assert.equal(legacyContentConfigFile(w), "bpmiq.yml"); // legacy-name-ok: pins the legacy path
+  // a folder squatting on the documented name does not make the repo "renamed"
+  mkdirSync(join(w, "designiq.yml"));
+  assert.equal(legacyContentConfigFile(w), "bpmiq.yml"); // legacy-name-ok: pins the legacy path
+  // both FILES (agreeing or not): designiq.yml is read — nothing to nudge
+  const both = ws();
+  writeFileSync(join(both, "designiq.yml"), "models: processes\n");
+  writeFileSync(join(both, "bpmiq.yml"), "processes: processes\n"); // legacy-name-ok: pins the legacy path
+  assert.equal(legacyContentConfigFile(both), undefined);
+  const documented = ws();
+  writeFileSync(join(documented, "designiq.yml"), "models: processes\n");
+  assert.equal(legacyContentConfigFile(documented), undefined);
 });
 
 test("content config: the legacy name alone stays a content repo, unchanged", () => {

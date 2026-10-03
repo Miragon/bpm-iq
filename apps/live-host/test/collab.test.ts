@@ -42,7 +42,7 @@ const session = (login = "petra"): Session => ({
 
 /** a tmpdir workspace + fully-injected deps; overrides mirror server.ts wiring */
 function setup(over: Partial<CollabDeps> = {}) {
-  const ws = mkdtempSync(join(tmpdir(), "bpm-collab-"));
+  const ws = mkdtempSync(join(tmpdir(), "designiq-collab-"));
   mkdirSync(join(ws, "processes", "order"), { recursive: true });
   const deps: CollabDeps = {
     lineage: new LineageStore(new DatabaseSync(":memory:"), REPO.fullName),
@@ -236,12 +236,12 @@ test("onLoadDocument: rooms outside the configured processes folder are refused"
   );
 });
 
-test("onLoadDocument: a repo without bpmiq.yml has no live rooms at all", async () => {
+test("onLoadDocument: a repo without a usable contract file has no live rooms at all", async () => {
   const { ws, hooks } = setup({ contentConfig: () => undefined });
   writeFileSync(join(ws, "processes", "order", "order.bpmn"), "<bpmn/>");
   await assert.rejects(
     () => hooks.onLoadDocument({ document: new Y.Doc(), documentName: ROOM }),
-    /not a BPM content repo/,
+    /— not a content repo$/,
   );
 });
 
@@ -249,7 +249,7 @@ test("onLoadDocument: a *.bpmn symlink escaping the checkout is refused (no arbi
   // a symlink inside the processes folder pointing outside the checkout passes
   // the lexical containment but must be caught by resolveRoom's realpath guard
   const { ws, hooks } = setup();
-  const outside = mkdtempSync(join(tmpdir(), "bpm-collab-out-"));
+  const outside = mkdtempSync(join(tmpdir(), "designiq-collab-out-"));
   writeFileSync(join(outside, "secret"), "not-yours");
   symlinkSync(join(outside, "secret"), join(ws, "processes", "order", "pwn.bpmn"));
   await assert.rejects(

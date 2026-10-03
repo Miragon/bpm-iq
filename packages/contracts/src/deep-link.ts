@@ -1,9 +1,9 @@
 /**
- * Web-app deep links — the doorway INTO bpmiq's own editor routes (the mirror
+ * Web-app deep links — the doorway INTO designIQ's own editor routes (the mirror
  * of assist.ts, which leads OUT into an AI chat). The URL shapes live in ONE
  * place because three surfaces build them: the Live Host's `open_modeler` /
  * `open_decision_modeler` results, the GitHub issue bodies
- * (adapters/github/issues.ts) and the MCP modeler widgets' "Open in bpmiq"
+ * (adapters/github/issues.ts) and the MCP modeler widgets' "Open in designIQ"
  * button — hand-rolled copies would drift.
  *
  * The repo segment splits at the FIRST slash: GitHub is always owner/name;

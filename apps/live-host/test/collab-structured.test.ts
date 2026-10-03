@@ -29,7 +29,7 @@ import { LineageStore } from "../src/adapters/sqlite/lineage-store.ts";
 import { makeCollabHooks } from "../src/application/collab.ts";
 import { type ContentDeps, getContent, putContent } from "../src/application/content.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
-import { loadContentConfig } from "../src/repos/content.ts";
+import { CONTENT_CONFIG_FILE, loadContentConfig } from "../src/repos/content.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 const REPO: ConnectedRepo = {
@@ -62,10 +62,10 @@ after(async () => {
 
 /** tmpdir content repo + real Hocuspocus with the INJECTED structured codec */
 function setup(existing?: { ws: string; db: DatabaseSync }) {
-  const ws = existing?.ws ?? mkdtempSync(join(tmpdir(), "bpm-structured-"));
+  const ws = existing?.ws ?? mkdtempSync(join(tmpdir(), "designiq-structured-"));
   if (!existing) {
     mkdirSync(join(ws, "processes"), { recursive: true });
-    writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+    writeFileSync(join(ws, CONTENT_CONFIG_FILE), "models: processes\n");
     writeFileSync(join(ws, PATH), CANONICAL);
   }
   const db = existing?.db ?? new DatabaseSync(":memory:");
@@ -211,7 +211,7 @@ test("a non-canonical (but decodable) payload normalizes — token matches the c
   const { deps } = setup();
   const got = await getContent(deps, REPO, PATH);
   // same board, scrambled key order and a garbage line — decode is total
-  const messy = `garbage line\n{"meta":{"title":"Order flow"},"version":1,"format":"bpmiq-structured"}\n{"x":20,"id":"e1","text":"Place order","type":"command"}\n{"id":"e2","type":"event","text":"Order placed","x":100}\n`;
+  const messy = `garbage line\n{"meta":{"title":"Order flow"},"version":1,"format":"structured-model"}\n{"x":20,"id":"e1","text":"Place order","type":"command"}\n{"id":"e2","type":"event","text":"Order placed","x":100}\n`;
   const saved = await putContent(deps, REPO, PATH, { content: messy, baseVersion: got.baseVersion });
   assert.ok(saved.ok);
   const after = await getContent(deps, REPO, PATH);

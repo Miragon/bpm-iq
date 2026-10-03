@@ -1,4 +1,4 @@
-# bpmiq Live Host — production-shaped Docker Compose example (on-prem, ADR 0004).
+# designIQ Live Host — production-shaped Docker Compose example (on-prem, ADR 0004).
 #
 #   cp .env.example .env    # fill in LIVE_PUBLIC_URL + your GitHub credentials
 #   docker compose up -d
@@ -9,8 +9,8 @@
 
 services:
   live-host:
-    # DESIGNIQ_VERSION wins; BPMIQ_VERSION stays read so a pin in an existing .env never drifts to latest
-    image: ghcr.io/miragon/bpmiq-live-host:${DESIGNIQ_VERSION:-${BPMIQ_VERSION:-latest}} # legacy-name-ok: BPMIQ_VERSION only
+    # DESIGNIQ_VERSION wins; BPMIQ_VERSION stays read so a pin in an existing .env never drifts to latest (legacy-name-ok)
+    image: ghcr.io/miragon/designiq-live-host:${DESIGNIQ_VERSION:-${BPMIQ_VERSION:-latest}} # legacy-name-ok: BPMIQ_VERSION only
     env_file:
       - path: .env
         required: false # `--profile keycloak up -d keycloak` must work before one exists;
@@ -44,10 +44,10 @@ services:
   # ── Optional: Keycloak as the identity provider (profile "keycloak") ─────
   # The self-contained IdP quickstart (docs/on-prem/idp-quickstart.md, ADR
   # 0007): `docker compose --profile keycloak up -d` starts Keycloak next to the
-  # Live Host with the bpmiq realm imported from ./keycloak/realm-designiq.json —
+  # Live Host with the designiq realm imported from ./keycloak/realm-designiq.json —
   # two public PKCE clients (designiq-web for the browser, designiq-mcp for MCP
   # clients), the `github_login` user attribute (admin-only editable) as a
-  # claim, a fixed audience `bpmiq`, and a demo user petra/petra.
+  # claim, a fixed audience `designiq`, and a demo user petra/petra.
   # Evaluation only as shipped (dev mode, in-memory H2, admin/admin) — for a
   # real deployment run Keycloak the way you run Keycloak, and keep the realm.
   keycloak:
@@ -77,14 +77,14 @@ services:
       start_period: 60s
 
   # ── Optional: read-only MCP server ───────────────────────────────────────
-  # Serves a CONTENT repo checkout (a bpmiq.yml + .bpmn files) to MCP clients
+  # Serves a CONTENT repo checkout (a designiq.yml + .bpmn files) to MCP clients
   # over POST /mcp. Image published later (ADR 0004 fast-follow) — shown here
   # for shape.
   #
   # mcp:
-  #   image: ghcr.io/miragon/bpmiq-mcp:${DESIGNIQ_VERSION:-${BPMIQ_VERSION:-latest}} # legacy-name-ok: BPMIQ_VERSION only
+  #   image: ghcr.io/miragon/designiq-mcp:${DESIGNIQ_VERSION:-${BPMIQ_VERSION:-latest}} # legacy-name-ok: BPMIQ_VERSION only
   #   environment:
-  #     BPM_CONTENT_ROOT: /content # content-repo checkout mounted below
+  #     DESIGNIQ_CONTENT_ROOT: /content # content-repo checkout mounted below
   #     # MCP_TOKEN: change-me     # optional — MCP clients must then send "Authorization: Bearer <token>"
   #   volumes:
   #     - ./content:/content:ro # a checkout of YOUR content repo
@@ -96,10 +96,10 @@ services:
   # Caddy terminates TLS and proxies to the live-host; reverse_proxy upgrades
   # WebSockets automatically — no extra config. The whole Caddyfile is 2 lines:
   #
-  #   bpm.example.com
+  #   design.example.com
   #   reverse_proxy live-host:8080
   #
-  # LIVE_PUBLIC_URL must then be the https URL (https://bpm.example.com) —
+  # LIVE_PUBLIC_URL must then be the https URL (https://design.example.com) —
   # OAuth callbacks, webhooks and Secure cookies derive from it. Drop the
   # live-host `ports:` mapping when only Caddy should be reachable.
   #

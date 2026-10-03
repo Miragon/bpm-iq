@@ -73,7 +73,7 @@ export function editorReturnPage(returnUri: string, login: string): string {
     "<!doctype html>",
     '<html lang="en"><head><meta charset="utf-8">',
     `<meta http-equiv="refresh" content="0;url=${href}">`,
-    "<title>BPM Live — signed in</title>",
+    "<title>designIQ — signed in</title>",
     "<style>body{font:15px/1.5 system-ui,sans-serif;margin:3rem auto;max-width:36rem;padding:0 1rem;color:#222}</style>",
     "</head><body>",
     `<h1>Signed in as @${escapeHtml(login)}</h1>`,

@@ -385,7 +385,7 @@ export function startApi(port: number, opts: ApiOptions): Server {
     resource,
     authorization_servers: [opts.oidc!.issuer],
     bearer_methods_supported: ["header"],
-    resource_name: "bpmiq Live Host",
+    resource_name: "designIQ Live Host",
     ...(opts.oidc!.scopes?.length ? { scopes_supported: opts.oidc!.scopes } : {}),
   });
 

@@ -39,10 +39,10 @@ const REPO: ConnectedRepo = {
   suspended: false,
 };
 
-/** a content-repo workspace: bpmiq.yml + one nested process */
+/** a content-repo workspace: designiq.yml + one nested process */
 function workspace(): string {
-  const ws = mkdtempSync(join(tmpdir(), "bpm-scaffold-"));
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+  const ws = mkdtempSync(join(tmpdir(), "designiq-scaffold-"));
+  writeFileSync(join(ws, "designiq.yml"), "processes: processes\n");
   mkdirSync(join(ws, "processes", "subprocesses"), { recursive: true });
   writeFileSync(join(ws, "processes", "order.bpmn"), "<bpmn/>");
   writeFileSync(join(ws, "processes", "subprocesses", "check-credit.bpmn"), "<bpmn/>");
@@ -69,12 +69,12 @@ test("listFolders: every folder under the processes root, empty ones included", 
   });
 });
 
-test("listFolders: no bpmiq.yml → not a content repo; missing folder still is one", async () => {
-  const empty = mkdtempSync(join(tmpdir(), "bpm-scaffold-empty-"));
+test("listFolders: no designiq.yml → not a content repo; missing folder still is one", async () => {
+  const empty = mkdtempSync(join(tmpdir(), "designiq-scaffold-empty-"));
   assert.deepEqual(await listFolders(empty), { isContentRepo: false, folders: [] });
-  // a bpmiq.yml whose processes folder does not exist yet is still a content
+  // a designiq.yml whose processes folder does not exist yet is still a content
   // repo — an empty tree, not a missing config (create would just mkdir it)
-  writeFileSync(join(empty, "bpmiq.yml"), "processes: not-there\n");
+  writeFileSync(join(empty, "designiq.yml"), "processes: not-there\n");
   assert.deepEqual(await listFolders(empty), { isContentRepo: true, folders: [] });
 });
 
@@ -114,7 +114,7 @@ test("createFolder/createProcess: a path segment that is a FILE is a 409, not a 
 
 test("createFolder/createProcess: a symlinked folder escaping the checkout is refused", async () => {
   const ws = workspace();
-  const outside = mkdtempSync(join(tmpdir(), "bpm-scaffold-outside-"));
+  const outside = mkdtempSync(join(tmpdir(), "designiq-scaffold-outside-"));
   symlinkSync(outside, join(ws, "processes", "evil"));
   await assert.rejects(() => createFolder(REPO, ws, "evil/sub"), rejectsWith("scaffold/outside-processes-root", 400));
   await assert.rejects(
@@ -125,8 +125,8 @@ test("createFolder/createProcess: a symlinked folder escaping the checkout is re
   assert.ok(!existsSync(join(outside, "escape.bpmn")), "nothing was written outside the workspace");
 });
 
-test("createFolder: a repo without bpmiq.yml is a 422", async () => {
-  const empty = mkdtempSync(join(tmpdir(), "bpm-scaffold-nocfg-"));
+test("createFolder: a repo without designiq.yml is a 422", async () => {
+  const empty = mkdtempSync(join(tmpdir(), "designiq-scaffold-nocfg-"));
   await assert.rejects(() => createFolder(REPO, empty, "orders"), rejectsWith("scaffold/not-a-content-repo", 422));
 });
 
@@ -179,7 +179,7 @@ test("createProcess: invalid folder and missing config gate like createFolder", 
     () => createProcess(REPO, ws, { name: "Ok", folder: "../out" }),
     rejectsWith("scaffold/invalid-folder", 400),
   );
-  const empty = mkdtempSync(join(tmpdir(), "bpm-scaffold-nocfg2-"));
+  const empty = mkdtempSync(join(tmpdir(), "designiq-scaffold-nocfg2-"));
   await assert.rejects(
     () => createProcess(REPO, empty, { name: "Ok" }),
     rejectsWith("scaffold/not-a-content-repo", 422),
@@ -187,8 +187,8 @@ test("createProcess: invalid folder and missing config gate like createFolder", 
 });
 
 test("createProcess: processes root at '.' works (config 'processes: .')", async () => {
-  const ws = mkdtempSync(join(tmpdir(), "bpm-scaffold-root-"));
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: .\n");
+  const ws = mkdtempSync(join(tmpdir(), "designiq-scaffold-root-"));
+  writeFileSync(join(ws, "designiq.yml"), "processes: .\n");
   const created = await createProcess(REPO, ws, { name: "Intake" });
   assert.equal(created.bpmn, "intake.bpmn");
   assert.equal(created.folder, "");
@@ -234,7 +234,7 @@ test("createDecision: invalid name/folder and missing config gate like createPro
     () => createDecision(REPO, ws, { name: "Ok", folder: "../out" }),
     rejectsWith("scaffold/invalid-folder", 400),
   );
-  const empty = mkdtempSync(join(tmpdir(), "bpm-scaffold-nocfg3-"));
+  const empty = mkdtempSync(join(tmpdir(), "designiq-scaffold-nocfg3-"));
   await assert.rejects(
     () => createDecision(REPO, empty, { name: "Ok" }),
     rejectsWith("scaffold/not-a-content-repo", 422),
@@ -243,7 +243,7 @@ test("createDecision: invalid name/folder and missing config gate like createPro
 
 test("createDecision: a symlinked folder escaping the checkout is refused", async () => {
   const ws = workspace();
-  const outside = mkdtempSync(join(tmpdir(), "bpm-scaffold-outside2-"));
+  const outside = mkdtempSync(join(tmpdir(), "designiq-scaffold-outside2-"));
   symlinkSync(outside, join(ws, "processes", "evil"));
   await assert.rejects(
     () => createDecision(REPO, ws, { name: "Escape", folder: "evil" }),
@@ -421,7 +421,7 @@ test("moveModels: an occupied destination is a 409 and nothing moves (an orphane
 test("moveModels: only discovered models move — foreign files, traversal and bad folders are refused", async () => {
   const ws = workspace();
   const { deps } = moveDeps();
-  for (const path of ["bpmiq.yml", "processes/../bpmiq.yml", "processes/missing.bpmn"]) {
+  for (const path of ["designiq.yml", "processes/../designiq.yml", "processes/missing.bpmn"]) {
     await assert.rejects(
       () => moveModels(REPO, ws, { paths: [path], folder: "archive" }, deps),
       rejectsWith("move/unknown-model", 404),
@@ -542,7 +542,7 @@ test("renameModel: an OPEN decision migrates — notice, final live state to dis
   assert.deepEqual(spy.ws.retired[0], [
     "acme/models/processes/credit.dmn",
     JSON.stringify({
-      type: "bpmiq/moved",
+      type: "bpmiq/moved", // legacy-name-ok: frozen wire type (MOVED_NOTICE), clients match it
       to: "processes/credit-limit.dmn",
       room: "acme/models/processes/credit-limit.dmn",
       by: "Petra",
@@ -592,7 +592,7 @@ test("renameModel: same name, empty slug, a taken id, an occupied or still-open 
     // process ids are unique repo-wide — the sub-folder's check-credit counts
     [spy.deps(ws), { path: "processes/order.bpmn", name: "Check credit" }, "rename/model-exists", 409],
     [spy.deps(ws), { path: "processes/missing.bpmn", name: "x" }, "rename/unknown-model", 404],
-    [spy.deps(ws), { path: "bpmiq.yml", name: "x" }, "rename/unknown-model", 404],
+    [spy.deps(ws), { path: "designiq.yml", name: "x" }, "rename/unknown-model", 404],
     // an orphaned sidecar squats on the new tests path
     [spy.deps(ws), { path: "processes/credit.dmn", name: "archive" }, "rename/target-exists", 409],
     [
@@ -703,12 +703,12 @@ test("deleteModels: one open or unknown model refuses the whole batch — nothin
     rejectsWith("delete/live-session", 409),
   );
   await assert.rejects(
-    () => deleteModels(REPO, ws, { paths: ["processes/order.bpmn", "bpmiq.yml"] }, deps),
+    () => deleteModels(REPO, ws, { paths: ["processes/order.bpmn", "designiq.yml"] }, deps),
     rejectsWith("delete/unknown-model", 404),
   );
   await assert.rejects(() => deleteModels(REPO, ws, { paths: [" "] }, deps), rejectsWith("delete/no-paths", 400));
   assert.ok(existsSync(join(ws, "processes", "order.bpmn")));
-  assert.ok(existsSync(join(ws, "bpmiq.yml")));
+  assert.ok(existsSync(join(ws, "designiq.yml")));
 });
 
 test("renameModel: a failed file rename keeps an OPEN model's live state under its old name", async () => {

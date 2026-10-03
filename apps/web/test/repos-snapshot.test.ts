@@ -13,6 +13,7 @@ import { QueryClient } from "@tanstack/react-query";
 
 import {
   clearRepoSnapshot,
+  dropLegacyRepoSnapshot,
   persistRepoSnapshots,
   readRepoSnapshot,
   writeRepoSnapshot,
@@ -98,6 +99,7 @@ test("blocked storage degrades to no snapshot", () => {
   assert.doesNotThrow(() => writeRepoSnapshot("petra", [repo("acme/models")], blocked));
   assert.equal(readRepoSnapshot("petra", blocked), undefined);
   assert.doesNotThrow(() => clearRepoSnapshot(blocked));
+  assert.doesNotThrow(() => dropLegacyRepoSnapshot(blocked));
 });
 
 test("clearRepoSnapshot (logout) removes the entry", () => {
@@ -105,6 +107,23 @@ test("clearRepoSnapshot (logout) removes the entry", () => {
   writeRepoSnapshot("petra", [repo("acme/models")], storage);
   clearRepoSnapshot(storage);
   assert.equal(readRepoSnapshot("petra", storage), undefined);
+});
+
+// written in two halves ON PURPOSE: a search/replace of the product name would
+// rewrite the source constant and a one-piece literal here in the same breath
+const LEGACY_KEY = "bpm" + "iq.repos.v1";
+
+test("dropLegacyRepoSnapshot removes the pre-rename entry and leaves the current one", () => {
+  const storage = memoryStorage();
+  storage.setItem(LEGACY_KEY, JSON.stringify({ login: "petra", savedAt: 1, repos: [repo("acme/private")] }));
+  writeRepoSnapshot("petra", [repo("acme/models")], storage, 1_000);
+  dropLegacyRepoSnapshot(storage);
+  assert.equal(storage.items.has(LEGACY_KEY), false, "the orphaned private repo list is gone");
+  assert.deepEqual(
+    readRepoSnapshot("petra", storage, 2_000)?.repos.map((r) => r.fullName),
+    ["acme/models"],
+  );
+  assert.doesNotThrow(() => dropLegacyRepoSnapshot(storage), "a second run is a no-op");
 });
 
 test("persistRepoSnapshots writes each successful repos result under the signed-in login — and only that", () => {

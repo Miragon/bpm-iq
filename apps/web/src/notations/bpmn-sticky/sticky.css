@@ -1,4 +1,4 @@
-/* bpmiq stickies (#117): the palette create tool draws via CSS mask in
+/* Stickies (#117): the palette create tool draws via CSS mask in
    currentColor, so it matches the font glyphs exactly — palette color AND
    hover blue. Shipped with the module so every bpmn surface (SPA engine
    chunk, MCP-App widget) gets it. */

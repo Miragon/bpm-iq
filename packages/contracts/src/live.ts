@@ -40,7 +40,8 @@ export const roomName = (repoFullName: string, path: string): string => `${repoF
 // (live-host http/editor-login.ts); the extension registers the URI handler
 // under the same id — a literal shared here so the two cannot drift.
 
-/** publisher.name of the VS Code extension (apps/vscode/package.json) */
+/** publisher.name of the VS Code extension (apps/vscode/package.json — the
+ *  two are pinned together by apps/vscode/src/test/unit/manifest.test.ts) */
 export const EDITOR_EXTENSION_ID = "miragon-gmbh.design-iq";
 /** the path of the extension's sign-in URI handler */
 export const EDITOR_LOGIN_PATH = "/auth";

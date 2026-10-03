@@ -1,6 +1,6 @@
 /**
  * The engine contract the widget core drives — the @miragon/modeler-api
- * profile as bpmiq consumes it (this core is its first consumer): import and
+ * profile as designIQ consumes it (this core is its first consumer): import and
  * export the document TEXT, report user edits, optionally hand the canvas to
  * a Y.Text. Two invariants the lifecycle relies on:
  *

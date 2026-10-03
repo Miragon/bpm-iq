@@ -41,7 +41,7 @@ export function implementPrompt(todo: TodoWire, target: PromptTarget): string {
   // spelled out in every step: the assistant may act on any one of them alone
   const args = `repo: "${target.repo}", path: "${target.path}"`;
   const lines = [
-    "Please implement this bpmiq todo end to end, using the bpmiq tools on this connector.",
+    "Please implement this designIQ todo end to end, using the tools on this connector.",
     "",
     `Todo #${todo.id} — ${todo.title}`,
     `Repository: ${target.repo}`,

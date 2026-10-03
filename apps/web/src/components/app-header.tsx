@@ -15,7 +15,7 @@ export function AppHeader({ me }: { me?: Me }) {
       <Link to="/" className="flex items-center gap-2.5">
         <MiragonComet className="h-3 w-auto shrink-0" />
         <span className="flex items-baseline gap-2">
-          <span className="text-lg font-semibold tracking-tight">bpmiq</span>
+          <span className="text-lg font-semibold tracking-tight">designIQ</span>
           <span className="text-muted-foreground hidden text-xs sm:inline">Let your processes talk</span>
         </span>
       </Link>

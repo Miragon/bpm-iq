@@ -49,7 +49,7 @@ export interface CollabDeps {
   access: { canWrite(session: Session, repo: ConnectedRepo): Promise<boolean> };
   registry: RegistryLookup;
   workspaces: WorkspaceEnsure;
-  /** the repo's content config (bpmiq.yml) — rooms exist only inside its processes folder */
+  /** the repo's content config (designiq.yml) — rooms exist only inside its processes folder */
   contentConfig: ContentConfigLookup;
   /** LIVE_AUTH=none (auth/none.ts, ADR 0007): every ws join IS this principal,
    * whatever token the client sent — absent = authenticated mode (session id / ticket) */

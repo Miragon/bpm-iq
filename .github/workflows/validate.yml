@@ -32,7 +32,7 @@ jobs:
         run: pnpm format:check
       - name: Typecheck all packages (type stripping runs untyped otherwise)
         run: pnpm typecheck
-      - name: Validate the example content repo (bpmiq.yml discovery + BPMN structure/DI)
+      - name: Validate the example content repo (contract-file discovery + BPMN structure/DI)
         run: pnpm validate
       - name: Tests (notations, validator, web sync merge, live-host release flow)
         run: pnpm test

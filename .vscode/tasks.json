@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "bpm-live: compile",
+      "label": "design-iq: compile",
       "type": "shell",
-      "command": "pnpm --filter bpm-live compile",
+      "command": "pnpm --filter design-iq compile",
       "problemMatcher": [],
       "presentation": { "reveal": "silent", "panel": "shared" }
     }

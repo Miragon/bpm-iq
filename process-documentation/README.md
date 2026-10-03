@@ -1,16 +1,20 @@
 # process-documentation — example BPM content repo
 
-The example **BPM content repository** the bpmiq platform serves — the content
+The example **BPM content repository** the designIQ platform serves — the content
 counterpart to the platform code in this monorepo, and the working example the
 MCP server and validator run against.
 
 ## The contract
 
-A content repo is a root **`bpmiq.yml`** naming the folder its models live in:
+A content repo is a root **`designiq.yml`** naming the folder its models live in:
 
 ```yaml
-processes: processes
+models: processes
 ```
+
+`designiq.yml` needs designIQ / Live Host **4.3.1 or later** — older versions read
+only the legacy name `bpmiq.yml`. That name stays readable for good (the validator
+suggests `git mv bpmiq.yml designiq.yml`), and so does the legacy key `processes:`.
 
 - Every file with a known notation extension under that folder (subfolders
   included) is a **model** — `.bpmn` a process, `.dmn` a decision.
@@ -21,7 +25,7 @@ processes: processes
   (`@designiq/notations/derive`).
 
 ```
-bpmiq.yml
+designiq.yml
 processes/
   order-to-cash.bpmn              ← the process
   order-to-cash.storm             ← same id, other notation: the event-storming session behind it
@@ -50,12 +54,12 @@ models link to. So:
 
 ## Working with it
 
-- **Model live**: open the repo in the bpmiq web app; every `.bpmn` is a process
+- **Model live**: open the repo in the designIQ web app; every `.bpmn` is a process
   you can co-edit. Release → PR publishes a process's live state.
 - **Ask the processes**: the MCP server (`packages/mcp`) answers questions over
   this content (`list_processes`, `get_process`, `who_owns`, `enumerate_paths`, …).
-- **Validate**: `node packages/validator/src/cli.ts --root .` (from the repo
-  root) checks BPMN structure + BPMNDI coverage.
+- **Validate**: `npx @designiq/validator --root .` (from the repo root) checks
+  BPMN structure + BPMNDI coverage.
 - **Skills**: `.claude/skills/` carries the AI toolset that operates on this repo.
 
 This repo is mirrored to [`Miragon/process-documentation-starter`](https://github.com/Miragon/process-documentation-starter)

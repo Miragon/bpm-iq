@@ -41,22 +41,22 @@ import {
 import { githubApi } from "./app-auth.ts";
 
 /** attribution line appended to every created issue (items are bot-authored) */
-export const attributionLine = (author: string): string => `_Created from the bpmiq live model by @${author}_`;
+export const attributionLine = (author: string): string => `_Created from the designIQ live model by @${author}_`;
 
 /**
- * Reads the attribution in BOTH product spellings — the legacy one and
- * "designIQ", which hosts write once the product is renamed: hosts are upgraded
- * one by one, so an older host must already name the author of an issue a
- * newer one filed. The legacy alternative stays for good — those bodies are
- * stored in customer trackers and are never rewritten. Only the new name
- * matches case-insensitively (`(?i:…)` scopes the flag to it): a line re-cased
- * by hand must not lose its author, while the legacy spelling and the rest of
- * the sentence keep matching exactly as they always did.
+ * Reads the attribution in BOTH product spellings — "designIQ", which
+ * attributionLine writes, and the legacy one every host before the rename
+ * wrote. The legacy alternative stays for good — those bodies are stored in
+ * customer trackers and are never rewritten. Only the new name matches
+ * case-insensitively (`(?i:…)` scopes the flag to it): a line re-cased by hand
+ * must not lose its author, while the legacy spelling and the rest of the
+ * sentence keep matching exactly as they always did.
  */
 const ATTRIBUTION_RE = /_Created from the (?:bpmiq|(?i:designiq)) live model by @([A-Za-z0-9-]+)_/; // legacy-name-ok: stored in customer trackers
 
 /** attribution comment posted before closing (the close itself is bot-authored) */
-export const closeAttributionLine = (closedBy: string): string => `_Closed from the bpmiq live model by @${closedBy}_`;
+export const closeAttributionLine = (closedBy: string): string =>
+  `_Closed from the designIQ live model by @${closedBy}_`;
 
 /** parse the platform author back out of an issue body (null: created by hand) */
 export function parseAuthor(body: string): string | null {
@@ -230,12 +230,12 @@ export function createGitHubIssueTracker(deps: GitHubIssueRowsDeps): IssueTracke
       await ensureLabel(token, repoFullName, {
         name: TODO_LABEL,
         color: "fa8100",
-        description: "bpmiq model-anchored todo",
+        description: "designIQ model-anchored todo",
       });
       await ensureLabel(token, repoFullName, {
         name: processLabel(input.anchor.process),
         color: "ededed",
-        description: `bpmiq process ${input.anchor.process}`,
+        description: `designIQ process ${input.anchor.process}`,
       });
       const res = await rest(token, `/repos/${repoFullName}/issues`, {
         method: "POST",
@@ -286,7 +286,7 @@ export function createGitHubIssueTracker(deps: GitHubIssueRowsDeps): IssueTracke
         await ensureLabel(token, repoFullName, {
           name: processLabel(to.process),
           color: "ededed",
-          description: `bpmiq process ${to.process}`,
+          description: `designIQ process ${to.process}`,
         });
         ensured.add(key);
       }

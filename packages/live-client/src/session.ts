@@ -1,5 +1,5 @@
 /**
- * openLiveSession — the ONE place a bpmiq client opens a collaborative session
+ * openLiveSession — the ONE place a designIQ client opens a collaborative session
  * against the Live Host. Previously this Hocuspocus wiring existed three times
  * (web editor, VS Code extension, headless guest test) with drift between them.
  *

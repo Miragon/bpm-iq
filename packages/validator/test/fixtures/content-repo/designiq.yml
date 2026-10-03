@@ -1,0 +1,2 @@
+# marks this fixture as a content repo — the models live under processes/
+models: processes

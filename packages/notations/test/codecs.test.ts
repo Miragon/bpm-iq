@@ -31,7 +31,7 @@ test("encode is canonical: insertion-order independent, sorted ids/keys, line-pe
   assert.equal(text, codec.encode(reordered), "same snapshot, any insertion order → same bytes");
   const lines = text.trimEnd().split("\n");
   assert.equal(lines.length, 3, "one header line + one line per element");
-  assert.match(lines[0]!, /^\{"format":"bpmiq-structured"/);
+  assert.match(lines[0]!, /^\{"format":"structured-model"/);
   assert.match(lines[1]!, /^\{"id":"e1"/);
   assert.match(lines[2]!, /^\{"id":"e2"/);
   assert.ok(text.endsWith("\n"), "trailing newline (git-friendly)");
@@ -59,7 +59,7 @@ test("reserved keys: attr 'id' never re-keys, a format-attr element survives, __
   // an element whose attrs contain the header marker is NOT swallowed as one
   const marked: StructuredSnapshot = {
     meta: { title: "T" },
-    elements: { x: { format: "bpmiq-structured", type: "note" } },
+    elements: { x: { format: "structured-model", type: "note" } },
   };
   assert.deepEqual(codec.decode(codec.encode(marked)), marked);
 

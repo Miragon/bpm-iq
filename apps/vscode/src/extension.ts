@@ -1,6 +1,6 @@
 /**
- * BPM Live Workspace — the "thin client" from the platform concept (revision 2):
- * no Live-Share clone, just a FileSystemProvider for `bpm-live://` whose file
+ * The designIQ extension — the "thin client" from the platform concept (revision 2):
+ * no Live-Share clone, just a FileSystemProvider for `designiq://` whose file
  * contents are bound to the Live Host's Y.Text documents.
  *
  * The Miragon BPMN Modeler (a CustomTextEditorProvider matching *.bpmn by glob,
@@ -29,11 +29,15 @@ import type * as Y from "yjs";
 
 import { LiveAuth } from "./auth.ts";
 import { hostJson } from "./host-api.ts";
+import { LEGACY_SECTION, legacyCopies } from "./legacy-settings.ts";
 import { LiveBinding } from "./live-binding.ts";
 import { hostUrls } from "./login-flow.ts";
 import { modelItems, modelUri, repoItems } from "./model-picker.ts";
+import { SCHEME } from "./scheme.ts";
 
-const SCHEME = "bpm-live";
+/** set per target (globalState / workspaceState) once the legacy settings
+ *  were carried over — a key the user clears afterwards stays cleared */
+const LEGACY_MIGRATED = "designiq.legacySettingsCopied";
 
 /** room name = repo-qualified path = uri.path without the leading slash */
 const roomOf = (uri: vscode.Uri): string => uri.path.replace(/^\//, "");
@@ -217,7 +221,27 @@ function toFsError(err: unknown): vscode.FileSystemError {
     : vscode.FileSystemError.Unavailable(message);
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+/** carry the host URL of a pre-rename dev build over to the new key, once
+ *  per target and never over a value set since (legacy-settings.ts) */
+async function migrateLegacySettings(context: vscode.ExtensionContext): Promise<void> {
+  const config = vscode.workspace.getConfiguration("designiq");
+  const legacy = vscode.workspace.getConfiguration(LEGACY_SECTION).inspect<string>("serverUrl");
+  for (const { target, value } of legacyCopies(legacy, config.inspect<string>("serverUrl"))) {
+    const memo = target === "global" ? context.globalState : context.workspaceState;
+    if (memo.get(LEGACY_MIGRATED)) continue;
+    const to = target === "global" ? vscode.ConfigurationTarget.Global : vscode.ConfigurationTarget.Workspace;
+    await config.update("serverUrl", value, to);
+    await memo.update(LEGACY_MIGRATED, true);
+  }
+}
+
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  // before anything reads the host URL, so documents restored with the window
+  // connect to the carried-over host; an unwritable settings.json must not
+  // keep the extension from starting
+  await migrateLegacySettings(context).catch((err: unknown) => {
+    console.warn("[designiq] could not carry over the legacy settings", err);
+  });
   const config = () => vscode.workspace.getConfiguration("designiq");
   const serverUrl = () => config().get<string>("serverUrl") ?? "http://localhost:8301";
   const auth = new LiveAuth(context, serverUrl);
@@ -228,7 +252,7 @@ export function activate(context: vscode.ExtensionContext): void {
     presence: () => auth.presence(),
     onAuthFailed: (room, reason) => {
       void vscode.window
-        .showErrorMessage(`BPM Live: access to ${room} denied (${reason}).`, "Sign in")
+        .showErrorMessage(`designIQ: access to ${room} denied (${reason}).`, "Sign in")
         .then((choice) => {
           if (choice) void vscode.commands.executeCommand("designiq.login");
         });
@@ -237,7 +261,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const from = room.split("/").pop() ?? room;
       const to = notice.to.split("/").pop() ?? notice.to;
       void vscode.window
-        .showInformationMessage(`BPM Live: ${notice.by || "Someone"} renamed ${from} to ${to}.`, `Open ${to}`)
+        .showInformationMessage(`designIQ: ${notice.by || "Someone"} renamed ${from} to ${to}.`, `Open ${to}`)
         .then((choice) => {
           if (choice) void vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(`${SCHEME}:/${notice.room}`));
         });
@@ -246,7 +270,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   const paint = (host: string, me: Me["user"] | undefined) => {
-    status.text = me ? `$(account) BPM Live: @${me.login}` : "$(account) BPM Live: sign in";
+    status.text = me ? `$(account) designIQ: @${me.login}` : "$(account) designIQ: sign in";
     status.tooltip = !me
       ? `Sign in to the Live Host at ${host}`
       : me.provider === "local"
@@ -294,9 +318,9 @@ export function activate(context: vscode.ExtensionContext): void {
       try {
         const me = await auth.login();
         rebindOpen();
-        void vscode.window.showInformationMessage(`BPM Live: signed in as ${me.user.name || me.user.login}.`);
+        void vscode.window.showInformationMessage(`designIQ: signed in as ${me.user.name || me.user.login}.`);
       } catch (err) {
-        void vscode.window.showErrorMessage(`BPM Live: sign-in failed — ${(err as Error).message}`);
+        void vscode.window.showErrorMessage(`designIQ: sign-in failed — ${(err as Error).message}`);
       }
     }),
     // the manual route: a session token pasted from a browser login — for hosts
@@ -313,15 +337,15 @@ export function activate(context: vscode.ExtensionContext): void {
       try {
         const me = await auth.useToken(token.trim());
         rebindOpen();
-        void vscode.window.showInformationMessage(`BPM Live: signed in as ${me.user.name || me.user.login}.`);
+        void vscode.window.showInformationMessage(`designIQ: signed in as ${me.user.name || me.user.login}.`);
       } catch (err) {
-        void vscode.window.showErrorMessage(`BPM Live: the token was not accepted — ${(err as Error).message}`);
+        void vscode.window.showErrorMessage(`designIQ: the token was not accepted — ${(err as Error).message}`);
       }
     }),
     vscode.commands.registerCommand("designiq.logout", async () => {
       await auth.logout();
       rebindOpen();
-      void vscode.window.showInformationMessage("BPM Live: signed out.");
+      void vscode.window.showInformationMessage("designIQ: signed out.");
     }),
     vscode.commands.registerCommand("designiq.open", async () => {
       const { http } = hostUrls(serverUrl());
@@ -336,7 +360,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       const repoChoices = repoItems(repos);
       if (repoChoices.length === 0) {
-        void vscode.window.showWarningMessage(`BPM Live: no repository with write access on ${http}.`);
+        void vscode.window.showWarningMessage(`designIQ: no repository with write access on ${http}.`);
         return;
       }
       const repo =
@@ -369,7 +393,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   function offerSignIn(message: string): void {
-    void vscode.window.showErrorMessage(`BPM Live: ${message}`, "Sign in").then((choice) => {
+    void vscode.window.showErrorMessage(`designIQ: ${message}`, "Sign in").then((choice) => {
       if (choice) void vscode.commands.executeCommand("designiq.login");
     });
   }

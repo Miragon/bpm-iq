@@ -3,13 +3,13 @@
 # issue a todo; add the `process:<id>` label so it shows up in that process's
 # panel on the canvas.
 name: Todo (model work item)
-description: File a work item on a process model — anchored todos show up on the bpmiq canvas
+description: File a work item on a process model — anchored todos show up on the designIQ canvas
 labels: ["todo"]
 body:
   - type: markdown
     attributes:
       value: |
-        Todos created **from the bpmiq canvas** carry their anchor automatically — this form is the
+        Todos created **from the designIQ canvas** carry their anchor automatically — this form is the
         manual path. After submitting, also add the `process:<id>` **label** to the issue so the todo
         appears in that process's panel.
   - type: input

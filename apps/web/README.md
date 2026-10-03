@@ -1,6 +1,6 @@
 # @designiq/web
 
-The collaborative web client of bpmiq — the SPA (bpmn-js / dmn-js / the Miragon
+The collaborative web client of designIQ — the SPA (bpmn-js / dmn-js / the Miragon
 renderers + Monaco on a shared Y.Text, the repo overview) **and** the MCP-App
 modeler widgets the Live Host serves inline in AI chats (claude.ai, Claude
 Desktop, ChatGPT).

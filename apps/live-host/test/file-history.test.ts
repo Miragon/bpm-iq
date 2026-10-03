@@ -137,7 +137,7 @@ const GIT_ID = ["-c", "user.name=t", "-c", "user.email=t@test"];
 
 /** a checkout at the manager's expected location with two commits on main */
 async function gitWorkspace() {
-  const dataDir = mkdtempSync(join(tmpdir(), "bpm-history-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "designiq-history-"));
   const checkout = join(dataDir, "workspaces", "acme", "models");
   const rel = "processes/order/order.bpmn";
   mkdirSync(join(checkout, "processes", "order"), { recursive: true });
@@ -151,7 +151,7 @@ async function gitWorkspace() {
   const workspaces = new WorkspaceManager({
     dataDir,
     hostRepo: "other/host",
-    hostRoot: mkdtempSync(join(tmpdir(), "bpm-hostroot-")),
+    hostRoot: mkdtempSync(join(tmpdir(), "designiq-hostroot-")),
     registry: { tokenFor: async () => undefined } as unknown as RepoRegistry,
     githubBaseUrl: "https://github.example",
   });
@@ -195,7 +195,7 @@ test("fileHistory: a renamed file lists only fetchable commits (no --follow dead
 });
 
 test("fileHistory: a directory without git yields an empty history", async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), "bpm-history-nogit-"));
+  const dataDir = mkdtempSync(join(tmpdir(), "designiq-history-nogit-"));
   mkdirSync(join(dataDir, "workspaces", "acme", "models"), { recursive: true });
   const workspaces = new WorkspaceManager({
     dataDir,

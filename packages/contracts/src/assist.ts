@@ -1,5 +1,5 @@
 /**
- * "Analyse with AI" deep links — the doorway from a bpmiq surface (the web
+ * "Analyse with AI" deep links — the doorway from a designIQ surface (the web
  * app, later the VS Code extension) into an AI chat whose FIRST move is this
  * connector's modeler widget: `open_modeler` (BPMN) / `open_decision_modeler`
  * (DMN) / the generated `open_<notation>_modeler` of every Miragon renderer.
@@ -12,8 +12,11 @@
  * path, the literal tool call, and the Live Host's MCP URL. Naming the host is
  * deliberate: a connector pointed at a DIFFERENT instance (self-hosting and
  * cell mode make several routine) then fails as a recognizable "wrong
- * instance", not as a phantom missing repo. Model-derived text (element
- * names) is DATA, not instructions — it rides in a `fenced()` block.
+ * instance", not as a phantom missing repo. The connector is identified by
+ * that URL, never by a name: its label is whatever the user typed when adding
+ * it, so a prompt that names a label sends the assistant looking for one that
+ * may not exist. Model-derived text (element names) is DATA, not
+ * instructions — it rides in a `fenced()` block.
  *
  * Both link targets PREFILL a chat, neither auto-submits — the user reviews
  * and sends. claude:// is documented so, with `q` truncated at ~14,000 chars
@@ -85,7 +88,7 @@ export function buildAssistPrompt(ctx: AssistContext): string {
   const path = JSON.stringify(ctx.path);
   const lines = [
     `Open ${path} from repository ${ctx.repo} in the modeler — first step, before anything else: ` +
-      `call ${tool}({repo: ${JSON.stringify(ctx.repo)}, path: ${path}}) on the bpmiq connector (Live Host at ${ctx.mcpUrl}). ` +
+      `call ${tool}({repo: ${JSON.stringify(ctx.repo)}, path: ${path}}) using the connector for the designIQ Live Host at ${ctx.mcpUrl}. ` +
       "The widget renders the model right here in the chat, live-synced with the web editor I just came from.",
   ];
   if (ctx.selection && ctx.selection.length > 0) {

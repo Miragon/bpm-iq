@@ -46,7 +46,10 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
-const HEADER_FORMAT = "bpmiq-structured";
+/** the header's format tag — brand-NEUTRAL on purpose: it is persisted in
+ *  every structured model file, and a product rename must never again have
+ *  to touch (or dual-read) files in customer repos */
+const HEADER_FORMAT = "structured-model";
 
 /**
  * THE house codec: one JSON header line (format, version, meta), then one
@@ -82,7 +85,7 @@ export function jsonLinesCodec(): DocCodec {
         if (parsed === null || typeof parsed !== "object") continue;
         const row = parsed as Record<string, unknown>;
         // a header NEVER carries an id — an element whose attrs happen to
-        // contain format:"bpmiq-structured" must not be swallowed as one
+        // contain format:"structured-model" must not be swallowed as one
         if (row.format === HEADER_FORMAT && typeof row.id !== "string") {
           if (row.meta !== null && typeof row.meta === "object") snapshot.meta = row.meta as Record<string, unknown>;
           continue;

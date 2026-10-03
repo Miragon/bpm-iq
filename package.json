@@ -3,7 +3,7 @@
   "version": "4.3.1",
   "private": true,
   "type": "module",
-  "description": "bpmiq — collaborative BPM platform: live modeling, PR-based release, and processes that talk",
+  "description": "designIQ — collaborative BPM platform: live modeling, PR-based release, and processes that talk",
   "engines": {
     "node": ">=23.6"
   },

@@ -48,7 +48,7 @@ test("hasRefs: true exactly for notations with an emitter — the save/check ski
 });
 
 test("buildRepoIndex: artifacts + resolved/dangling refs + incoming/outgoing traversal", async () => {
-  const w = mkdtempSync(join(tmpdir(), "bpm-refs-"));
+  const w = mkdtempSync(join(tmpdir(), "designiq-refs-"));
   mkdirSync(join(w, "models", "sub"), { recursive: true });
   writeFileSync(join(w, "models", "caller.bpmn"), CALLER);
   writeFileSync(join(w, "models", "sub", "invoice-handling.bpmn"), "<definitions/>");

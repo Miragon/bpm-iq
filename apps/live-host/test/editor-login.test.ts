@@ -60,4 +60,5 @@ test("the landing page escapes the URI and the login", () => {
   assert.ok(page.includes('href="vscode://miragon-gmbh.design-iq/auth?code=c&amp;state=s"'));
   assert.ok(!page.includes("<img"), "login escaped");
   assert.ok(page.includes("&lt;img onerror=&quot;x&quot;&gt;"));
+  assert.ok(page.includes("<title>designIQ — signed in</title>"), "the product name in the tab title");
 });

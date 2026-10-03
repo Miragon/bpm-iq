@@ -41,7 +41,7 @@ const BASE_RULES = `
 
 export function createRemoteCaretStyles(): RemoteCaretStyles {
   const sheet = document.createElement("style");
-  sheet.dataset.bpmRemoteCarets = "";
+  sheet.dataset.designiqRemoteCarets = "";
   document.head.appendChild(sheet);
   let lastCss = "";
 

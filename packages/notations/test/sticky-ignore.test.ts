@@ -1,8 +1,8 @@
 /**
- * bpmiq:sticky extension elements (#117) are DISCUSSION artifacts — the
- * derive/extract toolchain must never see them: the extracted graph and the
- * derived process view of a diagram are byte-identical with and without
- * stickies. This is the pin the sticky feature stands on ("stickies never
+ * Sticky extension elements (#117, the frozen bpmiq:sticky — legacy-name-ok)
+ * are DISCUSSION artifacts — the derive/extract toolchain must never see
+ * them: the extracted graph and the derived process view of a diagram are
+ * byte-identical with and without stickies. This is the pin the sticky feature stands on ("stickies never
  * appear as process steps" — MCP views, process-navigator, release PRs).
  */
 import assert from "node:assert/strict";

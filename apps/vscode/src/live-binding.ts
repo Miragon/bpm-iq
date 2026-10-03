@@ -26,7 +26,7 @@ import * as vscode from "vscode";
 import type * as Y from "yjs";
 
 /** transaction origin of our own pushes — the observer skips them */
-const LOCAL = { source: "bpm-live/vscode" };
+const LOCAL = { source: "designiq/vscode" };
 const SAVE_DEBOUNCE_MS = 300;
 
 export class LiveBinding implements vscode.Disposable {

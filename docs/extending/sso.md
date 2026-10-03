@@ -1,4 +1,4 @@
-# Extending bpmiq: SSO / identity providers
+# Extending designIQ: SSO / identity providers
 
 **Browser SSO ships built-in**: any OIDC-conformant IdP (Keycloak, Entra ID,
 WorkOS, …) can BE the web login — set `LIVE_OIDC_CLIENT_ID` next to the

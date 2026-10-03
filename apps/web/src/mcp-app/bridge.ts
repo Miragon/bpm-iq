@@ -62,7 +62,7 @@ export type SaveResult = ({ ok: true } & PutContentResultWire) | SaveConflict;
  *  is served outside the Live Host (dev preview) — default to editable, with
  *  this very origin as the deep-link base (the dev server serves the SPA too).
  *  A parsed payload WITHOUT publicUrl (older Live Host) keeps it absent — the
- *  "Open in bpmiq" button hides rather than dead-link. */
+ *  "Open in designIQ" button hides rather than dead-link. */
 export function bootConfig(): BootConfig {
   const raw = (window as { DESIGNIQ_BOOT?: unknown }).DESIGNIQ_BOOT;
   if (typeof raw === "string" && !raw.startsWith("__")) {

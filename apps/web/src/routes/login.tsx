@@ -11,7 +11,7 @@ export function Login() {
     <div className="mx-auto flex max-w-md flex-col px-6 py-20">
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">bpmiq Live</CardTitle>
+          <CardTitle className="text-2xl">designIQ</CardTitle>
           <CardDescription>Model together, release via pull request — then talk to your processes.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">

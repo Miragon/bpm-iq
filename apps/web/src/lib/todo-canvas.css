@@ -5,24 +5,24 @@
  * the four variables next to its @import. `font: inherit` is load-bearing for
  * the widget (it has no button reset; the SPA's Tailwind preflight makes it a
  * no-op). */
-.bpm-todo-badge {
+.designiq-todo-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: var(--bpm-todo-badge-size);
-  height: var(--bpm-todo-badge-size);
-  padding: 0 var(--bpm-todo-badge-pad);
-  border: 1px solid var(--bpm-todo-badge-fg);
+  min-width: var(--designiq-todo-badge-size);
+  height: var(--designiq-todo-badge-size);
+  padding: 0 var(--designiq-todo-badge-pad);
+  border: 1px solid var(--designiq-todo-badge-fg);
   border-radius: 9999px;
-  background: var(--bpm-todo-badge-bg);
-  color: var(--bpm-todo-badge-fg);
+  background: var(--designiq-todo-badge-bg);
+  color: var(--designiq-todo-badge-fg);
   font: inherit;
-  font-size: var(--bpm-todo-badge-font);
+  font-size: var(--designiq-todo-badge-font);
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
   transition: transform 0.1s ease;
 }
-.bpm-todo-badge:hover {
+.designiq-todo-badge:hover {
   transform: scale(1.15);
 }

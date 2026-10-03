@@ -1,7 +1,7 @@
 {
   "name": "@designiq/mcp",
   "version": "4.3.1",
-  "description": "Read-only MCP server exposing a BPM content repo's processes — discovered from bpmiq.yml, derived from the BPMN — to any MCP client.",
+  "description": "Read-only MCP server exposing a BPM content repo's processes — discovered from designiq.yml, derived from the BPMN — to any MCP client.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -21,7 +21,7 @@
     "node": ">=22"
   },
   "bin": {
-    "designiq-mcp": "server.ts"
+    "designiq-mcp-server": "server.ts"
   },
   "exports": {
     ".": "./server.ts",
@@ -37,7 +37,7 @@
       "./http": "./dist/http.js"
     },
     "bin": {
-      "designiq-mcp": "dist/server.js"
+      "designiq-mcp-server": "dist/server.js"
     }
   },
   "scripts": {

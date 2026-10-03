@@ -11,12 +11,12 @@ import { useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 import { SidePanel } from "@/components/side-panel";
-import { bpmiqModdle } from "@/notations/bpmn-sticky/bpmiq-moddle";
+import { stickyModdle } from "@/notations/bpmn-sticky/sticky-moddle";
 import type { NotationPanelProps } from "@/notations/registry";
 
 // the sticky namespace has ONE definition (frozen there) — a second copy of
 // the literal here could drift from what the modeler writes
-const BPMIQ_NS = bpmiqModdle.uri;
+const STICKY_NS = stickyModdle.uri;
 
 /** facilitator priority: open ends first, context last */
 const KIND_ORDER = ["question", "decision", "note", "role"] as const;
@@ -41,13 +41,14 @@ interface StickyRow {
   kind: Kind;
 }
 
-/** parse the live XML's bpmiq:sticky extension elements — namespace-aware,
- *  total: a mid-edit malformed document simply yields the previous list */
+/** parse the live XML's bpmiq:sticky extension elements (legacy-name-ok) —
+ *  namespace-aware, total: a mid-edit malformed document simply yields the
+ *  previous list */
 function parseStickies(xml: string): StickyRow[] | undefined {
   const doc = new DOMParser().parseFromString(xml, "text/xml");
   if (doc.getElementsByTagName("parsererror").length > 0) return undefined;
   const rows: StickyRow[] = [];
-  for (const el of [...doc.getElementsByTagNameNS(BPMIQ_NS, "sticky")]) {
+  for (const el of [...doc.getElementsByTagNameNS(STICKY_NS, "sticky")]) {
     const id = el.getAttribute("id");
     if (!id) continue;
     const kind = el.getAttribute("kind") ?? "note";
@@ -97,7 +98,7 @@ export function NotesPanel({ content, onRevealElement, onClose }: NotationPanelP
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {total === 0 && (
           <p className="text-muted-foreground text-xs">
-            No stickies on this diagram yet. In Design mode, press <kbd>n</kbd> (or use the palette) to drop one —
+            No stickies on this diagram yet. In Workshop mode, press <kbd>n</kbd> (or use the palette) to drop one —
             notes, open questions, decisions and role remarks all live right in the model.
           </p>
         )}

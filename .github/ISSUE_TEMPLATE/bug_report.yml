@@ -6,7 +6,7 @@ body:
     id: deploy-mode
     attributes:
       label: Deploy mode
-      description: How are you running bpmiq?
+      description: How are you running designIQ?
       options:
         - Docker Compose (docs/on-prem)
         - From source (pnpm live-host)

@@ -7,6 +7,8 @@
 import { roomName } from "@designiq/contracts/live";
 import type { ModelInfo, RepoInfo } from "@designiq/contracts/live-host";
 
+import { SCHEME } from "./scheme.ts";
+
 /** a QuickPick item carrying its value — the shape vscode.window.showQuickPick
  *  renders (label with $(icon) syntax, description, detail) */
 export interface PickItem<T> {
@@ -52,7 +54,7 @@ export function modelItems(models: ModelInfo[]): PickItem<ModelInfo>[] {
     }));
 }
 
-/** the bpm-live URI of a model — the path IS the room name */
+/** the live URI of a model — the path IS the room name */
 export function modelUri(repoFullName: string, path: string): string {
-  return `bpm-live:/${roomName(repoFullName, path)}`;
+  return `${SCHEME}:/${roomName(repoFullName, path)}`;
 }

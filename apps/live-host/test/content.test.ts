@@ -28,7 +28,7 @@ import { type ContentDeps, getContent, putContent } from "../src/application/con
 import { newBpmnXml } from "../src/domain/bpmn-template.ts";
 import { newDmnXml } from "../src/domain/dmn-template.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
-import { loadContentConfig } from "../src/repos/content.ts";
+import { CONTENT_CONFIG_FILE, loadContentConfig } from "../src/repos/content.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 const REPO: ConnectedRepo = {
@@ -55,9 +55,11 @@ after(async () => {
 
 /** tmpdir content repo + real Hocuspocus (hooks wired like server.ts) */
 function setup(over: { contentRepo?: boolean; configFile?: string; maxDocBytes?: number } = {}) {
-  const ws = mkdtempSync(join(tmpdir(), "bpm-content-"));
+  const ws = mkdtempSync(join(tmpdir(), "designiq-content-"));
   mkdirSync(join(ws, "processes"), { recursive: true });
-  if (over.contentRepo !== false) writeFileSync(join(ws, over.configFile ?? "bpmiq.yml"), "processes: processes\n");
+  if (over.contentRepo !== false) {
+    writeFileSync(join(ws, over.configFile ?? CONTENT_CONFIG_FILE), "processes: processes\n");
+  }
   const liveDocs = new Set<string>();
   const lineage = new LineageStore(new DatabaseSync(":memory:"), REPO.fullName);
   const registry = { get: (n: string) => (n.toLowerCase() === REPO.fullName ? REPO : undefined) };
@@ -119,7 +121,7 @@ test("getContent seeds from disk, returns a stable token, and unloads the doc (l
   assert.equal(liveDocs.size, 0, "direct connection released the room");
 });
 
-test("getContent: missing file → 404, bad extension → 400, no bpmiq.yml → 422", async () => {
+test("getContent: missing file → 404, bad extension → 400, no contract file → 422", async () => {
   const { deps } = setup();
   await assert.rejects(
     () => getContent(deps, REPO, "processes/ghost.bpmn"),
@@ -142,7 +144,7 @@ test("getContent: 422 is decided by the error's TYPE — a path that merely read
   // the status used to be matched on; it is a bad path in a perfectly fine repo
   const { deps } = setup();
   await assert.rejects(
-    () => getContent(deps, REPO, "docs/no bpmiq.yml.bpmn"),
+    () => getContent(deps, REPO, "docs/not a content repo.bpmn"),
     (e: AppError) =>
       e.code === "content/invalid-path" &&
       e.status === 400 &&
@@ -150,8 +152,8 @@ test("getContent: 422 is decided by the error's TYPE — a path that merely read
   );
 });
 
-test("getContent: a repo whose contract file is designiq.yml is a content repo", async () => {
-  const { ws, deps } = setup({ configFile: "designiq.yml" });
+test("getContent: a repo whose contract file is the legacy name alone is still a content repo", async () => {
+  const { ws, deps } = setup({ configFile: "bpmiq.yml" }); // legacy-name-ok: pins the legacy path
   writeFileSync(join(ws, PATH), VALID);
   assert.equal((await getContent(deps, REPO, PATH)).content, VALID);
 });

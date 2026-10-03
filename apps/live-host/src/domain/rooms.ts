@@ -23,18 +23,21 @@ export interface WorkspaceEnsure {
   ensure(repo: ConnectedRepo): Promise<string>;
 }
 
-/** the repo's content config (bpmiq.yml) — injected so this module stays pure */
+/** the repo's content config (designiq.yml) — injected so this module stays pure */
 export type ContentConfigLookup = (workspaceRoot: string) => { processes: string } | undefined;
 
 /**
  * The repo has no content config, so it has no live rooms at all. A class —
  * not a message to match — because the content use-case answers this one
  * with its own status (422, "fix the repo") while every other rejection here
- * is a bad path (400); the wording must stay free to change.
+ * is a bad path (400); the wording must stay free to change. It spells out
+ * notAContentRepoReason (repos/content.ts) instead of importing it: that
+ * module reads the filesystem, this one stays pure — rooms.test.ts pins the
+ * two to the same sentence.
  */
 export class NotAContentRepoError extends Error {
   constructor(repoFullName: string) {
-    super(`not a BPM content repo (no bpmiq.yml): ${repoFullName}`);
+    super(`${repoFullName} has no usable designiq.yml (or legacy bpmiq.yml) at its root — not a content repo`); // legacy-name-ok: names the legacy file it still reads
     this.name = "NotAContentRepoError";
   }
 }
@@ -84,7 +87,7 @@ export function splitRoom(
 /**
  * Resolve a room to an absolute on-disk path inside the repo's workspace, guarding
  * against filesystem + cross-repo escape (defense-in-depth over splitRoom's rules).
- * Live rooms exist only INSIDE the repo's configured processes folder (bpmiq.yml)
+ * Live rooms exist only INSIDE the repo's configured processes folder (designiq.yml)
  * — a repo without the config has no live-editable files at all.
  */
 export async function toDiskPath(

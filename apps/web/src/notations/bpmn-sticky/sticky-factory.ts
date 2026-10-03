@@ -1,9 +1,9 @@
 /**
  * Sticky element factory (#117) — overrides bpmn-js' ElementFactory for the
- * ONE case it must not handle: bpmiq:Sticky shapes get NO DI (their
- * coordinates live on the extension element; bpmn-js' createElement would
- * mint a dangling bpmndi:BPMNShape for them). Everything else falls through
- * to the bpmn implementation untouched.
+ * ONE case it must not handle: sticky shapes (bpmiq:Sticky, legacy-name-ok)
+ * get NO DI (their coordinates live on the extension element; bpmn-js'
+ * createElement would mint a dangling bpmndi:BPMNShape for them). Everything
+ * else falls through to the bpmn implementation untouched.
  */
 import ElementFactory from "bpmn-js/lib/features/modeling/ElementFactory";
 

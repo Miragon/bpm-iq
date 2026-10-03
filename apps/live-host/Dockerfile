@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# bpmiq Live Host — collaborative editing platform (Hocuspocus sync + REST API +
+# designIQ Live Host — collaborative editing platform (Hocuspocus sync + REST API +
 # web app on ONE port). Multi-repo: connected repos are cloned on demand, so the
 # runtime needs git. Build context = the monorepo root (pnpm workspace).
 #
@@ -36,7 +36,7 @@ COPY . .
 RUN pnpm --filter @designiq/web build
 
 FROM node:26-slim
-LABEL org.opencontainers.image.title="bpmiq live-host" \
+LABEL org.opencontainers.image.title="designIQ Live Host" \
   org.opencontainers.image.description="Collaborative BPM platform server: live model sync + REST API + web app on one port; releases become pull requests" \
   org.opencontainers.image.source="https://github.com/Miragon/design-iq" \
   org.opencontainers.image.licenses="MIT"

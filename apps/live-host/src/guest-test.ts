@@ -22,7 +22,7 @@ const URL = process.env.LIVE_URL ?? "ws://localhost:8301";
 // the ws token: a LIVE_AUTH=none host accepts any value; against an
 // authenticated host pass a session id (the wsToken of /api/me after a login)
 const TOKEN = process.env.LIVE_TOKEN ?? "local";
-// room = <owner>/<repo>/<repo-relative-path>; the monorepo's root bpmiq.yml
+// room = <owner>/<repo>/<repo-relative-path>; the monorepo's root designiq.yml
 // points its processes folder at process-documentation/processes
 const DOC_NAME = "Miragon/design-iq/process-documentation/processes/order-to-cash.bpmn";
 const REL_PATH = DOC_NAME.split("/").slice(2).join("/");

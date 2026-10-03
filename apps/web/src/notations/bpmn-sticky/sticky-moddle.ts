@@ -1,8 +1,9 @@
 /**
- * The `bpmiq` moddle extension (#117): sticky notes as BPMN extension
+ * The sticky moddle extension (#117): sticky notes as BPMN extension
  * elements plus the per-document t.BPM maturity flag.
  *
- * `bpmiq:Sticky` deliberately does NOT extend bpmn:BaseElement — bpmn-js'
+ * The sticky type (`bpmiq:Sticky` in the file, legacy-name-ok: frozen prefix)
+ * deliberately does NOT extend bpmn:BaseElement — bpmn-js'
  * BpmnUpdater gates every DI/parent hook on `is(element, 'bpmn:BaseElement')`
  * (ifBpmn), so a non-BPMN superclass keeps the whole DI machinery away from
  * stickies: their coordinates live on the extension element itself and no
@@ -10,7 +11,7 @@
  * compliant tools to preserve foreign extensionElements, so a workshop file
  * opened in Camunda Modeler survives untouched.
  */
-export const bpmiqModdle = {
+export const stickyModdle = {
   // FROZEN — these never follow a product rename. uri + prefix are written
   // into every customer .bpmn that ever held a sticky or the workshop flag
   // (the xmlns declaration, the sticky tag, the mode attribute). Rename both
@@ -38,9 +39,9 @@ export const bpmiqModdle = {
       ],
     },
     {
-      // bpmiq:mode="workshop|full" on bpmn:Definitions — the per-DOCUMENT
-      // switch #54's reduced palette keys on (all participants see the same
-      // tools; a client toggle could not guarantee that)
+      // bpmiq:mode="workshop|full" on bpmn:Definitions (legacy-name-ok: frozen)
+      // — the per-DOCUMENT switch #54's reduced palette keys on (all
+      // participants see the same tools; a client toggle could not guarantee that)
       name: "ModeDefinitions",
       extends: ["bpmn:Definitions"],
       properties: [{ name: "mode", type: "String", isAttr: true }],

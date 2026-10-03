@@ -1,7 +1,7 @@
 {
-  "name": "bpm-live",
-  "displayName": "BPM Live Workspace",
-  "description": "Open live model documents (bpm-live://) synced through the bpmiq Live Host — the Miragon BPMN Modeler opens them like any other file.",
+  "name": "design-iq",
+  "displayName": "designIQ",
+  "description": "Open live model documents (designiq://) synced through the designIQ Live Host — the Miragon BPMN Modeler opens them like any other file.",
   "version": "0.0.1",
   "private": true,
   "publisher": "miragon-gmbh",
@@ -10,30 +10,34 @@
   },
   "main": "./out/extension.js",
   "activationEvents": [
-    "onFileSystem:bpm-live",
+    "onFileSystem:designiq",
     "onUri"
   ],
   "contributes": {
     "commands": [
       {
         "command": "designiq.open",
-        "title": "BPM Live: Open Live Model"
+        "title": "Open Live Model",
+        "category": "designIQ"
       },
       {
         "command": "designiq.login",
-        "title": "BPM Live: Sign in"
+        "title": "Sign in",
+        "category": "designIQ"
       },
       {
         "command": "designiq.loginWithToken",
-        "title": "BPM Live: Sign in with a session token…"
+        "title": "Sign in with a session token…",
+        "category": "designIQ"
       },
       {
         "command": "designiq.logout",
-        "title": "BPM Live: Sign out"
+        "title": "Sign out",
+        "category": "designIQ"
       }
     ],
     "configuration": {
-      "title": "BPM Live",
+      "title": "designIQ",
       "properties": {
         "designiq.serverUrl": {
           "type": "string",

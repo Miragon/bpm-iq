@@ -34,7 +34,7 @@ const SETUP_URL = "https://github.com/Miragon/design-iq/blob/main/docs/mcp-integ
 const copyPrompt = async (prompt: string): Promise<void> => {
   try {
     await navigator.clipboard.writeText(prompt);
-    toast.success("Prompt copied", { description: "Paste it into a chat connected to the bpmiq connector." });
+    toast.success("Prompt copied", { description: "Paste it into a chat connected to the designIQ connector." });
   } catch {
     // clipboard needs a secure context (https/localhost) — surface it to copy by hand
     toast.info("Copy the prompt by hand", { description: prompt, duration: 15_000 });
@@ -56,7 +56,7 @@ const openClaude = (url: string, prompt: string): void => {
     document.removeEventListener("visibilitychange", onLeave);
     if (left) return;
     toast("Claude Desktop didn't open?", {
-      description: "It may not be installed — copy the prompt for any chat with the bpmiq connector instead.",
+      description: "It may not be installed — copy the prompt for any chat with the designIQ connector instead.",
       action: { label: "Copy prompt", onClick: () => void copyPrompt(prompt) },
       duration: 10_000,
     });
@@ -141,7 +141,7 @@ export function AssistMenu({
         <DropdownMenuItem asChild>
           <a href={SETUP_URL} target="_blank" rel="noreferrer">
             <BookOpen />
-            Requires the bpmiq connector — setup
+            Requires the designIQ connector — setup
           </a>
         </DropdownMenuItem>
       </DropdownMenuContent>

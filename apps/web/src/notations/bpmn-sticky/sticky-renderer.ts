@@ -1,8 +1,9 @@
 /**
- * Sticky renderer (#117) — draws bpmiq:Sticky shapes: a colored square with
- * wrapped, centered text. Registered ABOVE the BpmnRenderer's priority;
- * BpmnRenderer never claims stickies anyway (canRender is bpmn:BaseElement-
- * gated), the priority just keeps the dispatch unambiguous.
+ * Sticky renderer (#117) — draws bpmiq:Sticky shapes (legacy-name-ok): a
+ * colored square with wrapped, centered text. Registered ABOVE the
+ * BpmnRenderer's priority; BpmnRenderer never claims stickies anyway
+ * (canRender is bpmn:BaseElement-gated), the priority just keeps the dispatch
+ * unambiguous.
  *
  * The text auto-fits the note (#188, sticky-text.ts): the renderer lays the
  * lines out itself in the diagram's label font — bpmn-js' TextRenderer only

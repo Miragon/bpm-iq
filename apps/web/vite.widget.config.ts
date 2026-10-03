@@ -62,7 +62,7 @@ const here = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url
 /** rename the emitted HTML once everything is written — the template's name
  *  is fixed by its input path, the bundle's by the widget registry */
 const emitHtmlAs = (from: string, to: string): Plugin => ({
-  name: "bpmiq:widget-html-name",
+  name: "designiq:widget-html-name",
   writeBundle(options) {
     const dir = options.dir ?? "dist";
     renameSync(join(dir, from), join(dir, to));

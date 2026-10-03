@@ -4,7 +4,7 @@
 # context = the monorepo root (pnpm workspace).
 #
 # Build (from the repo root):  docker build -t designiq-mcp .
-# Serves any content repo: set BPM_CONTENT_ROOT / mount your checkout (docs/on-prem).
+# Serves any content repo: set DESIGNIQ_CONTENT_ROOT / mount your checkout (docs/on-prem).
 
 FROM node:26-slim AS build
 # Node 26 no longer bundles Corepack — install it explicitly (pnpm version stays
@@ -34,7 +34,7 @@ RUN npm install -g corepack@latest && corepack enable
 ENV NODE_ENV=production PORT=8080
 WORKDIR /app
 # Runtime needs: the MCP server + its deps and the content the tools read
-# (process-documentation: bpmiq.yml + processes/*.bpmn — the default example).
+# (process-documentation: designiq.yml + processes/*.bpmn — the default example).
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/pnpm-workspace.yaml /app/.npmrc /app/package.json ./
 COPY --from=build /app/packages/notations ./packages/notations

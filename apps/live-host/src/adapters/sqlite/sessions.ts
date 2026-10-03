@@ -22,6 +22,13 @@ export interface Session {
   createdAt: number;
 }
 
+// The four cookie names in this file were renamed with the product (Release B)
+// and are read under the new names only — deliberately no fallback: a browser's
+// pre-rename session cookie is no longer recognized, so every browser signs in
+// once more after the upgrade (accepted: a session lasts a working day anyway),
+// and a login in flight across the deploy fails its state check and is simply
+// retried. The old cookies expire on their own. Bearer sessions (VS Code, the
+// session-token route) do not ride a cookie and are unaffected.
 export const COOKIE = "designiq_sid";
 const MAX_AGE_MS = 1000 * 60 * 60 * 12; // 12h — a working day; re-grant afterwards
 

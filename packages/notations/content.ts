@@ -1,12 +1,12 @@
 /**
- * The content-repo contract (bpmiq.yml) — the ONE definition of "what is a
+ * The content-repo contract (designiq.yml) — the ONE definition of "what is a
  * content repo, and what are its models", shared by every consumer that reads
  * a checkout: the Live Host, the MCP server, and the validator.
  *
- *   # bpmiq.yml
+ *   # designiq.yml
  *   models: processes        # or the legacy alias:  processes: processes
  *
- * A repo is a content repo iff a root bpmiq.yml names the folder its model
+ * A repo is a content repo iff a root designiq.yml names the folder its model
  * files live in. A model IS a file with a registered notation extension under
  * that folder (@designiq/notations); its id is the file stem (modelStem). A
  * process is the .bpmn special case, a decision the .dmn one. Nothing else
@@ -16,7 +16,9 @@
  * order): the first one that EXISTS at the root is THE config, the other is
  * not even read. Selection is by existence only — a preferred file that is
  * mid-edit or broken makes the repo "not a content repo" instead of silently
- * handing the model folder to whatever the other file says.
+ * handing the model folder to whatever the other file says. The second name
+ * is the legacy one: read forever, written never — the CLIs nudge a rename
+ * (legacyContentConfigFile).
  *
  * Node-only (fs + yaml) — imported via the "@designiq/notations/content" subpath,
  * NEVER from the browser-safe package index.
@@ -31,8 +33,9 @@ import { extractModelGraph } from "./extract.ts";
 import { byExtension, modelStem } from "./index.ts";
 import { refsOf } from "./refs.ts";
 
-/** the documented name of the contract file — the one messages and docs say */
-export const CONTENT_CONFIG_FILE = "bpmiq.yml";
+/** the documented name of the contract file — the one messages and docs say,
+ *  and the one a new repo gets (the starter template carries it) */
+export const CONTENT_CONFIG_FILE = "designiq.yml";
 
 /**
  * Every name the contract file is accepted under, in precedence order. The
@@ -72,6 +75,30 @@ function isContractFile(root: string, name: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * The LEGACY name `root`'s contract is read from — set only when that file is
+ * the one actually in use (no designiq.yml beside it). A repo carrying both
+ * names on purpose (to stay readable by images that predate designiq.yml) is
+ * fine and gets no nudge; contentConfigConflict covers the two disagreeing.
+ */
+export function legacyContentConfigFile(root: string): string | undefined {
+  const used = resolveContentConfigFile(root);
+  return used === undefined || used === CONTENT_CONFIG_FILE ? undefined : used;
+}
+
+/** how messages name the contract file: the documented name, then the legacy
+ *  one an older repo still carries — its owner must recognise their file */
+export const CONTENT_CONFIG_NAMES = `${CONTENT_CONFIG_FILE} (or legacy ${CONTENT_CONFIG_FILES[1]})`;
+
+/**
+ * The one "not a content repo" sentence — true whether the contract file is
+ * missing or names no usable folder (loadContentConfig answers undefined for
+ * both), so a reader who just wrote a broken file is not told it is absent.
+ */
+export function notAContentRepoReason(subject: string): string {
+  return `${subject} has no usable ${CONTENT_CONFIG_NAMES} at its root — not a content repo`;
 }
 
 /** a contract file EXISTS at the root (it may still name no usable folder) —

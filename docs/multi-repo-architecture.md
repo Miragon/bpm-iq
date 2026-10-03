@@ -67,8 +67,8 @@ exactly once. `create-app` used to discard both (fixed now: persisted as
 `GITHUB_APP_PRIVATE_KEY_B64` / `GITHUB_WEBHOOK_SECRET`). Without the pem there is no
 RS256 app JWT → no `GET /app/installations` → no installation-derived repo list.
 
-- The **existing `bpm-live` app's key is unrecoverable** — generate a new private key
-  once in the app settings (org → Developer settings → BPM Live → Private keys) and
+- The **existing `bpm-live` app's key is unrecoverable** — generate a new private key <!-- legacy-name-ok: Miragon's dev app slug -->
+  once in the app settings (org → Developer settings → BPM Live → Private keys) and <!-- legacy-name-ok: that app's name on GitHub -->
   add it to `.env` (base64). Same for the webhook secret when the webhook is enabled.
 - `GITHUB_APP_ID` is written but read nowhere yet — it becomes the JWT issuer.
 - Manifest is `public: false` → flip to **public** (app settings "Make public", or
@@ -128,7 +128,7 @@ Nothing today records where the app is installed; `/setup/installed` discards
 - `toDiskPath` parses the repo segment, resolves against that repo's workspace, guards
   against filesystem **and cross-repo** escape.
 - `liveDocs` tracked per repo (today one flat set — counts leak across repos).
-- VS Code: repo moves into the document path — `bpm-live:/<owner>/<repo>/<path>`
+- VS Code: repo moves into the document path — `designiq:/<owner>/<repo>/<path>`
   (implemented path-based, not via the URI authority).
 
 ### E. AuthN/AuthZ split: login authenticates, repos authorize
@@ -176,7 +176,7 @@ The content repo currently carries platform machinery. For N repos, the machiner
 moves host-side; connected repos ship **content only**:
 
 - **Validation**: releasing no longer runs any validator (the content contract is now
-  just `bpmiq.yml` + `.bpmn` files — see "The repo contract" below). Historically
+  just `designiq.yml` + `.bpmn` files — see "The repo contract" below). Historically
   `release()` executed `node scripts/validate.ts` _from the content repo_, which under a
   public app was **remote code execution by any third-party repo on the host**. If
   release-time validation returns, it must ship with the platform (pinned, versioned,
@@ -197,8 +197,9 @@ moves host-side; connected repos ship **content only**:
 ## The repo contract (what a connected repo must fulfill)
 
 The contract is deliberately minimal (v0; `process-documentation/` is the example
-and is mirrored to the template repo): a **`bpmiq.yml` at the repo root** naming the
-folder the model files live in (`models: <folder>`, legacy alias `processes:`).
+and is mirrored to the template repo): a **`designiq.yml` at the repo root** naming the
+folder the model files live in (`models: <folder>`, legacy alias `processes:`; the legacy
+file name `bpmiq.yml` is still read, `designiq.yml` wins when both exist).
 Every file with a registered notation extension under that folder is a model
 (id = file stem) — every `.bpmn` a process; a repo without the config is simply not a
 content repo — the Live Host neither lists nor serves it, and live rooms exist
@@ -206,25 +207,26 @@ only inside the configured folder. There is no hand-written metadata: the proces
 view (name, roles from BPMN lanes, steps, flow, sub-process calls) is **derived**
 from the BPMN (`@designiq/notations/derive`), consumed the same way by the validator,
 the MCP server, and the Live Host. Richer metadata can grow back into the contract
-as it evolves — the `bpmiq.yml` is the seam for it.
+as it evolves — the `designiq.yml` is the seam for it.
 
 ## Suggested milestones
 
 | Milestone                                    | Scope                                                                                                                                                                                                                                                  | Unlocks                                                 |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| **MR-1: registry + overview (read)**         | Persist pem/webhook secret (done for future apps; regenerate key for `bpm-live`), app-JWT + installation enumeration, webhook receiver, `GET /api/repos`, overview screen. Editing still single-repo.                                                  | The Übersicht; "connect repo" UX; public-app groundwork |
+| **MR-1: registry + overview (read)**         | Persist pem/webhook secret (done for future apps; regenerate key for `bpm-live` <!-- legacy-name-ok: Miragon's dev app slug -->), app-JWT + installation enumeration, webhook receiver, `GET /api/repos`, overview screen. Editing still single-repo.  | The Übersicht; "connect repo" UX; public-app groundwork |
 | **MR-2: multi-repo editing + release**       | Workspace manager, namespaced rooms + persistence migration, per-(user,repo) authZ, repo-scoped routes, VS Code URI authority, per-repo release.                                                                                                       | Full multi-repo collaboration                           |
 | **MR-3: public app + multi-tenant pipeline** | Register a SEPARATE production app (see below), platform-owned validator (no repo code execution), portal/MCP per repo from webhook-synced checkouts, token refresh, rate-limit handling, org isolation review, **+ the app-key security gate below**. | Foreign orgs onboard themselves                         |
 
 ## The production public app is a SEPARATE app — not the dev app flipped
 
-The app `create-app` registers (`bpm-live`, private, ad-hoc name, key that has been on a dev
-machine) is a **development app**. Going public does **not** mean flipping it — the public,
-multi-tenant production app is a **distinct GitHub App**, created deliberately once:
+The app `create-app` registered for Miragon (`bpm-live`, private, ad-hoc name, <!-- legacy-name-ok: Miragon's dev app slug -->
+key that has been on a dev machine) is a **development app**. Going public does **not** mean
+flipping it — the public, multi-tenant production app is a **distinct GitHub App**, created
+deliberately once:
 
 - its own app id, client id/secret, private key and webhook secret — **none shared** with the
   dev app; the dev key never becomes a production credential;
-- a clean identity (name "BPM Live", logo, homepage, verified publisher), `public: true`,
+- a clean identity (name "designIQ", logo, homepage, verified publisher), `public: true`,
   webhook pointed at the production URL;
 - key **born in the secret manager**, never written to a developer's disk.
 
@@ -266,7 +268,7 @@ per-user tokens across every user, but only if that one place is actually guarde
 ## Immediate to-dos (cheap now, expensive later)
 
 1. ~~Persist `pem` + `webhook_secret` in create-app~~ (done, 2026-07-08).
-2. Generate a private key for the DEV app `bpm-live` (org → Developer settings → BPM Live →
+2. Generate a private key for the DEV app `bpm-live` (org → Developer settings → BPM Live → <!-- legacy-name-ok: Miragon's dev app on GitHub -->
    Private keys → Generate) and give it to the server — simplest for local dev: drop the
    downloaded `.pem` into `apps/live-host/` (auto-detected; `*.pem` is gitignored), or set
    `GITHUB_APP_PRIVATE_KEY_FILE` / `GITHUB_APP_PRIVATE_KEY_B64`.

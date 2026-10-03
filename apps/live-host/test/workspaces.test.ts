@@ -36,10 +36,10 @@ function manager(hostRoot: string, dataDir: string) {
 }
 
 test("isHostRepo: true only for the host repo WITH a root contract file (legacy name)", () => {
-  const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
-  const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
+  const hostRoot = mkdtempSync(join(tmpdir(), "designiq-host-"));
+  const data = mkdtempSync(join(tmpdir(), "designiq-data-"));
   const wm = manager(hostRoot, data);
-  // no bpmiq.yml yet → the host checkout is NOT served in place (cloned like any repo)
+  // no contract file yet → the host checkout is NOT served in place (cloned like any repo)
   assert.equal(wm.isHostRepo("Miragon/design-iq"), false);
   writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n"); // legacy-name-ok: pins the legacy path
   assert.equal(wm.isHostRepo("Miragon/design-iq"), true);
@@ -48,8 +48,8 @@ test("isHostRepo: true only for the host repo WITH a root contract file (legacy 
 });
 
 test("isHostRepo: a host root whose contract file is designiq.yml is served in place too", () => {
-  const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
-  const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
+  const hostRoot = mkdtempSync(join(tmpdir(), "designiq-host-"));
+  const data = mkdtempSync(join(tmpdir(), "designiq-data-"));
   const wm = manager(hostRoot, data);
   assert.equal(wm.isHostRepo("Miragon/design-iq"), false);
   // the bind-mount case: a checkout that only carries the new name must not be
@@ -61,11 +61,11 @@ test("isHostRepo: a host root whose contract file is designiq.yml is served in p
 });
 
 test("dir: host repo → its checkout in place; other repos → dataDir/workspaces/<owner>/<name>", () => {
-  const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
-  const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
-  writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n");
+  const hostRoot = mkdtempSync(join(tmpdir(), "designiq-host-"));
+  const data = mkdtempSync(join(tmpdir(), "designiq-data-"));
+  writeFileSync(join(hostRoot, "designiq.yml"), "models: processes\n");
   const wm = manager(hostRoot, data);
-  // the checkout root, NOT a content subdirectory — the bpmiq.yml folder is the
+  // the checkout root, NOT a content subdirectory — the designiq.yml folder is the
   // content config's business, so dir() no longer probes for processes/
   assert.equal(wm.dir(repo("Miragon/design-iq")), hostRoot);
   assert.equal(wm.dir(repo("acme/models")), join(data, "workspaces", "acme", "models"));
@@ -87,11 +87,11 @@ const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd,
 
 /** a bare "origin" seeded on main with processes/order.bpmn = "v1" */
 function bareOrigin(): string {
-  const bare = mkdtempSync(join(tmpdir(), "bpm-bare-"));
+  const bare = mkdtempSync(join(tmpdir(), "designiq-bare-"));
   git(bare, "init", "--bare", "-b", "main");
-  const seed = mkdtempSync(join(tmpdir(), "bpm-seed-"));
+  const seed = mkdtempSync(join(tmpdir(), "designiq-seed-"));
   git(seed, "clone", bare, ".");
-  writeFileSync(join(seed, "bpmiq.yml"), "processes: processes\n");
+  writeFileSync(join(seed, "designiq.yml"), "models: processes\n");
   mkdirSync(join(seed, "processes"), { recursive: true });
   writeFileSync(join(seed, "processes", "order.bpmn"), "v1");
   git(seed, "add", "-A");
@@ -102,7 +102,7 @@ function bareOrigin(): string {
 
 test("resetToDefault: discards dirty edits + untracked files, hard-resets onto origin, reports affected paths", async () => {
   const bare = bareOrigin();
-  const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
+  const data = mkdtempSync(join(tmpdir(), "designiq-data-"));
   const wsDir = join(data, "workspaces", "acme", "models");
   mkdirSync(dirname(wsDir), { recursive: true });
   git(data, "clone", bare, wsDir); // workspace @ v1
@@ -112,13 +112,13 @@ test("resetToDefault: discards dirty edits + untracked files, hard-resets onto o
   writeFileSync(join(wsDir, "processes", "new.bpmn"), "brand new");
 
   // upstream advanced main since the clone (a merged release)
-  const seed = mkdtempSync(join(tmpdir(), "bpm-seed2-"));
+  const seed = mkdtempSync(join(tmpdir(), "designiq-seed2-"));
   git(seed, "clone", bare, ".");
   writeFileSync(join(seed, "processes", "order.bpmn"), "v2");
   git(seed, "commit", "-am", "v2");
   git(seed, "push", "origin", "main");
 
-  const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-")); // no bpmiq.yml → not the host repo
+  const hostRoot = mkdtempSync(join(tmpdir(), "designiq-host-")); // no contract file → not the host repo
   const wm = new WorkspaceManager({
     dataDir: data,
     hostRepo: "Miragon/design-iq",
@@ -143,9 +143,9 @@ test("resetToDefault: discards dirty edits + untracked files, hard-resets onto o
 });
 
 test("resetToDefault: refuses the in-place host checkout (would wipe the operator's tree)", async () => {
-  const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
-  const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
-  writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n"); // now it IS the host repo
+  const hostRoot = mkdtempSync(join(tmpdir(), "designiq-host-"));
+  const data = mkdtempSync(join(tmpdir(), "designiq-data-"));
+  writeFileSync(join(hostRoot, "designiq.yml"), "models: processes\n"); // now it IS the host repo
   const wm = manager(hostRoot, data);
   await assert.rejects(wm.resetToDefault(repo("Miragon/design-iq")), /in-place host checkout/);
 });
@@ -155,16 +155,16 @@ test("resetToDefault: refuses the in-place host checkout (would wipe the operato
 /** a bare origin + a workspace clone + a second clone that plays "everyone
  *  else" (merges, outside edits), wired like server.ts wires the hooks */
 function catchUpFixture(files: Record<string, string>) {
-  const bare = mkdtempSync(join(tmpdir(), "bpm-bare-"));
+  const bare = mkdtempSync(join(tmpdir(), "designiq-bare-"));
   git(bare, "init", "--bare", "-b", "main");
-  const upstreamDir = mkdtempSync(join(tmpdir(), "bpm-upstream-"));
+  const upstreamDir = mkdtempSync(join(tmpdir(), "designiq-upstream-"));
   git(upstreamDir, "clone", bare, ".");
-  writeFiles(upstreamDir, { "bpmiq.yml": "processes: processes\n", ...files });
+  writeFiles(upstreamDir, { "designiq.yml": "models: processes\n", ...files });
   git(upstreamDir, "add", "-A");
   git(upstreamDir, "commit", "-m", "initial");
   git(upstreamDir, "push", "origin", "main");
 
-  const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
+  const data = mkdtempSync(join(tmpdir(), "designiq-data-"));
   const ws = join(data, "workspaces", "acme", "models");
   mkdirSync(dirname(ws), { recursive: true });
   git(data, "clone", bare, ws);
@@ -172,7 +172,7 @@ function catchUpFixture(files: Record<string, string>) {
   const wm = new WorkspaceManager({
     dataDir: data,
     hostRepo: "Miragon/design-iq",
-    hostRoot: mkdtempSync(join(tmpdir(), "bpm-host-")), // no bpmiq.yml → not the host repo
+    hostRoot: mkdtempSync(join(tmpdir(), "designiq-host-")), // no contract file → not the host repo
     registry: { tokenFor: async () => undefined } as unknown as RepoRegistry,
     githubBaseUrl: "https://github.com",
   });
@@ -472,9 +472,9 @@ test("conflicts: take main's version, keep the workspace's, or heal by convergin
 });
 
 test("reconcile / markReleased: never touch the in-place host checkout", async () => {
-  const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
-  writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n"); // not even a git repo
-  const wm = manager(hostRoot, mkdtempSync(join(tmpdir(), "bpm-data-")));
+  const hostRoot = mkdtempSync(join(tmpdir(), "designiq-host-"));
+  writeFileSync(join(hostRoot, "designiq.yml"), "models: processes\n"); // not even a git repo
+  const wm = manager(hostRoot, mkdtempSync(join(tmpdir(), "designiq-data-")));
   await wm.reconcile(repo("Miragon/design-iq")); // would throw on any git call
   await wm.markReleased(repo("Miragon/design-iq"), "deadbeef", ["processes/a.bpmn"]);
   assert.deepEqual(await wm.conflicts(repo("Miragon/design-iq")), []);

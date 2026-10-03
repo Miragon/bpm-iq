@@ -14,16 +14,16 @@ import { attachPresenceCanvas } from "@/lib/presence-canvas";
 import { attachTodoCanvas } from "@/lib/todo-canvas";
 
 import { bpmnColorModule } from "./bpmn-color";
-import { bpmiqModdle, bpmnStickyModule, tbpmToggleAction } from "./bpmn-sticky";
+import { bpmnStickyModule, stickyModdle, tbpmToggleAction } from "./bpmn-sticky";
 import type { EditorContext, MountedEditor } from "./registry";
 
 export function mountBpmnEditor(container: HTMLElement, ctx: EditorContext): MountedEditor {
   const modeler = new BpmnModeler({
     container,
-    // stickies (#117): discussion artifacts as bpmiq:sticky extension elements;
+    // stickies (#117): discussion artifacts as bpmiq:sticky extension elements (legacy-name-ok);
     // element colours (#189): the context-pad brush
     additionalModules: [bpmnStickyModule, bpmnColorModule],
-    moddleExtensions: { bpmiq: bpmiqModdle },
+    moddleExtensions: { sticky: stickyModdle },
   });
   const unbind = bindBpmn(modeler as never, ctx.ytext, ctx.doc, ctx.onSyncError);
   const todoCanvas = attachTodoCanvas(modeler as never, {

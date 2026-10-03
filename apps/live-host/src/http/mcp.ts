@@ -207,7 +207,7 @@ const BPMN_WIDGET: WidgetSpec = {
     "editor in MCP-Apps-capable clients (claude.ai, Claude Desktop) — including the process's " +
     "todos, with a badge on every anchored element; other clients get a " +
     "text summary — use get_process/get_bpmn_xml there instead. The result's " +
-    "`opened.url` links the same model in the full bpmiq web modeler.",
+    "`opened.url` links the same model in the full designIQ web modeler.",
   inputSchema: processRef,
 };
 const DMN_WIDGET: WidgetSpec = {
@@ -223,7 +223,7 @@ const DMN_WIDGET: WidgetSpec = {
     "which is how to SHOW someone a failing case instead of describing it. The widget also " +
     "runs and captures the decision's test cases. Non-apps clients get a text summary — use " +
     "get_decision / simulate_decision there. The result's `opened.url` links the same " +
-    "decision in the bpmiq web app.",
+    "decision in the designIQ web app.",
   inputSchema: {
     ...decisionRef,
     scenario: z
@@ -253,7 +253,7 @@ const generatedWidget = (id: string): WidgetSpec => {
       "canvas inline in MCP-Apps-capable clients (claude.ai, Claude Desktop): edits save through the same " +
       "validated, conflict-guarded path as save_model_content and upgrade to live co-editing where the host " +
       "allows the socket. Other clients get a text summary — use get_view / get_model_content there. The " +
-      `result's \`opened.url\` links the same ${noun} in the bpmiq web app.`,
+      `result's \`opened.url\` links the same ${noun} in the designIQ web app.`,
     inputSchema: {
       repo: repoArg,
       id: z.string().optional().describe(`${noun} id = file stem (from list_models)`),
@@ -320,7 +320,7 @@ export function createLiveMcpServer(
   session: Session,
   contributions: readonly LiveToolContribution[] = [],
 ): McpServer {
-  const server = new McpServer({ name: "bpmiq-live", version: "1.0.0" });
+  const server = new McpServer({ name: "designiq-live", version: "1.0.0" });
 
   /** registry 404 + per-repo write authz — the shared application-layer gate;
    *  safe() surfaces the AppError message to the agent verbatim */

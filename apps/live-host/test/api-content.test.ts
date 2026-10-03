@@ -24,7 +24,7 @@ import { newBpmnXml } from "../src/domain/bpmn-template.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
 import { type ApiOptions, startApi } from "../src/http/api.ts";
 import type { GitProvider } from "../src/ports/git-provider.ts";
-import { loadContentConfig } from "../src/repos/content.ts";
+import { CONTENT_CONFIG_FILE, loadContentConfig } from "../src/repos/content.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 const repo = (fullName: string): ConnectedRepo => ({
@@ -57,9 +57,9 @@ after(async () => {
 before(async () => {
   const workspaces = new Map<string, string>();
   for (const r of REPOS) {
-    const ws = mkdtempSync(join(tmpdir(), "bpm-api-"));
+    const ws = mkdtempSync(join(tmpdir(), "designiq-api-"));
     mkdirSync(join(ws, "processes"), { recursive: true });
-    writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+    writeFileSync(join(ws, CONTENT_CONFIG_FILE), "models: processes\n");
     writeFileSync(join(ws, PATH), VALID);
     workspaces.set(r.fullName, ws);
   }
@@ -96,7 +96,7 @@ before(async () => {
   const bot = sessions.create({ login: "demo", name: "demo", avatarUrl: null, provider: "github" });
   AUTH = { authorization: `Bearer ${bot.id}` };
   const opts: ApiOptions = {
-    webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
+    webDist: mkdtempSync(join(tmpdir(), "designiq-webdist-")),
     publicUrl: "http://live.test",
     github: {} as GitProvider,
     sessions,

@@ -76,7 +76,7 @@ export class StickyViewImport {
 }
 
 /** viewer module: pass via additionalModules on a NavigatedViewer (plus the
- *  bpmiq moddle extension) — stickies render, nothing is editable */
+ *  sticky moddle extension) — stickies render, nothing is editable */
 export const bpmnStickyViewModule = {
   __init__: ["stickyRenderer", "stickyViewImport"],
   stickyRenderer: ["type", StickyRenderer],

@@ -11,10 +11,10 @@ only fix them when the user asks.
 ## Step 0 — Run the deterministic validator first
 
 ```
-node packages/validator/src/cli.ts --root . [<process-id>]
+npx @designiq/validator --root . [<process-id>]
 ```
 
-(from the monorepo root; `--root <checkout>` for another repo). It covers the
+(from the repo root; `--root <checkout>` for another repo). It covers the
 mechanical invariants: XML well-formedness, namespace declarations, flow
 structure (one start event, no unreachable nodes or dead ends, valid
 sequenceFlow/message-flow references, boundary attachments), **BPMNDI coverage**

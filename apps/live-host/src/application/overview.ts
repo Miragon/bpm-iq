@@ -1,7 +1,7 @@
 /**
  * The overview read-models, extracted from http/api.ts:
  *
- *   listProcesses — one row per .bpmn file under the repo's bpmiq.yml
+ *   listProcesses — one row per .bpmn file under the repo's designiq.yml
  *                   processes folder (repos/content.ts), with dirty-vs-origin
  *                   flag and live session count
  *   listDecisions — the .dmn sibling of listProcesses
@@ -194,7 +194,7 @@ export async function decisionUsers(workspace: string, decisionId: string): Prom
 /**
  * Every CONTENT file in which the shared workspace differs from
  * origin/<default> — the pool a file-selection release picks from, confined
- * to the bpmiq.yml processes scope (like live rooms; checkout files outside
+ * to the designiq.yml processes scope (like live rooms; checkout files outside
  * it are not part of the platform's surface). liveSessions marks files a
  * colleague currently has open, so the release dialog can warn before
  * shipping somebody's work in progress; conflict marks files the default
@@ -250,7 +250,7 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
       return null;
     }
     // counts only when the workspace already exists locally AND declares itself
-    // a content repo (bpmiq.yml) — the overview must never trigger clones;
+    // a content repo (designiq.yml) — the overview must never trigger clones;
     // opening the repo does that. One repo's broken tree must not 500 the whole
     // overview (adversarial review).
     const ws = opts.workspaces.dir(repo);

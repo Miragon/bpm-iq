@@ -29,5 +29,5 @@ test("bin fails loudly on a non-content root", () => {
   const dir = mkdtempSync(join(tmpdir(), "designiq-validate-empty-"));
   const r = spawnSync(process.execPath, [CLI, "--root", dir], { encoding: "utf8" });
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /no bpmiq\.yml/);
+  assert.match(r.stderr, /no designiq\.yml \(or legacy bpmiq\.yml\) at the root/); // legacy-name-ok: pins the legacy wording
 });

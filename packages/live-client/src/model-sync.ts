@@ -132,7 +132,7 @@ export function bindModelSync(
       lastExport = text;
       importErrorReported = false;
     } catch (err) {
-      console.warn("[bpm-live] remote document not importable, keeping last good state", err);
+      console.warn("[designiq] remote document not importable, keeping last good state", err);
       reportFirstImportFailure(err instanceof Error ? err.message : String(err));
     } finally {
       importing = false;

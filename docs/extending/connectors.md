@@ -1,4 +1,4 @@
-# Extending bpmiq: git connectors
+# Extending designIQ: git connectors
 
 A connector teaches the Live Host a new git vendor — GitLab is the worked example
 throughout. The seam is three ports in `apps/live-host/src/ports/`; GitHub is one
@@ -142,7 +142,8 @@ installation directory, and records PR payloads for assertions.
    `LIVE_GIT_URL_OVERRIDE=file://…` (clone/fetch) + `LIVE_PUSH_URL_OVERRIDE=file://….git` (push).
 4. Run the host with `LIVE_AUTH=none`, drive the API without a credential and assert the release gates end to end
    (no-change rejection, unknown-process 404, branch + PR with correct paths,
-   upstream-drift guard, monorepo-shaped `bpmiq.yml` folders).
+   upstream-drift guard, a `designiq.yml` repo and a monorepo-shaped one still on the legacy
+   `bpmiq.yml`).
 
 A GitLab connector gets a sibling `test/stub-gitlab.ts` shaped like GitLab's API and
 its own e2e script on the same skeleton — the whole repo-gate → session →

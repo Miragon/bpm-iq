@@ -6,7 +6,7 @@ description: Scaffolds a new business process in this repository — creates a s
 # New Process
 
 Scaffold a process as a single `.bpmn` file. The slim content contract is just
-`bpmiq.yml` + `.bpmn` files: a process IS its BPMN, there is no `process.yaml`,
+`designiq.yml` + `.bpmn` files: a process IS its BPMN, there is no `process.yaml`,
 no landscape, no INDEX. The process id is the file name without the extension.
 
 ## Inputs to gather
@@ -25,8 +25,9 @@ From the user's request (ask only for what you cannot infer):
 
 ## Steps
 
-1. Find the processes folder from `bpmiq.yml` (`processes:` key). Confirm the id
-   is free: no existing `<folder>/**/<id>.bpmn`.
+1. Find the models folder from `designiq.yml` (`models:` key; an older repo may
+   still name the file `bpmiq.yml` or the key `processes:` — both are read).
+   Confirm the id is free: no existing `<folder>/**/<id>.bpmn`.
 2. Write `<folder>/<id>.bpmn` — one `<bpmn:process>` (or a collaboration with one
    pool named after the process). Include:
    - a **laneSet** with one lane per role, every flow node assigned to a lane;
@@ -41,8 +42,7 @@ From the user's request (ask only for what you cannot infer):
 4. Follow the modeling conventions: tasks **verb + object** ("Check credit limit"),
    events **object + past participle**, gateways as **questions** ("Approved?").
 5. Validate before finishing:
-   `node packages/validator/src/cli.ts --root .` (from the monorepo root) —
-   fix every error. The validator checks XML well-formedness, flow structure,
+   `npx @designiq/validator --root .` (from the repo root) — fix every error. The validator checks XML well-formedness, flow structure,
    BPMNDI coverage, and that each `callActivity` resolves to a real process.
 
 ## Output

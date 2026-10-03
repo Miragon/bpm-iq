@@ -1,6 +1,6 @@
 {
-  "realm": "bpmiq",
-  "displayName": "bpmiq",
+  "realm": "designiq",
+  "displayName": "designIQ",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,
@@ -12,7 +12,7 @@
   "clients": [
     {
       "clientId": "designiq-web",
-      "name": "bpmiq Live Host \u2014 browser login",
+      "name": "designIQ Live Host \u2014 browser login",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
@@ -28,12 +28,12 @@
       },
       "protocolMappers": [
         {
-          "name": "bpmiq audience",
+          "name": "designiq audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.custom.audience": "bpmiq",
+            "included.custom.audience": "designiq",
             "access.token.claim": "true",
             "id.token.claim": "false",
             "introspection.token.claim": "true"
@@ -60,7 +60,7 @@
     },
     {
       "clientId": "designiq-mcp",
-      "name": "bpmiq Live Host \u2014 MCP clients (Claude Code: --client-id designiq-mcp --callback-port 8765)",
+      "name": "designIQ Live Host \u2014 MCP clients (Claude Code: --client-id designiq-mcp --callback-port 8765)",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
@@ -76,12 +76,12 @@
       },
       "protocolMappers": [
         {
-          "name": "bpmiq audience",
+          "name": "designiq audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.custom.audience": "bpmiq",
+            "included.custom.audience": "designiq",
             "access.token.claim": "true",
             "id.token.claim": "false",
             "introspection.token.claim": "true"

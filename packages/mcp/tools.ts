@@ -1,24 +1,24 @@
 /**
- * bpm-mcp-server — tool definitions, shared by both transports:
+ * designiq-mcp-server — tool definitions, shared by both transports:
  *   server.ts  → stdio (local: Claude Code picks it up via .mcp.json)
  *   http.ts    → Streamable HTTP (remote: fly.io, any MCP client via URL)
  *
  * Read-only by construction: only readFileSync + the content-repo discovery,
  * no write path. All tools carry readOnlyHint so clients may auto-approve them.
  * The one opt-in exception to "repo-local" is list_todos (registered ONLY when
- * BPM_TODOS_REPO + BPM_TODOS_TOKEN are set — also read as DESIGNIQ_TODOS_REPO + // legacy-name-ok
- * DESIGNIQ_TODOS_TOKEN, which win): a read-only GET against the content
+ * DESIGNIQ_TODOS_REPO + DESIGNIQ_TODOS_TOKEN are set — also read under the
+ * legacy BPM_TODOS_* names): a read-only GET against the content // legacy-name-ok
  * repo's issue tracker — the zero-auth default stays untouched.
  *
- * The content contract is minimal (@designiq/notations/content): a repo is a BPM
- * content repo iff it has a root bpmiq.yml naming its BPMN processes folder; a
- * process IS a .bpmn file there. There is NO hand-written process.yaml — the
- * process view (name, roles, steps, flow, sub-process calls) is DERIVED from the
- * BPMN on the fly (@designiq/notations/derive). A new notation with an extractor is
- * automatically analyzable here.
+ * The content contract is minimal (@designiq/notations/content): a repo is a
+ * content repo iff it has a root designiq.yml (legacy name: bpmiq.yml) naming // legacy-name-ok
+ * its models folder; a process IS a .bpmn file there. There is NO hand-written
+ * process.yaml — the process view (name, roles, steps, flow, sub-process calls)
+ * is DERIVED from the BPMN on the fly (@designiq/notations/derive). A new
+ * notation with an extractor is automatically analyzable here.
  *
- * Content root: pass --root <dir> (server.ts) or BPM_CONTENT_ROOT (also read as // legacy-name-ok
- * DESIGNIQ_CONTENT_ROOT, which wins) — any content repo works, the bundled
+ * Content root: pass --root <dir> (server.ts) or DESIGNIQ_CONTENT_ROOT (the
+ * legacy BPM_CONTENT_ROOT is still read) — any content repo works, the bundled // legacy-name-ok
  * process-documentation is only the default.
  */
 import { readFileSync } from "node:fs";
@@ -158,15 +158,15 @@ export interface TodosConfig {
 
 /** The list_todos gate, used by BOTH entry points (server.ts, http.ts — the
  * composition roots read env, this module doesn't): undefined unless BOTH a
- * tracker repo (BPM_TODOS_REPO) and a token (BPM_TODOS_TOKEN) are set — the // legacy-name-ok
- * server stays zero-auth by default, the tool simply does not exist without
- * the opt-in.
+ * tracker repo (DESIGNIQ_TODOS_REPO) and a token (DESIGNIQ_TODOS_TOKEN) are
+ * set — the server stays zero-auth by default, the tool simply does not exist
+ * without the opt-in.
  *
- * Each of the two is also read as DESIGNIQ_TODOS_*, which wins, and resolved on
- * its own: a half-migrated environment (repo under one name, token under the
- * other) still opts in rather than silently losing the tool. Empty counts as
- * unset (compose passes "" for an unset variable), so an empty new name never
- * shadows a set old one. */
+ * Each of the two is also read under its legacy BPM_TODOS_* name (the new name // legacy-name-ok
+ * wins) and resolved on its own: a half-migrated environment (repo under one
+ * name, token under the other) still opts in rather than silently losing the
+ * tool. Empty counts as unset (compose passes "" for an unset variable), so an
+ * empty new name never shadows a set old one. */
 export function todosConfigFromEnv(env: Record<string, string | undefined>): TodosConfig | undefined {
   const repo = env.DESIGNIQ_TODOS_REPO || env.BPM_TODOS_REPO; // legacy-name-ok: env fallback
   const token = env.DESIGNIQ_TODOS_TOKEN || env.BPM_TODOS_TOKEN; // legacy-name-ok: env fallback
@@ -224,12 +224,14 @@ export function createMcpServer(
   const pluralOf = (notation: string): string => byId(notation)?.noun.plural ?? notation;
   const notAContentRepo = () =>
     fail(
-      `No bpmiq.yml at the content root — not a BPM content repo. Expected a root bpmiq.yml naming a processes folder.`,
+      // both names are read (the legacy one forever): the owner of an older
+      // repo must recognise their file here, not go hunting for a new one
+      `No usable designiq.yml (or legacy bpmiq.yml) at the content root — not a content repo. Expected a root designiq.yml naming the models folder.`, // legacy-name-ok
     );
   const unknownProcess = async (id: string) =>
     fail(`Unknown process '${id}'. Available: ${(await processes()).map((p) => p.id).join(", ") || "(none)"}.`);
 
-  const server = new McpServer({ name: "bpm-architecture", version: "0.2.0" });
+  const server = new McpServer({ name: "designiq-mcp", version: "0.2.0" });
 
   server.registerTool(
     "list_models",
@@ -276,8 +278,8 @@ export function createMcpServer(
     "list_processes",
     {
       description:
-        "List all modeled business processes — every .bpmn file under the repo's bpmiq.yml " +
-        "processes folder. Each row: id (file name without extension), derived name, the file " +
+        "List all modeled business processes — every .bpmn file under the repo's designiq.yml " +
+        "models folder. Each row: id (file name without extension), derived name, the file " +
         "path, and a count of steps/events/gateways/roles. Use to get a portfolio overview or " +
         "to find a process id before calling get_process, get_model, who_owns or enumerate_paths.",
       annotations: READ_ONLY,
@@ -546,8 +548,8 @@ export function createMcpServer(
   // Model-anchored todos live as issues in the content repo's OWN tracker (see
   // apps/live-host). Listing them needs a credential, which this read-only
   // zero-auth server must never require — the tool only EXISTS when the entry
-  // point passed a TodosConfig (todosConfigFromEnv: BPM_TODOS_REPO + BPM_TODOS_TOKEN, // legacy-name-ok
-  // or the same two as DESIGNIQ_TODOS_*).
+  // point passed a TodosConfig (todosConfigFromEnv: DESIGNIQ_TODOS_REPO +
+  // DESIGNIQ_TODOS_TOKEN, or the same two under the legacy BPM_TODOS_* names). // legacy-name-ok
   if (todos) {
     const { repo: todosRepo, token: todosToken } = todos;
     const api = (todos.apiUrl ?? "https://api.github.com").replace(/\/$/, "");

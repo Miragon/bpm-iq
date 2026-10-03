@@ -65,7 +65,7 @@ interface ModelerLike {
   off(event: string, callback: (event?: unknown) => void): void;
 }
 
-const LAYER = "bpm-presence";
+const LAYER = "designiq-presence";
 const SVG_NS = "http://www.w3.org/2000/svg";
 /** publish cadence for pointer moves — awareness is a broadcast, not a stream */
 const PUBLISH_MS = 33;

@@ -117,7 +117,7 @@ export class LiveAuth implements vscode.Disposable {
     });
     if (probe.status === 404 || probe.status === 501) {
       throw new Error(
-        `${http} has no editor sign-in yet (older Live Host) — use "BPM Live: Sign in with a session token…"`,
+        `${http} has no editor sign-in yet (older Live Host) — use "designIQ: Sign in with a session token…"`,
       );
     }
     const config = await hostJson<AppConfig>(`${http}/api/config`);
@@ -130,7 +130,7 @@ export class LiveAuth implements vscode.Disposable {
     const code = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `BPM Live: finish signing in via ${provider.label} in your browser…`,
+        title: `designIQ: finish signing in via ${provider.label} in your browser…`,
         cancellable: true,
       },
       (_progress, cancel) =>
@@ -175,7 +175,7 @@ export class LiveAuth implements vscode.Disposable {
     if (!callback) return;
     const pending = this.pending;
     if (!pending || pending.state !== callback.state) {
-      void vscode.window.showWarningMessage("BPM Live: ignored a sign-in callback that matches no pending sign-in.");
+      void vscode.window.showWarningMessage("designIQ: ignored a sign-in callback that matches no pending sign-in.");
       return;
     }
     pending.resolve(callback.code);

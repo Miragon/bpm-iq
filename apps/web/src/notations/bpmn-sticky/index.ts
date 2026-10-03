@@ -1,18 +1,19 @@
 /**
- * The bpmiq sticky module (#117) — everything the bpmn-js Modeler needs to
+ * The sticky module (#117) — everything the bpmn-js Modeler needs to
  * speak sticky: pass `bpmnStickyModule` via `additionalModules` and
- * `bpmiqModdle` via `moddleExtensions`. Stickies persist as
- * `<bpmiq:sticky/>` extension elements (no BPMNDI), ride the existing
- * Y.Text/bpmn-sync collab and are ignored by the derive/validator toolchain
- * (warn-only residue check aside). It also carries the rest of the t.BPM
- * workshop tooling: the reduced palette (#54) and group naming (#190).
+ * `stickyModdle` via `moddleExtensions`. Stickies persist as
+ * `<bpmiq:sticky/>` extension elements (legacy-name-ok: frozen namespace)
+ * with no BPMNDI, ride the existing Y.Text/bpmn-sync collab and are ignored
+ * by the derive/validator toolchain (warn-only residue check aside). It also
+ * carries the rest of the t.BPM workshop tooling: the reduced palette (#54)
+ * and group naming (#190).
  */
 import "./sticky.css";
 
-import { bpmiqModdle } from "./bpmiq-moddle";
 import { GroupNaming } from "./group-naming";
 import { StickyCopyPaste } from "./sticky-copy-paste";
 import { StickyElementFactory } from "./sticky-factory";
+import { stickyModdle } from "./sticky-moddle";
 import { StickyOrdering } from "./sticky-ordering";
 import { StickyPersistence } from "./sticky-persistence";
 import { StickyRenderer } from "./sticky-renderer";
@@ -46,6 +47,6 @@ export const bpmnStickyModule = {
   groupNaming: ["type", GroupNaming],
 };
 
-export { bpmiqModdle };
+export { stickyModdle };
 export { bpmnStickyViewModule } from "./sticky-view";
 export { tbpmToggleAction } from "./tbpm-action";

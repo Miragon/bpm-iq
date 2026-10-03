@@ -173,14 +173,14 @@
 
 /* count badge on an anchored element — the shared canvas controller
    (lib/todo-canvas.ts) creates it, both surfaces style it themselves */
-.bpm-todo-badge {
+.designiq-todo-badge {
   /* geometry/behaviour: ../lib/todo-canvas.css — the widget sheet has no
      prefers-color-scheme block, hence the fixed #bf8700 instead of --warning */
-  --bpm-todo-badge-size: 18px;
-  --bpm-todo-badge-pad: 4px;
-  --bpm-todo-badge-font: 11px;
-  --bpm-todo-badge-bg: #bf8700;
-  --bpm-todo-badge-fg: var(--bg);
+  --designiq-todo-badge-size: 18px;
+  --designiq-todo-badge-pad: 4px;
+  --designiq-todo-badge-font: 11px;
+  --designiq-todo-badge-bg: #bf8700;
+  --designiq-todo-badge-fg: var(--bg);
 }
 
 /* t.BPM workshop switch (#117) — the widget twin of the web header toggle */

@@ -2,13 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run BPM Live Extension",
+      "name": "Run designIQ Extension",
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "sourceMaps": true,
-      "preLaunchTask": "bpm-live: compile"
+      "preLaunchTask": "design-iq: compile"
     }
   ]
 }

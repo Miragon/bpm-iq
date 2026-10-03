@@ -20,8 +20,8 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
 FIXTURE="$REPO_ROOT/packages/validator/test/fixtures/content-repo"
-E2E="$(mktemp -d "${TMPDIR:-/tmp}/bpm-keycloak-e2e.XXXXXX")"
-COMPOSE=(docker compose -p bpmiq-keycloak-e2e -f "$REPO_ROOT/deploy/docker-compose.yml" --profile keycloak)
+E2E="$(mktemp -d "${TMPDIR:-/tmp}/designiq-keycloak-e2e.XXXXXX")"
+COMPOSE=(docker compose -p designiq-keycloak-e2e -f "$REPO_ROOT/deploy/docker-compose.yml" --profile keycloak)
 ISSUER="http://localhost:8080/realms/designiq"
 HOST="http://localhost:8301"
 STUB_PORT=8399
@@ -45,13 +45,13 @@ done
 # ── Keycloak with the quickstart realm (the compose profile, as documented) ──
 "${COMPOSE[@]}" up -d keycloak >"$E2E/compose.log" 2>&1 || { cat "$E2E/compose.log"; exit 2; }
 curl -sf --retry 60 --retry-delay 2 --retry-all-errors -o /dev/null "$ISSUER/.well-known/openid-configuration" \
-  || { echo "Keycloak did not come up:"; docker logs bpmiq-keycloak-e2e-keycloak-1 2>&1 | tail -20; exit 2; }
-ok "K0: Keycloak up, realm bpmiq imported (discovery answers)"
+  || { echo "Keycloak did not come up:"; docker logs designiq-keycloak-e2e-keycloak-1 2>&1 | tail -20; exit 2; }
+ok "K0: Keycloak up, realm designiq imported (discovery answers)"
 
 # ── GitHub stub + one content repo, exactly like release-e2e.sh ──────────────
 openssl genrsa -out "$E2E/app.pem" 2048 2>/dev/null
 mkdir -p "$E2E/origin/acme" "$E2E/empty" "$E2E/data"
-SRC="$E2E/src"; cp -R "$FIXTURE" "$SRC"; printf 'processes: processes\n' > "$SRC/bpmiq.yml"
+SRC="$E2E/src"; cp -R "$FIXTURE" "$SRC"; printf 'models: processes\n' > "$SRC/designiq.yml"
 git -C "$SRC" init -q -b main && git -C "$SRC" add -A
 git -C "$SRC" -c user.name=e2e -c user.email=e2e@test commit -qm "content"
 git clone -q --bare "$SRC" "$E2E/origin/acme/bpm-processes.git"
@@ -71,12 +71,12 @@ host() {
     GITHUB_CLIENT_ID= GITHUB_CLIENT_SECRET= \
     GITHUB_REPO=acme/bpm-processes LIVE_HOST_CONTENT_DIR="$E2E/empty" \
     GITHUB_BASE_URL="http://localhost:$STUB_PORT" GITHUB_API_URL="http://localhost:$STUB_PORT" \
-    GITHUB_APP_ID=4711 GITHUB_APP_PRIVATE_KEY_FILE="$E2E/app.pem" GITHUB_APP_SLUG=bpm-live-stub \
+    GITHUB_APP_ID=4711 GITHUB_APP_PRIVATE_KEY_FILE="$E2E/app.pem" GITHUB_APP_SLUG=designiq-live-host-stub \
     LIVE_GIT_URL_OVERRIDE="file://$E2E/origin" LIVE_PUSH_URL_OVERRIDE="file://$E2E/origin/acme/bpm-processes.git" \
     "$@" node "$REPO_ROOT/apps/live-host/src/server.ts"
 }
 OIDC=(LIVE_AUTH=oidc LIVE_OIDC_ISSUER="$ISSUER" LIVE_OIDC_JWKS_URL="$ISSUER/protocol/openid-connect/certs"
-      LIVE_OIDC_AUDIENCE=bpmiq LIVE_OIDC_CLIENT_ID=designiq-web LIVE_OIDC_LOGIN_LABEL=Keycloak)
+      LIVE_OIDC_AUDIENCE=designiq LIVE_OIDC_CLIENT_ID=designiq-web LIVE_OIDC_LOGIN_LABEL=Keycloak)
 # the flow helpers print the credential on stdout; stderr goes to a log that a
 # failure shows (Node's own warnings must never end up inside a cookie)
 flow() { node "$HERE/keycloak-flows.ts" "$@" 2>>"$E2E/flows.log"; }

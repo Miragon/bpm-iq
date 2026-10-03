@@ -33,32 +33,38 @@ const state = randomBytes(12).toString("base64url");
 const isPublicHost = !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(PUBLIC_URL);
 const webhookUrl = process.env.LIVE_WEBHOOK_URL ?? (isPublicHost ? `${PUBLIC_URL}/webhook/github` : undefined);
 
+// GitHub App names are unique across ALL of GitHub (and capped at 34 chars):
+// a fixed default would be free for the first self-hoster only. The org makes
+// it free for every org — and GitHub's create page still lets the owner rename.
+const appName = `designIQ ${OWNER}`.slice(0, 34).trimEnd();
+
 const manifest = JSON.stringify({
-  name: "BPM Live",
+  name: appName,
   url: PUBLIC_URL,
   redirect_url: `http://localhost:${PORT}/callback`,
   setup_url: `${PUBLIC_URL}/setup/installed`,
   setup_on_update: true,
   // no user OAuth (ADR 0007): people sign in at the IdP, the App only authorizes
   request_oauth_on_install: false,
-  description: "Live BPM collaboration — releases become pull requests in the name of the releasing user.",
+  description:
+    "designIQ Live Host — live model collaboration; releases become pull requests in the name of the releasing user.",
   public: false,
   default_permissions: { contents: "write", pull_requests: "write", issues: "write", metadata: "read" },
   ...(webhookUrl ? { hook_attributes: { url: webhookUrl, active: false } } : {}),
 });
 
-const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>BPM Live — create the GitHub App</title>
+const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>designIQ — create the GitHub App</title>
 <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f6f8fa}
 .card{background:#fff;border:1px solid #d0d7de;border-radius:12px;padding:40px 48px;max-width:560px}
 h1 em{color:#fa8100;font-style:normal} p{color:#656d76;font-size:14px;line-height:1.6}
 button{background:#fa8100;color:#fff;border:0;border-radius:6px;padding:12px 22px;font-size:15px;font-weight:600;cursor:pointer}
 code{background:#f6f8fa;padding:1px 5px;border-radius:4px}</style></head><body><div class="card">
-<h1><em>BPM</em> Live — create the central GitHub App (one-time)</h1>
+<h1><em>designIQ</em> — create the central GitHub App (one-time)</h1>
 <p>This is the vendor step from the Netlify/GitBook model: <strong>one</strong> app,
 registered in the <strong>${OWNER}</strong> organization. From then on users only ever see
 GitHub's install picker (connect repositories) — sign-in happens at your identity provider.</p>
-<p>Prerequisite: you are signed in to GitHub as an owner of the org. Name and details can
-still be adjusted on GitHub's page.</p>
+<p>Prerequisite: you are signed in to GitHub as an owner of the org. The name
+(<strong>${appName}</strong>) and details can still be adjusted on GitHub's page.</p>
 <form action="${GH_BASE}/organizations/${encodeURIComponent(OWNER)}/settings/apps/new?state=${state}" method="post">
   <input type="hidden" name="manifest" value='${manifest.replace(/'/g, "&#39;")}' />
   <button type="submit">Create the app under ${OWNER}</button>
@@ -102,7 +108,7 @@ const server = createServer(async (req, res) => {
     writeFileSync(
       ENV_FILE,
       [
-        `# BPM Live — central GitHub App (created ${new Date().toISOString().slice(0, 10)} via pnpm create-app)`,
+        `# designIQ Live Host — central GitHub App (created ${new Date().toISOString().slice(0, 10)} via pnpm create-app)`,
         `GITHUB_APP_SLUG=${app.slug}`,
         `GITHUB_APP_ID=${app.id}`,
         `GITHUB_APP_PRIVATE_KEY_B64=${Buffer.from(app.pem).toString("base64")}`,

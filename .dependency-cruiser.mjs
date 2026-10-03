@@ -1,5 +1,5 @@
 /**
- * Architecture rules (ArchUnit-style) for the bpmiq workspace — run `pnpm arch`.
+ * Architecture rules (ArchUnit-style) for the designIQ workspace — run `pnpm arch`.
  *
  * Public-repo rule set (ADR 0004): identical to the pre-split config minus the
  * control-plane-specific rules — that app lives in the private overlay repo,

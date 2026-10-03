@@ -4,8 +4,9 @@
  * (idempotent), issue creation with the anchor block + attribution, list
  * mapping (anchor roundtrip, PR exclusion, process filter), close (attribution
  * comment first, then the state transition), element deep links (todoBody with
- * publicUrl), the attribution read back in the legacy AND the future product
- * wording, and the missing-Issues-permission 403 → AppError mapping.
+ * publicUrl), the attribution written in the designIQ wording and read back
+ * in it AND the legacy one, and the missing-Issues-permission 403 → AppError
+ * mapping.
  */
 import assert from "node:assert/strict";
 import { type ChildProcess, spawn } from "node:child_process";
@@ -197,24 +198,24 @@ const deepLinkInput = {
 };
 
 test("todoBody: publicUrl adds one encoded editor deep link per anchored element, before the attribution", () => {
-  const body = todoBody(deepLinkInput, { publicUrl: "https://bpm.example/", repoFullName: "acme/bpm-processes" });
+  const body = todoBody(deepLinkInput, { publicUrl: "https://design.example/", repoFullName: "acme/bpm-processes" });
   // the web app's process-editor route: /r/$owner/$repo/p/$processId?element=<id>
   assert.ok(
     body.includes(
-      "📍 [Bonität prüfen](https://bpm.example/r/acme/bpm-processes/p/order-to-cash?element=Task_CheckCredit)",
+      "📍 [Bonität prüfen](https://design.example/r/acme/bpm-processes/p/order-to-cash?element=Task_CheckCredit)",
     ),
     `named element links with its name:\n${body}`,
   );
   // a nameless element falls back to its id; ids are URL-encoded
   assert.ok(
-    body.includes("📍 [Gateway 1](https://bpm.example/r/acme/bpm-processes/p/order-to-cash?element=Gateway%201)"),
+    body.includes("📍 [Gateway 1](https://design.example/r/acme/bpm-processes/p/order-to-cash?element=Gateway%201)"),
     `nameless element links with its encoded id:\n${body}`,
   );
   assert.ok(body.indexOf("📍") < body.indexOf(attributionLine("petra")), "deep links precede the attribution line");
 });
 
 test("todoBody: the repo splits at the FIRST slash (GitLab subgroups stay in the repo segment)", () => {
-  const body = todoBody(deepLinkInput, { publicUrl: "https://bpm.example", repoFullName: "group/sub/name" });
+  const body = todoBody(deepLinkInput, { publicUrl: "https://design.example", repoFullName: "group/sub/name" });
   assert.ok(body.includes("/r/group/sub%2Fname/p/order-to-cash"), `owner=group, repo=sub/name (encoded):\n${body}`);
 });
 
@@ -223,7 +224,7 @@ test("todoBody: without publicUrl there is no deep-link line", () => {
 });
 
 test("parseBody: inverts todoBody — anchor block, deep links and attribution stripped", () => {
-  const stored = todoBody(deepLinkInput, { publicUrl: "https://bpm.example", repoFullName: "acme/bpm-processes" });
+  const stored = todoBody(deepLinkInput, { publicUrl: "https://design.example", repoFullName: "acme/bpm-processes" });
   assert.equal(parseBody(stored), "The threshold looks stale.");
   // an empty author text leaves nothing behind but the markup
   assert.equal(parseBody(todoBody({ ...deepLinkInput, body: "" })), "");
@@ -245,38 +246,42 @@ test("parseBody: strips deep links with `]` in the element name and `)` in the U
       elements: [{ id: "Task_Check", name: "Prüfen [manuell]" }],
     },
   };
-  const stored = todoBody(input, { publicUrl: "https://bpm.example", repoFullName: "acme/bpm-processes" });
+  const stored = todoBody(input, { publicUrl: "https://design.example", repoFullName: "acme/bpm-processes" });
   assert.ok(stored.includes("📍 [Prüfen [manuell]]"), `precondition — the raw name is in the link:\n${stored}`);
   assert.equal(parseBody(stored), "The threshold looks stale.");
 });
 
-// ── attribution wording: the legacy product name AND the future one ─────────
-// spelled out as literals on purpose: attributionLine() follows the product
-// name, while these are the bodies as they sit in a customer's tracker — filed
-// by a host before the rename, or by an already-renamed host next to this one.
+// ── attribution wording: today's product name AND the legacy one ───────────
+// spelled out as literals on purpose: these are the bodies as they sit in a
+// customer's tracker — filed by this host, or by a host before the rename.
 // The legacy name is spelled in two halves ON PURPOSE: a search/replace of the
 // product name rewrites the regex and a one-piece fixture in the same breath,
 // and every test stays green — this spelling it cannot reach.
 
 const LEGACY_NAME = "bpm" + "iq";
 const LEGACY_ATTRIBUTION = `_Created from the ${LEGACY_NAME} live model by @petra_`;
-const FUTURE_ATTRIBUTION = "_Created from the designIQ live model by @petra_";
+const ATTRIBUTION = "_Created from the designIQ live model by @petra_";
+
+test("attributionLine / closeAttributionLine write the designIQ wording", () => {
+  assert.equal(attributionLine("petra"), ATTRIBUTION);
+  assert.equal(closeAttributionLine("petra"), "_Closed from the designIQ live model by @petra_");
+});
 
 /** a stored body as todoBody builds it, signed in the given attribution wording */
 function storedWith(attribution: string): string {
-  const stored = todoBody(deepLinkInput, { publicUrl: "https://bpm.example", repoFullName: "acme/bpm-processes" });
+  const stored = todoBody(deepLinkInput, { publicUrl: "https://design.example", repoFullName: "acme/bpm-processes" });
   const signed = stored.replace(attributionLine("petra"), attribution);
   // precondition — without it a failed swap would leave today's line in place and pass every read below
   assert.ok(signed.endsWith(`\n\n${attribution}`), `the body is signed in the wording under test:\n${signed}`);
   return signed;
 }
 
-test("parseAuthor: the legacy wording and the future wording both name the author", () => {
+test("parseAuthor: today's wording and the legacy wording both name the author", () => {
   assert.equal(parseAuthor(storedWith(LEGACY_ATTRIBUTION)), "petra");
-  assert.equal(parseAuthor(storedWith(FUTURE_ATTRIBUTION)), "petra");
+  assert.equal(parseAuthor(storedWith(ATTRIBUTION)), "petra");
   // the new name re-cased (edited by hand on GitHub) keeps its author
   for (const name of ["designiq", "DesignIQ", "DESIGNIQ"]) {
-    assert.equal(parseAuthor(storedWith(FUTURE_ATTRIBUTION.replace("designIQ", name))), "petra", name);
+    assert.equal(parseAuthor(storedWith(ATTRIBUTION.replace("designIQ", name))), "petra", name);
   }
   // the login pattern is the same in both wordings
   assert.equal(parseAuthor(`_Created from the ${LEGACY_NAME} live model by @octo-cat99_`), "octo-cat99");
@@ -294,22 +299,22 @@ test("parseAuthor: a body with neither wording has no platform author", () => {
   assert.equal(parseAuthor("_Created from the BPMIQ live model by @petra_"), null); // legacy-name-ok: stored in customer trackers
   // the close comment is not a creation attribution, in either wording
   assert.equal(parseAuthor(closeAttributionLine("petra")), null);
-  assert.equal(parseAuthor("_Closed from the designIQ live model by @petra_"), null);
+  assert.equal(parseAuthor(`_Closed from the ${LEGACY_NAME} live model by @petra_`), null);
 });
 
-test("parseBody: strips the attribution line in the legacy and in the future wording", () => {
+test("parseBody: strips the attribution line in today's and in the legacy wording", () => {
   assert.equal(parseBody(storedWith(LEGACY_ATTRIBUTION)), "The threshold looks stale.");
-  assert.equal(parseBody(storedWith(FUTURE_ATTRIBUTION)), "The threshold looks stale.");
-  assert.equal(parseBody(storedWith(FUTURE_ATTRIBUTION.replace("designIQ", "designiq"))), "The threshold looks stale.");
+  assert.equal(parseBody(storedWith(ATTRIBUTION)), "The threshold looks stale.");
+  assert.equal(parseBody(storedWith(ATTRIBUTION.replace("designIQ", "designiq"))), "The threshold looks stale.");
   // a line in neither wording is the author's own text and stays
   const foreign = "_Created from the acme live model by @petra_";
   assert.equal(parseBody(`The threshold looks stale.\n\n${foreign}`), `The threshold looks stale.\n\n${foreign}`);
 });
 
-test("listTodos: an issue filed under the future product name keeps its author, anchor and clean body", async () => {
-  const repo = "acme/future-name";
+test("listTodos: an issue a host filed before the rename keeps its author, anchor and clean body", async () => {
+  const repo = "acme/legacy-name";
   await control({
-    addIssue: { repo, title: "Filed by a newer host", body: storedWith(FUTURE_ATTRIBUTION), labels: ["todo"] },
+    addIssue: { repo, title: "Filed before the rename", body: storedWith(LEGACY_ATTRIBUTION), labels: ["todo"] },
   });
   const [todo] = await tracker.listTodos(repo);
   assert.equal(todo?.author, "petra");
@@ -323,7 +328,7 @@ const RENAME_REPO = "acme/renames";
 const linked = createGitHubIssueTracker({
   apiUrl: STUB_URL,
   tokenFor: async () => "stub-installation-token-1",
-  publicUrl: "https://bpm.example",
+  publicUrl: "https://design.example",
 });
 
 test("retargetTodo: ONE write swaps the process label and re-anchors the body; a second run is a no-op", async () => {
@@ -361,7 +366,7 @@ test("retargetTodo: ONE write swaps the process label and re-anchors the body; a
   const raw = (await (await fetch(`${STUB_URL}/repos/${RENAME_REPO}/issues/${created.id}`)).json()) as {
     body: string;
   };
-  assert.ok(raw.body.includes("https://bpm.example/r/acme/renames/p/billing?element=Task_Remind"), raw.body);
+  assert.ok(raw.body.includes("https://design.example/r/acme/renames/p/billing?element=Task_Remind"), raw.body);
   assert.ok(!raw.body.includes("/p/invoice-handling"), "no deep link left on the old id");
 
   assert.equal(
@@ -407,18 +412,18 @@ test("retargetTodo: a secondary rate limit surfaces as TrackerRateLimited with t
 });
 
 test("retargetBody: only a body anchored to `from` changes — anchor block and deep links, nothing else", () => {
-  const body = todoBody(deepLinkInput, { publicUrl: "https://bpm.example", repoFullName: "acme/x" });
+  const body = todoBody(deepLinkInput, { publicUrl: "https://design.example", repoFullName: "acme/x" });
   const out = retargetBody(
     body,
     "order-to-cash",
     { process: "o2c", file: "processes/o2c.bpmn" },
-    { publicUrl: "https://bpm.example", repoFullName: "acme/x" },
+    { publicUrl: "https://design.example", repoFullName: "acme/x" },
   );
   assert.equal(
     out,
     todoBody(
       { ...deepLinkInput, anchor: { ...deepLinkInput.anchor, process: "o2c", file: "processes/o2c.bpmn" } },
-      { publicUrl: "https://bpm.example", repoFullName: "acme/x" },
+      { publicUrl: "https://design.example", repoFullName: "acme/x" },
     ),
   );
   assert.equal(retargetBody(body, "other", { process: "o2c", file: "x" }), body, "anchored elsewhere: untouched");

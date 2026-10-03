@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * bpm-mcp-server — stdio entry point (local use).
+ * designiq-mcp-server — stdio entry point (local use).
  *
  * Claude Code auto-connects via the repo's .mcp.json. Tool definitions live in
  * tools.ts, shared with the HTTP entry point (http.ts) that runs on fly.io.
  *
  * Content repo: `node server.ts --root /path/to/content-repo` or
- * BPM_CONTENT_ROOT (also read as DESIGNIQ_CONTENT_ROOT, which wins) — defaults // legacy-name-ok
- * to the bundled process-documentation example.
+ * DESIGNIQ_CONTENT_ROOT (the legacy BPM_CONTENT_ROOT is still read; the new // legacy-name-ok
+ * name wins) — defaults to the bundled process-documentation example.
  *
  * One command, no build step: node server.ts (Node >= 23.6, built-in type stripping).
  */
@@ -24,22 +24,23 @@ if (!existsSync(root)) {
   // fallback only exists inside the monorepo checkout, never in an npm install
   console.error(
     [
-      `bpm-mcp-server: content root not found: ${root}`,
+      `designiq-mcp-server: content root not found: ${root}`,
       "",
-      "Point the server at a BPM content repo (a checkout with a root bpmiq.yml):",
-      "  designiq-mcp --root <path-to-content-repo>",
-      "  BPM_CONTENT_ROOT=<path-to-content-repo> designiq-mcp",
+      "Point the server at a content repo (a checkout with a root designiq.yml):",
+      "  npx @designiq/mcp --root <path-to-content-repo>",
+      "  DESIGNIQ_CONTENT_ROOT=<path-to-content-repo> npx @designiq/mcp",
+      "(the legacy BPM_CONTENT_ROOT is still read; DESIGNIQ_CONTENT_ROOT wins)", // legacy-name-ok: env fallback
     ].join("\n"),
   );
   process.exit(2);
 }
 
-// list_todos is strictly opt-in (BPM_TODOS_REPO + BPM_TODOS_TOKEN, also read as // legacy-name-ok
-// DESIGNIQ_TODOS_*, which win) — without a repo AND a token the tool does not
-// exist and the server stays zero-auth
+// list_todos is strictly opt-in (DESIGNIQ_TODOS_REPO + DESIGNIQ_TODOS_TOKEN, also
+// read under the legacy BPM_TODOS_* names) — without a repo AND a token the tool // legacy-name-ok
+// does not exist and the server stays zero-auth
 const todos = todosConfigFromEnv(process.env);
 const server = createMcpServer(root, todos);
 await server.connect(new StdioServerTransport());
 console.error(
-  `bpm-mcp-server ready — read-only tools${todos ? ` (+ list_todos on ${todos.repo})` : ""}, repo root: ${root}`,
+  `designiq-mcp-server ready — read-only tools${todos ? ` (+ list_todos on ${todos.repo})` : ""}, repo root: ${root}`,
 );

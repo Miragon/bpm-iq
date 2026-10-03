@@ -9,18 +9,18 @@
  * Error contract: typed 404s with the message shape the MCP tools always had
  * ("… (use list_processes).") — safe() surfaces it to agents verbatim, and a
  * REST caller gets the status. One deliberate wire change: a repo without a
- * bpmiq.yml now says so, instead of "process 'x' not found".
+ * usable contract file now says so, instead of "process 'x' not found".
  */
 import { AppError } from "@designiq/http-kit";
 
 import type { WorkspaceEnsure } from "../domain/rooms.ts";
 import {
-  CONTENT_CONFIG_FILE,
   type ContentConfig,
   discoverDecisions,
   discoverModels,
   discoverProcesses,
   loadContentConfig,
+  notAContentRepoReason,
 } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 
@@ -33,11 +33,10 @@ export interface FindModelDeps {
 function requireContentConfig(workspace: string, repo: ConnectedRepo): ContentConfig {
   const cfg = loadContentConfig(workspace);
   if (!cfg) {
-    throw new AppError(
-      "content/not-a-content-repo",
-      `${repo.fullName} has no ${CONTENT_CONFIG_FILE} — not a BPM content repo`,
-      { status: 404, expose: true },
-    );
+    throw new AppError("content/not-a-content-repo", notAContentRepoReason(repo.fullName), {
+      status: 404,
+      expose: true,
+    });
   }
   return cfg;
 }

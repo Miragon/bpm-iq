@@ -4,6 +4,10 @@ Decisions that shape the platform, with the evidence that led to them.
 Format: context → decision → consequences. Superseded ADRs stay in place,
 marked as such — the history is the point.
 
+Naming: ADRs 0001–0007 predate the rename to designIQ ([ADR 0008](0008-rename-to-designiq.md))
+and keep the names of their time — product, packages, image, repository and VS Code
+extension appear there under their old names. ADR 0008 lists the new ones.
+
 | ADR                                                       | Title                                                                                      | Status   |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------- |
 | [0001](0001-zero-stored-user-tokens.md)                   | Zero stored user tokens — authorization via installation token                             | accepted |
@@ -13,5 +17,6 @@ marked as such — the history is the point.
 | [0005](0005-in-process-mcp-and-oidc-resource-server.md)   | AI write access in-process: /mcp + content REST, OIDC RS, no self-built AS                 | accepted |
 | [0006](0006-notation-plugins-and-structured-doc-shape.md) | Notation plugins: capability slots, reference meta-model, structured doc shape             | accepted |
 | [0007](0007-idp-only-login-and-no-auth-mode.md)           | One login: IdP everywhere, explicit no-auth mode, GitHub OAuth login and dev token retired | accepted |
+| [0008](0008-rename-to-designiq.md)                        | Rename to designIQ: readers before writers, stored identifiers frozen                      | accepted |
 
 Operational: the SaaS activation runbook lives with the control plane (`apps/control-plane/docs/saas-activation.md`) — turning ADR 0002 from code-complete into a running SaaS.

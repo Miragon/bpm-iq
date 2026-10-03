@@ -1,5 +1,5 @@
 /**
- * The sticky namespace is FROZEN (src/notations/bpmn-sticky/bpmiq-moddle.ts,
+ * The sticky namespace is FROZEN (src/notations/bpmn-sticky/sticky-moddle.ts,
  * sticky-model.ts): its uri and prefix are written into customer .bpmn files,
  * so they never follow a product rename. A file written by today's modeler
  * must keep opening TYPED — the stickies as sticky elements, the workshop flag
@@ -13,7 +13,7 @@ import { createRequire } from "node:module";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { bpmiqModdle } from "../src/notations/bpmn-sticky/bpmiq-moddle.ts";
+import { stickyModdle } from "../src/notations/bpmn-sticky/sticky-moddle.ts";
 import {
   isWorkshopMode,
   type ModdleLike,
@@ -35,7 +35,7 @@ const { BpmnModdle } = (await import(pathToFileURL(viaBpmnJs.resolve("bpmn-moddl
 };
 // the editor's wiring: bpmn-js hands its moddleExtensions map to BpmnModdle as
 // is (src/notations/bpmn-editor.ts) — the key is only a label
-const moddle = (): Moddle => new BpmnModdle({ sticky: bpmiqModdle });
+const moddle = (): Moddle => new BpmnModdle({ sticky: stickyModdle });
 
 // The frozen spellings, written in two halves ON PURPOSE: a search/replace of
 // the product name rewrites the descriptor AND the fixture below in the same
@@ -61,9 +61,9 @@ const LEGACY_WORKSHOP_BPMN = [
 ].join("\n");
 
 test("the descriptor's uri and prefix are frozen, and STICKY_TYPE carries that prefix", () => {
-  assert.equal(bpmiqModdle.uri, URI);
-  assert.equal(bpmiqModdle.prefix, PREFIX);
-  assert.equal(bpmiqModdle.name, bpmiqModdle.prefix);
+  assert.equal(stickyModdle.uri, URI);
+  assert.equal(stickyModdle.prefix, PREFIX);
+  assert.equal(stickyModdle.name, stickyModdle.prefix);
   // moddle names a parsed element "<prefix>:<type name>" — the constant every
   // sticky module compares against must be exactly that
   assert.equal(STICKY_TYPE, `${PREFIX}:Sticky`);

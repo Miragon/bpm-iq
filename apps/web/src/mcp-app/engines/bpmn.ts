@@ -20,7 +20,7 @@ import type * as Y from "yjs";
 
 import { attachPresenceCanvas } from "../../lib/presence-canvas.ts";
 import { bpmnColorModule } from "../../notations/bpmn-color.ts";
-import { bpmiqModdle, bpmnStickyModule, bpmnStickyViewModule } from "../../notations/bpmn-sticky/index.ts";
+import { bpmnStickyModule, bpmnStickyViewModule, stickyModdle } from "../../notations/bpmn-sticky/index.ts";
 import type { EngineFactory, LiveBindHooks, WidgetEngine } from "../core/engine.ts";
 import { fitViewport, selectedElementOf } from "./diagram-js.ts";
 
@@ -35,12 +35,12 @@ export const mountBpmnEngine: EngineFactory<BpmnEngine> = (container, readonly) 
     ? new NavigatedViewer({
         container,
         additionalModules: [bpmnStickyViewModule],
-        moddleExtensions: { bpmiq: bpmiqModdle },
+        moddleExtensions: { sticky: stickyModdle },
       })
     : new Modeler({
         container,
         additionalModules: [bpmnStickyModule, bpmnColorModule],
-        moddleExtensions: { bpmiq: bpmiqModdle },
+        moddleExtensions: { sticky: stickyModdle },
       });
   const dirtyCbs = new Set<() => void>();
   if (!readonly) {

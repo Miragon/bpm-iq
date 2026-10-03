@@ -1,6 +1,6 @@
 /**
  * The MCP tool-result codec — ONE definition of the wire convention the two
- * bpmiq MCP servers emit and the widget client decodes. It existed as three
+ * designIQ MCP servers emit and the widget client decodes. It existed as three
  * copies before ("packages/mcp/tools.ts house style" said one of them out
  * loud): packages/mcp, the Live Host's /mcp, and the widget bridge's decoder.
  *

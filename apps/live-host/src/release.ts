@@ -47,7 +47,7 @@ import { decisionImpact } from "./application/decision-impact.ts";
 import { referenceImpact } from "./application/reference-impact.ts";
 import type { RepoConnectionSource } from "./ports/connection-source.ts";
 import type { GitProvider } from "./ports/git-provider.ts";
-import { CONTENT_CONFIG_FILE, type ContentConfig, discoverProcesses, loadContentConfig } from "./repos/content.ts";
+import { type ContentConfig, discoverProcesses, loadContentConfig, notAContentRepoReason } from "./repos/content.ts";
 import type { ConnectedRepo } from "./repos/registry.ts";
 import type { WorkspaceManager } from "./repos/workspaces.ts";
 
@@ -127,7 +127,7 @@ export function releasePrBody(id: string, repoFullName: string, login: string, b
     `Release of **${id}** in \`${repoFullName}\` from the live collaboration workspace, by @${login}.`,
     "",
     botAuthored
-      ? "- opened by the bpmiq platform on behalf of the releaser — **you can approve this PR yourself** (merge = approval, CODEOWNERS)"
+      ? "- opened by designIQ on behalf of the releaser — **you can approve this PR yourself** (merge = approval, CODEOWNERS)"
       : "- merge = approval (CODEOWNERS)",
   ].join("\n");
 }
@@ -145,7 +145,7 @@ export function releaseFilesPrBody(
     ...files.map((f) => `- \`${f.path}\`${f.deleted ? " (deleted)" : ""}`),
     "",
     botAuthored
-      ? "- opened by the bpmiq platform on behalf of the releaser — **you can approve this PR yourself** (merge = approval, CODEOWNERS)"
+      ? "- opened by designIQ on behalf of the releaser — **you can approve this PR yourself** (merge = approval, CODEOWNERS)"
       : "- merge = approval (CODEOWNERS)",
   ].join("\n");
 }
@@ -202,7 +202,7 @@ async function publish(
     repo.installationId !== null
       ? await opts.connectionSource?.cloneToken(repo.installationId).catch(() => undefined)
       : undefined;
-  const worktree = await mkdtemp(join(tmpdir(), "bpm-release-"));
+  const worktree = await mkdtemp(join(tmpdir(), "designiq-release-"));
   try {
     // authenticated like every WorkspaceManager fetch (gitEnv → http.extraHeader):
     // an anonymous fetch of a PRIVATE repo has no credential and no TTY in the
@@ -352,11 +352,10 @@ async function publish(
 function requireContentRepo(repo: ConnectedRepo, workspace: string): ContentConfig {
   const cfg = loadContentConfig(workspace);
   if (!cfg) {
-    throw new AppError(
-      "release/not-a-content-repo",
-      `${repo.fullName} has no ${CONTENT_CONFIG_FILE} — not a BPM content repo`,
-      { status: 404, expose: true },
-    );
+    throw new AppError("release/not-a-content-repo", notAContentRepoReason(repo.fullName), {
+      status: 404,
+      expose: true,
+    });
   }
   return cfg;
 }
@@ -428,7 +427,7 @@ export async function releaseFiles(
       expose: true,
     });
   }
-  // the pool is confined to the bpmiq.yml content scope, like GET /changes
+  // the pool is confined to the contract file's content scope, like GET /changes
   const pool = await opts.workspaces.changedFiles(repo, cfg.processes);
   const changed = new Map(pool.map((c) => [c.path, c.status]));
   const unknown = requested.filter((f) => !changed.has(f));

@@ -118,14 +118,14 @@ const widgetStub = (file: string): string =>
   `<html><head><script>window.DESIGNIQ_BOOT = "__DESIGNIQ_BOOT__";</script></head><body>${file}</body></html>`;
 
 function deps(over: Partial<McpDeps> = {}, widgets: readonly string[] = WIDGET_FILES): McpDeps {
-  const ws = mkdtempSync(join(tmpdir(), "bpm-mcp-"));
+  const ws = mkdtempSync(join(tmpdir(), "designiq-mcp-"));
   mkdirSync(join(ws, "processes"), { recursive: true });
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+  writeFileSync(join(ws, "designiq.yml"), "processes: processes\n");
   writeFileSync(join(ws, PATH), VALID);
   writeFileSync(join(ws, DMN_PATH), DMN);
   writeFileSync(join(ws, USER_PATH), USER_BPMN);
   writeFileSync(join(ws, OWM_PATH), OWM);
-  const webDist = mkdtempSync(join(tmpdir(), "bpm-webdist-"));
+  const webDist = mkdtempSync(join(tmpdir(), "designiq-webdist-"));
   for (const file of widgets) writeFileSync(join(webDist, file), widgetStub(file));
   const registry = { get: (n: string) => (n.toLowerCase() === REPO.fullName ? REPO : undefined), list: () => [REPO] };
   const workspaces = {
@@ -961,7 +961,7 @@ test("release_process demands a target; save demands baseVersion by schema", asy
 
 function apiOpts(d: McpDeps, sessions = new SessionStore(new DatabaseSync(":memory:"))): ApiOptions {
   return {
-    webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
+    webDist: mkdtempSync(join(tmpdir(), "designiq-webdist-")),
     publicUrl: "http://live.test",
     github: d.github,
     sessions,
@@ -1010,7 +1010,7 @@ test("/mcp over HTTP: stateless JSON, 405 on GET, 401 + RFC-9728 challenge, -327
   assert.equal(init.status, 200);
   assert.match(init.headers.get("content-type") ?? "", /application\/json/);
   const body = (await init.json()) as { result: { serverInfo: { name: string } } };
-  assert.equal(body.result.serverInfo.name, "bpmiq-live");
+  assert.equal(body.result.serverInfo.name, "designiq-live");
 
   const get = await fetch(`${base}/mcp`, { headers });
   assert.equal(get.status, 405);

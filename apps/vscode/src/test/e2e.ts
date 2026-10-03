@@ -1,7 +1,7 @@
 /**
  * Integration test, runs INSIDE a real VS Code instance (@vscode/test-electron).
  * Exercises the M0 checklist from apps/live-host/README.md programmatically:
- *   1. open bpm-live:/…/order-to-cash.bpmn as text — content must equal the working tree
+ *   1. open designiq:/…/order-to-cash.bpmn as text — content must equal the working tree
  *   2. remote guest edit → the open (non-dirty) document must update
  *   3. local edit + save → the remote guest must receive it
  *   4. if the Miragon BPMN Modeler is installed: open the SAME virtual doc with the
@@ -21,6 +21,7 @@ import WebSocket from "ws";
 
 import { hostJson } from "../host-api.ts";
 import { modelItems } from "../model-picker.ts";
+import { SCHEME } from "../scheme.ts";
 
 const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/design-iq";
 const FILE = "process-documentation/processes/order-to-cash.bpmn";
@@ -73,7 +74,7 @@ export async function run(): Promise<void> {
     }
 
     // 1 — open the live document as text
-    const uri = vscode.Uri.parse(`bpm-live:/${DOC}`);
+    const uri = vscode.Uri.parse(`${SCHEME}:/${DOC}`);
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc, { preview: false });
     const disk = readFileSync(`${CONTENT_ROOT}/${FILE}`, "utf8");
@@ -161,7 +162,7 @@ export async function run(): Promise<void> {
       const tab = vscode.window.tabGroups.all
         .flatMap((g) => g.tabs)
         .find((t) => t.input instanceof vscode.TabInputCustom && t.input.viewType === "bpmn-modeler.bpmn");
-      if (tab) pass("Miragon BPMN Modeler opened the bpm-live:// document (custom-editor tab active)");
+      if (tab) pass(`Miragon BPMN Modeler opened the ${SCHEME}:// document (custom-editor tab active)`);
       else fail("no custom-editor tab for bpmn-modeler.bpmn found");
       // remote edit while the custom editor is open — document must keep syncing
       const M3 = `<!-- vscode-e2e-custom-${Date.now()} -->`;

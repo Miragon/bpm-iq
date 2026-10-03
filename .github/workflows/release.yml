@@ -1,6 +1,6 @@
 name: Release (GHCR image)
 
-# The ONE live-host artifact (ADR 0004): on-prem installs, the bpm-live Fly app
+# The ONE live-host artifact (ADR 0004): on-prem installs, the bpm-live Fly app (legacy-name-ok: its real name)
 # and every SaaS cell run this exact image.
 #   push to main   → ghcr.io/miragon/designiq-live-host:sha-<full-sha> + :edge
 #   tag v*         → additionally :vX.Y.Z, :vX.Y and :latest

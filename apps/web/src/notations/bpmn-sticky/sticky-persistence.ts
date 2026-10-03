@@ -1,6 +1,6 @@
 /**
  * Sticky persistence (#117) — the bridge between canvas shapes and the
- * `<bpmiq:sticky/>` extension elements in the .bpmn:
+ * `<bpmiq:sticky/>` extension elements in the .bpmn (legacy-name-ok):
  *
  *  - import.done  → rebuild sticky shapes from every process's
  *    extensionElements (importXML wipes the canvas; the extension elements

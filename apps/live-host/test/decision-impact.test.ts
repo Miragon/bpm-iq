@@ -56,7 +56,7 @@ cases:
 /** a workspace holding the NEW version, plus a fake git for the old one */
 // `null` = no suite at all; an explicit `undefined` would re-trigger the default
 function setup(current: string, previous?: string, suite: string | null = SUITE) {
-  const ws = mkdtempSync(join(tmpdir(), "bpm-impact-"));
+  const ws = mkdtempSync(join(tmpdir(), "designiq-impact-"));
   mkdirSync(join(ws, "processes"), { recursive: true });
   writeFileSync(join(ws, DMN_PATH), current);
   if (suite !== null) writeFileSync(join(ws, "processes", "rabatt.tests.yaml"), suite);
@@ -123,7 +123,7 @@ test("only decisions produce a section — and a changed suite alone counts as o
 
 test("a MOVED decision (#182) is compared against its old path — reported once, as a move", async () => {
   const moved = "processes/finance/rabatt.dmn";
-  const ws = mkdtempSync(join(tmpdir(), "bpm-impact-"));
+  const ws = mkdtempSync(join(tmpdir(), "designiq-impact-"));
   mkdirSync(join(ws, "processes", "finance"), { recursive: true });
   writeFileSync(join(ws, moved), dmn("100"));
   writeFileSync(join(ws, "processes", "finance", "rabatt.tests.yaml"), SUITE);

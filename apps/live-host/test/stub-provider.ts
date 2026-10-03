@@ -94,7 +94,7 @@ createServer(async (req, res) => {
   if (/^\/app-manifests\/[^/]+\/conversions$/.test(url.pathname) && req.method === "POST") {
     return json(res, 201, {
       id: 4711,
-      slug: "bpm-live-stub",
+      slug: "designiq-live-host-stub",
       client_id: "stub-app-client",
       client_secret: "stub-app-secret",
       pem: "-----BEGIN FAKE KEY-----\nstub\n-----END FAKE KEY-----",
@@ -113,7 +113,7 @@ createServer(async (req, res) => {
 
   // GitHub App server-side API: installations → repositories → tokens
   // (the JWT signature is NOT verified — this is a stub)
-  if (url.pathname === "/app") return json(res, 200, { slug: "bpm-live-stub", id: 4711 });
+  if (url.pathname === "/app") return json(res, 200, { slug: "designiq-live-host-stub", id: 4711 });
   const reposOf = (id: number): string[] => (id === 1 ? installationRepos : (installations.get(id)?.repos ?? []));
   const instJson = (id: number) => {
     const inst = installations.get(id)!;

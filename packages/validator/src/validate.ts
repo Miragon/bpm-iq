@@ -1,7 +1,7 @@
 /**
  * Deterministic validation of a BPM content repository (the slim contract).
  *
- * A content repo is a root `bpmiq.yml` naming the folder its BPMN processes
+ * A content repo is a root `designiq.yml` naming the folder its BPMN processes
  * live in (@designiq/notations/content); a process IS a `.bpmn` file there. This
  * checks the mechanical invariants that make each model trustworthy and
  * editable: well-formed XML, sound BPMN flow structure, and a COMPLETE BPMNDI
@@ -110,11 +110,11 @@ export function checkBpmnXml(
   }
   checkXmlNamespaces(raw, (m) => err("bpmn/xml", m));
 
-  // #117: bpmiq:sticky extension elements are DISCUSSION artifacts — never
-  // process content (every checker below ignores extensionElements), but
-  // residue worth SURFACING before a release: warn-only, never blocks.
-  // The prefix is resolved from the namespace DECLARATION — a foreign tool
-  // may have re-bound the bpmiq URI to another alias.
+  // #117: sticky extension elements (bpmiq:sticky — legacy-name-ok) are
+  // DISCUSSION artifacts — never process content (every checker below ignores
+  // extensionElements), but residue worth SURFACING before a release:
+  // warn-only, never blocks. The prefix is resolved from the namespace
+  // DECLARATION — a foreign tool may have re-bound the sticky URI to another alias.
   // Namespace URI and default prefix are FROZEN identifiers: both are stored
   // in customer .bpmn files and must never follow a product rename.
   const prefix = /xmlns:([A-Za-z_][\w.-]*)="https:\/\/bpmiq\.io\/schema\/1\.0\/bpmiq"/.exec(raw)?.[1] ?? "bpmiq"; // legacy-name-ok: persisted in customer .bpmn files
@@ -504,7 +504,8 @@ export async function runCli(): Promise<void> {
 
   const rel = (p: string): string => (p.startsWith("/") ? relative(ROOT, p) : p);
 
-  const { contentConfigConflict, discoverModels, loadContentConfig } = await import("@designiq/notations/content");
+  const { CONTENT_CONFIG_FILE, contentConfigConflict, discoverModels, legacyContentConfigFile, loadContentConfig } =
+    await import("@designiq/notations/content");
   const cfg = loadContentConfig(ROOT);
   if (!cfg) {
     console.error(notContentRepoError(ROOT));
@@ -542,6 +543,19 @@ export async function runCli(): Promise<void> {
         `names a different models folder than ${conflict.ignored} ` +
         `(${show(conflict.usedFolder)} vs ${show(conflict.ignoredFolder)}) — ${conflict.used} wins; ` +
         `tools that predate ${conflict.used} read only ${conflict.ignored}`,
+    });
+  }
+  // read from the legacy file name alone: still fully valid, but the platform
+  // only ever writes the documented name — nudge once, never fail the gate
+  const legacy = legacyContentConfigFile(ROOT);
+  if (legacy) {
+    findings.push({
+      severity: "WARN",
+      ruleId: "content/legacy-config-name",
+      file: legacy,
+      message:
+        `legacy contract file name — rename it to ${CONTENT_CONFIG_FILE} ` +
+        `(git mv ${legacy} ${CONTENT_CONFIG_FILE}); still read`,
     });
   }
   for (const model of [...processes, ...decisions, ...others]) {

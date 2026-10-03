@@ -15,39 +15,43 @@ work-in-progress → the Live Host endpoint.
 
 A minimal, read-only [MCP](https://modelcontextprotocol.io) server that exposes a content
 repo's processes. Any MCP client (Claude Code, other IDEs, agent frameworks) can query the
-processes **live from HEAD**: a content repo is a root `bpmiq.yml` naming its models folder
-(`models:`, legacy alias `processes:`), a model IS a file with a registered notation extension
-there (a process its `.bpmn`, a decision its `.dmn`), and the process view is **derived from
-the BPMN** at call time (`@designiq/notations/derive`). No build step; the tool definitions live in
+processes **live from HEAD**: a content repo is a root `designiq.yml` naming its models folder
+(`models:`, legacy alias `processes:`; the legacy file name `bpmiq.yml` is still read), a
+model IS a file with a registered notation extension there (a process its `.bpmn`, a decision
+its `.dmn`), and the process view is **derived from the BPMN** at call time
+(`@designiq/notations/derive`). No build step; the tool definitions live in
 `packages/mcp/tools.ts`, shared by two entry points:
 
 - `packages/mcp/server.ts` — **stdio**, for local use (Claude Code auto-connects via `.mcp.json`)
 - `packages/mcp/http.ts` — **Streamable HTTP** (`POST /mcp`), for remote use; the root
   `Dockerfile` packages exactly this
 
-| Tool                         | Question it answers                 | Reads / derives                                                                                                                                                  |
-| ---------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_models`                | What models exist, of ANY notation? | every registered-notation file under the `bpmiq.yml` folder, grouped by notation: id (file stem), path, plus name/summary/stats where the notation has a deriver |
-| `list_processes`             | What processes exist?               | every `.bpmn` under the `bpmiq.yml` folder: id (file stem), derived name, path, stats                                                                            |
-| `get_process(id)`            | Everything about one process        | the derived view: name, roles (BPMN lanes), steps (with role), gateways, events, flow, sub-process calls                                                         |
-| `get_view(id)`               | The view of ANY model               | name, summary, stats + the rich notation payload in `detail` — every notation with extract+derive                                                                |
-| `get_model(id)`              | What does the MODEL say?            | ANY model parsed into a generic graph (nodes/edges/meta) via `@designiq/notations/extract`                                                                       |
-| `enumerate_paths(id, max?)`  | Which ways can a case take?         | start→end path enumeration over the notation's flow edges (graphHints; cycle-safe, capped)                                                                       |
-| `find_cycles(id)`            | Where does the flow loop?           | the notation's flow edges per graphHints (BPMN sequence flows, Wardley dependencies, DMN requirements)                                                           |
-| `who_owns(id)`               | Who does what?                      | the BPMN lanes (roles) and the steps each contains; the pools                                                                                                    |
-| `which_processes_use(query)` | Impact: what references this?       | each process's id, derived name, role names, step names, and `callActivity` `calledElement`                                                                      |
-| `which_models_use(id)`       | Impact, across EVERY notation       | the repo-wide reference index (typed cross-model refs: calls, decides, …) — incl. dangling references                                                            |
-| `list_todos(process?)`       | What work is open (opt-in)?         | the content repo's issue tracker (label `todo` + `process:<id>`), anchors parsed from issue bodies                                                               |
+| Tool                         | Question it answers                 | Reads / derives                                                                                                                                                     |
+| ---------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_models`                | What models exist, of ANY notation? | every registered-notation file under the `designiq.yml` folder, grouped by notation: id (file stem), path, plus name/summary/stats where the notation has a deriver |
+| `list_processes`             | What processes exist?               | every `.bpmn` under the `designiq.yml` folder: id (file stem), derived name, path, stats                                                                            |
+| `get_process(id)`            | Everything about one process        | the derived view: name, roles (BPMN lanes), steps (with role), gateways, events, flow, sub-process calls                                                            |
+| `get_view(id)`               | The view of ANY model               | name, summary, stats + the rich notation payload in `detail` — every notation with extract+derive                                                                   |
+| `get_model(id)`              | What does the MODEL say?            | ANY model parsed into a generic graph (nodes/edges/meta) via `@designiq/notations/extract`                                                                          |
+| `enumerate_paths(id, max?)`  | Which ways can a case take?         | start→end path enumeration over the notation's flow edges (graphHints; cycle-safe, capped)                                                                          |
+| `find_cycles(id)`            | Where does the flow loop?           | the notation's flow edges per graphHints (BPMN sequence flows, Wardley dependencies, DMN requirements)                                                              |
+| `who_owns(id)`               | Who does what?                      | the BPMN lanes (roles) and the steps each contains; the pools                                                                                                       |
+| `which_processes_use(query)` | Impact: what references this?       | each process's id, derived name, role names, step names, and `callActivity` `calledElement`                                                                         |
+| `which_models_use(id)`       | Impact, across EVERY notation       | the repo-wide reference index (typed cross-model refs: calls, decides, …) — incl. dangling references                                                               |
+| `list_todos(process?)`       | What work is open (opt-in)?         | the content repo's issue tracker (label `todo` + `process:<id>`), anchors parsed from issue bodies                                                                  |
 
 All tools carry `readOnlyHint` annotations, so clients may auto-approve them. The content repo
-is configurable: `node server.ts --root /path/to/repo` or the `BPM_CONTENT_ROOT` env var — the
-bundled `process-documentation/` is only the default.
+is configurable: `node server.ts --root /path/to/repo` or the `DESIGNIQ_CONTENT_ROOT` env var —
+the bundled `process-documentation/` is only the default. Outside this monorepo the published
+package runs the same server: `npx @designiq/mcp --root /path/to/repo` (bin
+`designiq-mcp-server`).
 
 `list_todos` is the one tool that leaves the checkout (a read-only query against the repo's
-issue tracker) and is **strictly opt-in**: it only registers when both `BPM_TODOS_REPO`
-(`owner/name`) and `BPM_TODOS_TOKEN` (a token with issues:read) are set — without them the
+issue tracker) and is **strictly opt-in**: it only registers when both `DESIGNIQ_TODOS_REPO`
+(`owner/name`) and `DESIGNIQ_TODOS_TOKEN` (a token with issues:read) are set — without them the
 server stays zero-auth and the tool does not exist. `GITHUB_API_URL` overrides the REST base
-(default `https://api.github.com`).
+(default `https://api.github.com`). The pre-rename names `BPM_CONTENT_ROOT`, `BPM_TODOS_REPO`
+and `BPM_TODOS_TOKEN` are still read; when both names of a variable are set, `DESIGNIQ_*` wins.
 
 ### Live from HEAD vs. exported snapshots
 
@@ -75,7 +79,7 @@ Requires Node >= 23.6 (runs the TypeScript server directly via built-in type str
   ```json
   {
     "mcpServers": {
-      "bpm-architecture": {
+      "designiq-content": {
         "command": "node",
         "args": ["/absolute/path/to/design-iq/packages/mcp/server.ts"]
       }
@@ -90,7 +94,7 @@ Streamable HTTP — stateless, so no session management is needed:
 
 ```sh
 # Claude Code
-claude mcp add --transport http bpm https://<app>/mcp
+claude mcp add --transport http designiq https://<app>/mcp
 
 # any HTTP MCP client: point it at https://<app>/mcp
 ```
@@ -189,7 +193,7 @@ selection. It reads a loaded room only and announces nothing itself.
 
 ### Decisions: DMN as a first-class model
 
-A decision **is** a `.dmn` file under the same `bpmiq.yml` folder (id = file stem), so the
+A decision **is** a `.dmn` file under the same `designiq.yml` folder (id = file stem), so the
 decision tools mirror the process tools one-to-one: `list_decisions` → `get_decision` →
 `save_dmn_xml`, all addressed by `id` or `path`, all conflict-guarded the same way.
 
@@ -364,7 +368,7 @@ widget then returns to inline display and closes the panel,
 because the answer arrives in the conversation, not in the iframe. Tracker links go through
 the host too (`ui/open-link`) — the app sandbox blocks `target="_blank"` navigation.
 
-**"Open in bpmiq" leaves the chat for the full product.** The toolbar's deep link opens
+**"Open in designIQ" leaves the chat for the full product.** The toolbar's deep link opens
 the loaded model in the web modeler — the process route, carrying the current canvas
 selection as `?element=` so the web editor reveals exactly the element under discussion
 (the DMN widget links its file route). The instance origin rides in the widget's boot
@@ -381,7 +385,7 @@ Clients without apps support (Claude Code, the read-only `@designiq/mcp` package
 plain tool that returns a short process summary plus the model's web URL — use
 `get_process`/`get_bpmn_xml` there. Under `LIVE_MCP_READONLY=1` the tool stays registered
 but the widget becomes a read-only viewer (no save button, no ws ticket), matching the
-absent write tools — the "Open in bpmiq" link stays, pointing at the differently
+absent write tools — the "Open in designIQ" link stays, pointing at the differently
 authenticated web surface.
 
 ### MCP App: the decision modeler and its simulator
@@ -424,7 +428,7 @@ renderers (`@miragon/wardley-renderer`, `team-topologies-renderer`,
 `event-storming-renderer`, `context-maps-renderer`): the same CAS autosave through `save_model_content`, the same
 conflict banner, the same live upgrade through `mint_ws_ticket`, a read-only viewer under
 `LIVE_MCP_READONLY=1`. What they do not have: todos and stickies (BPMN-only), and the
-`?element=` reveal — their "Open in bpmiq" link is the file route (`/f/<path>`). The
+`?element=` reveal — their "Open in designIQ" link is the file route (`/f/<path>`). The
 tool result is the lean `{opened: {repo, path, url}, summary: {name, summary, stats}}` —
 non-apps clients read `get_view` / `get_model_content` instead.
 
@@ -488,7 +492,7 @@ not erroring.
 Connect a client:
 
 ```sh
-claude mcp add --transport http bpm-live http://localhost:8301/mcp \
+claude mcp add --transport http designiq http://localhost:8301/mcp \
   --header "Authorization: Bearer <token>"
 ```
 

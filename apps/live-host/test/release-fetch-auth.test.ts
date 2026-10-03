@@ -37,9 +37,9 @@ test("release: the upstream-guard fetch carries the installation token", async (
   const port = (server.address() as AddressInfo).port;
 
   // a content-repo workspace whose origin is that endpoint
-  const workspace = mkdtempSync(join(tmpdir(), "bpm-release-auth-"));
+  const workspace = mkdtempSync(join(tmpdir(), "designiq-release-auth-"));
   mkdirSync(join(workspace, "processes"), { recursive: true });
-  writeFileSync(join(workspace, "bpmiq.yml"), "processes: processes\n");
+  writeFileSync(join(workspace, "designiq.yml"), "models: processes\n");
   writeFileSync(join(workspace, "processes", "order.bpmn"), "<v1/>");
   await runGit(["init", "-b", "main", workspace]);
   await runGit(["-C", workspace, "add", "--all"]);

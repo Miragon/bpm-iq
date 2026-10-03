@@ -50,7 +50,7 @@ export interface EditorContext {
  *  engine owns state and behavior, React only renders the button */
 export interface EditorToolbarAction {
   id: string;
-  /** button label, e.g. "Design" */
+  /** button label, e.g. "Workshop" */
   label: string;
   buttonTitle: string;
   /** current on/off state (toggle actions); absent = stateless action */

@@ -1,0 +1,5 @@
+# designiq.yml — marks this repo as a designIQ content repo.
+# `models` is the repo-root-relative folder holding the models; here it points
+# into the example content repo bundled with the monorepo. The legacy-named
+# file beside it must keep naming the same folder (older images read only that).
+models: process-documentation/processes

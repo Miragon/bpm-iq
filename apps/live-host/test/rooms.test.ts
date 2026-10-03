@@ -9,6 +9,7 @@ import { resolve } from "node:path";
 import { test } from "node:test";
 
 import { NotAContentRepoError, splitRoom, toDiskPath } from "../src/domain/rooms.ts";
+import { notAContentRepoReason } from "../src/repos/content.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 function repo(fullName: string, extra: Partial<ConnectedRepo> = {}): ConnectedRepo {
@@ -96,7 +97,7 @@ test("splitRoom: rejects a non-editable extension", () => {
 
 // ── toDiskPath ──────────────────────────────────────────────────────────────
 
-/** the injected bpmiq.yml lookup — rooms exist only inside its processes folder */
+/** the injected designiq.yml lookup — rooms exist only inside its processes folder */
 const contentConfig = () => ({ processes: "processes" });
 
 test("toDiskPath: resolves a valid room inside the repo workspace", async () => {
@@ -128,14 +129,15 @@ test("toDiskPath: refuses rooms outside the configured processes folder", async 
   );
 });
 
-test("toDiskPath: a repo without bpmiq.yml has no live rooms", async () => {
+test("toDiskPath: a repo without a usable contract file has no live rooms", async () => {
   const workspaces = { ensure: async () => "/srv/ws/acme-models" };
   await assert.rejects(
     () =>
       toDiskPath("acme/models/processes/order.bpmn", fakeRegistry(repo("acme/models")), workspaces, () => undefined),
     // the CLASS is the contract (the content use-case maps it to 422) — the
-    // message is wording, pinned only because clients see it
-    (e: Error) => e instanceof NotAContentRepoError && /not a BPM content repo \(.*\): acme\/models$/.test(e.message),
+    // message is wording, pinned only because clients see it: the pure domain
+    // spells out the very sentence every other not-a-content-repo answer uses
+    (e: Error) => e instanceof NotAContentRepoError && e.message === notAContentRepoReason("acme/models"),
   );
 });
 

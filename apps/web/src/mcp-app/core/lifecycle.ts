@@ -184,7 +184,7 @@ export interface WidgetLifecycle<E extends WidgetEngine> {
   load(input: ModelInput): Promise<void>;
   /** the manual "Save now" — the same save() the autosave timer runs */
   save(): Promise<void>;
-  /** "Open in bpmiq" leaves the chat: `if (dirty && !live) void save()` —
+  /** "Open in designIQ" leaves the chat: `if (dirty && !live) void save()` —
    *  paused under a banner on purpose (the banner owns the divergence decision) */
   flushOnLeave(): void;
   /** true once tool input arrived (set at load START) — wireApp's no-input guard */
@@ -628,7 +628,7 @@ export function createWidgetLifecycle<E extends WidgetEngine>(deps: LifecycleDep
     ]);
   }
 
-  /** "Open in bpmiq": a still-unsaved edit follows in parallel — REST saves
+  /** "Open in designIQ": a still-unsaved edit follows in parallel — REST saves
    *  land in the very live document the opened web editor joins (in live mode
    *  Yjs has already persisted everything). While a conflict/interrupted
    *  banner is up, save() stays paused on purpose — the opened editor then

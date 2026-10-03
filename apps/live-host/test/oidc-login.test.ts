@@ -94,7 +94,7 @@ before(async () => {
 function boot(cellMode: boolean): { base: string; sessions: SessionStore } {
   const sessions = new SessionStore(new DatabaseSync(":memory:"));
   const opts: ApiOptions = {
-    webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
+    webDist: mkdtempSync(join(tmpdir(), "designiq-webdist-")),
     publicUrl: "http://live.test",
     github: {} as GitProvider,
     sessions,

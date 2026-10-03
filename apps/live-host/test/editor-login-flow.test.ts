@@ -44,7 +44,7 @@ after(async () => {
 });
 
 const baseOpts = (): ApiOptions => ({
-  webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
+  webDist: mkdtempSync(join(tmpdir(), "designiq-webdist-")),
   publicUrl: "http://live.test",
   github: {} as GitProvider,
   sessions: new SessionStore(new DatabaseSync(":memory:")),
