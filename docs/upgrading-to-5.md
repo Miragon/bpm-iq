@@ -90,12 +90,12 @@ The Live Host does not care what the realm is called — it only reads `LIVE_OID
 
 |                       | 4.x                                                           | 5.0                                                                    |
 | --------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| validator package/bin | `@bpmiq/validator` / `bpmiq-validate` <!-- legacy-name-ok --> | `@designiq/validator` / `designiq-validate`                            |
-| MCP package/bin       | `@bpmiq/mcp` / `bpmiq-mcp` <!-- legacy-name-ok -->            | `@designiq/mcp` / `designiq-mcp-server`                                |
+| validator package/bin | `@bpmiq/validator` / `bpmiq-validate` <!-- legacy-name-ok --> | `@miragon/design-iq-validator` / `designiq-validate`                   |
+| MCP package/bin       | `@bpmiq/mcp` / `bpmiq-mcp` <!-- legacy-name-ok -->            | `@miragon/design-iq-mcp` / `designiq-mcp-server`                       |
 | MCP env               | `BPM_CONTENT_ROOT`, `BPM_TODOS_REPO`, `BPM_TODOS_TOKEN`       | `DESIGNIQ_CONTENT_ROOT`, `DESIGNIQ_TODOS_REPO`, `DESIGNIQ_TODOS_TOKEN` |
 | MCP serverInfo name   | `bpm-architecture`                                            | `designiq-mcp`                                                         |
 
-Run them as `npx @designiq/validator --root .` and `npx @designiq/mcp --root <path>`. The
+Run them as `npx @miragon/design-iq-validator --root .` and `npx @miragon/design-iq-mcp --root <path>`. The
 old env names are still read; when both are set, `DESIGNIQ_*` wins. The MCP bin is
 `designiq-mcp-server`, not `designiq-mcp` — that bare name belongs to an unrelated npm
 package.

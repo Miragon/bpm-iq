@@ -1,5 +1,5 @@
 {
-  "name": "@designiq/validator",
+  "name": "@miragon/design-iq-validator",
   "version": "4.3.1",
   "type": "module",
   "description": "Platform-owned validator for BPM content repos — designiq.yml discovery + BPMN structure and BPMNDI coverage. Runs against any checkout via --root; never executes content-repo code.",

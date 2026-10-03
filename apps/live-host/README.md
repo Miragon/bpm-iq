@@ -81,7 +81,7 @@ registers no write tools at all. Non-MCP clients use the REST twins:
 `GET/PUT /api/repos/:owner/:repo/content?path=<model path>` — GET returns
 `{repo, path, content, baseVersion}`; PUT requires `{content, baseVersion}` (the pre-#154 `xml`
 key is still accepted and emitted as a deprecated alias for one release), validates the
-notation via `@designiq/validator` (ERROR findings → 422, WARN returned as warnings), enforces
+notation via `@miragon/design-iq-validator` (ERROR findings → 422, WARN returned as warnings), enforces
 the doc size cap (413), and CASes (stale `baseVersion` → 409 with the current state). Writes land
 in the live Y.Text (the `@designiq/live-client/text` minimal-diff writer over a Hocuspocus
 direct connection), so every open editor sees them instantly — git is only reached through

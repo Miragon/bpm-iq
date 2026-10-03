@@ -11,7 +11,7 @@ only fix them when the user asks.
 ## Step 0 — Run the deterministic validator first
 
 ```
-npx @designiq/validator --root . [<process-id>]
+npx @miragon/design-iq-validator --root . [<process-id>]
 ```
 
 (from the repo root; `--root <checkout>` for another repo). It covers the

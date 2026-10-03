@@ -42,7 +42,7 @@ From the user's request (ask only for what you cannot infer):
 4. Follow the modeling conventions: tasks **verb + object** ("Check credit limit"),
    events **object + past participle**, gateways as **questions** ("Approved?").
 5. Validate before finishing:
-   `npx @designiq/validator --root .` (from the repo root) — fix every error. The validator checks XML well-formedness, flow structure,
+   `npx @miragon/design-iq-validator --root .` (from the repo root) — fix every error. The validator checks XML well-formedness, flow structure,
    BPMNDI coverage, and that each `callActivity` resolves to a real process.
 
 ## Output

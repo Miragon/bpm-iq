@@ -40,7 +40,7 @@ import { byExtension, byId, modelStem, NOTATIONS } from "@designiq/notations";
 import { deriveDecision, deriveProcess, deriveView, hasDeriver } from "@designiq/notations/derive";
 import { extractModelGraph } from "@designiq/notations/extract";
 import { hasTemplate } from "@designiq/notations/templates";
-import { checkModel } from "@designiq/validator";
+import { checkModel } from "@miragon/design-iq-validator";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";

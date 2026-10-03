@@ -1,5 +1,5 @@
 // Publish-boundary build ONLY (the workspace itself runs the raw .ts via Node
-// type stripping — see tsconfig.base.json). `pnpm --filter @designiq/validator build`
+// type stripping — see tsconfig.base.json). `pnpm --filter @miragon/design-iq-validator build`
 // emits dist/validate.js (library) + dist/cli.js (bin) for npm; dev bin/exports
 // keep pointing at src/.
 import { defineConfig } from "tsdown";

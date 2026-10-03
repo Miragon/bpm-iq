@@ -5,7 +5,7 @@
  *
  *   node packages/decisions/cli.ts --root <dir> [<decision-id>]
  *
- * The sibling of the platform validator (@designiq/validator, which checks the
+ * The sibling of the platform validator (@miragon/design-iq-validator, which checks the
  * MECHANICAL invariants of BPMN and DMN). This one adds what needs the FEEL
  * engine: expressions that do not parse, rules that can never decide anything,
  * chains that read a variable nobody produces — and the versioned test suites.

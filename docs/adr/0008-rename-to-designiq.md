@@ -40,15 +40,20 @@ The name is not one string. It lives in four kinds of places, and each breaks di
 
 ### 1. The names
 
-| Form            | Value       | Used for                                                                                                               |
-| --------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
-| identifier      | `designiq`  | file names, keys, ids, env vars `DESIGNIQ_*`, CSS classes, log prefixes, serverInfo names, the npm scope `@designiq/*` |
-| display name    | `designIQ`  | everything a human reads                                                                                               |
-| repository slug | `design-iq` | `Miragon/design-iq`, the VS Code extension's package name                                                              |
+| Form            | Value       | Used for                                                                                                                             |
+| --------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| identifier      | `designiq`  | file names, keys, ids, env vars `DESIGNIQ_*`, CSS classes, log prefixes, serverInfo names, the private workspace scope `@designiq/*` |
+| display name    | `designIQ`  | everything a human reads                                                                                                             |
+| repository slug | `design-iq` | `Miragon/design-iq`, the VS Code extension's package name                                                                            |
 
 The server component keeps its name — the **Live Host**, "designIQ Live Host" where the
 product is named with it — and its `LIVE_*` variables. The concrete names:
 
+- npm packages `@miragon/design-iq-validator` and `@miragon/design-iq-mcp` — under the
+  scope Miragon already owns, next to its other modeling packages, rather than a new
+  `designiq` npm org; the never-published workspace packages keep the private scope
+  `@designiq/*`, which needs no org because nothing resolves it from the registry (they
+  are devDependencies, bundled into the two published packages);
 - image `ghcr.io/miragon/designiq-live-host`;
 - bins `designiq-validate` and `designiq-mcp-server` — not `designiq-mcp`: that bare name
   belongs to an unrelated npm package;

@@ -38,7 +38,7 @@ import { updateText } from "@designiq/live-client/text";
 import { byExtension } from "@designiq/notations";
 import type { DocCodec } from "@designiq/notations/codecs";
 import { hasRefs } from "@designiq/notations/refs";
-import { checkModel, type Finding } from "@designiq/validator";
+import { checkModel, type Finding } from "@miragon/design-iq-validator";
 import type * as Y from "yjs";
 
 import {

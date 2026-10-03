@@ -1,5 +1,5 @@
 // Publish-boundary build ONLY (the workspace itself runs the raw .ts via Node
-// type stripping — see tsconfig.base.json). `pnpm --filter @designiq/mcp build`
+// type stripping — see tsconfig.base.json). `pnpm --filter @miragon/design-iq-mcp build`
 // emits dist/server.js + dist/http.js (tools.ts becomes a shared chunk) for npm;
 // dev bin/exports keep pointing at the raw .ts entries.
 import { defineConfig } from "tsdown";

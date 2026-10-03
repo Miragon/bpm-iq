@@ -27,8 +27,8 @@ if (!existsSync(root)) {
       `designiq-mcp-server: content root not found: ${root}`,
       "",
       "Point the server at a content repo (a checkout with a root designiq.yml):",
-      "  npx @designiq/mcp --root <path-to-content-repo>",
-      "  DESIGNIQ_CONTENT_ROOT=<path-to-content-repo> npx @designiq/mcp",
+      "  npx @miragon/design-iq-mcp --root <path-to-content-repo>",
+      "  DESIGNIQ_CONTENT_ROOT=<path-to-content-repo> npx @miragon/design-iq-mcp",
       "(the legacy BPM_CONTENT_ROOT is still read; DESIGNIQ_CONTENT_ROOT wins)", // legacy-name-ok: env fallback
     ].join("\n"),
   );

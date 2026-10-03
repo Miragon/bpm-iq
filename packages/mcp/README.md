@@ -1,4 +1,4 @@
-# @designiq/mcp
+# @miragon/design-iq-mcp
 
 designIQ's read-only MCP server: it exposes a BPM content repo's processes to any MCP client
 (Claude Code, Claude Desktop, IDEs, ...). A content repo is a root `designiq.yml` naming its
@@ -19,7 +19,7 @@ running Live Host, use the Live Host's own `/mcp` endpoint instead — see
 
 ```sh
 # stdio server against your content repo
-npx @designiq/mcp --root ./my-content-repo
+npx @miragon/design-iq-mcp --root ./my-content-repo
 ```
 
 Installed as a dependency, the same server is the `designiq-mcp-server` binary.
@@ -31,14 +31,14 @@ Or register it in an MCP client config (e.g. `.mcp.json`):
   "mcpServers": {
     "designiq-content": {
       "command": "npx",
-      "args": ["@designiq/mcp", "--root", "./my-content-repo"]
+      "args": ["@miragon/design-iq-mcp", "--root", "./my-content-repo"]
     }
   }
 }
 ```
 
 The content root can also be set via `DESIGNIQ_CONTENT_ROOT`. A Streamable-HTTP entry point
-ships as `@designiq/mcp/http` (`PORT`, optional `MCP_TOKEN` bearer auth).
+ships as `@miragon/design-iq-mcp/http` (`PORT`, optional `MCP_TOKEN` bearer auth).
 
 ## Todos (opt-in)
 

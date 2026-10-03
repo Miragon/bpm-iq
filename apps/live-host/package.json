@@ -23,7 +23,7 @@
     "@designiq/live-client": "workspace:*",
     "@designiq/mcp-kit": "workspace:*",
     "@designiq/notations": "workspace:*",
-    "@designiq/validator": "workspace:*",
+    "@miragon/design-iq-validator": "workspace:*",
     "@hocuspocus/server": "4.7.0",
     "@modelcontextprotocol/client": "2.1.0",
     "@modelcontextprotocol/ext-apps": "2.0.3",

@@ -180,7 +180,7 @@ moves host-side; connected repos ship **content only**:
   `release()` executed `node scripts/validate.ts` _from the content repo_, which under a
   public app was **remote code execution by any third-party repo on the host**. If
   release-time validation returns, it must ship with the platform (pinned, versioned,
-  `validate --root <checkout>`), never run repo code — the packaged `@designiq/validator`
+  `validate --root <checkout>`), never run repo code — the packaged `@miragon/design-iq-validator`
   already works this way for the `process-documentation/` example.
 - **Portal**: removed with the slim contract — the web client (`apps/web`) renders the
   models live from the Live Host, so there is no separate VitePress site to serve per repo.

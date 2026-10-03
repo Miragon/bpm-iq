@@ -43,7 +43,7 @@ its `.dmn`), and the process view is **derived from the BPMN** at call time
 All tools carry `readOnlyHint` annotations, so clients may auto-approve them. The content repo
 is configurable: `node server.ts --root /path/to/repo` or the `DESIGNIQ_CONTENT_ROOT` env var —
 the bundled `process-documentation/` is only the default. Outside this monorepo the published
-package runs the same server: `npx @designiq/mcp --root /path/to/repo` (bin
+package runs the same server: `npx @miragon/design-iq-mcp --root /path/to/repo` (bin
 `designiq-mcp-server`).
 
 `list_todos` is the one tool that leaves the checkout (a read-only query against the repo's
@@ -381,7 +381,7 @@ the login gate and land on the model, not the overview (the SPA stashes the deep
 across the auth round-trip). The `open_modeler` / `open_decision_modeler` results carry
 the same link as `opened.url`, so non-apps clients can surface it in plain text.
 
-Clients without apps support (Claude Code, the read-only `@designiq/mcp` package) see a
+Clients without apps support (Claude Code, the read-only `@miragon/design-iq-mcp` package) see a
 plain tool that returns a short process summary plus the model's web URL — use
 `get_process`/`get_bpmn_xml` there. Under `LIVE_MCP_READONLY=1` the tool stays registered
 but the widget becomes a read-only viewer (no save button, no ws ticket), matching the
@@ -472,7 +472,7 @@ with the literal tool call is the lever, honest UI copy is the promise.
 `save_bpmn_xml` is compare-and-set: the caller passes the `baseVersion` from a prior
 `get_bpmn_xml`, and if the live document moved in between, the save is refused with a
 retryable `{conflict: true, currentContent}` — re-read (or rebase onto `currentContent`) and retry;
-nothing is overwritten. Saves are validation-gated (`@designiq/validator`: ERROR findings
+nothing is overwritten. Saves are validation-gated (`@miragon/design-iq-validator`: ERROR findings
 refuse the save, WARN findings come back as warnings) and land in the live Yjs state —
 every open editor sees them instantly, exactly like a keystroke.
 

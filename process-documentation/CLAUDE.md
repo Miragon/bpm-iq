@@ -46,7 +46,7 @@ Never leave scratch models (`test1.bpmn`, `des.dmn`) in the folder.
 
 1. BPMN files need a complete BPMNDI section (every flow node), or the visual
    editor breaks. Keep semantics (`bpmn:*`) and layout (`bpmndi:*`) in sync.
-2. After ANY model edit, validate: `npx @designiq/validator --root .`
+2. After ANY model edit, validate: `npx @miragon/design-iq-validator --root .`
    (from the repo root) — fix errors before finishing.
 3. Modeling conventions: tasks verb+object, events object+past participle,
    gateways as questions, lanes = team/role labels.

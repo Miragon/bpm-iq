@@ -9,7 +9,7 @@
  * breaks). It also cross-checks callActivity → calledElement against the other
  * processes in the repo. Nothing else about the layout is assumed.
  *
- * Library use:  import { checkBpmnXml } from "@designiq/validator" — a PURE function
+ * Library use:  import { checkBpmnXml } from "@miragon/design-iq-validator" — a PURE function
  * over a single BPMN XML string (no filesystem, no process.exit). The CLI lives
  * in src/cli.ts (a dedicated entry, so importing this module never runs it).
  */

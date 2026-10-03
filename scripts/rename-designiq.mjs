@@ -49,7 +49,8 @@ const FROZEN = [
 
 /** the rewrite rules, applied in order to every unmasked line */
 const RULES = [
-  [/@bpmiq(?=\\?\/)/g, "@designiq"], // the npm scope — import specifiers, manifests, escaped regexes
+  [/@bpmiq(?=\\?\/)/g, "@designiq"], // the private workspace scope — import specifiers, manifests, escaped regexes
+  [/@designiq\/(validator|mcp)(?![-\w])/g, "@miragon/design-iq-$1"], // the two packages published on npm, under Miragon's scope
   [/miragon%2Fbpmiq--live--host/g, "miragon%2Fdesigniq--live--host"], // shields.io badge escaping
   [/\bbpmiq-live-host\b/g, "designiq-live-host"], // the container image
   [/\bbpmiq-mcp\b/g, "designiq-mcp"], // image tag, Keycloak client id, User-Agent

@@ -1,4 +1,4 @@
-# @designiq/validator
+# @miragon/design-iq-validator
 
 Deterministic validator for BPM content repositories: `designiq.yml` discovery, BPMN structural
 checks (flow soundness, complete BPMNDI coverage), the generic cross-model reference rule
@@ -13,10 +13,10 @@ target repo as pure data — it never executes content-repo code. Exit code 0 = 
 
 ```sh
 # validate the content repo in the current directory
-npx @designiq/validator --root .
+npx @miragon/design-iq-validator --root .
 
 # validate a single process
-npx @designiq/validator --root . order-to-cash
+npx @miragon/design-iq-validator --root . order-to-cash
 ```
 
 `--root` points at any checkout that follows the content contract (a root `designiq.yml` naming

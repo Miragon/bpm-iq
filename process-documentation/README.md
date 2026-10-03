@@ -58,7 +58,7 @@ models link to. So:
   you can co-edit. Release → PR publishes a process's live state.
 - **Ask the processes**: the MCP server (`packages/mcp`) answers questions over
   this content (`list_processes`, `get_process`, `who_owns`, `enumerate_paths`, …).
-- **Validate**: `npx @designiq/validator --root .` (from the repo root) checks
+- **Validate**: `npx @miragon/design-iq-validator --root .` (from the repo root) checks
   BPMN structure + BPMNDI coverage.
 - **Skills**: `.claude/skills/` carries the AI toolset that operates on this repo.
 

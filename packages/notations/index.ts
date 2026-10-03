@@ -11,7 +11,7 @@
  *                  notation views deriveProcess/deriveDecision)
  *   - ./templates  blank-model file content (templateFor)
  *   - ./content    content-repo discovery over any checkout (Node-only)
- *   - @designiq/validator  checkModel — the platform check per notation (the
+ *   - @miragon/design-iq-validator  checkModel — the platform check per notation (the
  *                  checkers stay OUT of this package: the published
  *                  designiq-validate binary owns them)
  *
