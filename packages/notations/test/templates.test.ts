@@ -85,3 +85,9 @@ test("template names are forced onto one line — control chars would break OWM 
   assert.equal((JSON.parse(newTtJson("x", "A\nB")) as { title: string }).title, "A B");
   assert.equal(newMarkdownText("x", "A\rB"), "# A B\n");
 });
+
+test("newDmnXml keeps the frozen DMN namespace base", () => {
+  // spelled in two halves ON PURPOSE: a search/replace of the product name must
+  // not be able to rewrite the template and this pin together
+  assert.ok(newDmnXml("x", "X").includes('namespace="http://' + "bpm" + 'iq.dev/dmn/x"'));
+});

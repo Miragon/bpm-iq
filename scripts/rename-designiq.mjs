@@ -65,8 +65,14 @@ const RULES = [
   [/\bbpmLive\b/g, "designiq"], // VS Code command / setting / secret prefix
   [/\bbpm-live-host\b/g, "designiq-live-host"], // User-Agent
   [/\bbpm-live-create-app\b/g, "designiq-create-app"], // User-Agent
+  [/\bbpmiq-live\b/g, "designiq-live"], // Live Host MCP serverInfo name (after the -live-host rule)
+  [/\bonFileSystem:bpm-live\b/g, "onFileSystem:designiq"], // VS Code activation event
+  [/\bbpm-live:/g, "designiq:"], // VS Code document URI scheme
+  [/\bbpm-(todo-badge|diff-(?:viewer|added|removed|changed|layout)|presence|connect-repo)\b/g, "designiq-$1"], // CSS classes + custom properties
+  [/\bbpmRemoteCarets\b/g, "designiqRemoteCarets"], // data attribute
+  [/\bx-bpmiq-model\b/g, "x-designiq-model"], // drag-and-drop media type
   [/ui:\/\/bpmiq\//g, "ui://designiq/"], // MCP-App resource URIs
-  [/\bbpmiq-modeler\b/g, "designiq-modeler"], // MCP-App client + BroadcastChannel name
+  [/\bbpmiq-modeler\b/g, "designiq-modeler"], // MCP-App client name (the claim channel is frozen, legacy-name-ok)
   [/\bbpmiq-(sticky|palette)/g, "designiq-$1"], // CSS classes + palette entry ids
   [/\bbpmiq\.(repos|returnTo)\b/g, "designiq.$1"], // browser storage keys
   [/\bMiragon\/bpm-iq\b/g, "Miragon/design-iq"], // the GitHub repository

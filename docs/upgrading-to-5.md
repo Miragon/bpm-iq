@@ -65,7 +65,10 @@ The Live Host does not care what the realm is called — it only reads `LIVE_OID
   `LIVE_OIDC_AUDIENCE=designiq` and `LIVE_OIDC_CLIENT_ID=designiq-web`, and re-add MCP
   clients with `--client-id designiq-mcp`. The shipped dev-mode Keycloak keeps no state, so
   it imports the new realm on restart with the demo users only — set `github_login` on your
-  own users again. A Keycloak with a database that still starts with `--import-realm` and
+  own users again, and repeat your realm edits: the redirect URI and web origin of
+  `designiq-web` and the MCP callbacks of `designiq-mcp`
+  ([idp-quickstart §6](on-prem/idp-quickstart.md#6-beyond-localhost)), and the GitHub
+  identity provider, whose OAuth App callback is now `…/realms/designiq/broker/github/endpoint`. A Keycloak with a database that still starts with `--import-realm` and
   the mounted file gets `designiq` as a second realm next to the old one; its users stay in
   the old realm.
 
@@ -96,6 +99,10 @@ Run them as `npx @designiq/validator --root .` and `npx @designiq/mcp --root <pa
 old env names are still read; when both are set, `DESIGNIQ_*` wins. The MCP bin is
 `designiq-mcp-server`, not `designiq-mcp` — that bare name belongs to an unrelated npm
 package.
+
+`@bpmiq/validator` and `@bpmiq/mcp` get no release after 4.3.1 and are deprecated with a <!-- legacy-name-ok -->
+pointer to the new names. An unpinned `npx @bpmiq/…` raises no error — it silently stays on <!-- legacy-name-ok -->
+4.3.1, so change the package name in CI and MCP client configs.
 
 ## MCP connectors
 
@@ -147,5 +154,10 @@ unique across all of GitHub). Existing apps, their names and slugs are untouched
   (`content/not-a-content-repo`, …), not on the text.
 - **Web app**: the product name reads designIQ, the BPMN header toggle for t.BPM workshop
   mode is labelled "Workshop" (files are unchanged), and the cached repo list reloads once.
+- **`GITHUB_REPO` default** is now `Miragon/design-iq` (was `Miragon/bpm-iq`). A host that <!-- legacy-name-ok -->
+  never set it keys its live documents by that name: release its unreleased edits before
+  upgrading, or set `GITHUB_REPO=Miragon/bpm-iq` to keep them. Such a host also keeps a <!-- legacy-name-ok -->
+  stale fallback entry under the old name in its repository list; remove it with
+  `sqlite3 <data>/live.db "DELETE FROM repos WHERE full_name='Miragon/bpm-iq' AND installation_id IS NULL"`. <!-- legacy-name-ok -->
 - **"Analyse with AI"** names the connector by its URL, so the prompt works whatever you
   called the connector.

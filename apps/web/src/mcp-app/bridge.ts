@@ -178,7 +178,9 @@ export const closeTodo = (app: App, repo: string, todoId: string): Promise<{ ok:
  *  Returns the release — a re-claiming widget MUST release its previous claim
  *  first, or its own broadcast supersedes itself. */
 export function claimDocument(key: string, onSuperseded: () => void): () => void {
-  const channel = new BroadcastChannel(`designiq-modeler:${key}`);
+  // FROZEN like MOVED_NOTICE: a widget mounted in a chat before an upgrade keeps
+  // running old code, and only a shared channel name lets the newer one stop it
+  const channel = new BroadcastChannel(`bpmiq-modeler:${key}`); // legacy-name-ok: widgets across an upgrade
   const stamp = Date.now() + Math.random();
   channel.postMessage(stamp);
   channel.onmessage = (e: MessageEvent<number>) => {

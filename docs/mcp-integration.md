@@ -94,7 +94,7 @@ Streamable HTTP — stateless, so no session management is needed:
 
 ```sh
 # Claude Code
-claude mcp add --transport http designiq https://<app>/mcp
+claude mcp add --transport http designiq-content https://<app>/mcp
 
 # any HTTP MCP client: point it at https://<app>/mcp
 ```
