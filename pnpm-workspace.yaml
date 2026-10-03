@@ -2,13 +2,12 @@ packages:
   - "apps/*"
   - "apps/*/ui"
   - "packages/*"
-  # process-documentation is example CONTENT (bpmiq.yml + .bpmn), not a package
+  # process-documentation is example CONTENT (designiq.yml + .bpmn), not a package
   # postinstall build scripts pnpm may run (blocked by default for security)
 allowBuilds:
   esbuild: true
   inferno: false
 minimumReleaseAgeExclude:
-  - "@bpmiq/validator@0.1.0"
   # the event-storming modeler family (#116) — pinned exact, adopted fresh
   - "@miragon/event-storming-dsl@0.2.1"
   - "@miragon/event-storming-renderer@0.2.1"

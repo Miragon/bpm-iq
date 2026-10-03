@@ -3,7 +3,7 @@
  * live document serializes to its canonical at-rest text — the bridge that
  * keeps git diffs, PR review, sha256 compare-and-set, per-file history and
  * the validator working on plain text while the LIVE document merges
- * element-wise (Y.Map, @bpmiq/contracts/live ELEMENTS_KEY/META_KEY).
+ * element-wise (Y.Map, @designiq/contracts/live ELEMENTS_KEY/META_KEY).
  *
  * Dark-launched: the registry below is EMPTY — no shipped notation is
  * structured yet. The first canvas notation (event storming, #116) registers
@@ -46,7 +46,10 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
-const HEADER_FORMAT = "bpmiq-structured";
+/** the header's format tag — brand-NEUTRAL on purpose: it is persisted in
+ *  every structured model file, and a product rename must never again have
+ *  to touch (or dual-read) files in customer repos */
+const HEADER_FORMAT = "structured-model";
 
 /**
  * THE house codec: one JSON header line (format, version, meta), then one
@@ -82,7 +85,7 @@ export function jsonLinesCodec(): DocCodec {
         if (parsed === null || typeof parsed !== "object") continue;
         const row = parsed as Record<string, unknown>;
         // a header NEVER carries an id — an element whose attrs happen to
-        // contain format:"bpmiq-structured" must not be swallowed as one
+        // contain format:"structured-model" must not be swallowed as one
         if (row.format === HEADER_FORMAT && typeof row.id !== "string") {
           if (row.meta !== null && typeof row.meta === "object") snapshot.meta = row.meta as Record<string, unknown>;
           continue;

@@ -1,17 +1,17 @@
-import { byId } from "@bpmiq/notations";
-import { type NotationDescriptor, NOTATIONS } from "@bpmiq/notations";
-import { hasTemplate } from "@bpmiq/notations/templates";
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { byId } from "@designiq/notations";
+import { type NotationDescriptor, NOTATIONS } from "@designiq/notations";
+import { hasTemplate } from "@designiq/notations/templates";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@bpmiq/ui-kit/components/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@bpmiq/ui-kit/components/table";
-import { cn } from "@bpmiq/ui-kit/lib/utils";
+} from "@designiq/ui-kit/components/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@designiq/ui-kit/components/table";
+import { cn } from "@designiq/ui-kit/lib/utils";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
   type Column,
@@ -152,7 +152,7 @@ const modelRowId = (path: string): string => `model-row:${path}`;
  *  A row that is part of the selection drags the whole selection (#210). It
  *  names its repo: a row dragged in from ANOTHER repo's window must not move
  *  whatever sits at the same path here */
-const DRAG_TYPE = "application/x-bpmiq-model";
+const DRAG_TYPE = "application/x-designiq-model";
 type DragPayload = { repo: string; models: MovableModel[] };
 
 /** one model row of the current level, whatever its kind — the unit the
@@ -188,10 +188,11 @@ export function ProcessList() {
     [modelsQuery.data],
   );
   const folders = useFolders(repo);
-  // a content repo declares itself with a root bpmiq.yml; without one, creating
-  // folders/processes 422s and a release has nothing to ship — so the view hides
-  // those actions. Assume yes until the (cloning) folders query proves otherwise,
-  // so the actions don't flicker for the overwhelmingly common content repo.
+  // a content repo declares itself with a root designiq.yml (or the legacy
+  // bpmiq.yml, legacy-name-ok); without one, creating folders/processes 422s
+  // and a release has nothing to ship — so the view hides those actions.
+  // Assume yes until the (cloning) folders query proves otherwise, so the
+  // actions don't flicker for the overwhelmingly common content repo.
   const isContentRepo = folders.data?.isContentRepo ?? true;
   const repos = useRepos();
   const branch = repos.data?.find((r) => r.fullName === repo)?.defaultBranch ?? "main";
@@ -591,9 +592,9 @@ export function ProcessList() {
               {sync.isPending ? "Loading…" : `Load latest from ${branch}`}
             </Button>
           )}
-          {/* create/release only make sense in a content repo (a root bpmiq.yml).
+          {/* create/release only make sense in a content repo (a root designiq.yml).
               Without one, a create 422s and a release has nothing to ship — so
-              the actions are hidden and the body explains it's not a BPM repo. */}
+              the actions are hidden and the body explains it's not a content repo. */}
           {isContentRepo && (
             <>
               <Button variant="outline" size="sm" onClick={() => setReleaseOpen(true)}>
@@ -675,9 +676,10 @@ export function ProcessList() {
         <p className="text-muted-foreground text-sm">Loading… (the first load clones the repository)</p>
       ) : !isContentRepo ? (
         <p className="text-muted-foreground max-w-prose text-sm">
-          Not a BPM repository — this repo has no <code className="bg-muted rounded px-1">bpmiq.yml</code> at its root
-          naming the folder its models live in (e.g. <code className="bg-muted rounded px-1">processes: processes</code>
-          ). Add one to create folders, processes and releases here.
+          Not a content repository — this repo has no usable <code className="bg-muted rounded px-1">designiq.yml</code>{" "}
+          (or legacy <code className="bg-muted rounded px-1">bpmiq.yml</code>) at its root naming the folder its models
+          live in (e.g. <code className="bg-muted rounded px-1">models: models</code>). Add one to create folders,
+          processes and releases here.
         </p>
       ) : empty && dir !== "" ? (
         <p className="text-muted-foreground max-w-prose text-sm">

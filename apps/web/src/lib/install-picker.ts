@@ -11,7 +11,7 @@ export function openInstallPicker(installUrl: string, onReturn: () => void): voi
   const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
   const popup = window.open(
     installUrl,
-    "bpm-connect-repo",
+    "designiq-connect-repo",
     `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=yes`,
   );
   if (!popup) {

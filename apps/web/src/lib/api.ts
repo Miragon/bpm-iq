@@ -1,5 +1,5 @@
 /** Live-Host API client — session-based (git-provider OAuth), same-origin. */
-import { api } from "@bpmiq/api-client";
+import { api } from "@designiq/api-client";
 import type {
   AppConfig,
   ChangedFileWire,
@@ -34,11 +34,11 @@ import type {
   SyncResult,
   TodoJobWire,
   TodoWire,
-} from "@bpmiq/contracts/live-host";
+} from "@designiq/contracts/live-host";
 
 // re-export so app-internal `instanceof ApiError` call sites keep one import path
-export { ApiError } from "@bpmiq/api-client";
-// the wire types live in @bpmiq/contracts (the backend assembles them under
+export { ApiError } from "@designiq/api-client";
+// the wire types live in @designiq/contracts (the backend assembles them under
 // `satisfies` checks) — re-exported so component imports keep one import path
 export type {
   AppConfig,
@@ -78,7 +78,7 @@ export type {
   TodoElementWire,
   TodoJobWire,
   TodoWire,
-} from "@bpmiq/contracts/live-host";
+} from "@designiq/contracts/live-host";
 
 export const config = {
   // same origin as the page (single port; wss:// behind Fly TLS). Override with
@@ -90,7 +90,7 @@ export const config = {
 
 /** presence color, DETERMINISTIC per login — lives in the live contract now
  *  so the Live Host paints its agent presence from the same palette */
-export { presenceColor } from "@bpmiq/contracts/live";
+export { presenceColor } from "@designiq/contracts/live";
 
 export const fetchConfig = (): Promise<AppConfig> => api("/api/config");
 export const fetchMe = (): Promise<Me> => api("/api/me");

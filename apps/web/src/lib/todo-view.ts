@@ -4,7 +4,7 @@
  * frontends render differently (JSX vs imperative DOM) but must answer these
  * questions identically. Framework-free, like lib/todo-canvas.ts.
  */
-import type { TodoWire } from "@bpmiq/contracts/live-host";
+import type { TodoWire } from "@designiq/contracts/live-host";
 
 /** the todos anchored to ONE element (the canvas-badge filter) */
 export const todosForElement = (todos: TodoWire[], elementId: string): TodoWire[] =>

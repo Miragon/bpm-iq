@@ -1,4 +1,4 @@
-import { queryDefaults } from "@bpmiq/api-client";
+import { queryDefaults } from "@designiq/api-client";
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -46,7 +46,12 @@ import {
   syncRepo,
   type TodoWire,
 } from "@/lib/api";
-import { clearRepoSnapshot, persistRepoSnapshots, readRepoSnapshot } from "@/lib/repos-snapshot";
+import {
+  clearRepoSnapshot,
+  dropLegacyRepoSnapshot,
+  persistRepoSnapshots,
+  readRepoSnapshot,
+} from "@/lib/repos-snapshot";
 import { followTodoJob } from "@/lib/todo-jobs";
 
 export const queryClient = new QueryClient({
@@ -58,6 +63,7 @@ export const queryClient = new QueryClient({
   },
 });
 persistRepoSnapshots(queryClient);
+dropLegacyRepoSnapshot();
 
 /** current session identity + ws token; errors (401) drive the login gate */
 export function useMe() {

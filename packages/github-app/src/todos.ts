@@ -2,7 +2,7 @@
  * The GitHub-side todo vocabulary: labels and the issues-list row shape. This
  * is TRACKER vocabulary, not platform wire types — ports/issue-tracker.ts
  * deliberately assumes no numbers, labels or markdown (Jira has neither), so
- * this lives with the GitHub plumbing, not in @bpmiq/contracts. The body
+ * this lives with the GitHub plumbing, not in @designiq/contracts. The body
  * MARKUP (anchor block, attribution line) stays adapter-owned per that port.
  *
  * Zero imports — the read-only MCP server can adopt this without pulling the

@@ -13,8 +13,8 @@
  */
 import { randomBytes } from "node:crypto";
 
-import { presenceColor, type PresenceUser } from "@bpmiq/contracts/live";
-import type { AppConfig, EditorLoginExchangeBody, Me } from "@bpmiq/contracts/live-host";
+import { presenceColor, type PresenceUser } from "@designiq/contracts/live";
+import type { AppConfig, EditorLoginExchangeBody, Me } from "@designiq/contracts/live-host";
 import * as vscode from "vscode";
 
 import { hostJson } from "./host-api.ts";
@@ -43,7 +43,7 @@ export class LiveAuth implements vscode.Disposable {
   }
 
   private key(kind: "session" | "me"): string {
-    return `bpmLive.${kind}:${hostUrls(this.serverUrl()).http}`;
+    return `designiq.${kind}:${hostUrls(this.serverUrl()).http}`;
   }
 
   /** who we are on the configured host — undefined while not signed in */
@@ -117,7 +117,7 @@ export class LiveAuth implements vscode.Disposable {
     });
     if (probe.status === 404 || probe.status === 501) {
       throw new Error(
-        `${http} has no editor sign-in yet (older Live Host) — use "BPM Live: Sign in with a session token…"`,
+        `${http} has no editor sign-in yet (older Live Host) — use "designIQ: Sign in with a session token…"`,
       );
     }
     const config = await hostJson<AppConfig>(`${http}/api/config`);
@@ -130,7 +130,7 @@ export class LiveAuth implements vscode.Disposable {
     const code = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `BPM Live: finish signing in via ${provider.label} in your browser…`,
+        title: `designIQ: finish signing in via ${provider.label} in your browser…`,
         cancellable: true,
       },
       (_progress, cancel) =>
@@ -169,13 +169,13 @@ export class LiveAuth implements vscode.Disposable {
     this.changed.fire();
   }
 
-  /** the URI handler: <scheme>://miragon-gmbh.bpm-live/auth?code=…&state=… */
+  /** the URI handler: <scheme>://miragon-gmbh.design-iq/auth?code=…&state=… */
   handleUri(uri: vscode.Uri): void {
     const callback = parseLoginCallback(uri.path, uri.query);
     if (!callback) return;
     const pending = this.pending;
     if (!pending || pending.state !== callback.state) {
-      void vscode.window.showWarningMessage("BPM Live: ignored a sign-in callback that matches no pending sign-in.");
+      void vscode.window.showWarningMessage("designIQ: ignored a sign-in callback that matches no pending sign-in.");
       return;
     }
     pending.resolve(callback.code);

@@ -1,5 +1,5 @@
 /**
- * Architecture rules (ArchUnit-style) for the bpmiq workspace — run `pnpm arch`.
+ * Architecture rules (ArchUnit-style) for the designIQ workspace — run `pnpm arch`.
  *
  * Public-repo rule set (ADR 0004): identical to the pre-split config minus the
  * control-plane-specific rules — that app lives in the private overlay repo,
@@ -74,7 +74,7 @@ export default {
       name: "decisions-lib-stays-isomorphic",
       severity: "error",
       comment:
-        "@bpmiq/decisions runs in the BROWSER too (the SPA's DMN editor and the " +
+        "@designiq/decisions runs in the BROWSER too (the SPA's DMN editor and the " +
         "MCP-App widget import it, see packages/decisions/README.md). Its cli.ts " +
         "is the only Node entry — nothing the package EXPORTS may touch an I/O " +
         "builtin, or the bundlers break and server and browser drift apart again.",
@@ -89,7 +89,7 @@ export default {
       severity: "error",
       comment:
         "The stateless Streamable-HTTP transport is constructed ONCE, in " +
-        "@bpmiq/mcp-kit/mount. A second copy is how packages/mcp and the Live " +
+        "@designiq/mcp-kit/mount. A second copy is how packages/mcp and the Live " +
         "Host's /mcp drifted (one lost the else-res.end(); ADR 0005).",
       from: { path: "^(apps|packages)/", pathNot: ["^packages/mcp-kit/"] },
       // the SERVER transport only (SDK v2: @modelcontextprotocol/node is nothing
@@ -101,7 +101,7 @@ export default {
       name: "mcp-kit-index-stays-browser-safe",
       severity: "error",
       comment:
-        "@bpmiq/mcp-kit's '.' entry is imported by the widget bundles — no Node " +
+        "@designiq/mcp-kit's '.' entry is imported by the widget bundles — no Node " +
         "builtins, no SDK there; the transport lives behind ./mount.",
       from: { path: "^packages/mcp-kit/index\\.ts$" },
       to: {
@@ -113,7 +113,7 @@ export default {
       name: "one-bpmn-reader",
       severity: "error",
       comment:
-        "fast-xml-parser is configured ONCE, in @bpmiq/notations/extract " +
+        "fast-xml-parser is configured ONCE, in @designiq/notations/extract " +
         "(parseXml + the XMLValidator re-export). The validator's byte-identical " +
         "parser copy is how the two BPMN walks drifted (#86).",
       from: { path: "^(apps|packages)/", pathNot: ["^packages/notations/extract\\.ts$"] },
@@ -133,7 +133,7 @@ export default {
       name: "notations-index-and-derive-stay-browser-safe",
       severity: "error",
       comment:
-        "@bpmiq/notations' index.ts, derive.ts and templates.ts are imported by " +
+        "@designiq/notations' index.ts, derive.ts and templates.ts are imported by " +
         "apps/web (the SPA value-imports processIdFromName, derive types and " +
         "hasTemplate for the New menu) — no fs, no yaml, no fast-xml-parser " +
         "there; those live behind ./content and ./extract. " +

@@ -9,7 +9,7 @@
  * other columns are not inputs the user owes the table. Since 0.3 the add-on
  * agrees natively: an empty input runs as FEEL `null` (matching `-` cells and
  * nothing else) in both the decision-table form and the DRD panel, the same way
- * @bpmiq/decisions reports what a scenario left unset rather than refusing to
+ * @designiq/decisions reports what a scenario left unset rather than refusing to
  * run it (`simulateDecision`, `missingInputs`). That covers an agent-supplied
  * partial scenario (`open_decision_modeler` with a `scenario`) too — no store
  * override needed any more.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * bpm-mcp-server — HTTP entry point (remote use, e.g. fly.io).
+ * designiq-mcp-server — HTTP entry point (remote use, e.g. fly.io).
  *
  *   POST /mcp     → the MCP server over Streamable HTTP (stateless; same
  *                   read-only tools as the local stdio server — see tools.ts)
@@ -13,16 +13,16 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { bearerAuth, send } from "@bpmiq/http-kit";
-import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
+import { bearerAuth, send } from "@designiq/http-kit";
+import { mountStatelessMcp } from "@designiq/mcp-kit/mount";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const TOKEN = process.env.MCP_TOKEN;
-// list_todos is strictly opt-in (BPM_TODOS_REPO + BPM_TODOS_TOKEN, also read as // legacy-name-ok
-// DESIGNIQ_TODOS_*, which win) — without a repo AND a token the tool does not
-// exist and the server stays zero-auth
+// list_todos is strictly opt-in (DESIGNIQ_TODOS_REPO + DESIGNIQ_TODOS_TOKEN, also
+// read under the legacy BPM_TODOS_* names) — without a repo AND a token the tool // legacy-name-ok
+// does not exist and the server stays zero-auth
 const TODOS = todosConfigFromEnv(process.env);
 
 /** Stateless Streamable HTTP: one fresh server + transport per request (read-only tools, no session state). */
@@ -62,5 +62,5 @@ createServer(async (req, res) => {
     else res.end();
   }
 }).listen(PORT, () => {
-  console.log(`bpm MCP listening on :${PORT} — POST /mcp${TOKEN ? " (bearer-token protected)" : ""}`);
+  console.log(`designIQ MCP listening on :${PORT} — POST /mcp${TOKEN ? " (bearer-token protected)" : ""}`);
 });

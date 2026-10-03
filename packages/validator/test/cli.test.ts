@@ -15,8 +15,8 @@ const CLI = resolve(import.meta.dirname, "../src/cli.ts");
 const FIXTURE = resolve(import.meta.dirname, "fixtures/content-repo");
 
 test("bin run through a symlink validates for real (exit 0 AND real output)", () => {
-  const dir = mkdtempSync(join(tmpdir(), "bpmiq-validate-"));
-  const link = join(dir, "bpmiq-validate");
+  const dir = mkdtempSync(join(tmpdir(), "designiq-validate-"));
+  const link = join(dir, "designiq-validate");
   symlinkSync(CLI, link);
   const r = spawnSync(process.execPath, [link, "--root", FIXTURE], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
@@ -26,8 +26,8 @@ test("bin run through a symlink validates for real (exit 0 AND real output)", ()
 });
 
 test("bin fails loudly on a non-content root", () => {
-  const dir = mkdtempSync(join(tmpdir(), "bpmiq-validate-empty-"));
+  const dir = mkdtempSync(join(tmpdir(), "designiq-validate-empty-"));
   const r = spawnSync(process.execPath, [CLI, "--root", dir], { encoding: "utf8" });
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /no bpmiq\.yml/);
+  assert.match(r.stderr, /no designiq\.yml \(or legacy bpmiq\.yml\) at the root/); // legacy-name-ok: pins the legacy wording
 });

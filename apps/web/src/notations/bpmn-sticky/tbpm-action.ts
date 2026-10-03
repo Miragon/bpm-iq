@@ -1,8 +1,9 @@
 /**
- * The t.BPM header toggle (#117/#54): flips bpmiq:mode on bpmn:Definitions —
- * a DOCUMENT property, so every participant's tooling switches together
- * (palette gating + creation rules key on it). Lives in the shell header via
- * the MountedEditor.actions surface, not in the diagram palette.
+ * The t.BPM header toggle (#117/#54): flips bpmiq:mode (legacy-name-ok) on
+ * bpmn:Definitions — a DOCUMENT property, so every participant's tooling
+ * switches together (palette gating + creation rules key on it). Lives in the
+ * shell header via the MountedEditor.actions surface, not in the diagram
+ * palette.
  */
 import type { EditorToolbarAction } from "../registry";
 import { isWorkshopMode, type ModdleLike } from "./sticky-model";
@@ -25,9 +26,9 @@ export function tbpmToggleAction(modeler: ModelerLike): EditorToolbarAction {
   const canvas = modeler.get("canvas");
   return {
     id: "tbpm",
-    label: "Design",
+    label: "Workshop",
     buttonTitle:
-      "Design mode (t.BPM): sticky-note discussion tooling — a document setting, every participant switches together",
+      "Workshop mode (t.BPM): sticky-note discussion tooling — a document setting, every participant switches together",
     isActive: () => isWorkshopMode(modeler.getDefinitions()),
     onChanged: (cb) => {
       // local flips + their undo/redo AND remote flips (arrive via re-import)

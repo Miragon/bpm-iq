@@ -5,7 +5,7 @@
  *
  *   node packages/decisions/cli.ts --root <dir> [<decision-id>]
  *
- * The sibling of the platform validator (@bpmiq/validator, which checks the
+ * The sibling of the platform validator (@miragon/design-iq-validator, which checks the
  * MECHANICAL invariants of BPMN and DMN). This one adds what needs the FEEL
  * engine: expressions that do not parse, rules that can never decide anything,
  * chains that read a variable nobody produces — and the versioned test suites.
@@ -16,10 +16,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
-import { cliRoot, notContentRepoError } from "@bpmiq/notations/cli";
-import { discoverDecisions, loadContentConfig } from "@bpmiq/notations/content";
-import { deriveDecision } from "@bpmiq/notations/derive";
-import { extractModelGraph } from "@bpmiq/notations/extract";
+import { cliRoot, notContentRepoError } from "@designiq/notations/cli";
+import { discoverDecisions, loadContentConfig } from "@designiq/notations/content";
+import { deriveDecision } from "@designiq/notations/derive";
+import { extractModelGraph } from "@designiq/notations/extract";
 
 import { analyzeDecision } from "./analyze.ts";
 import { parseTestSuite, runDecisionTests, testsPathFor } from "./tests.ts";

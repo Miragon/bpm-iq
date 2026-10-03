@@ -1,4 +1,4 @@
-# Contributing to bpmiq
+# Contributing to designIQ
 
 **There is no build step.** This repo runs raw TypeScript on Node >= 23.6 via type
 stripping; `pnpm typecheck` is the only type gate. Backends and packages execute their

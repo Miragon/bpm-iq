@@ -1,7 +1,7 @@
 /**
  * The overview read-models, extracted from http/api.ts:
  *
- *   listProcesses — one row per .bpmn file under the repo's bpmiq.yml
+ *   listProcesses — one row per .bpmn file under the repo's designiq.yml
  *                   processes folder (repos/content.ts), with dirty-vs-origin
  *                   flag and live session count
  *   listDecisions — the .dmn sibling of listProcesses
@@ -13,16 +13,16 @@
  * Pure orchestration over injected surfaces: the dirty check goes through
  * WorkspaceManager.changedPaths (the git subprocess lives behind that seam,
  * never here). The returned object shapes ARE the wire format
- * (@bpmiq/contracts/live-host — shape drift is a tsc error).
+ * (@designiq/contracts/live-host — shape drift is a tsc error).
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { roomName, roomPrefix } from "@bpmiq/contracts/live";
-import type { ChangedFileWire, DecisionInfo, ModelInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
-import { byExtension } from "@bpmiq/notations";
-import { deriveProcess } from "@bpmiq/notations/derive";
-import { extractModelGraph } from "@bpmiq/notations/extract";
+import { roomName, roomPrefix } from "@designiq/contracts/live";
+import type { ChangedFileWire, DecisionInfo, ModelInfo, ProcessInfo, RepoInfo } from "@designiq/contracts/live-host";
+import { byExtension } from "@designiq/notations";
+import { deriveProcess } from "@designiq/notations/derive";
+import { extractModelGraph } from "@designiq/notations/extract";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import { discoverDecisions, discoverModels, discoverProcesses, loadContentConfig } from "../repos/content.ts";
@@ -194,7 +194,7 @@ export async function decisionUsers(workspace: string, decisionId: string): Prom
 /**
  * Every CONTENT file in which the shared workspace differs from
  * origin/<default> — the pool a file-selection release picks from, confined
- * to the bpmiq.yml processes scope (like live rooms; checkout files outside
+ * to the designiq.yml processes scope (like live rooms; checkout files outside
  * it are not part of the platform's surface). liveSessions marks files a
  * colleague currently has open, so the release dialog can warn before
  * shipping somebody's work in progress; conflict marks files the default
@@ -250,7 +250,7 @@ export async function listRepos(opts: OverviewDeps, session: Session): Promise<R
       return null;
     }
     // counts only when the workspace already exists locally AND declares itself
-    // a content repo (bpmiq.yml) — the overview must never trigger clones;
+    // a content repo (designiq.yml) — the overview must never trigger clones;
     // opening the repo does that. One repo's broken tree must not 500 the whole
     // overview (adversarial review).
     const ws = opts.workspaces.dir(repo);

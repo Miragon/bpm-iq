@@ -1,8 +1,8 @@
 {
-  "name": "@bpmiq/web",
+  "name": "@designiq/web",
   "private": true,
   "type": "module",
-  "description": "bpmiq web client: collaborative modelers (bpmn-js / dmn-js / the Miragon renderers + Monaco on a shared Y.Text), repo overview, release-as-PR, and the MCP-App widgets.",
+  "description": "designIQ web client: collaborative modelers (bpmn-js / dmn-js / the Miragon renderers + Monaco on a shared Y.Text), repo overview, release-as-PR, and the MCP-App widgets.",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/build-widgets.ts",
@@ -10,13 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bpmiq/api-client": "workspace:*",
-    "@bpmiq/contracts": "workspace:*",
-    "@bpmiq/decisions": "workspace:*",
-    "@bpmiq/live-client": "workspace:*",
-    "@bpmiq/mcp-kit": "workspace:*",
-    "@bpmiq/notations": "workspace:*",
-    "@bpmiq/ui-kit": "workspace:*",
+    "@designiq/api-client": "workspace:*",
+    "@designiq/contracts": "workspace:*",
+    "@designiq/decisions": "workspace:*",
+    "@designiq/live-client": "workspace:*",
+    "@designiq/mcp-kit": "workspace:*",
+    "@designiq/notations": "workspace:*",
+    "@designiq/ui-kit": "workspace:*",
     "@emaarco/dmn-js-simulation": "0.3.1",
     "@miragon/context-maps-renderer": "0.2.0",
     "@miragon/context-maps-schema-model": "0.2.0",

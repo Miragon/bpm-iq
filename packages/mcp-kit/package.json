@@ -1,9 +1,9 @@
 {
-  "name": "@bpmiq/mcp-kit",
+  "name": "@designiq/mcp-kit",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The MCP wire conventions both bpmiq MCP servers and the widget client speak — tool-result codec, stateless Streamable-HTTP mount, client/test unwrappers",
+  "description": "The MCP wire conventions both designIQ MCP servers and the widget client speak — tool-result codec, stateless Streamable-HTTP mount, client/test unwrappers",
   "engines": {
     "node": ">=23.6"
   },
@@ -18,7 +18,7 @@
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
-    "@bpmiq/http-kit": "workspace:*",
+    "@designiq/http-kit": "workspace:*",
     "@modelcontextprotocol/node": "2.1.0",
     "@modelcontextprotocol/server": "2.1.0",
     "zod": "4.6.5"

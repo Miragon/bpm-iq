@@ -1,8 +1,9 @@
 /**
- * Sticky renderer (#117) — draws bpmiq:Sticky shapes: a colored square with
- * wrapped, centered text. Registered ABOVE the BpmnRenderer's priority;
- * BpmnRenderer never claims stickies anyway (canRender is bpmn:BaseElement-
- * gated), the priority just keeps the dispatch unambiguous.
+ * Sticky renderer (#117) — draws bpmiq:Sticky shapes (legacy-name-ok): a
+ * colored square with wrapped, centered text. Registered ABOVE the
+ * BpmnRenderer's priority; BpmnRenderer never claims stickies anyway
+ * (canRender is bpmn:BaseElement-gated), the priority just keeps the dispatch
+ * unambiguous.
  *
  * The text auto-fits the note (#188, sticky-text.ts): the renderer lays the
  * lines out itself in the diagram's label font — bpmn-js' TextRenderer only
@@ -97,7 +98,7 @@ export class StickyRenderer extends BaseRenderer {
       // a soft paper shadow (CSS filters apply to SVG) — the miro look
       style: "filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.22))",
     });
-    rect.classList.add("bpmiq-sticky-note");
+    rect.classList.add("designiq-sticky-note");
     parentGfx.appendChild(rect);
 
     const layout = this.fitText(bo.text ?? "", element);
@@ -108,7 +109,7 @@ export class StickyRenderer extends BaseRenderer {
       fill: "#333333",
       "text-anchor": "middle",
     });
-    label.classList.add("djs-label", "bpmiq-sticky-text");
+    label.classList.add("djs-label", "designiq-sticky-text");
     // the block centers vertically; a baseline sits 3/4 down its line (the
     // offset diagram-js' own label layout uses)
     const top = (element.height - layout.lines.length * layout.lineHeight) / 2;

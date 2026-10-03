@@ -2,7 +2,7 @@ name: Sync starter
 
 # Mirrors process-documentation/ into Miragon/process-documentation-starter so
 # the "Use this template" repo never drifts from the monorepo source of truth.
-# process-documentation/ IS the content-repo contract: a root bpmiq.yml + .bpmn
+# process-documentation/ IS the content-repo contract: a root designiq.yml + .bpmn
 # files, plus the .claude/skills toolset that travels with a content repo.
 # Requires the release-please GitHub App installed on the starter repo with
 # Contents write (and Workflows write if the template later ships workflows).
@@ -51,7 +51,7 @@ jobs:
         run: |
           # the contract essentials must survive the mirror — the contract file
           # under either name; designiq.yml wins when both exist, like the loader
-          cfg=bpmiq.yml
+          cfg=bpmiq.yml # legacy-name-ok: the fallback when only the legacy name exists
           if test -f designiq.yml; then cfg=designiq.yml; fi
           for f in "$cfg" README.md LICENSE; do
             test -f "$f" || { echo "::error::starter is missing $f"; exit 1; }
@@ -76,5 +76,5 @@ jobs:
             echo "Starter already up to date."
             exit 0
           fi
-          git commit -m "chore: sync from bpm-iq@${GITHUB_SHA::7}"
+          git commit -m "chore: sync from design-iq@${GITHUB_SHA::7}"
           git push

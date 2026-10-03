@@ -1,9 +1,9 @@
 {
-  "name": "@bpmiq/ui-kit",
+  "name": "@designiq/ui-kit",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Shared shadcn (new-york) UI kit for the bpmiq SPAs — raw .tsx/.css sources consumed directly by Vite, no build step. react/react-dom are peerDependencies: pnpm auto-installs them and both SPAs pin the same range, guaranteeing a single React instance.",
+  "description": "Shared shadcn (new-york) UI kit for the designIQ SPAs — raw .tsx/.css sources consumed directly by Vite, no build step. react/react-dom are peerDependencies: pnpm auto-installs them and both SPAs pin the same range, guaranteeing a single React instance.",
   "exports": {
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",

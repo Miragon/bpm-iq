@@ -1,9 +1,10 @@
 /**
- * The workshop-residue check (#117) — bpmiq:sticky extension elements are
- * DISCUSSION artifacts: the validator must (a) surface leftover stickies as a
- * WARN (never an ERROR — a workshop board always saves) and (b) otherwise
- * ignore them entirely: a valid diagram with stickies stays valid, its
- * structural/DI verdicts byte-identical to the sticky-free version.
+ * The workshop-residue check (#117) — sticky extension elements (the frozen
+ * bpmiq:sticky — legacy-name-ok) are DISCUSSION artifacts: the validator must
+ * (a) surface leftover stickies as a WARN (never an ERROR — a workshop board
+ * always saves) and (b) otherwise ignore them entirely: a valid diagram with
+ * stickies stays valid, its structural/DI verdicts byte-identical to the
+ * sticky-free version.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,7 +18,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = (p: string): string => readFileSync(join(HERE, "fixtures", "content-repo", "processes", p), "utf8");
 
 /** inject stickies into a valid fixture's first process element — with the
- *  bpmiq namespace declared, exactly as the modeler serializes it */
+ *  frozen sticky namespace declared, exactly as the modeler serializes it */
 function withStickies(xml: string, stickies: string): string {
   return xml
     .replace(/<bpmn:definitions /, `<bpmn:definitions xmlns:bpmiq="https://bpmiq.io/schema/1.0/bpmiq" `)
@@ -57,6 +58,7 @@ test("verdicts are otherwise UNCHANGED by stickies (toolchain ignores bpmiq:*)",
 });
 
 test("a foreign tool re-binding the bpmiq URI to another prefix still counts (prefix resolved from xmlns)", () => {
+  // legacy-name-ok: the frozen URI
   // the URI is spelled in two halves ON PURPOSE — this is the one case that
   // exercises the validator's own copy of the frozen namespace (every other
   // fixture passes through the default-prefix fallback), and a search/replace

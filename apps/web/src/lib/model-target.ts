@@ -4,7 +4,7 @@
  * open editor, plus the two client-side mirrors of server rules they need:
  * the file a model gets under a new id, and where a model opens.
  */
-import { byExtension, byId, modelStem } from "@bpmiq/notations";
+import { byExtension, byId, modelStem } from "@designiq/notations";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 

@@ -1,5 +1,5 @@
 /**
- * openLiveSession — the ONE place a bpmiq client opens a collaborative session
+ * openLiveSession — the ONE place a designIQ client opens a collaborative session
  * against the Live Host. Previously this Hocuspocus wiring existed three times
  * (web editor, VS Code extension, headless guest test) with drift between them.
  *
@@ -18,7 +18,7 @@ import {
   parseMovedNotice,
   type PresenceUser,
   roomName,
-} from "@bpmiq/contracts/live";
+} from "@designiq/contracts/live";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import type * as Y from "yjs";
 

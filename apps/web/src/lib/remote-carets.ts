@@ -7,7 +7,7 @@
  * labeled with their name; peers come pre-sanitized (presence-format) because
  * awareness payloads are remote input landing in CSS text.
  */
-import type { PresenceUser } from "@bpmiq/contracts/live";
+import type { PresenceUser } from "@designiq/contracts/live";
 
 import { safePresenceColor, safePresenceLabel, withAlpha } from "@/lib/presence-format";
 
@@ -41,7 +41,7 @@ const BASE_RULES = `
 
 export function createRemoteCaretStyles(): RemoteCaretStyles {
   const sheet = document.createElement("style");
-  sheet.dataset.bpmRemoteCarets = "";
+  sheet.dataset.designiqRemoteCarets = "";
   document.head.appendChild(sheet);
   let lastCss = "";
 

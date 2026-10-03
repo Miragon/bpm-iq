@@ -12,7 +12,7 @@ Verified end to end (all self-tested, see git history for the harnesses):
 
 - canvas co-modeling, two real browser tabs, both directions, ~370 ms: **9/9 PASS**
 - release flow against the real repo: PR created, CI validate green (pre-split, private history)
-- VS Code (Miragon modeler on `bpm-live://`): **6/6 PASS**
+- VS Code (Miragon modeler on `bpm-live://`, today `designiq://`): **6/6 PASS** <!-- legacy-name-ok: the scheme of that run -->
 - Yjs lineage survives server restarts (SQLite persistence in `.live/live.db`): **PASS** —
   this fix came from a live-observed bug where a restart + reconnecting client duplicated
   every character of the document
@@ -29,8 +29,8 @@ private key is configured). The web app opens with a **repo overview** (`GET /ap
 filtered per user permission); rooms are **`<owner>/<repo>/<path>`**; every repo gets its
 own workspace (`.live/workspaces/<owner>/<repo>`, cloned on demand with installation
 tokens — the host's own repo keeps using this checkout). A repo is a BPM content
-repo when it has a root **`bpmiq.yml`** naming its BPMN processes folder; a process
-is a `.bpmn` file under it. Releases are repo-scoped
+repo when it has a root **`designiq.yml`** (legacy `bpmiq.yml` still read) naming its
+models folder; a process is a `.bpmn` file under it. Releases are repo-scoped
 (`POST /api/repos/:owner/:repo/release/:id`) and publish that file's live state as a PR.
 Requires in `.env` (from `pnpm create-app` in this directory): `GITHUB_APP_ID` + the app
 private key — via any of (first match wins):
@@ -46,7 +46,7 @@ cross-repo bleed) and per-(user,repo) authorization.
 
 `GET/POST /api/repos/:fullName/todos` (+ `POST …/todos/:id/close`) stores todos as **GitHub
 Issues in the content repo** (label `todo` + `process:<id>`, the anchor block from
-`@bpmiq/contracts/todo-anchor` embedded in the issue body) — never in a platform database.
+`@designiq/contracts/todo-anchor` embedded in the issue body) — never in a platform database.
 The MCP twins are `list_todos` / `create_todo` / `close_todo` (below), so agents and the
 embedded modeler widget file and complete the same items humans see in the web app. Reads
 return the author's own text (`body`) with that platform markup stripped again — it is what
@@ -81,9 +81,9 @@ registers no write tools at all. Non-MCP clients use the REST twins:
 `GET/PUT /api/repos/:owner/:repo/content?path=<model path>` — GET returns
 `{repo, path, content, baseVersion}`; PUT requires `{content, baseVersion}` (the pre-#154 `xml`
 key is still accepted and emitted as a deprecated alias for one release), validates the
-notation via `@bpmiq/validator` (ERROR findings → 422, WARN returned as warnings), enforces
+notation via `@miragon/design-iq-validator` (ERROR findings → 422, WARN returned as warnings), enforces
 the doc size cap (413), and CASes (stale `baseVersion` → 409 with the current state). Writes land
-in the live Y.Text (the `@bpmiq/live-client/text` minimal-diff writer over a Hocuspocus
+in the live Y.Text (the `@designiq/live-client/text` minimal-diff writer over a Hocuspocus
 direct connection), so every open editor sees them instantly — git is only reached through
 the release-as-PR flow. Full doc: docs/mcp-integration.md; decision record:
 docs/adr/0005-in-process-mcp-and-oidc-resource-server.md.
@@ -112,9 +112,10 @@ provider (CODEOWNERS/branch protection). No user token is obtained or stored, an
 ### GitHub — one vendor app, users only see the install picker
 
 **Vendor step, once ever** (Miragon / the instance operator):
-`pnpm --filter @bpmiq/live-host create-app` — a guided page creates the central
-**"BPM Live" GitHub App** under the org that owns the content repo (requires being signed
-in as org owner); credentials land automatically in `apps/live-host/.env`. Never touched again.
+`pnpm --filter @designiq/live-host create-app` — a guided page creates the central
+**GitHub App** (proposed name "designIQ <org>") under the org that owns the content repo
+(requires being signed in as org owner); credentials land automatically in
+`apps/live-host/.env`. Never touched again.
 
 **User flow, forever after**: sign in at the IdP → repo not connected yet? The screen offers
 **"Repository verbinden"** → GitHub's own **install picker** (choose org + repository) →
@@ -200,7 +201,7 @@ pnpm install                     # monorepo root
 LIVE_AUTH=none pnpm live-host   # local evaluation: no login (ADR 0007)
 
 # Terminal 2 — automated exit-criterion test (two headless guests)
-pnpm --filter @bpmiq/live-host test:sync
+pnpm --filter @designiq/live-host test:sync
 
 # MCP smoke test against the running host (LIVE_AUTH=none: no token; else SMOKE_TOKEN=<token>)
 node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]
@@ -241,20 +242,21 @@ outside the viewport has no DOM node — content sync and awareness are what mat
 PASS  virtual document content equals working tree
 PASS  remote edit auto-applied to open document after 50ms
 PASS  local edit+save reached the remote guest after 0ms
-PASS  Miragon BPMN Modeler opened the bpm-live:// document (custom-editor tab active)
+PASS  Miragon BPMN Modeler opened the bpm-live:// document (custom-editor tab active)   # legacy-name-ok: verbatim log
 PASS  remote edit propagated while the custom editor is open
 PASS  cleanup: working tree clean
 ```
 
 The concept's load-bearing assumptions are hereby verified programmatically: VS Code
 auto-reverts non-dirty virtual documents on our `FileChangeType.Changed` events, and the
-Miragon custom editor opens `bpm-live://` documents and keeps receiving remote changes.
+Miragon custom editor opens the extension's live documents (`designiq://` since 5.0) and
+keeps receiving remote changes.
 Two open observations for the eyeball test (the only thing code can't see — pixels):
 the test asserts the custom-editor _tab_, not the rendered canvas, and the test log showed
 one webview css load error (possibly an artifact of the sandboxed test `--extensions-dir`).
 
 Run the eyeball test: `cd apps/vscode && pnpm compile`, F5 (or
-`code --extensionDevelopmentPath=$PWD`), then _BPM Live: Open Live Model_ while the web
+`code --extensionDevelopmentPath=$PWD`), then _designIQ: Open Live Model_ while the web
 client is open — watch the canvas follow the browser edits.
 
 ## What's in here
@@ -267,7 +269,7 @@ client is open — watch the canvas follow the browser edits.
 | `scripts/mcp-smoke.mjs` | Manual MCP smoke test against a running host (`SMOKE_TOKEN=…`)                                                                                                      |
 | `src/guest-test.ts`     | Two headless guests: connect, co-edit, measure, revert                                                                                                              |
 | `../web/`               | Browser client: bpmn-js + Monaco + `HocuspocusProvider` + y-monaco (remote cursors via awareness)                                                                   |
-| `../vscode/`            | Thin extension skeleton: `bpm-live://` FileSystemProvider bound to the shared Y.Text                                                                                |
+| `../vscode/`            | Thin extension skeleton: `designiq://` FileSystemProvider bound to the shared Y.Text                                                                                |
 
 ## Spike shortcuts (M1 turns these into the real thing)
 

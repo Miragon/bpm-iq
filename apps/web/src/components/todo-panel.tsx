@@ -13,9 +13,9 @@
  * move is — or, when the tracker refused some, which old id still holds
  * them, with a Retry.
  */
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
-import { cn } from "@bpmiq/ui-kit/lib/utils";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
+import { cn } from "@designiq/ui-kit/lib/utils";
 import { Check, CircleAlert, ExternalLink, ListTodo, Loader2 } from "lucide-react";
 
 import { SidePanel } from "@/components/side-panel";

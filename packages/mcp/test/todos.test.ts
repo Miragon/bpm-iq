@@ -1,10 +1,10 @@
 /**
  * list_todos (packages/mcp/tools.ts) — the STRICTLY opt-in tracker tool.
- * Without BPM_TODOS_REPO + BPM_TODOS_TOKEN (also read as DESIGNIQ_TODOS_*, which // legacy-name-ok
- * win — todosConfigFromEnv) the tool must not exist (the server
+ * Without DESIGNIQ_TODOS_REPO + DESIGNIQ_TODOS_TOKEN (also read under the legacy
+ * BPM_TODOS_* names — todosConfigFromEnv) the tool must not exist (the server // legacy-name-ok
  * stays zero-auth by default); with both set it lists open todos from a tiny
  * local GitHub-shaped HTTP stub: label filter (todo + process:<id>), PR-row
- * exclusion, anchor parsing via @bpmiq/contracts/todo-anchor, token forwarding.
+ * exclusion, anchor parsing via @designiq/contracts/todo-anchor, token forwarding.
  * Drives the REAL server over an in-memory transport, like tools.test.ts.
  */
 import assert from "node:assert/strict";
@@ -12,8 +12,8 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, test } from "node:test";
 
-import { encodeAnchor } from "@bpmiq/contracts/todo-anchor";
-import { toolText } from "@bpmiq/mcp-kit/testing";
+import { encodeAnchor } from "@designiq/contracts/todo-anchor";
+import { toolText } from "@designiq/mcp-kit/testing";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "../tools.ts";
@@ -131,8 +131,8 @@ async function call(client: Client, args: Record<string, unknown> = {}): Promise
   return toolText(await client.callTool({ name: "list_todos", arguments: args }));
 }
 
-test("zero-auth default: without BPM_TODOS_REPO + BPM_TODOS_TOKEN the tool does not exist", async () => {
-  // all four names: a shell that already exports the new ones must not opt this run in
+test("zero-auth default: without DESIGNIQ_TODOS_REPO + DESIGNIQ_TODOS_TOKEN the tool does not exist", async () => {
+  // all four names: a shell that still exports the old ones must not opt this run in
   delete process.env.BPM_TODOS_REPO; // legacy-name-ok: env fallback
   delete process.env.BPM_TODOS_TOKEN; // legacy-name-ok: env fallback
   delete process.env.DESIGNIQ_TODOS_REPO;
@@ -144,8 +144,8 @@ test("zero-auth default: without BPM_TODOS_REPO + BPM_TODOS_TOKEN the tool does 
 });
 
 test("opt-in: with both env vars set the tool registers (alongside the repo-local ten)", async () => {
-  process.env.BPM_TODOS_REPO = TRACKER_REPO;
-  process.env.BPM_TODOS_TOKEN = "test-token";
+  process.env.DESIGNIQ_TODOS_REPO = TRACKER_REPO;
+  process.env.DESIGNIQ_TODOS_TOKEN = "test-token";
   process.env.GITHUB_API_URL = `http://localhost:${(stub.address() as AddressInfo).port}`;
   const { client, close } = await connect();
   const names = (await client.listTools()).tools.map((t) => t.name);
@@ -178,7 +178,7 @@ test("list_todos: open todos with parsed anchors; PR rows excluded; the token is
   assert.deepEqual(anchored.assignees, ["petra"]);
   assert.equal(anchored.createdAt, "2026-07-15T09:00:00Z");
   assert.equal(todos[1]!.anchor, null, "a hand-filed todo lists with anchor null");
-  assert.equal(lastAuth, "Bearer test-token", "BPM_TODOS_TOKEN is forwarded as the bearer token");
+  assert.equal(lastAuth, "Bearer test-token", "DESIGNIQ_TODOS_TOKEN is forwarded as the bearer token");
   await close();
 });
 

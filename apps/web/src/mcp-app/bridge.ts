@@ -23,9 +23,9 @@ import type {
   TodoElementWire,
   TodoWire,
   WidgetBootWire,
-} from "@bpmiq/contracts/live-host";
-import type { CaseOutcome, SuiteOutcome, TestCase, TestSuite } from "@bpmiq/decisions/tests";
-import { unwrapToolResult } from "@bpmiq/mcp-kit";
+} from "@designiq/contracts/live-host";
+import type { CaseOutcome, SuiteOutcome, TestCase, TestSuite } from "@designiq/decisions/tests";
+import { unwrapToolResult } from "@designiq/mcp-kit";
 import { App } from "@modelcontextprotocol/ext-apps";
 
 export type BootConfig = WidgetBootWire;
@@ -62,9 +62,9 @@ export type SaveResult = ({ ok: true } & PutContentResultWire) | SaveConflict;
  *  is served outside the Live Host (dev preview) — default to editable, with
  *  this very origin as the deep-link base (the dev server serves the SPA too).
  *  A parsed payload WITHOUT publicUrl (older Live Host) keeps it absent — the
- *  "Open in bpmiq" button hides rather than dead-link. */
+ *  "Open in designIQ" button hides rather than dead-link. */
 export function bootConfig(): BootConfig {
-  const raw = (window as { BPMIQ_BOOT?: unknown }).BPMIQ_BOOT;
+  const raw = (window as { DESIGNIQ_BOOT?: unknown }).DESIGNIQ_BOOT;
   if (typeof raw === "string" && !raw.startsWith("__")) {
     try {
       return JSON.parse(raw) as BootConfig;
@@ -76,12 +76,12 @@ export function bootConfig(): BootConfig {
 }
 
 export function makeApp(): App {
-  return new App({ name: "bpmiq-modeler", version: "1.0.0" });
+  return new App({ name: "designiq-modeler", version: "1.0.0" });
 }
 
 /** one tool call → parsed JSON payload; tool `isError` becomes a throw with
  *  the server's agent-readable message (the widget shows it verbatim) —
- *  decoding is the shared @bpmiq/mcp-kit codec, the inverse of the server's ok() */
+ *  decoding is the shared @designiq/mcp-kit codec, the inverse of the server's ok() */
 async function call<T>(app: App, name: string, args: Record<string, unknown>): Promise<T> {
   return unwrapToolResult<T>(await app.callServerTool({ name, arguments: args }), name);
 }
@@ -103,7 +103,7 @@ export const saveModelContent = (
   call(app, "save_model_content", { repo: ref.repo, path: ref.path, content, baseVersion, lint: "warn" });
 
 // ── DMN decision tests (the decision widget's tests panel) ──────────────────
-// The wire shapes below are the LIB's own types (@bpmiq/decisions, isomorphic —
+// The wire shapes below are the LIB's own types (@designiq/decisions, isomorphic —
 // the widget runs the very same module the Live Host answers with), so a server
 // change breaks the build here instead of drifting silently. Only the tool
 // envelope (`exists`, `path`) is local: it belongs to mcp.ts, not to the suite.
@@ -153,8 +153,8 @@ export const mintWsTicket = (app: App, ref: ProcessRef): Promise<WsTicket> =>
 
 /** the SDK answers an unregistered tool with "Tool <name> not found" — that is
  *  a MISSING CAPABILITY (no tracker configured, or the read-only surface), not
- *  a failure to report. The predicate is the shared @bpmiq/mcp-kit one. */
-export { isMissingTool } from "@bpmiq/mcp-kit";
+ *  a failure to report. The predicate is the shared @designiq/mcp-kit one. */
+export { isMissingTool } from "@designiq/mcp-kit";
 
 /** OPEN todos of ONE process (the widget always scopes to the open document) */
 export const listTodos = (app: App, ref: ProcessRef): Promise<{ todos: TodoWire[] }> =>
@@ -178,7 +178,9 @@ export const closeTodo = (app: App, repo: string, todoId: string): Promise<{ ok:
  *  Returns the release — a re-claiming widget MUST release its previous claim
  *  first, or its own broadcast supersedes itself. */
 export function claimDocument(key: string, onSuperseded: () => void): () => void {
-  const channel = new BroadcastChannel(`bpmiq-modeler:${key}`);
+  // FROZEN like MOVED_NOTICE: a widget mounted in a chat before an upgrade keeps
+  // running old code, and only a shared channel name lets the newer one stop it
+  const channel = new BroadcastChannel(`bpmiq-modeler:${key}`); // legacy-name-ok: widgets across an upgrade
   const stamp = Date.now() + Math.random();
   channel.postMessage(stamp);
   channel.onmessage = (e: MessageEvent<number>) => {

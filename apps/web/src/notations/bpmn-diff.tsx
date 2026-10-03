@@ -67,11 +67,11 @@ export function BpmnDiagramDiff({ historical, current, onUnavailable }: DiagramD
         const canvas = viewer.get("canvas");
         for (const id of ids) if (registry.get(id)) canvas.addMarker(id, marker);
       };
-      mark(left, Object.keys(changes._removed), "bpm-diff-removed");
-      mark(right, Object.keys(changes._added), "bpm-diff-added");
+      mark(left, Object.keys(changes._removed), "designiq-diff-removed");
+      mark(right, Object.keys(changes._added), "designiq-diff-added");
       for (const viewer of [left, right]) {
-        mark(viewer, Object.keys(changes._changed), "bpm-diff-changed");
-        mark(viewer, Object.keys(changes._layoutChanged), "bpm-diff-layout");
+        mark(viewer, Object.keys(changes._changed), "designiq-diff-changed");
+        mark(viewer, Object.keys(changes._layoutChanged), "designiq-diff-layout");
       }
 
       // fit BOTH first, then couple the viewboxes — panning/zooming one side
@@ -105,8 +105,8 @@ export function BpmnDiagramDiff({ historical, current, onUnavailable }: DiagramD
 
   return (
     <div className="flex min-h-0 flex-1">
-      <div ref={leftRef} className="bpm-diff-viewer min-w-0 flex-1 border-r" />
-      <div ref={rightRef} className="bpm-diff-viewer min-w-0 flex-1" />
+      <div ref={leftRef} className="designiq-diff-viewer min-w-0 flex-1 border-r" />
+      <div ref={rightRef} className="designiq-diff-viewer min-w-0 flex-1" />
     </div>
   );
 }

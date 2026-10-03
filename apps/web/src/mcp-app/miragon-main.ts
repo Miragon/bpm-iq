@@ -11,7 +11,7 @@
  */
 import "./chrome.css";
 
-import { byId } from "@bpmiq/notations";
+import { byId } from "@designiq/notations";
 
 import { spec } from "@/mcp-app/widget-spec";
 
@@ -21,7 +21,7 @@ import { el } from "./shell";
 
 const notation = byId(spec.id);
 if (!notation) throw new Error(`widget: no notation descriptor for renderer spec '${spec.id}'`);
-document.title = `bpmiq ${notation.label} modeler`;
+document.title = `designIQ ${notation.label} modeler`;
 const noun = notation.noun.singular;
 
 // the engine module is inlined into the bundle, so this resolves in a microtask

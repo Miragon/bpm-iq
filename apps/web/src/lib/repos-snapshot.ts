@@ -9,11 +9,13 @@
  * TanStack cache persister: that would persist ["me"] too, whose wsToken IS
  * the session id.
  */
-import type { Me, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { Me, RepoInfo } from "@designiq/contracts/live-host";
 import type { QueryClient } from "@tanstack/react-query";
 
 /** bump the version when RepoInfo changes incompatibly — old entries are then ignored */
-const KEY = "bpmiq.repos.v1";
+const KEY = "designiq.repos.v1";
+/** the snapshot's key before the designIQ rename (dropLegacyRepoSnapshot) */
+const LEGACY_KEY = "bpmiq.repos.v1"; // legacy-name-ok: written by pre-rename releases
 /** older than this, a snapshot misleads more than it helps */
 const MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 
@@ -69,6 +71,17 @@ export function writeRepoSnapshot(login: string, repos: RepoInfo[], storage = br
 export function clearRepoSnapshot(storage = browserStorage()) {
   try {
     storage?.removeItem(KEY);
+  } catch {
+    /* blocked storage never held a snapshot */
+  }
+}
+
+/** drop the pre-rename snapshot: nothing reads it any more and logout clears
+ *  only KEY, so without this a private repo list would linger in the browser
+ *  for good (idempotent — a no-op on every load after the first) */
+export function dropLegacyRepoSnapshot(storage = browserStorage()) {
+  try {
+    storage?.removeItem(LEGACY_KEY);
   } catch {
     /* blocked storage never held a snapshot */
   }

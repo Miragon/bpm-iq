@@ -1,4 +1,4 @@
-/** Shared same-origin API client for the bpmiq SPAs (session cookie auth). */
+/** Shared same-origin API client for the designIQ SPAs (session cookie auth). */
 
 /** an API error carrying the HTTP status (so callers can branch on 401/403) */
 export class ApiError extends Error {

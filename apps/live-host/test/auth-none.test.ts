@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, before, test } from "node:test";
 
-import type { AppConfig, Me } from "@bpmiq/contracts/live-host";
+import type { AppConfig, Me } from "@designiq/contracts/live-host";
 
 import { SessionStore } from "../src/adapters/sqlite/sessions.ts";
 import { allowAllAccess, isCrossSite, LOCAL_PROVIDER, LOCAL_SESSION_ID, makeLocalPrincipal } from "../src/auth/none.ts";
@@ -65,7 +65,7 @@ after(async () => {
 
 before(async () => {
   const opts: ApiOptions = {
-    webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
+    webDist: mkdtempSync(join(tmpdir(), "designiq-webdist-")),
     publicUrl: "http://live.test",
     github: {} as GitProvider,
     sessions: new SessionStore(new DatabaseSync(":memory:")),
@@ -104,7 +104,7 @@ test("none mode: a credential is ignored, not rejected — and the repo routes p
   const bogus = await fetch(`${base}/api/me`, { headers: { authorization: "Bearer not.a.session" } });
   assert.equal(bogus.status, 200);
   assert.equal(((await bogus.json()) as Me).user.login, "petra");
-  const stale = await fetch(`${base}/api/me`, { headers: { cookie: "bpm_live_sid=stale" } });
+  const stale = await fetch(`${base}/api/me`, { headers: { cookie: "designiq_sid=stale" } });
   assert.equal(stale.status, 200);
   const repos = await fetch(`${base}/api/repos`);
   assert.equal(repos.status, 200);

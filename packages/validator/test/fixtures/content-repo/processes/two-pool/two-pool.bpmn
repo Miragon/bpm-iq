@@ -3,7 +3,7 @@
                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-                  id="Definitions_twopool" targetNamespace="http://bpmiq.example/two-pool">
+                  id="Definitions_twopool" targetNamespace="http://designiq.example/two-pool">
   <bpmn:collaboration id="Collaboration_1">
     <bpmn:participant id="Participant_company" name="Company" processRef="Process_company" />
     <bpmn:participant id="Participant_customer" name="Customer" processRef="Process_customer" />

@@ -29,9 +29,9 @@
  * are guessable), the panel names hold on to @6xl (they are the labels a
  * once-a-month process owner actually needs), the view switch to @4xl.
  */
-import type { PresenceUser } from "@bpmiq/contracts/live";
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import type { PresenceUser } from "@designiq/contracts/live";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -39,8 +39,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@bpmiq/ui-kit/components/dropdown-menu";
-import { cn } from "@bpmiq/ui-kit/lib/utils";
+} from "@designiq/ui-kit/components/dropdown-menu";
+import { cn } from "@designiq/ui-kit/lib/utils";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -367,7 +367,7 @@ function PeerAvatar({ user }: { user: PresenceUser }) {
   // render sites (url(...) would fetch on paint)
   const background = safePresenceColor(user.color);
   // an AI client acting for someone (kind is server-asserted, see
-  // @bpmiq/contracts/live): a sparkle on its color, named after that person
+  // @designiq/contracts/live): a sparkle on its color, named after that person
   if (user.kind === "agent") {
     return (
       <div

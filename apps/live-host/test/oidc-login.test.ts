@@ -94,7 +94,7 @@ before(async () => {
 function boot(cellMode: boolean): { base: string; sessions: SessionStore } {
   const sessions = new SessionStore(new DatabaseSync(":memory:"));
   const opts: ApiOptions = {
-    webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
+    webDist: mkdtempSync(join(tmpdir(), "designiq-webdist-")),
     publicUrl: "http://live.test",
     github: {} as GitProvider,
     sessions,
@@ -148,8 +148,8 @@ async function startLogin(base: string): Promise<{ location: URL; state: string;
   return {
     location,
     state: location.searchParams.get("state")!,
-    nonce: cookieOf(res, "bpm_live_oauth")!,
-    verifier: cookieOf(res, "bpm_live_pkce")!,
+    nonce: cookieOf(res, "designiq_oauth")!,
+    verifier: cookieOf(res, "designiq_pkce")!,
   };
 }
 
@@ -190,7 +190,7 @@ test("full login: code exchange (PKCE verifier sent) → verified token → iden
   const res = await callback(
     base,
     `code=good&state=${encodeURIComponent(state)}`,
-    `bpm_live_oauth=${nonce}; bpm_live_pkce=${verifier}`,
+    `designiq_oauth=${nonce}; designiq_pkce=${verifier}`,
   );
   assert.equal(res.status, 302);
   assert.equal(res.headers.get("location"), "/");
@@ -202,8 +202,8 @@ test("full login: code exchange (PKCE verifier sent) → verified token → iden
   assert.equal(exchange.get("code_verifier"), verifier, "the browser-bound PKCE verifier reaches the IdP");
   assert.equal(exchange.get("client_secret"), null, "public client sends no secret");
 
-  const sid = cookieOf(res, "bpm_live_sid")!;
-  const me = await fetch(`${base}/api/me`, { headers: { cookie: `bpm_live_sid=${sid}` } });
+  const sid = cookieOf(res, "designiq_sid")!;
+  const me = await fetch(`${base}/api/me`, { headers: { cookie: `designiq_sid=${sid}` } });
   assert.equal(me.status, 200);
   const body = (await me.json()) as { user: { login: string; provider: string } };
   assert.equal(body.user.login, "petra");
@@ -218,14 +218,14 @@ test("state without its browser cookie, missing PKCE cookie, IdP error — all r
   // valid state, no cookies → login-CSRF guard
   assert.equal((await callback(base, `code=good&state=${encodeURIComponent(state)}`, "")).status, 400);
   // bound state but the PKCE verifier is gone → no exchange possible
-  const noPkce = await callback(base, `code=good&state=${encodeURIComponent(state)}`, `bpm_live_oauth=${nonce}`);
+  const noPkce = await callback(base, `code=good&state=${encodeURIComponent(state)}`, `designiq_oauth=${nonce}`);
   assert.equal(noPkce.status, 400);
   // the IdP refused (user cancelled, policy) → 401, flow cookies cleared
   const s2 = await startLogin(base);
   const denied = await callback(
     base,
     `error=access_denied&state=${encodeURIComponent(s2.state)}`,
-    `bpm_live_oauth=${s2.nonce}; bpm_live_pkce=${s2.verifier}`,
+    `designiq_oauth=${s2.nonce}; designiq_pkce=${s2.verifier}`,
   );
   assert.equal(denied.status, 401);
 });
@@ -236,7 +236,7 @@ test("a used/expired code and a token without the login claim both fail closed",
   const bad = await callback(
     base,
     `code=bad&state=${encodeURIComponent(s1.state)}`,
-    `bpm_live_oauth=${s1.nonce}; bpm_live_pkce=${s1.verifier}`,
+    `designiq_oauth=${s1.nonce}; designiq_pkce=${s1.verifier}`,
   );
   assert.equal(bad.status, 401, "IdP rejects the code → user-facing 401, not a 500");
 
@@ -244,7 +244,7 @@ test("a used/expired code and a token without the login claim both fail closed",
   const noClaim = await callback(
     base,
     `code=no-claim&state=${encodeURIComponent(s2.state)}`,
-    `bpm_live_oauth=${s2.nonce}; bpm_live_pkce=${s2.verifier}`,
+    `designiq_oauth=${s2.nonce}; designiq_pkce=${s2.verifier}`,
   );
   assert.equal(noClaim.status, 401, "no github_login claim → refused (no fallback, ever)");
 });
@@ -255,7 +255,7 @@ test("cell mode: the tenant gate routes a cross-tenant login back to the platfor
   const wrong = await callback(
     base,
     `code=wrong-tenant&state=${encodeURIComponent(s1.state)}`,
-    `bpm_live_oauth=${s1.nonce}; bpm_live_pkce=${s1.verifier}`,
+    `designiq_oauth=${s1.nonce}; designiq_pkce=${s1.verifier}`,
   );
   assert.equal(wrong.status, 302, "not an error page — a routing problem");
   assert.equal(wrong.headers.get("location"), `${CP_URL}/login?org=42`, "asks the platform to rescope to THIS tenant");
@@ -264,7 +264,7 @@ test("cell mode: the tenant gate routes a cross-tenant login back to the platfor
   const right = await callback(
     base,
     `code=right-tenant&state=${encodeURIComponent(s2.state)}`,
-    `bpm_live_oauth=${s2.nonce}; bpm_live_pkce=${s2.verifier}`,
+    `designiq_oauth=${s2.nonce}; designiq_pkce=${s2.verifier}`,
   );
   assert.equal(right.status, 302);
   assert.equal(right.headers.get("location"), "/", "the matching tenant logs in normally");

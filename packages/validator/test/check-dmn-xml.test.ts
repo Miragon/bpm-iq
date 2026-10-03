@@ -1,7 +1,7 @@
 /**
  * checkDmnXml — the mechanical DMN invariants. Scope on purpose: everything
  * here is decidable from the XML alone. FEEL semantics and hit-policy
- * reachability belong to @bpmiq/decisions, not to this zero-dependency CLI.
+ * reachability belong to @designiq/decisions, not to this zero-dependency CLI.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";

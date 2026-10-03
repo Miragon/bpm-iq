@@ -20,9 +20,9 @@ you click one button, GitHub creates the app and returns the credentials — inc
 private key and webhook secret, which GitHub hands out **exactly once, at this moment**.
 
 ```bash
-LIVE_PUBLIC_URL=https://bpm.example.com \
+LIVE_PUBLIC_URL=https://design.example.com \
 GITHUB_REPO=<owner>/<repo> \
-pnpm --filter @bpmiq/live-host create-app
+pnpm --filter @designiq/live-host create-app
 ```
 
 Set `LIVE_PUBLIC_URL` to the deployment's public URL **before** running — the callback,
@@ -33,8 +33,8 @@ registered under. For GitHub Enterprise, also export `GITHUB_BASE_URL`/`GITHUB_A
 Then:
 
 1. Open `http://localhost:8302`, signed in to GitHub as an **owner of the org**.
-2. One click posts the manifest; GitHub shows its create-app page (name and details still
-   editable there); confirm.
+2. One click posts the manifest; GitHub shows its create-app page (the proposed name is
+   `designIQ <org>`; name and details still editable there); confirm.
 3. GitHub redirects back, the tool exchanges the temporary code and writes
    `apps/live-host/.env`:
 
@@ -62,7 +62,7 @@ mirror the manifest in
 
 | Field                                                      | Value                                                                                                                      |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Name / Homepage URL                                        | e.g. `BPM Live` / `https://<host>`                                                                                         |
+| Name / Homepage URL                                        | e.g. `designIQ <org>` (app names are unique across GitHub) / `https://<host>`                                              |
 | **Request user authorization (OAuth) during installation** | **unchecked** — sign-in happens at the identity provider, not through the app                                              |
 | Setup URL                                                  | `https://<host>/setup/installed`, with **Redirect on update** checked                                                      |
 | Webhook                                                    | Active, URL `https://<host>/webhook/github`, generate + note a webhook secret                                              |

@@ -14,7 +14,7 @@ import type { MiragonRendererSpec } from "./src/notations/miragon/spec.ts";
  * build against this factory (scripts/build-widgets.ts runs them all) — the
  * iframe sandbox allows no external requests, so nothing may be shared
  * between the emitted files. Runs AFTER the SPA build (emptyOutDir: false) —
- * `pnpm --filter @bpmiq/web build` produces all bundles. Deliberately no
+ * `pnpm --filter @designiq/web build` produces all bundles. Deliberately no
  * react/tailwind: widgets are vanilla TS + one engine each (bpmn-js, dmn-js,
  * a Miragon renderer). Exactly ONE engine per emitted file is also the
  * widgets' whole CSS scoping — the SPA's postcss vendor-CSS scoping is
@@ -62,7 +62,7 @@ const here = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url
 /** rename the emitted HTML once everything is written — the template's name
  *  is fixed by its input path, the bundle's by the widget registry */
 const emitHtmlAs = (from: string, to: string): Plugin => ({
-  name: "bpmiq:widget-html-name",
+  name: "designiq:widget-html-name",
   writeBundle(options) {
     const dir = options.dir ?? "dist";
     renameSync(join(dir, from), join(dir, to));

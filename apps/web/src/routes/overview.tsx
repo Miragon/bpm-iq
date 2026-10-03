@@ -1,7 +1,7 @@
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@bpmiq/ui-kit/components/card";
-import { Skeleton } from "@bpmiq/ui-kit/components/skeleton";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@designiq/ui-kit/components/card";
+import { Skeleton } from "@designiq/ui-kit/components/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Copy, Loader2, Plus, RefreshCw } from "lucide-react";

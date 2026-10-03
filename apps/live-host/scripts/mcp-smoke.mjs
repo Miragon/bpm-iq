@@ -10,7 +10,7 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
 const MCP_URL = process.argv[2] ?? "http://localhost:8301/mcp";
-const REPO = process.argv[3] ?? "Miragon/bpm-iq";
+const REPO = process.argv[3] ?? "Miragon/design-iq";
 /** absent = the host runs LIVE_AUTH=none (an authenticated host answers 401) */
 const TOKEN = process.env.SMOKE_TOKEN;
 

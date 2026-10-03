@@ -12,7 +12,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 // shared primitives — identical wire formats, so states/cookies minted before
 // this move keep verifying
-import { readCookie as readCookieKit, tag, timingSafeStr, untag } from "@bpmiq/http-kit";
+import { readCookie as readCookieKit, tag, timingSafeStr, untag } from "@designiq/http-kit";
 
 import type { GitUser } from "../../ports/git-provider.ts";
 
@@ -22,7 +22,14 @@ export interface Session {
   createdAt: number;
 }
 
-export const COOKIE = "bpm_live_sid";
+// The four cookie names in this file were renamed with the product (Release B)
+// and are read under the new names only — deliberately no fallback: a browser's
+// pre-rename session cookie is no longer recognized, so every browser signs in
+// once more after the upgrade (accepted: a session lasts a working day anyway),
+// and a login in flight across the deploy fails its state check and is simply
+// retried. The old cookies expire on their own. Bearer sessions (VS Code, the
+// session-token route) do not ride a cookie and are unaffected.
+export const COOKIE = "designiq_sid";
 const MAX_AGE_MS = 1000 * 60 * 60 * 12; // 12h — a working day; re-grant afterwards
 
 export class SessionStore {
@@ -114,7 +121,7 @@ export class SessionStore {
 }
 
 /** the browser-binding cookie for the OAuth `state` nonce (login-CSRF fix) */
-export const OAUTH_COOKIE = "bpm_live_oauth";
+export const OAUTH_COOKIE = "designiq_oauth";
 export function oauthCookie(nonce: string, secure: boolean): string {
   return `${OAUTH_COOKIE}=${nonce}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? "; Secure" : ""}`;
 }
@@ -125,7 +132,7 @@ export function clearOauthCookie(secure: boolean): string {
 /** the PKCE code_verifier for the OIDC browser login — browser-bound (HttpOnly,
  * one flow's lifetime) exactly like the state nonce; the callback needs it for
  * the token exchange and clears it */
-export const PKCE_COOKIE = "bpm_live_pkce";
+export const PKCE_COOKIE = "designiq_pkce";
 export function pkceCookie(verifier: string, secure: boolean): string {
   return `${PKCE_COOKIE}=${verifier}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? "; Secure" : ""}`;
 }
@@ -136,7 +143,7 @@ export function clearPkceCookie(secure: boolean): string {
 /** the editor sign-in's (scheme, nonce) pair (http/editor-login.ts) —
  * browser-bound for one flow exactly like the state nonce; the callback reads it
  * to land in the editor instead of setting the session cookie, then clears it */
-export const EDITOR_COOKIE = "bpm_live_editor";
+export const EDITOR_COOKIE = "designiq_editor";
 export function editorCookie(value: string, secure: boolean): string {
   return `${EDITOR_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? "; Secure" : ""}`;
 }

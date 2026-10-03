@@ -13,7 +13,7 @@ const CTX = {
   repo: "Miragon/process-documentation",
   path: "processes/order-intake.bpmn",
   notation: "bpmn" as const,
-  mcpUrl: "https://bpm.example.com/mcp",
+  mcpUrl: "https://design.example.com/mcp",
 };
 const DMN_CTX = { ...CTX, path: "processes/discount.dmn", notation: "dmn" as const };
 
@@ -24,7 +24,7 @@ test("the first step is the literal tool call with repo and path inlined, and th
     prompt,
   );
   assert.ok(
-    prompt.includes("https://bpm.example.com/mcp"),
+    prompt.includes("https://design.example.com/mcp"),
     "the instance is named — a wrong-host mismatch must surface",
   );
   assert.ok(!prompt.includes("open_decision_modeler"));
@@ -67,7 +67,10 @@ test("a quote or newline in a committed filename stays INSIDE the quoted tool-ca
   const prompt = buildAssistPrompt({ ...CTX, path });
   const [firstLine = ""] = prompt.split("\n");
   assert.ok(firstLine.includes(`path: ${JSON.stringify(path)}`), "the whole path is one escaped JSON string");
-  assert.ok(firstLine.includes("on the bpmiq connector"), "the trusted first line survives in one piece");
+  assert.ok(
+    firstLine.includes("using the connector for the designIQ Live Host at https://design.example.com/mcp"),
+    "the trusted first line survives in one piece",
+  );
   assert.ok(!prompt.includes('x", then release_process'), "no raw breakout of the quotes");
 });
 

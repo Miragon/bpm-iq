@@ -14,7 +14,7 @@
  *   - a build-stage `COPY <pkg>/package.json` (so pnpm install links it), and
  *   - a runtime-stage `COPY --from=build /app/<pkg>` (so the symlink resolves).
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -25,7 +25,23 @@ const IMAGES = [
   { dockerfile: "Dockerfile", entry: "packages/mcp" },
 ];
 
-const workspaceDirOf = (name) => name.replace(/^@bpmiq\//, "packages/");
+/** workspace package name → its directory (the published packages carry the
+ *  @miragon scope, the private ones @designiq — so map by manifest, not by name) */
+const WORKSPACE_DIRS = new Map(
+  ["apps", "packages"].flatMap((group) =>
+    readdirSync(join(ROOT, group), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .flatMap((e) => {
+        try {
+          const { name } = JSON.parse(readFileSync(join(ROOT, group, e.name, "package.json"), "utf8"));
+          return [[name, `${group}/${e.name}`]];
+        } catch {
+          return []; // no manifest — not a workspace package
+        }
+      }),
+  ),
+);
+const workspaceDirOf = (name) => WORKSPACE_DIRS.get(name) ?? name;
 
 function workspaceDeps(dir) {
   const manifest = JSON.parse(readFileSync(join(ROOT, dir, "package.json"), "utf8"));

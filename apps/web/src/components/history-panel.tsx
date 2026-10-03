@@ -6,9 +6,9 @@
  * it overwrites unreleased live edits for everyone in the session (the live
  * doc stays recoverable through this very history).
  */
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
-import { cn } from "@bpmiq/ui-kit/lib/utils";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
+import { cn } from "@designiq/ui-kit/lib/utils";
 import { ChevronDown, ChevronRight, GitCompare, History, Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 

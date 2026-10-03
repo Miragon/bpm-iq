@@ -13,8 +13,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, before, test } from "node:test";
 
-import type { ContentConflictWire, ContentWire, PutContentResultWire } from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
+import type { ContentConflictWire, ContentWire, PutContentResultWire } from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
 import { Server as HocuspocusServer } from "@hocuspocus/server";
 
 import { LineageStore } from "../src/adapters/sqlite/lineage-store.ts";
@@ -24,7 +24,7 @@ import { newBpmnXml } from "../src/domain/bpmn-template.ts";
 import { DocSizeGuard } from "../src/domain/doc-size-guard.ts";
 import { type ApiOptions, startApi } from "../src/http/api.ts";
 import type { GitProvider } from "../src/ports/git-provider.ts";
-import { loadContentConfig } from "../src/repos/content.ts";
+import { CONTENT_CONFIG_FILE, loadContentConfig } from "../src/repos/content.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";
 
 const repo = (fullName: string): ConnectedRepo => ({
@@ -57,9 +57,9 @@ after(async () => {
 before(async () => {
   const workspaces = new Map<string, string>();
   for (const r of REPOS) {
-    const ws = mkdtempSync(join(tmpdir(), "bpm-api-"));
+    const ws = mkdtempSync(join(tmpdir(), "designiq-api-"));
     mkdirSync(join(ws, "processes"), { recursive: true });
-    writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+    writeFileSync(join(ws, CONTENT_CONFIG_FILE), "models: processes\n");
     writeFileSync(join(ws, PATH), VALID);
     workspaces.set(r.fullName, ws);
   }
@@ -96,7 +96,7 @@ before(async () => {
   const bot = sessions.create({ login: "demo", name: "demo", avatarUrl: null, provider: "github" });
   AUTH = { authorization: `Bearer ${bot.id}` };
   const opts: ApiOptions = {
-    webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
+    webDist: mkdtempSync(join(tmpdir(), "designiq-webdist-")),
     publicUrl: "http://live.test",
     github: {} as GitProvider,
     sessions,
@@ -215,7 +215,7 @@ test("sessionOf JWT branch: synthetic identity on /api/me, typed 401 for a bad J
   // an established cookie session is checked FIRST — a stray broken bearer
   // must not lock the browser out
   const s = sessions.create({ login: "cookie-user", name: "Cookie", avatarUrl: null, provider: "github" });
-  const both = await get("/api/me", { cookie: `bpm_live_sid=${s.id}`, authorization: "Bearer expired.jwt.token" });
+  const both = await get("/api/me", { cookie: `designiq_sid=${s.id}`, authorization: "Bearer expired.jwt.token" });
   assert.equal(both.status, 200);
   assert.equal(((await both.json()) as { user: { login: string } }).user.login, "cookie-user");
 });

@@ -30,7 +30,7 @@
  * output, an object for several, a list under COLLECT. `rules` is compared as
  * a SET against the rules the hit policy reported.
  */
-import type { DerivedDecision } from "@bpmiq/notations/derive";
+import type { DerivedDecision } from "@designiq/notations/derive";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import type { RawValue } from "./engine.ts";

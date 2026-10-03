@@ -12,11 +12,11 @@
  * The eager part is DATA (id, package, css classes); the renderer, its
  * stylesheet and its text lane ride behind `load()` — the engine chunk loads
  * on mount in the SPA, and is inlined whole into the widget bundle. What
- * differs between the renderers is their text lane (@bpmiq/live-client
+ * differs between the renderers is their text lane (@designiq/live-client
  * miragon-sync MiragonLane); issue #136 (@miragon/modeler-api) retires that
  * split upstream, after which a spec is `{ id, pkg, css, load }` alone.
  */
-import type { DocumentModelerLike, DslModelerLike, MiragonLane } from "@bpmiq/live-client/miragon-sync";
+import type { DocumentModelerLike, DslModelerLike, MiragonLane } from "@designiq/live-client/miragon-sync";
 
 /** a mounted Miragon renderer as the platform touches it — STRUCTURALLY
  *  (each renderer pins its own diagram-js copy; nothing may instanceof) */
@@ -35,7 +35,7 @@ export interface LoadedMiragonRenderer {
 }
 
 export interface MiragonRendererSpec {
-  /** must match a NotationDescriptor.id (@bpmiq/notations) — AND the spec
+  /** must match a NotationDescriptor.id (@designiq/notations) — AND the spec
    *  file name `<id>.ts` (the widget build resolves the spec by id) */
   id: string;
   /** the renderer's npm package — the vendor-CSS scoping keys on it */

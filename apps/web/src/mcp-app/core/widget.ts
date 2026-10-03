@@ -15,7 +15,7 @@
  * never a payload big enough to trip the hosts' ~150k-char result limit.
  * Bundle-only (imports the App and the DOM): never loaded by a test.
  */
-import { fileDeepLink } from "@bpmiq/contracts/deep-link";
+import { fileDeepLink } from "@designiq/contracts/deep-link";
 import type { App } from "@modelcontextprotocol/ext-apps";
 
 import { bootConfig, claimDocument, getModelContent, makeApp, mintWsTicket, saveModelContent } from "../bridge.ts";
@@ -39,7 +39,7 @@ export interface WidgetSpec<E extends WidgetEngine = WidgetEngine> {
    *  "model" to keep today's strings, the others the descriptor's noun */
   noun: string;
   engine: EngineFactory<E>;
-  /** the "Open in bpmiq" target. Default: fileDeepLink (the SPA's /f/ splat
+  /** the "Open in designIQ" target. Default: fileDeepLink (the SPA's /f/ splat
    *  route — every model file has it); bpmn passes the process route + ?element= */
   deepLink?: (publicUrl: string, doc: DocRef, engine: E) => string;
   /** rescue an INLINED icon font past the host CSP — only the engines that
@@ -63,7 +63,7 @@ export function bootWidget<E extends WidgetEngine>(spec: WidgetSpec<E>): void {
   const { toolbar, saveBtn, openBtn, fullscreenBtn, status, setStatus } = chrome;
   const cfg = bootConfig();
   const app = makeApp();
-  if (cfg.publicUrl) openBtn.title = `Open this ${spec.noun} in the full bpmiq web modeler (${cfg.publicUrl})`;
+  if (cfg.publicUrl) openBtn.title = `Open this ${spec.noun} in the full designIQ web modeler (${cfg.publicUrl})`;
 
   const chromePort: ChromePort = {
     setTitle: (text) => {

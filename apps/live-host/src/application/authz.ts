@@ -10,7 +10,7 @@
  * — only the denial WORDING is shared there. A LIVE_AUTH=none host needs no
  * branch here either: its injected `access` allows everything (auth/none.ts).
  */
-import { AppError } from "@bpmiq/http-kit";
+import { AppError } from "@designiq/http-kit";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";

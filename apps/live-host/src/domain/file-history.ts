@@ -7,7 +7,7 @@
  * only garble its own record — records whose first field is not a commit sha
  * are dropped instead of corrupting the whole listing.
  */
-import type { FileCommitWire } from "@bpmiq/contracts/live-host";
+import type { FileCommitWire } from "@designiq/contracts/live-host";
 
 /** `git log --format=` producing one 0x1e-terminated record per commit */
 export const FILE_LOG_FORMAT = "%H%x1f%an%x1f%aI%x1f%s%x1f%b%x1e";

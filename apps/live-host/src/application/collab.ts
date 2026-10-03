@@ -16,9 +16,9 @@
 import { existsSync, realpathSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 
-import { AWARENESS_USER_KEY, CONTENT_KEY, ELEMENTS_KEY, META_KEY } from "@bpmiq/contracts/live";
-import { readSnapshot, reconcileSnapshot } from "@bpmiq/live-client/structured";
-import { type DocCodec } from "@bpmiq/notations/codecs";
+import { AWARENESS_USER_KEY, CONTENT_KEY, ELEMENTS_KEY, META_KEY } from "@designiq/contracts/live";
+import { readSnapshot, reconcileSnapshot } from "@designiq/live-client/structured";
+import { type DocCodec } from "@designiq/notations/codecs";
 import * as Y from "yjs";
 
 import type { LineageStore } from "../adapters/sqlite/lineage-store.ts";
@@ -49,7 +49,7 @@ export interface CollabDeps {
   access: { canWrite(session: Session, repo: ConnectedRepo): Promise<boolean> };
   registry: RegistryLookup;
   workspaces: WorkspaceEnsure;
-  /** the repo's content config (bpmiq.yml) — rooms exist only inside its processes folder */
+  /** the repo's content config (designiq.yml) — rooms exist only inside its processes folder */
   contentConfig: ContentConfigLookup;
   /** LIVE_AUTH=none (auth/none.ts, ADR 0007): every ws join IS this principal,
    * whatever token the client sent — absent = authenticated mode (session id / ticket) */

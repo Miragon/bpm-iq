@@ -28,7 +28,7 @@
  * simulator holds a column's value (what the input expression computed), a
  * scenario holds a variable's value (what the model reads). They coincide for
  * a plain read and for nothing else — see the note on variableOf in
- * @bpmiq/decisions.
+ * @designiq/decisions.
  *
  * Edit tracking: dmn-js does NOT re-emit editing events on the manager —
  * every view is its own viewer with its own command stack, and an inactive
@@ -36,7 +36,7 @@
  * same shape live-client/dmn-sync.ts uses for the web editor). Whatever a
  * view switch or an import raises is muted (engine invariant 1).
  */
-import { type Scenario, variableOf } from "@bpmiq/decisions";
+import { type Scenario, variableOf } from "@designiq/decisions";
 import DmnModeler from "dmn-js/lib/Modeler";
 import DmnViewer from "dmn-js/lib/Viewer";
 

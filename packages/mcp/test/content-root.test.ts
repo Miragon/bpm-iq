@@ -76,7 +76,7 @@ test("DEFAULT_ROOT: an empty value stays '' (the cwd) under either name — neve
 
 test("server.ts: the content root arrives under the old name, the new name, and the new one wins", () => {
   // two roots that cannot exist — the usage exit prints the one the server resolved
-  const dir = mkdtempSync(join(tmpdir(), "bpm-mcp-root-"));
+  const dir = mkdtempSync(join(tmpdir(), "designiq-mcp-root-"));
   const oldRoot = join(dir, "old");
   const newRoot = join(dir, "new");
 

@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, before, test } from "node:test";
 
-import type { Me } from "@bpmiq/contracts/live-host";
+import type { Me } from "@designiq/contracts/live-host";
 
 import { SessionStore } from "../src/adapters/sqlite/sessions.ts";
 import { LoginCodeStore } from "../src/application/login-codes.ts";
@@ -44,7 +44,7 @@ after(async () => {
 });
 
 const baseOpts = (): ApiOptions => ({
-  webDist: mkdtempSync(join(tmpdir(), "bpm-webdist-")),
+  webDist: mkdtempSync(join(tmpdir(), "designiq-webdist-")),
   publicUrl: "http://live.test",
   github: {} as GitProvider,
   sessions: new SessionStore(new DatabaseSync(":memory:")),
@@ -100,22 +100,22 @@ test("editor sign-in: start → callback lands in the editor with a one-time cod
   assert.equal(start.status, 302);
   const state = new URL(start.headers.get("location") ?? "").searchParams.get("state") ?? "";
   const flow = jar(start);
-  assert.equal(flow.bpm_live_editor, `vscode:${NONCE}`, "the editor pair rides a browser-bound cookie");
-  assert.ok(flow.bpm_live_oauth, "the state nonce cookie as always");
-  assert.ok(flow.bpm_live_pkce, "the PKCE verifier cookie as always");
+  assert.equal(flow.designiq_editor, `vscode:${NONCE}`, "the editor pair rides a browser-bound cookie");
+  assert.ok(flow.designiq_oauth, "the state nonce cookie as always");
+  assert.ok(flow.designiq_pkce, "the PKCE verifier cookie as always");
 
   const cb = await manual(`/auth/oidc/callback?code=stub-code&state=${state}`, { cookie: cookieHeader(flow) });
   assert.equal(cb.status, 200, "a page, not the browser redirect");
   assert.match(cb.headers.get("content-type") ?? "", /text\/html/);
   const page = await cb.text();
-  const m = page.match(/vscode:\/\/miragon-gmbh\.bpm-live\/auth\?code=([A-Za-z0-9_-]+)&amp;state=([A-Za-z0-9_-]+)/);
+  const m = page.match(/vscode:\/\/miragon-gmbh\.design-iq\/auth\?code=([A-Za-z0-9_-]+)&amp;state=([A-Za-z0-9_-]+)/);
   assert.ok(m, "the page carries the editor return URI");
   assert.equal(m[2], NONCE, "the editor's own nonce comes back");
   const landed = jar(cb);
-  assert.equal(landed.bpm_live_sid, undefined, "NO browser session cookie for an editor login");
-  assert.equal(landed.bpm_live_editor, "", "the flow cookie is cleared");
-  assert.equal(landed.bpm_live_oauth, "", "the state nonce cookie is cleared");
-  assert.equal(landed.bpm_live_pkce, "", "the PKCE cookie is cleared");
+  assert.equal(landed.designiq_sid, undefined, "NO browser session cookie for an editor login");
+  assert.equal(landed.designiq_editor, "", "the flow cookie is cleared");
+  assert.equal(landed.designiq_oauth, "", "the state nonce cookie is cleared");
+  assert.equal(landed.designiq_pkce, "", "the PKCE cookie is cleared");
 
   const ex = await exchange(m[1]);
   assert.equal(ex.status, 200);
@@ -153,11 +153,11 @@ test("a plain browser login is unchanged: session cookie + redirect home", async
   assert.equal(start.status, 302);
   const state = new URL(start.headers.get("location") ?? "").searchParams.get("state") ?? "";
   const flow = jar(start);
-  assert.equal(flow.bpm_live_editor, undefined, "no editor cookie on a browser login");
+  assert.equal(flow.designiq_editor, undefined, "no editor cookie on a browser login");
   const cb = await manual(`/auth/oidc/callback?code=stub-code&state=${state}`, { cookie: cookieHeader(flow) });
   assert.equal(cb.status, 302);
   assert.equal(cb.headers.get("location"), "/");
-  assert.ok(jar(cb).bpm_live_sid, "the browser gets its session cookie");
+  assert.ok(jar(cb).designiq_sid, "the browser gets its session cookie");
 });
 
 test("without a configured IdP the login routes are a 404, not the SPA — and there is no other login", async () => {

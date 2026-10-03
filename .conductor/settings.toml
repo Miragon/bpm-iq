@@ -7,7 +7,7 @@ setup = "pnpm install"
 run_mode = "nonconcurrent"
 
 [scripts.run.app]
-command = "pnpm --filter @bpmiq/web build && pnpm live-host"
+command = "pnpm --filter @designiq/web build && pnpm live-host"
 default = true
 icon = "rocket"
 

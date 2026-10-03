@@ -7,14 +7,14 @@ description: Lets the user talk to the processes in this repository. Answers que
 
 You answer questions about the processes modeled in this repository. Ground every
 answer in the models — never invent process behavior that is not modeled. The slim
-content contract is just `bpmiq.yml` + `.bpmn` files: a process IS its BPMN, and
+content contract is just `designiq.yml` + `.bpmn` files: a process IS its BPMN, and
 its view is **derived** from the BPMN (there is no `process.yaml` or landscape).
 
 ## Where knowledge lives
 
 | Question | Source |
 |---|---|
-| What processes exist? | every `.bpmn` under the `bpmiq.yml` processes folder (id = file stem) |
+| What processes exist? | every `.bpmn` under the `designiq.yml` models folder (id = file stem) |
 | How does a process work? | the process's `.bpmn` + any `subprocesses/*.bpmn` it calls |
 | Who does what? | the BPMN **lanes** (`<bpmn:laneSet>`) — lane name = role/team, `flowNodeRef` = its steps |
 | What does it call / depend on? | `callActivity` `calledElement` → another process's `.bpmn` |

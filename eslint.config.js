@@ -1,4 +1,4 @@
-// Flat ESLint config for the bpmiq monorepo (one root config, no per-package configs).
+// Flat ESLint config for the designIQ monorepo (one root config, no per-package configs).
 // Pragmatic first adoption: the genuinely bug-catching type-aware rules
 // (no-floating-promises, no-misused-promises) are ERRORS; stylistic strictness
 // (no-explicit-any) is a WARN ratchet. Prettier owns formatting (config last).

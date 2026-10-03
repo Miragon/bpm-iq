@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { ModelInfo, RepoInfo } from "@designiq/contracts/live-host";
 
 import { modelItems, modelUri, repoItems } from "../../model-picker.ts";
 
@@ -70,5 +70,5 @@ test("modelItems: folder then name; description carries notation, folder, live p
 });
 
 test("modelUri: the path is the room name", () => {
-  assert.equal(modelUri("acme/models", "processes/order.bpmn"), "bpm-live:/acme/models/processes/order.bpmn");
+  assert.equal(modelUri("acme/models", "processes/order.bpmn"), "designiq:/acme/models/processes/order.bpmn");
 });

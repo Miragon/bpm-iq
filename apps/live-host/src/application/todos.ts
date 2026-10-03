@@ -11,9 +11,9 @@
  * it names that process (the platform contract: a path names its own process);
  * anything else normalizes to the discovered path. Elements drop empty ids.
  */
-import type { TodoWire } from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
-import { byExtension, modelStem } from "@bpmiq/notations";
+import type { TodoWire } from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
+import { byExtension, modelStem } from "@designiq/notations";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import type { IssueTracker, Todo } from "../ports/issue-tracker.ts";

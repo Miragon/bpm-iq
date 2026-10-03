@@ -1,9 +1,9 @@
 {
-  "name": "@bpmiq/http-kit",
+  "name": "@designiq/http-kit",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Shared node:http primitives for the bpmiq backends — zero dependencies (copies cleanly into the dependency-free control-plane image)",
+  "description": "Shared node:http primitives for the designIQ backends — zero dependencies (copies cleanly into the dependency-free control-plane image)",
   "engines": {
     "node": ">=23.6"
   },

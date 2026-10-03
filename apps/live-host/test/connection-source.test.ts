@@ -60,7 +60,7 @@ after(() => {
 });
 
 test("multi-tenant mode enumerates ALL installations", async () => {
-  const source = src({ appSlug: "bpm-live" });
+  const source = src({ appSlug: "designiq-live-host" });
   const snap = await source.listConnectedRepos();
   const names = snap.repos.map((r) => r.fullName).sort();
   assert.deepEqual(names, ["acme/processes", "globex/hr", "globex/ops"]);
@@ -69,7 +69,7 @@ test("multi-tenant mode enumerates ALL installations", async () => {
 });
 
 test("cell mode (tenantInstallationId) sees ONLY that tenant's repos", async () => {
-  const source = src({ appSlug: "bpm-live", tenantInstallationId: 2 });
+  const source = src({ appSlug: "designiq-live-host", tenantInstallationId: 2 });
   const snap = await source.listConnectedRepos();
   assert.deepEqual(snap.repos.map((r) => r.fullName).sort(), ["globex/hr", "globex/ops"]);
   assert.deepEqual([...snap.knownRefs], [2], "cell must not even know other installations exist");

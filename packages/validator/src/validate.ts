@@ -1,24 +1,24 @@
 /**
  * Deterministic validation of a BPM content repository (the slim contract).
  *
- * A content repo is a root `bpmiq.yml` naming the folder its BPMN processes
- * live in (@bpmiq/notations/content); a process IS a `.bpmn` file there. This
+ * A content repo is a root `designiq.yml` naming the folder its BPMN processes
+ * live in (@designiq/notations/content); a process IS a `.bpmn` file there. This
  * checks the mechanical invariants that make each model trustworthy and
  * editable: well-formed XML, sound BPMN flow structure, and a COMPLETE BPMNDI
  * section (every flow node has a shape — Hard Rule 2, or the visual editor
  * breaks). It also cross-checks callActivity → calledElement against the other
  * processes in the repo. Nothing else about the layout is assumed.
  *
- * Library use:  import { checkBpmnXml } from "@bpmiq/validator" — a PURE function
+ * Library use:  import { checkBpmnXml } from "@miragon/design-iq-validator" — a PURE function
  * over a single BPMN XML string (no filesystem, no process.exit). The CLI lives
  * in src/cli.ts (a dedicated entry, so importing this module never runs it).
  */
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
-import { byExtension, byId } from "@bpmiq/notations";
-import { kindOf } from "@bpmiq/notations/bpmn-kinds";
-import { cliRoot, notContentRepoError } from "@bpmiq/notations/cli";
+import { byExtension, byId } from "@designiq/notations";
+import { kindOf } from "@designiq/notations/bpmn-kinds";
+import { cliRoot, notContentRepoError } from "@designiq/notations/cli";
 import {
   asArray,
   extractModelGraph,
@@ -26,8 +26,8 @@ import {
   readBpmn,
   requirementHref,
   XMLValidator,
-} from "@bpmiq/notations/extract";
-import { hasRefs, type ModelRef, refsOf } from "@bpmiq/notations/refs";
+} from "@designiq/notations/extract";
+import { hasRefs, type ModelRef, refsOf } from "@designiq/notations/refs";
 
 export type Severity = "ERROR" | "WARN";
 export interface Finding {
@@ -110,11 +110,11 @@ export function checkBpmnXml(
   }
   checkXmlNamespaces(raw, (m) => err("bpmn/xml", m));
 
-  // #117: bpmiq:sticky extension elements are DISCUSSION artifacts — never
-  // process content (every checker below ignores extensionElements), but
-  // residue worth SURFACING before a release: warn-only, never blocks.
-  // The prefix is resolved from the namespace DECLARATION — a foreign tool
-  // may have re-bound the bpmiq URI to another alias.
+  // #117: sticky extension elements (bpmiq:sticky — legacy-name-ok) are
+  // DISCUSSION artifacts — never process content (every checker below ignores
+  // extensionElements), but residue worth SURFACING before a release:
+  // warn-only, never blocks. The prefix is resolved from the namespace
+  // DECLARATION — a foreign tool may have re-bound the sticky URI to another alias.
   // Namespace URI and default prefix are FROZEN identifiers: both are stored
   // in customer .bpmn files and must never follow a product rename.
   const prefix = /xmlns:([A-Za-z_][\w.-]*)="https:\/\/bpmiq\.io\/schema\/1\.0\/bpmiq"/.exec(raw)?.[1] ?? "bpmiq"; // legacy-name-ok: persisted in customer .bpmn files
@@ -137,7 +137,7 @@ export function checkBpmnXml(
     return { findings, called: [], decides: [] };
   }
 
-  // the ONE walk (@bpmiq/notations/extract) — everything below is a pure
+  // the ONE walk (@designiq/notations/extract) — everything below is a pure
   // consumer of the shared model; the validator's byte-identical copy of the
   // traversal is gone
   const model = readBpmn(defs ?? {});
@@ -281,7 +281,7 @@ export function checkBpmnXml(
  * requirements that point at elements which exist.
  *
  * Deliberately NOT here: FEEL semantics, hit-policy reachability, dead wiring.
- * Those need the FEEL engine and live in @bpmiq/decisions (`analyze_decision`),
+ * Those need the FEEL engine and live in @designiq/decisions (`analyze_decision`),
  * which would drag a browser-side dependency into this zero-dep CLI.
  */
 export function checkDmnXml(raw: string, opts: { file?: string } = {}): { findings: Finding[] } {
@@ -452,7 +452,7 @@ export function checkModel(raw: string, ctx: CheckContext): Finding[] | undefine
 
 /**
  * The generic dangling-reference rule: every REQUIRED reference the model
- * emits (@bpmiq/notations/refs) must resolve against the repo-wide ids —
+ * emits (@designiq/notations/refs) must resolve against the repo-wide ids —
  * ONE rule for every notation, replacing the bespoke processIds/decisionIds
  * plumbing. Skipped without ctx.modelIds (single-file use has no repo view).
  */
@@ -504,7 +504,8 @@ export async function runCli(): Promise<void> {
 
   const rel = (p: string): string => (p.startsWith("/") ? relative(ROOT, p) : p);
 
-  const { contentConfigConflict, discoverModels, loadContentConfig } = await import("@bpmiq/notations/content");
+  const { CONTENT_CONFIG_FILE, contentConfigConflict, discoverModels, legacyContentConfigFile, loadContentConfig } =
+    await import("@designiq/notations/content");
   const cfg = loadContentConfig(ROOT);
   if (!cfg) {
     console.error(notContentRepoError(ROOT));
@@ -542,6 +543,19 @@ export async function runCli(): Promise<void> {
         `names a different models folder than ${conflict.ignored} ` +
         `(${show(conflict.usedFolder)} vs ${show(conflict.ignoredFolder)}) — ${conflict.used} wins; ` +
         `tools that predate ${conflict.used} read only ${conflict.ignored}`,
+    });
+  }
+  // read from the legacy file name alone: still fully valid, but the platform
+  // only ever writes the documented name — nudge once, never fail the gate
+  const legacy = legacyContentConfigFile(ROOT);
+  if (legacy) {
+    findings.push({
+      severity: "WARN",
+      ruleId: "content/legacy-config-name",
+      file: legacy,
+      message:
+        `legacy contract file name — rename it to ${CONTENT_CONFIG_FILE} ` +
+        `(git mv ${legacy} ${CONTENT_CONFIG_FILE}); still read`,
     });
   }
   for (const model of [...processes, ...decisions, ...others]) {

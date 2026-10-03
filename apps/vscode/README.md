@@ -1,43 +1,48 @@
-# BPM Live Workspace (VS Code)
+# designIQ for VS Code
 
-Opens the bpmiq Live Host's model documents as `bpm-live://` files — the same
+Opens the designIQ Live Host's model documents as `designiq://` files — the same
 live Y.Text the web app and the MCP tools edit. The Miragon BPMN Modeler
 (`miragon-gmbh.vs-code-bpmn-modeler`) opens them like any other `.bpmn` file;
 every other notation opens as text.
 
 ## Run it (development)
 
-Open the monorepo (or `apps/vscode`) in VS Code and press **F5** — "Run BPM Live
+Open the monorepo (or `apps/vscode`) in VS Code and press **F5** — "Run designIQ
 Extension" compiles the bundle (with sourcemaps, so breakpoints land in the
 `.ts` sources) and starts an Extension Development Host with your normal
 extensions, the Miragon modeler included. Without the debugger:
 
 ```
-pnpm --filter bpm-live compile
+pnpm --filter design-iq compile
 code --extensionDevelopmentPath=$PWD/apps/vscode
 ```
 
-Settings (`bpmLive.*`):
+Settings (`designiq.*`):
 
 | Setting     | Default                 | What                                                   |
 | ----------- | ----------------------- | ------------------------------------------------------ |
 | `serverUrl` | `http://localhost:8301` | The Live Host — `http(s)://` or `ws(s)://`, both work. |
 
+A dev build from before the rename kept the URL under `bpmLive.serverUrl`; <!-- legacy-name-ok: the pre-rename settings key -->
+the first start copies it to `designiq.serverUrl` (user and workspace
+settings alike, never over a value already set there). Sign in again once:
+the new extension id starts with an empty SecretStorage.
+
 Commands:
 
-- **BPM Live: Open Live Model** — pick a repository (the ones you may write),
+- **designIQ: Open Live Model** — pick a repository (the ones you may write),
   then a model of any notation; the list shows folder, notation, who is on it
   and whether it carries unreleased changes. _Enter a path…_ at the end takes
   a repo-relative path by hand.
-- **BPM Live: Sign in** / **Sign in with a session token…** / **Sign out**. The
+- **designIQ: Sign in** / **Sign in with a session token…** / **Sign out**. The
   status-bar item runs the sign-in while signed out and the open command once
   signed in.
 
 ## Sign-in
 
-_BPM Live: Sign in_ opens the host's own login (GitHub OAuth, or the SSO login
+_designIQ: Sign in_ opens the host's own login (GitHub OAuth, or the SSO login
 when the host has one) in your browser. The callback bounces back into this
-editor through `vscode://miragon-gmbh.bpm-live/auth` with a one-time code,
+editor through `vscode://miragon-gmbh.design-iq/auth` with a one-time code,
 which the extension exchanges for its session — the one credential the host
 accepts on the websocket and the REST routes. It is stored in VS Code's
 SecretStorage per host URL; the browser gets no cookie, so signing out of the
@@ -47,7 +52,7 @@ day (12h); after that the next open asks you to sign in again.
 Works in VS Code, Insiders, Cursor and other `vscode.env.uriScheme` editors
 on the desktop; browser-hosted VS Code (vscode.dev) is not covered.
 
-**Older hosts, or no way back into the editor:** _BPM Live: Sign in with a
+**Older hosts, or no way back into the editor:** _designIQ: Sign in with a
 session token…_ takes a token by hand. Sign in to the host in your browser,
 open `<host>/api/me` and paste its `wsToken` — the extension verifies it
 against `/api/me`, shows you in the status bar and reconnects open documents
@@ -80,8 +85,9 @@ its local principal (`LIVE_LOCAL_USER`) — no sign-in needed there.
 
 ## Tests
 
-- `pnpm --filter bpm-live test` — unit tests of the sign-in and picker helpers.
-- `pnpm --filter bpm-live test:e2e` — a real VS Code (downloaded once) with
+- `pnpm --filter design-iq test` — unit tests of the sign-in, picker and
+  settings helpers, and of the manifest against the ids the code relies on.
+- `pnpm --filter design-iq test:e2e` — a real VS Code (downloaded once) with
   the Miragon modeler, against a running Live Host on `localhost:8301` with
   `LIVE_AUTH=none`; asserts the picker's data path, content sync both
   ways, presence and the custom editor.

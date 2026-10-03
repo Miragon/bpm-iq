@@ -21,7 +21,7 @@ import { existsSync, lstatSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import type { FileCommitWire } from "@bpmiq/contracts/live-host";
+import type { FileCommitWire } from "@designiq/contracts/live-host";
 
 import { gitEnv, runGit, scrub } from "../adapters/git/run.ts";
 import {
@@ -110,7 +110,7 @@ export class WorkspaceManager {
 
   isHostRepo(fullName: string): boolean {
     // Serve the local host checkout in place — no clone — when it actually is a
-    // BPM content repo (bpmiq.yml at its root). In a deployed image without the
+    // content repo (designiq.yml at its root). In a deployed image without the
     // config, the host repo is cloned like any other via an installation token.
     // hasContentConfig, not a file-name probe: a bind-mounted checkout whose
     // contract file carries the other accepted name is served in place as well.
@@ -125,8 +125,8 @@ export class WorkspaceManager {
 
   /**
    * Checkout root of a connected repo (no provisioning). Everything downstream
-   * — rooms, process listing, releases — is repo-root-relative; where the BPM
-   * content lives inside the repo is the content config's business (bpmiq.yml,
+   * — rooms, process listing, releases — is repo-root-relative; where the
+   * content lives inside the repo is the content config's business (designiq.yml,
    * repos/content.ts), not a filesystem heuristic.
    */
   dir(repo: ConnectedRepo): string {
@@ -548,7 +548,7 @@ export class WorkspaceManager {
 
   /**
    * changedPaths with a status per file — the release dialog's file list,
-   * confined to `pathspec` (the bpmiq.yml content scope: the release surface
+   * confined to `pathspec` (the designiq.yml content scope: the release surface
    * must never expose checkout files outside it, e.g. the in-place host
    * checkout's server sources). `--no-renames` keeps a rename visible as
    * delete + add (the release stages per file, so that is exactly how it

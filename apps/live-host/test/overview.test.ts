@@ -1,7 +1,7 @@
 /**
  * Overview read-models (src/application/overview.ts) — listProcesses/listRepos
  * assembly against a tmpdir workspace with injected fakes (registry, access,
- * changedPaths). A process is a .bpmn file under the bpmiq.yml processes
+ * changedPaths). A process is a .bpmn file under the designiq.yml processes
  * folder; the asserted object shapes ARE the wire format the web client
  * consumes.
  */
@@ -37,10 +37,10 @@ const session = (id: string, login = "petra"): Session => ({
   createdAt: Date.now(),
 });
 
-/** a workspace with a bpmiq.yml, two processes (one nested) and noise */
+/** a workspace with a designiq.yml, two processes (one nested) and noise */
 function setup(over: Partial<OverviewDeps> = {}) {
-  const ws = mkdtempSync(join(tmpdir(), "bpm-overview-"));
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+  const ws = mkdtempSync(join(tmpdir(), "designiq-overview-"));
+  writeFileSync(join(ws, "designiq.yml"), "models: processes\n");
   mkdirSync(join(ws, "processes", "sub"), { recursive: true });
   writeFileSync(join(ws, "processes", "order.bpmn"), "<bpmn/>");
   writeFileSync(join(ws, "processes", "sub", "check-credit.bpmn"), "<bpmn/>");
@@ -106,32 +106,32 @@ test("listProcesses: one row per .bpmn under the configured folder (recursive)",
   assert.equal(nested?.liveSessions, 1);
 });
 
-test("listProcesses: a workspace without bpmiq.yml lists nothing", async () => {
+test("listProcesses: a workspace without a contract file lists nothing", async () => {
   const { deps } = setup();
-  const empty = mkdtempSync(join(tmpdir(), "bpm-overview-empty-"));
+  const empty = mkdtempSync(join(tmpdir(), "designiq-overview-empty-"));
   assert.deepEqual(await listProcesses(deps, REPO, empty), []);
 });
 
 test("listProcesses: a config pointing at a missing folder lists nothing", async () => {
   const { deps } = setup();
-  const ws = mkdtempSync(join(tmpdir(), "bpm-overview-missing-"));
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: not-there\n");
+  const ws = mkdtempSync(join(tmpdir(), "designiq-overview-missing-"));
+  writeFileSync(join(ws, "designiq.yml"), "models: not-there\n");
   assert.deepEqual(await listProcesses(deps, REPO, ws), []);
 });
 
-test("listProcesses: an invalid bpmiq.yml degrades to an empty listing, not a failure", async () => {
+test("listProcesses: an invalid designiq.yml degrades to an empty listing, not a failure", async () => {
   const { deps } = setup();
-  const ws = mkdtempSync(join(tmpdir(), "bpm-overview-invalid-"));
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: [unclosed\n");
+  const ws = mkdtempSync(join(tmpdir(), "designiq-overview-invalid-"));
+  writeFileSync(join(ws, "designiq.yml"), "models: [unclosed\n");
   assert.deepEqual(await listProcesses(deps, REPO, ws), []);
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: ../outside\n");
+  writeFileSync(join(ws, "designiq.yml"), "models: ../outside\n");
   assert.deepEqual(await listProcesses(deps, REPO, ws), [], "traversal in the config is refused");
 });
 
 test("listProcesses: duplicate file names — the first (sorted) wins, the shadow is skipped", async () => {
   const { deps } = setup();
-  const ws = mkdtempSync(join(tmpdir(), "bpm-overview-dup-"));
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+  const ws = mkdtempSync(join(tmpdir(), "designiq-overview-dup-"));
+  writeFileSync(join(ws, "designiq.yml"), "models: processes\n");
   mkdirSync(join(ws, "processes", "a"), { recursive: true });
   mkdirSync(join(ws, "processes", "b"), { recursive: true });
   writeFileSync(join(ws, "processes", "a", "order.bpmn"), "<bpmn/>");
@@ -240,8 +240,8 @@ test("listRepos: a repo the user cannot write is invisible (private by default)"
   assert.deepEqual(await listRepos(deps, session("sess-petra")), []);
 });
 
-test("listRepos: no bpmiq.yml (workspace absent or plain repo) → null counts", async () => {
-  const empty = mkdtempSync(join(tmpdir(), "bpm-overview-nows-"));
+test("listRepos: no contract file (workspace absent or plain repo) → null counts", async () => {
+  const empty = mkdtempSync(join(tmpdir(), "designiq-overview-nows-"));
   const { deps } = setup({
     workspaces: { dir: () => empty, changedPaths: async () => [], changedFiles: async () => [] },
   });
@@ -253,7 +253,7 @@ test("listRepos: no bpmiq.yml (workspace absent or plain repo) → null counts",
 });
 
 test("listRepos: checks the repos in parallel, bounded, and keeps the registry order (#212)", async () => {
-  const empty = mkdtempSync(join(tmpdir(), "bpm-overview-par-"));
+  const empty = mkdtempSync(join(tmpdir(), "designiq-overview-par-"));
   const registry = Array.from({ length: 20 }, (_, i): ConnectedRepo => ({ ...REPO, fullName: `acme/r${i}` }));
   let running = 0;
   let peak = 0;

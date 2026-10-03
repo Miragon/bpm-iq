@@ -1,6 +1,6 @@
 #!/bin/bash
 # Release-flow integration test — fully offline: GitHub stub + file:// origins.
-# A content repo is bpmiq.yml + a processes folder; a process is a .bpmn file.
+# A content repo is designiq.yml + a processes folder; a process is a .bpmn file.
 #
 # Verifies the release-gate behaviors end to end:
 #   A1  releasing an unchanged process is rejected ("nothing to release")
@@ -8,8 +8,9 @@
 #   A3  a proper release pushes a branch + opens a PR with correct paths
 #   A4  upstream commits the workspace never absorbed block the release
 #       (a release must never silently revert merged work)
-#   B   monorepo-shaped repos (bpmiq.yml → process-documentation/processes)
-#       list + release with full repo-relative paths, no bogus top-level tree
+#   B   monorepo-shaped repos (process-documentation/processes) list + release
+#       with full repo-relative paths, no bogus top-level tree — and this origin
+#       carries only the LEGACY contract file name, which must keep working
 #   C   model-anchored todos over HTTP: create → tracker issue with anchor +
 #       session attribution, list with process filter, close → gone from the
 #       list, empty-title 400
@@ -25,12 +26,12 @@
 #       files arrives, and a file changed on both sides is flagged, refused,
 #       and resolvable either way
 #
-# Run: bash test/release-e2e.sh   (or: pnpm --filter @bpmiq/live-host test)
+# Run: bash test/release-e2e.sh   (or: pnpm --filter @designiq/live-host test)
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
 FIXTURE="$REPO_ROOT/packages/validator/test/fixtures/content-repo"
-E2E="$(mktemp -d "${TMPDIR:-/tmp}/bpm-release-e2e.XXXXXX")"
+E2E="$(mktemp -d "${TMPDIR:-/tmp}/designiq-release-e2e.XXXXXX")"
 STUB_PORT="${STUB_PORT:-8399}"
 PORT_A="${PORT_A:-8321}"
 PORT_B="${PORT_B:-8322}"
@@ -56,19 +57,21 @@ edit() { # $1=file $2=search $3=replace  (portable in-place substitution)
   node -e 'const fs=require("fs");const[,f,s,r]=process.argv;const t=fs.readFileSync(f,"utf8");if(!t.includes(s))throw new Error(`edit: "${s}" not found in ${f}`);fs.writeFileSync(f,t.replace(s,r));' "$1" "$2" "$3"
 }
 
-# ── origin 1: plain content repo (bpmiq.yml at the root) ─────────────
+# ── origin 1: plain content repo (designiq.yml at the root) ──────────
 SRC1="$E2E/src1"
 cp -R "$FIXTURE" "$SRC1"
-printf 'processes: processes\n' > "$SRC1/bpmiq.yml"
+printf 'models: processes\n' > "$SRC1/designiq.yml"
 git -C "$SRC1" init -q -b main && git -C "$SRC1" add -A
 git -C "$SRC1" -c user.name=e2e -c user.email=e2e@test commit -qm "content"
 git clone -q --bare "$SRC1" "$E2E/origin/acme/bpm-processes.git"
 
-# ── origin 2: monorepo shape (bpmiq.yml → process-documentation/processes) ──
+# ── origin 2: monorepo shape, legacy contract name (→ process-documentation/processes) ──
+# (the copied fixture's own designiq.yml lands in process-documentation/ — not
+# at the root, so it is just a file there; the root carries only the legacy name)
 SRC2="$E2E/src2"
 mkdir -p "$SRC2/process-documentation"
 cp -R "$FIXTURE/." "$SRC2/process-documentation/"
-printf 'processes: process-documentation/processes\n' > "$SRC2/bpmiq.yml"
+printf 'processes: process-documentation/processes\n' > "$SRC2/bpmiq.yml" # legacy-name-ok: pins the legacy path
 echo "# a monorepo" > "$SRC2/README.md"
 git -C "$SRC2" init -q -b main && git -C "$SRC2" add -A
 git -C "$SRC2" -c user.name=e2e -c user.email=e2e@test commit -qm "monorepo content"
@@ -142,7 +145,7 @@ echo "$R" | grep -q "upstream geändert" && ok "A4: upstream guard blocks silent
 start_host "acme/monorepo" "$E2E/data2" "$PORT_B"
 sleep 2.5
 PROCS=$(curl -s --max-time 60 "http://localhost:$PORT_B/api/repos/acme/monorepo/processes")
-echo "$PROCS" | grep -q "two-pool" && ok "B: monorepo processes listed (bpmiq.yml folder honored)" || bad "B: monorepo listing failed: $PROCS"
+echo "$PROCS" | grep -q "two-pool" && ok "B: monorepo processes listed (legacy bpmiq.yml folder honored)" || bad "B: monorepo listing failed: $PROCS" # legacy-name-ok: pins the legacy path
 echo "$PROCS" | grep -q '"bpmn": *"process-documentation/processes/two-pool/two-pool.bpmn"' && ok "B: process paths are repo-relative" || bad "B: unexpected process paths: $PROCS"
 WS2="$E2E/data2/workspaces/acme/monorepo"
 edit "$WS2/process-documentation/processes/two-pool/two-pool.bpmn" 'name="Send offer"' 'name="Send better offer"'
@@ -232,7 +235,7 @@ R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":[]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q "at least one" && ok "E: empty selection refused (400)" || bad "E: expected 400, got: $R"
 R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
-  -d '{"files":["bpmiq.yml"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
+  -d '{"files":["designiq.yml"]}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q "not changed" && ok "E: unchanged file refused (409)" || bad "E: expected not-changed, got: $R"
 # a file that moved UPSTREAM is in the pool but the guard must block it
 R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
@@ -259,7 +262,7 @@ R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
   -d '{"files":["processes/onboarding/prüfung.dmn"],"title":"Umlaut check"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/release")
 echo "$R" | grep -q '"pr"' && ok "E: umlaut filename releases" || bad "E: umlaut release failed: $R"
 
-# the pool is confined to the bpmiq.yml content scope — checkout files outside
+# the pool is confined to the designiq.yml content scope — checkout files outside
 # the processes folder never appear and never release
 printf 'operator scratch\n' > "$WS1/NOTES.md"
 CH=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processes/changes")
@@ -279,7 +282,7 @@ CH=$(curl -s --max-time 60 "http://localhost:$PORT_A/api/repos/acme/bpm-processe
 echo "$CH" | grep -q "\"path\": *\"$OLD_IH\", *\"status\": *\"deleted\"" && echo "$CH" | grep -q "\"path\": *\"$NEW_IH\", *\"status\": *\"added\"" \
   && ok "F: the move shows as delete + add in /changes" || bad "F: move not in the pool: $CH"
 MVBAD=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \
-  -d '{"paths":["bpmiq.yml"],"folder":"billing"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/move")
+  -d '{"paths":["designiq.yml"],"folder":"billing"}' "http://localhost:$PORT_A/api/repos/acme/bpm-processes/move")
 echo "$MVBAD" | grep -q "not a model" && ok "F: a non-model file is refused (404)" || bad "F: expected not-a-model, got: $MVBAD"
 # selecting only the NEW half ships the whole move — git records a rename
 R=$(curl -s --max-time 60 -X POST -H "Content-Type: application/json" \

@@ -70,8 +70,8 @@ async function hostLogin(host: string, user: string, pass: string): Promise<void
   if (cb.status !== 302 || cb.headers.get("location") !== "/") {
     throw new Error(`callback → HTTP ${cb.status} ${(await cb.text()).slice(0, 300)}`);
   }
-  const sid = jar.get("bpm_live_sid");
-  if (!sid) throw new Error("no bpm_live_sid cookie after the callback");
+  const sid = jar.get("designiq_sid");
+  if (!sid) throw new Error("no designiq_sid cookie after the callback");
   process.stdout.write(sid);
 }
 

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { AWARENESS_CANVAS_KEY, AWARENESS_USER_KEY, presenceColor, type PresenceUser } from "@bpmiq/contracts/live";
+import { AWARENESS_CANVAS_KEY, AWARENESS_USER_KEY, presenceColor, type PresenceUser } from "@designiq/contracts/live";
 import { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 

@@ -1,4 +1,4 @@
-/* Shared bpmiq design tokens + base layer (shadcn new-york, neutral).
+/* Shared designIQ design tokens + base layer (shadcn new-york, neutral).
    Imported by each SPA's index.css AFTER `@import "tailwindcss"` — Tailwind
    inlines it at build time, so @apply/@theme resolve in the combined sheet. */
 @import "tw-animate-css";

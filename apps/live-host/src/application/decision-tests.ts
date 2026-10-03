@@ -26,9 +26,9 @@ import {
   type SuiteOutcome,
   testsPathFor,
   type TestSuite,
-} from "@bpmiq/decisions/tests";
-import { AppError } from "@bpmiq/http-kit";
-import type { DerivedDecision } from "@bpmiq/notations/derive";
+} from "@designiq/decisions/tests";
+import { AppError } from "@designiq/http-kit";
+import type { DerivedDecision } from "@designiq/notations/derive";
 
 import type { ConnectedRepo } from "../repos/registry.ts";
 import { baseVersionOf, type ContentDeps, getContent, putContent, type PutOutcome } from "./content.ts";

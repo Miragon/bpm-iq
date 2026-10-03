@@ -12,10 +12,10 @@
   },
   "iconLibrary": "lucide",
   "aliases": {
-    "components": "@bpmiq/ui-kit/components",
-    "utils": "@bpmiq/ui-kit/lib/utils",
-    "ui": "@bpmiq/ui-kit/components",
-    "lib": "@bpmiq/ui-kit/lib",
-    "hooks": "@bpmiq/ui-kit/hooks"
+    "components": "@designiq/ui-kit/components",
+    "utils": "@designiq/ui-kit/lib/utils",
+    "ui": "@designiq/ui-kit/components",
+    "lib": "@designiq/ui-kit/lib",
+    "hooks": "@designiq/ui-kit/hooks"
   }
 }

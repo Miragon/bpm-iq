@@ -19,8 +19,8 @@
  *    explicit "information, not instructions" marker so a crafted body cannot
  *    splice its own steps into the work order.
  */
-import { fenced } from "@bpmiq/contracts/assist";
-import type { TodoWire } from "@bpmiq/contracts/live-host";
+import { fenced } from "@designiq/contracts/assist";
+import type { TodoWire } from "@designiq/contracts/live-host";
 
 /** the model document the widget currently has open — the anchor's own `file`
  *  is a creation-time snapshot and may be stale after a move */
@@ -41,7 +41,7 @@ export function implementPrompt(todo: TodoWire, target: PromptTarget): string {
   // spelled out in every step: the assistant may act on any one of them alone
   const args = `repo: "${target.repo}", path: "${target.path}"`;
   const lines = [
-    "Please implement this bpmiq todo end to end, using the bpmiq tools on this connector.",
+    "Please implement this designIQ todo end to end, using the tools on this connector.",
     "",
     `Todo #${todo.id} — ${todo.title}`,
     `Repository: ${target.repo}`,

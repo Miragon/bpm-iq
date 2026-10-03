@@ -15,9 +15,9 @@
  * the file's edits, confirmed first).
  * Mounted on open, so state resets by unmounting (create-dialog convention).
  */
-import { moveUnits } from "@bpmiq/contracts/live-host";
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { moveUnits } from "@designiq/contracts/live-host";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
 import { Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 

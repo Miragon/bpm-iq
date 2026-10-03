@@ -12,7 +12,7 @@
  * Added and changed ids only — a removed element has nothing left to outline.
  * Pure: graphs in, ids out.
  */
-import type { ModelGraph } from "@bpmiq/notations/extract";
+import type { ModelGraph } from "@designiq/notations/extract";
 
 /** the client renders at most this many outlines per peer (presence-canvas
  *  MAX_OUTLINES) — capping at the source keeps the awareness payload small */

@@ -13,7 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { templateFor } from "@bpmiq/notations/templates";
+import { templateFor } from "@designiq/notations/templates";
 
 import { checkModelBaseline } from "../src/validate.ts";
 
@@ -28,7 +28,7 @@ function run(args: string[]): { status: number; out: string } {
 /** a minimal content repo whose models folder holds exactly `files` */
 function repoWith(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), "validator-baseline-"));
-  writeFileSync(join(dir, "bpmiq.yml"), "models: models\n");
+  writeFileSync(join(dir, "designiq.yml"), "models: models\n");
   mkdirSync(join(dir, "models"), { recursive: true });
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(join(dir, "models", name), content);

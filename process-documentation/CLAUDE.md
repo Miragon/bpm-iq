@@ -2,11 +2,13 @@
 
 This repository models business processes as BPMN. **The models are the source
 of truth — ground every answer in them.** It is served by the
-[bpmiq](https://github.com/Miragon/bpm-iq) platform.
+[designIQ](https://github.com/Miragon/design-iq) platform.
 
 ## The contract (slim)
 
-- A root **`bpmiq.yml`** names the models folder (`processes: processes`).
+- A root **`designiq.yml`** names the models folder (`models: processes`). An
+  older repo may carry it as `bpmiq.yml` or use the key `processes:` — both are
+  still read.
 - Every file with a notation extension under it is a **model** — `.bpmn` a
   process, `.dmn` a decision; its id is the file name without the extension.
   There is NO `process.yaml` — the process view (name, roles from lanes, steps,
@@ -17,7 +19,7 @@ of truth — ground every answer in them.** It is served by the
   `<decision>.tests.yaml` next to them.
 
 ```
-bpmiq.yml
+designiq.yml
 processes/
   order-to-cash.bpmn              the process
   order-to-cash.storm             same id, other notation — one model, two views
@@ -44,8 +46,8 @@ Never leave scratch models (`test1.bpmn`, `des.dmn`) in the folder.
 
 1. BPMN files need a complete BPMNDI section (every flow node), or the visual
    editor breaks. Keep semantics (`bpmn:*`) and layout (`bpmndi:*`) in sync.
-2. After ANY model edit, validate: `node packages/validator/src/cli.ts --root .`
-   (from the monorepo root) — fix errors before finishing.
+2. After ANY model edit, validate: `npx @miragon/design-iq-validator --root .`
+   (from the repo root) — fix errors before finishing.
 3. Modeling conventions: tasks verb+object, events object+past participle,
    gateways as questions, lanes = team/role labels.
 4. A `callActivity`'s `calledElement` should match another process's id (its

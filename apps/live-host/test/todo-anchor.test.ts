@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
+import { encodeAnchor, parseAnchor, stripAnchor, type TodoAnchor } from "@designiq/contracts/todo-anchor";
 
 test("roundtrip: encode → parse yields the same anchor", () => {
   const anchor: TodoAnchor = {

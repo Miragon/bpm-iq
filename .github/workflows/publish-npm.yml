@@ -38,7 +38,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - name: Build (tsdown → dist/)
-        run: pnpm --filter @bpmiq/${{ inputs.package }} build
+        run: pnpm --filter ./packages/${{ inputs.package }} build
       - name: Sanity-run the built validator against the example content repo
         if: inputs.package == 'validator'
         run: node packages/validator/dist/validate.js --root process-documentation

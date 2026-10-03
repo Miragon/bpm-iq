@@ -1,8 +1,8 @@
 /**
- * The Miragon renderer registry — the web-side twin of @bpmiq/notations for
+ * The Miragon renderer registry — the web-side twin of @designiq/notations for
  * the notations whose editor is a Miragon modeler: ONE spec per renderer,
  * everything else derives (see ./spec.ts for the four consumers). Adding a
- * Miragon notation = its descriptor in @bpmiq/notations + one spec file here
+ * Miragon notation = its descriptor in @designiq/notations + one spec file here
  * (named `<id>.ts`, exporting `spec` — the widget build aliases it in by id)
  * + the id in the Live Host's widget list (apps/live-host/src/http/mcp.ts).
  *

@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ELEMENTS_KEY } from "@bpmiq/contracts/live";
+import { ELEMENTS_KEY } from "@designiq/contracts/live";
 import * as Y from "yjs";
 
 import { readSnapshot, reconcileSnapshot, type StructuredSnapshot } from "../src/structured.ts";
@@ -104,7 +104,7 @@ test("BOUNDARY: concurrent CREATION of one element id resolves whole-element LWW
   // attribute-level merge holds for EXISTING elements; two clients creating
   // the SAME id offline race on the map entry — one side's entire attribute
   // set wins, and the loser's retained Y.Map reference is orphaned (its later
-  // writes vanish). Documented in @bpmiq/contracts/live; editors must re-read
+  // writes vanish). Documented in @designiq/contracts/live; editors must re-read
   // the element from ELEMENTS_KEY after a sync and use collision-safe ids.
   const { a, b, merge } = pair({ meta: {}, elements: {} });
   reconcileSnapshot(a, { meta: {}, elements: { e5: { from: "A" } } });

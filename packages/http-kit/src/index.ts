@@ -1,5 +1,5 @@
 /**
- * Shared node:http primitives for the bpmiq backends (@bpmiq/http-kit).
+ * Shared node:http primitives for the designIQ backends (@designiq/http-kit).
  *
  * Extracted after the send/redirect/rawBody/OAuth-state plumbing had been
  * copy-pasted between live-host and control-plane and DRIFTED (the control

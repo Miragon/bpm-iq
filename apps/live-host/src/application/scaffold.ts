@@ -1,7 +1,7 @@
 /**
  * Write use-cases of the repository view, extracted like overview.ts:
  *
- *   listFolders    — every folder under the repo's bpmiq.yml processes root
+ *   listFolders    — every folder under the repo's designiq.yml processes root
  *                    (recursive, includes EMPTY ones — a just-created folder
  *                    must survive a reload before its first process exists)
  *   createFolder   — mkdir under the processes root
@@ -24,7 +24,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, posix, relative, resolve, sep } from "node:path";
 
-import { CONTENT_KEY, movedNotice, roomName } from "@bpmiq/contracts/live";
+import { CONTENT_KEY, movedNotice, roomName } from "@designiq/contracts/live";
 import type {
   DecisionInfo,
   DeleteModelsBody,
@@ -39,13 +39,13 @@ import type {
   RenameModelBody,
   RenameModelResult,
   TodoJobWire,
-} from "@bpmiq/contracts/live-host";
-import { testsPathFor } from "@bpmiq/decisions/tests";
-import { AppError } from "@bpmiq/http-kit";
-import { readSnapshot } from "@bpmiq/live-client/structured";
-import { byExtension, byId, modelStem, processIdFromName } from "@bpmiq/notations";
-import { retargetRefs } from "@bpmiq/notations/retarget";
-import { newBpmnXml, newDmnXml, templateFor } from "@bpmiq/notations/templates";
+} from "@designiq/contracts/live-host";
+import { testsPathFor } from "@designiq/decisions/tests";
+import { AppError } from "@designiq/http-kit";
+import { readSnapshot } from "@designiq/live-client/structured";
+import { byExtension, byId, modelStem, processIdFromName } from "@designiq/notations";
+import { retargetRefs } from "@designiq/notations/retarget";
+import { newBpmnXml, newDmnXml, templateFor } from "@designiq/notations/templates";
 import * as Y from "yjs";
 
 import { docCodecForPath } from "../domain/rooms.ts";
@@ -58,6 +58,7 @@ import {
   discoverModels,
   discoverProcesses,
   loadContentConfig,
+  notAContentRepoReason,
 } from "../repos/content.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";
 import { assertRealInsideWorkspace } from "./workspace-paths.ts";
@@ -71,7 +72,7 @@ function requireConfig(repo: ConnectedRepo, workspace: string): ContentConfig {
   if (!cfg) {
     throw new AppError(
       "scaffold/not-a-content-repo",
-      `${repo.fullName} is not a BPM content repo — add a root ${CONTENT_CONFIG_FILE} naming its processes folder first`,
+      `${notAContentRepoReason(repo.fullName)}; a root ${CONTENT_CONFIG_FILE} naming its models folder makes it one`,
       { status: 422, expose: true },
     );
   }
@@ -134,8 +135,8 @@ async function writeGuarded<T>(what: string, write: () => Promise<T>): Promise<T
  * every folder under the processes root, processes-root-relative, sorted — same
  * skip rules as process discovery (dot segments, node_modules) so the listing
  * never shows a folder whose content would be invisible. `isContentRepo` is
- * false exactly when there is no root bpmiq.yml (the repo view hides its
- * create/release actions then). Missing/unreadable processes folder still
+ * false exactly when there is no usable root contract file (the repo view
+ * hides its create/release actions then). Missing/unreadable processes folder still
  * counts as a content repo with an empty tree — the folder list must never 500
  * an overview, and a create would just mkdir it.
  */

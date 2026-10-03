@@ -1,6 +1,6 @@
 /**
  * Side panel for a live .dmn — three things, all computed IN THE BROWSER by
- * @bpmiq/decisions, the very module the Live Host answers `analyze_decision` /
+ * @designiq/decisions, the very module the Live Host answers `analyze_decision` /
  * `simulate_decision` / `run_decision_tests` with:
  *
  *   findings   what is wrong with the decision without any test data
@@ -25,18 +25,18 @@ import {
   simulateDecision,
   type SimulationResult,
   type VariableProfile,
-} from "@bpmiq/decisions";
+} from "@designiq/decisions";
 import {
   type CaseOutcome,
   parseTestSuite,
   runDecisionTests,
   type SuiteOutcome,
   testsPathFor,
-} from "@bpmiq/decisions/tests";
-import { deriveDecision } from "@bpmiq/notations/derive";
-import { extractModelGraph } from "@bpmiq/notations/extract";
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
+} from "@designiq/decisions/tests";
+import { deriveDecision } from "@designiq/notations/derive";
+import { extractModelGraph } from "@designiq/notations/extract";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Info, Play, ShieldCheck, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";

@@ -5,8 +5,8 @@
  * reset drops both) so the discard is an informed choice. Mounted on open, so state resets by unmounting; the reset itself
  * (mutation, toast) is owned by the parent (routes/repo.tsx).
  */
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
 import { useEffect } from "react";
 
 export function SyncRepoDialog({

@@ -10,8 +10,8 @@
  * tracker takes one change at a time): the dialog says so up front, with the
  * time it will take once that is noticeable, and a toast follows it.
  */
-import type { RenameModelResult } from "@bpmiq/contracts/live-host";
-import { processIdFromName } from "@bpmiq/notations";
+import type { RenameModelResult } from "@designiq/contracts/live-host";
+import { processIdFromName } from "@designiq/notations";
 import { FlaskConical, Link2, ListTodo, Users } from "lucide-react";
 import { useState } from "react";
 

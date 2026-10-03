@@ -1,6 +1,6 @@
 /**
  * Stateless Streamable-HTTP mount: one fresh McpServer + transport per
- * request, torn down on response close — the pattern both bpmiq MCP servers
+ * request, torn down on response close — the pattern both designIQ MCP servers
  * carried as private copies (one of them had lost the `else res.end()` that
  * keeps a mid-stream failure from hanging the socket).
  *
@@ -10,7 +10,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { readBody, send } from "@bpmiq/http-kit";
+import { readBody, send } from "@designiq/http-kit";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import type { McpServer } from "@modelcontextprotocol/server";
 

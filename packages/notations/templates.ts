@@ -83,6 +83,8 @@ export function newBpmnXml(id: string, name: string): string {
  * STEM, never the XML id.
  */
 export function newDmnXml(id: string, name: string): string {
+  // the namespace base below is FROZEN (ADR 0008): every existing decision
+  // carries it, and new ones keep it so old and new decisions stay alike
   const xmlId = xmlProcessId(id);
   const title = escapeXml(name);
   return `<?xml version="1.0" encoding="UTF-8"?>

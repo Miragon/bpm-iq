@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { AppError } from "@bpmiq/http-kit";
+import { AppError } from "@designiq/http-kit";
 
 import { type ConflictDeps, resolveConflict } from "../src/application/conflicts.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";

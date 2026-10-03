@@ -2,7 +2,7 @@
  * GitHub implementation of the IssueTracker port — todos are repo ISSUES in
  * the customer's own repository, never rows in a platform database. Each todo
  * carries the `todo` label plus `process:<id>` for the anchored process; the
- * platform anchor block (the codec lives in @bpmiq/contracts/todo-anchor (mcp needs it too)) lives invisibly
+ * platform anchor block (the codec lives in @designiq/contracts/todo-anchor (mcp needs it too)) lives invisibly
  * at the top of the issue body, followed by the author's text and a textual
  * attribution line (issues are bot-authored via the installation token, the
  * human stays attributed — same model as releases, ADR 0001).
@@ -13,17 +13,23 @@
  * (remote mint). Nothing GitHub-specific leaks through the port — GitLab/Jira
  * implement the same contract against their own issue APIs.
  */
-import { processDeepLink } from "@bpmiq/contracts/deep-link";
-import { encodeAnchor, parseAnchor, replaceAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
-import { GitHubHttpError, paginate, tokenRest } from "@bpmiq/github-app";
+import { processDeepLink } from "@designiq/contracts/deep-link";
+import {
+  encodeAnchor,
+  parseAnchor,
+  replaceAnchor,
+  stripAnchor,
+  type TodoAnchor,
+} from "@designiq/contracts/todo-anchor";
+import { GitHubHttpError, paginate, tokenRest } from "@designiq/github-app";
 import {
   type GitHubIssueRow,
   isPullRequestRow,
   processLabel,
   TODO_LABEL,
   todoLabelQuery,
-} from "@bpmiq/github-app/todos";
-import { AppError } from "@bpmiq/http-kit";
+} from "@designiq/github-app/todos";
+import { AppError } from "@designiq/http-kit";
 
 import {
   type IssueTracker,
@@ -35,22 +41,22 @@ import {
 import { githubApi } from "./app-auth.ts";
 
 /** attribution line appended to every created issue (items are bot-authored) */
-export const attributionLine = (author: string): string => `_Created from the bpmiq live model by @${author}_`;
+export const attributionLine = (author: string): string => `_Created from the designIQ live model by @${author}_`;
 
 /**
- * Reads the attribution in BOTH product spellings — the legacy one and
- * "designIQ", which hosts write once the product is renamed: hosts are upgraded
- * one by one, so an older host must already name the author of an issue a
- * newer one filed. The legacy alternative stays for good — those bodies are
- * stored in customer trackers and are never rewritten. Only the new name
- * matches case-insensitively (`(?i:…)` scopes the flag to it): a line re-cased
- * by hand must not lose its author, while the legacy spelling and the rest of
- * the sentence keep matching exactly as they always did.
+ * Reads the attribution in BOTH product spellings — "designIQ", which
+ * attributionLine writes, and the legacy one every host before the rename
+ * wrote. The legacy alternative stays for good — those bodies are stored in
+ * customer trackers and are never rewritten. Only the new name matches
+ * case-insensitively (`(?i:…)` scopes the flag to it): a line re-cased by hand
+ * must not lose its author, while the legacy spelling and the rest of the
+ * sentence keep matching exactly as they always did.
  */
 const ATTRIBUTION_RE = /_Created from the (?:bpmiq|(?i:designiq)) live model by @([A-Za-z0-9-]+)_/; // legacy-name-ok: stored in customer trackers
 
 /** attribution comment posted before closing (the close itself is bot-authored) */
-export const closeAttributionLine = (closedBy: string): string => `_Closed from the bpmiq live model by @${closedBy}_`;
+export const closeAttributionLine = (closedBy: string): string =>
+  `_Closed from the designIQ live model by @${closedBy}_`;
 
 /** parse the platform author back out of an issue body (null: created by hand) */
 export function parseAuthor(body: string): string | null {
@@ -81,7 +87,7 @@ export interface DeepLinkTarget {
 }
 
 /** one 📍 line per anchored element, linking into the web app's process-editor
- * route — the URL shape is the shared @bpmiq/contracts/deep-link builder (the
+ * route — the URL shape is the shared @designiq/contracts/deep-link builder (the
  * widget button and the open_modeler result build the very same links) */
 function deepLinkLines(anchor: TodoAnchor, target: DeepLinkTarget): string {
   return anchor.elements
@@ -224,12 +230,12 @@ export function createGitHubIssueTracker(deps: GitHubIssueRowsDeps): IssueTracke
       await ensureLabel(token, repoFullName, {
         name: TODO_LABEL,
         color: "fa8100",
-        description: "bpmiq model-anchored todo",
+        description: "designIQ model-anchored todo",
       });
       await ensureLabel(token, repoFullName, {
         name: processLabel(input.anchor.process),
         color: "ededed",
-        description: `bpmiq process ${input.anchor.process}`,
+        description: `designIQ process ${input.anchor.process}`,
       });
       const res = await rest(token, `/repos/${repoFullName}/issues`, {
         method: "POST",
@@ -280,7 +286,7 @@ export function createGitHubIssueTracker(deps: GitHubIssueRowsDeps): IssueTracke
         await ensureLabel(token, repoFullName, {
           name: processLabel(to.process),
           color: "ededed",
-          description: `bpmiq process ${to.process}`,
+          description: `designIQ process ${to.process}`,
         });
         ensured.add(key);
       }

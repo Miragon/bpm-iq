@@ -10,7 +10,11 @@
  * server-side returnTo could never thread through.
  */
 
-const KEY = "bpmiq.returnTo";
+const KEY = "designiq.returnTo";
+/** where a tab still running the pre-5.0 SPA stashes it — every browser signs
+ *  in again after that upgrade (renamed session cookie), and that tab's sign-in
+ *  click must still bring the user back to their deep link */
+const LEGACY_KEY = "bpmiq.returnTo"; // legacy-name-ok: tabs loaded before 5.0
 
 /** call from the sign-in click while the deep-link URL is still current */
 export function stashReturnTo(): void {
@@ -31,9 +35,10 @@ export function stashReturnTo(): void {
  *  stash. "//host" and "/\host" are scheme-relative escapes, not paths. */
 export function takeReturnTo(): string | undefined {
   try {
-    const value = sessionStorage.getItem(KEY);
+    const value = sessionStorage.getItem(KEY) ?? sessionStorage.getItem(LEGACY_KEY);
     if (value === null) return undefined;
     sessionStorage.removeItem(KEY);
+    sessionStorage.removeItem(LEGACY_KEY);
     if (value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\")) return value;
   } catch {
     /* storage blocked — nothing to restore */

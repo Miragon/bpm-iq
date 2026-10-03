@@ -12,8 +12,8 @@ import { fileURLToPath } from "node:url";
 import { downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath, runTests } from "@vscode/test-electron";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const extensionsDir = mkdtempSync(join(tmpdir(), "bpm-live-ext-"));
-const userDataDir = mkdtempSync(join(tmpdir(), "bpm-live-usr-"));
+const extensionsDir = mkdtempSync(join(tmpdir(), "designiq-ext-"));
+const userDataDir = mkdtempSync(join(tmpdir(), "designiq-usr-"));
 
 const vscodeExecutablePath = await downloadAndUnzipVSCode("stable");
 const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
@@ -35,7 +35,7 @@ await runTests({
   extensionTestsPath: join(ROOT, "out", "test-e2e.js"),
   extensionTestsEnv: {
     // e2e.ts reads the file the Live Host serves in place — default to the
-    // monorepo root (its bpmiq.yml points at process-documentation/processes), overridable for any other checkout
+    // monorepo root (its contract file points at process-documentation/processes), overridable for any other checkout
     LIVE_HOST_CONTENT_DIR: process.env.LIVE_HOST_CONTENT_DIR ?? resolve(ROOT, "..", ".."),
   },
   launchArgs: [

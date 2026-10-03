@@ -1,15 +1,15 @@
 /**
- * @bpmiq/github-app — the GitHub App primitives shared by the control plane
+ * @designiq/github-app — the GitHub App primitives shared by the control plane
  * (the ONLY holder of the app private key, ADR 0002) and a standalone / local
  * live-host: the RS256 app JWT, private-key loading, and the REST plumbing
  * (app-authenticated requests, installation-token minting, Link-header
  * pagination), pinned here so the two sides can't drift (they had already: the
  * .pem auto-detect existed on only one). Zero third-party deps (node:crypto +
  * node:fs). In cell mode a cell never holds the key — it uses
- * @bpmiq/cell-protocol handoffs instead.
+ * @designiq/cell-protocol handoffs instead.
  *
  * Each app keeps a thin adapter that pins ITS user-agent (GitHubApi.userAgent
- * is a parameter here — "bpm-control-plane" vs "bpm-live-host") and delegates
+ * is a parameter here — "bpm-control-plane" vs "designiq-live-host") and delegates
  * the wire work to this package.
  */
 import { createSign } from "node:crypto";
@@ -75,7 +75,7 @@ export function loadPrivateKey(
 export interface GitHubApi {
   /** REST base, e.g. https://api.github.com */
   apiUrl: string;
-  /** the calling app's user-agent, e.g. "bpm-control-plane" / "bpm-live-host" */
+  /** the calling app's user-agent, e.g. "bpm-control-plane" / "designiq-live-host" */
   userAgent: string;
 }
 

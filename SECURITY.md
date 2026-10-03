@@ -43,4 +43,4 @@ The areas we most want reports on:
 ## Supported versions
 
 Pre-1.0: only the **latest minor** receives security fixes. Track
-`ghcr.io/miragon/bpmiq-live-host:latest` or the newest `vX.Y.Z` tag.
+`ghcr.io/miragon/designiq-live-host:latest` or the newest `vX.Y.Z` tag.

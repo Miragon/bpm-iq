@@ -1,4 +1,4 @@
-# CODEOWNERS — decision rights per path in the bpmiq monorepo.
+# CODEOWNERS — decision rights per path in the designIQ monorepo.
 # Merge approval = release: a required review from the owning team IS the release decision.
 #
 # Individual owners for now; swap in org team slugs (e.g. @Miragon/platform)

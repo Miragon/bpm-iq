@@ -5,8 +5,8 @@
  * inline — their messages are actionable. Mounted on open, so state resets by
  * unmounting.
  */
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
 import { useEffect, useState } from "react";
 
 import type { TodoElementWire } from "@/lib/api";

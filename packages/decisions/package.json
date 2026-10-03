@@ -1,5 +1,5 @@
 {
-  "name": "@bpmiq/decisions",
+  "name": "@designiq/decisions",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
-    "@bpmiq/notations": "workspace:*",
+    "@designiq/notations": "workspace:*",
     "@emaarco/dmn-js-simulation": "0.3.1",
     "feelin": "8.1.0",
     "inferno": "5.6.3",

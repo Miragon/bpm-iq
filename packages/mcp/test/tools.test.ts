@@ -1,8 +1,8 @@
 /**
- * bpm-mcp-server tool behaviour (packages/mcp/tools.ts). Drives the REAL server
+ * designiq-mcp-server tool behaviour (packages/mcp/tools.ts). Drives the REAL server
  * over an in-memory transport — a linked Client↔Server pair, no stdio/HTTP boot —
  * so the tools are exercised exactly as an MCP client would. Content is a
- * self-contained slim fixture (bpmiq.yml + .bpmn files, no process.yaml): a
+ * self-contained slim fixture (designiq.yml + .bpmn files, no process.yaml): a
  * process IS a .bpmn, its view is DERIVED from the BPMN.
  */
 import assert from "node:assert/strict";
@@ -11,8 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 
-import { READ } from "@bpmiq/mcp-kit";
-import { toolText } from "@bpmiq/mcp-kit/testing";
+import { READ } from "@designiq/mcp-kit";
+import { toolText } from "@designiq/mcp-kit/testing";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { createMcpServer } from "../tools.ts";
@@ -57,8 +57,8 @@ const INVOICE_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
 </bpmn:definitions>`;
 
 function slimRepo(): string {
-  const root = mkdtempSync(join(tmpdir(), "bpm-mcp-"));
-  writeFileSync(join(root, "bpmiq.yml"), "processes: processes\n");
+  const root = mkdtempSync(join(tmpdir(), "designiq-mcp-"));
+  writeFileSync(join(root, "designiq.yml"), "processes: processes\n");
   mkdirSync(join(root, "processes", "subprocesses"), { recursive: true });
   writeFileSync(join(root, "processes", "order-to-cash.bpmn"), ORDER_BPMN);
   writeFileSync(join(root, "processes", "subprocesses", "invoice-handling.bpmn"), INVOICE_BPMN);
@@ -127,8 +127,8 @@ test("list_models: grouped by notation, rows enriched via extract+deriveView", a
 test("list_models: one broken model degrades to its bare row, the listing survives", async () => {
   // a live-edited checkout may hold transiently broken files — a per-row
   // throw must never kill the whole tool call
-  const root = mkdtempSync(join(tmpdir(), "bpm-mcp-broken-"));
-  writeFileSync(join(root, "bpmiq.yml"), "models: models\n");
+  const root = mkdtempSync(join(tmpdir(), "designiq-mcp-broken-"));
+  writeFileSync(join(root, "designiq.yml"), "models: models\n");
   mkdirSync(join(root, "models"), { recursive: true });
   writeFileSync(join(root, "models", "order-to-cash.bpmn"), ORDER_BPMN);
   writeFileSync(join(root, "models", "teams.tt"), "{ broken json");
@@ -211,8 +211,8 @@ test("get_model: any-notation resolution, unknown ids list every model with its 
 });
 
 test("shared stems: bpmn wins by default, the notation arg disambiguates, unknown honors the filter", async () => {
-  const root = mkdtempSync(join(tmpdir(), "bpm-mcp-shared-"));
-  writeFileSync(join(root, "bpmiq.yml"), "models: models\n");
+  const root = mkdtempSync(join(tmpdir(), "designiq-mcp-shared-"));
+  writeFileSync(join(root, "designiq.yml"), "models: models\n");
   mkdirSync(join(root, "models"), { recursive: true });
   writeFileSync(join(root, "models", "order.bpmn"), ORDER_BPMN);
   writeFileSync(join(root, "models", "order.owm"), "component A [0.5, 0.5]\ncomponent B [0.2, 0.7]\nA -> B\n");
@@ -250,8 +250,8 @@ test("shared stems: bpmn wins by default, the notation arg disambiguates, unknow
 });
 
 test("graph tools: notations without graphHints opt out gracefully; cyclic-only wardley yields the 0-path note", async () => {
-  const root = mkdtempSync(join(tmpdir(), "bpm-mcp-nohints-"));
-  writeFileSync(join(root, "bpmiq.yml"), "models: models\n");
+  const root = mkdtempSync(join(tmpdir(), "designiq-mcp-nohints-"));
+  writeFileSync(join(root, "designiq.yml"), "models: models\n");
   mkdirSync(join(root, "models"), { recursive: true });
   writeFileSync(join(root, "models", "teams.tt"), JSON.stringify({ version: 2, nodes: [] }));
   writeFileSync(join(root, "models", "loop.owm"), "component A [0.5, 0.5]\ncomponent B [0.2, 0.7]\nA -> B\nB -> A\n");
@@ -377,8 +377,8 @@ test("which_processes_use: finds the caller of a sub-process; misses succeed wit
   assert.match(miss.text, /No process references 'nonexistent-xyz'/);
 });
 
-test("not a content repo: tools report the missing bpmiq.yml, never crash", async () => {
-  const bare = mkdtempSync(join(tmpdir(), "bpm-mcp-bare-"));
+test("not a content repo: tools report the missing designiq.yml, never crash", async () => {
+  const bare = mkdtempSync(join(tmpdir(), "designiq-mcp-bare-"));
   const s = createMcpServer(bare);
   const [ct, st] = InMemoryTransport.createLinkedPair();
   const c = new Client({ name: "t", version: "0" });
@@ -386,7 +386,32 @@ test("not a content repo: tools report the missing bpmiq.yml, never crash", asyn
   const r = await c.callTool({ name: "list_processes", arguments: {} });
   const text = (r.content as Array<{ text?: string }>)[0]?.text ?? "";
   assert.ok(r.isError);
-  assert.match(text, /not a BPM content repo/);
+  assert.match(text, /not a content repo/);
+  assert.match(text, /Expected a root designiq\.yml naming the models folder/);
+  // the legacy name is still read, so the message names it too
+  assert.match(text, /or legacy bpmiq\.yml/); // legacy-name-ok: the pre-rename contract file
   await c.close();
   await s.close();
+});
+
+test("legacy contract file: a repo with only the pre-rename name is still served", async () => {
+  const root = mkdtempSync(join(tmpdir(), "designiq-mcp-legacy-"));
+  writeFileSync(join(root, "bpmiq.yml"), "models: models\n"); // legacy-name-ok: persisted in customer repos, readable forever
+  mkdirSync(join(root, "models"), { recursive: true });
+  writeFileSync(join(root, "models", "order-to-cash.bpmn"), ORDER_BPMN);
+  const s = createMcpServer(root);
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  const c = new Client({ name: "legacy-test", version: "0" });
+  await Promise.all([s.connect(st), c.connect(ct)]);
+  try {
+    const { isError, text } = toolText(await c.callTool({ name: "list_processes", arguments: {} }));
+    assert.ok(!isError, text);
+    assert.deepEqual(
+      JSON.parse(text).map((p: { id: string }) => p.id),
+      ["order-to-cash"],
+    );
+  } finally {
+    await c.close();
+    await s.close();
+  }
 });

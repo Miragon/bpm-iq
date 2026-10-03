@@ -8,11 +8,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { Me, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { Me, RepoInfo } from "@designiq/contracts/live-host";
 import { QueryClient } from "@tanstack/react-query";
 
 import {
   clearRepoSnapshot,
+  dropLegacyRepoSnapshot,
   persistRepoSnapshots,
   readRepoSnapshot,
   writeRepoSnapshot,
@@ -78,7 +79,7 @@ test("a damaged or foreign-shaped entry is ignored, never thrown", () => {
     JSON.stringify({ login: "petra", savedAt: 1, repos: [{ fullName: 42 }] }),
     JSON.stringify({ login: "petra", repos: [] }),
   ]) {
-    storage.setItem("bpmiq.repos.v1", raw);
+    storage.setItem("designiq.repos.v1", raw);
     assert.equal(readRepoSnapshot("petra", storage, 2), undefined, raw);
   }
 });
@@ -98,6 +99,7 @@ test("blocked storage degrades to no snapshot", () => {
   assert.doesNotThrow(() => writeRepoSnapshot("petra", [repo("acme/models")], blocked));
   assert.equal(readRepoSnapshot("petra", blocked), undefined);
   assert.doesNotThrow(() => clearRepoSnapshot(blocked));
+  assert.doesNotThrow(() => dropLegacyRepoSnapshot(blocked));
 });
 
 test("clearRepoSnapshot (logout) removes the entry", () => {
@@ -105,6 +107,23 @@ test("clearRepoSnapshot (logout) removes the entry", () => {
   writeRepoSnapshot("petra", [repo("acme/models")], storage);
   clearRepoSnapshot(storage);
   assert.equal(readRepoSnapshot("petra", storage), undefined);
+});
+
+// written in two halves ON PURPOSE: a search/replace of the product name would
+// rewrite the source constant and a one-piece literal here in the same breath
+const LEGACY_KEY = "bpm" + "iq.repos.v1";
+
+test("dropLegacyRepoSnapshot removes the pre-rename entry and leaves the current one", () => {
+  const storage = memoryStorage();
+  storage.setItem(LEGACY_KEY, JSON.stringify({ login: "petra", savedAt: 1, repos: [repo("acme/private")] }));
+  writeRepoSnapshot("petra", [repo("acme/models")], storage, 1_000);
+  dropLegacyRepoSnapshot(storage);
+  assert.equal(storage.items.has(LEGACY_KEY), false, "the orphaned private repo list is gone");
+  assert.deepEqual(
+    readRepoSnapshot("petra", storage, 2_000)?.repos.map((r) => r.fullName),
+    ["acme/models"],
+  );
+  assert.doesNotThrow(() => dropLegacyRepoSnapshot(storage), "a second run is a no-op");
 });
 
 test("persistRepoSnapshots writes each successful repos result under the signed-in login — and only that", () => {
@@ -123,7 +142,7 @@ test("persistRepoSnapshots writes each successful repos result under the signed-
     readRepoSnapshot("petra", storage)?.repos.map((r) => r.fullName),
     ["acme/models", "acme/claims"],
   );
-  assert.ok(!storage.items.get("bpmiq.repos.v1")?.includes("sess-secret"), "the ws token never reaches storage");
+  assert.ok(!storage.items.get("designiq.repos.v1")?.includes("sess-secret"), "the ws token never reaches storage");
 
   stop();
   qc.setQueryData(["repos"], []);

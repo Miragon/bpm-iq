@@ -20,7 +20,7 @@
  * fetched lazily on first login and cached; explicit URL overrides win
  * (air-gapped deployments where the issuer URL isn't reachable from the host).
  */
-import { AppError } from "@bpmiq/http-kit";
+import { AppError } from "@designiq/http-kit";
 
 export interface OidcLoginConfig {
   /** the IdP (same issuer the resource-server verifier is configured with) */

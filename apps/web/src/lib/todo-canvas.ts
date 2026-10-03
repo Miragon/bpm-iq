@@ -3,7 +3,7 @@
  * same ownership rule as bindBpmn: created inside the live-editor attach effect,
  * torn down in its cleanup. Framework-free on purpose — BOTH modeler surfaces
  * use it: the React SPA (components/live-editor.tsx) and the vanilla MCP-App
- * widget (mcp-app/todos.ts). Each styles `.bpm-todo-badge` in its own sheet.
+ * widget (mcp-app/todos.ts). Each styles `.designiq-todo-badge` in its own sheet.
  * Responsibilities:
  *
  *  - count badges (overlays service) on every element with ≥1 open anchored
@@ -64,7 +64,7 @@ export interface TodoCanvas {
 }
 
 /** overlay type marker — lets us remove exactly our badges before re-rendering */
-const OVERLAY_TYPE = "bpm-todo-badge";
+const OVERLAY_TYPE = "designiq-todo-badge";
 
 export function attachTodoCanvas(
   modeler: ModelerLike,
@@ -98,7 +98,7 @@ export function attachTodoCanvas(
       if (!registry.get(elementId)) continue; // anchor id gone from the diagram — the panel still lists the todo
       const badge = document.createElement("button");
       badge.type = "button";
-      badge.className = "bpm-todo-badge";
+      badge.className = "designiq-todo-badge";
       badge.textContent = String(count);
       badge.title = count === 1 ? "1 open todo" : `${count} open todos`;
       badge.addEventListener("click", (e) => {

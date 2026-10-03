@@ -5,8 +5,8 @@
  * unmounted dialog would drop the mutation's onSuccess). Mounted on open, so
  * state resets by unmounting (create-dialog convention).
  */
-import { Button } from "@bpmiq/ui-kit/components/button";
-import { cn } from "@bpmiq/ui-kit/lib/utils";
+import { Button } from "@designiq/ui-kit/components/button";
+import { cn } from "@designiq/ui-kit/lib/utils";
 import { type ReactNode, useEffect, useId } from "react";
 
 export const fieldClass =

@@ -6,7 +6,7 @@
  * the Live Host before a room's presence is answered to an MCP client.
  * Dependency-free on purpose — importable without the Hocuspocus provider.
  */
-import type { CanvasPresence, PresenceUser } from "@bpmiq/contracts/live";
+import type { CanvasPresence, PresenceUser } from "@designiq/contracts/live";
 
 /** the roster identity, or undefined when the peer has not announced one */
 export function sanitizeUser(raw: unknown): PresenceUser | undefined {

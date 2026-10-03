@@ -81,9 +81,9 @@ export class StickyPalette {
     this._elementFactory = elementFactory;
     this._bpmnjs = bpmnjs;
     palette.registerProvider(this);
-    // the entries depend on bpmiq:mode — refresh whenever it CHANGES, from
-    // any direction: the toggle itself, its undo/redo (commandStack.changed)
-    // or a remote flip (arrives via re-import)
+    // the entries depend on bpmiq:mode (legacy-name-ok) — refresh whenever it
+    // CHANGES, from any direction: the toggle itself, its undo/redo
+    // (commandStack.changed) or a remote flip (arrives via re-import)
     let lastMode: boolean | undefined;
     const maybeUpdate = (): void => {
       const workshop = isWorkshopMode(bpmnjs.getDefinitions());
@@ -116,13 +116,14 @@ export class StickyPalette {
       for (const [key, entry] of Object.entries(entries)) {
         if (WORKSHOP_PALETTE.has(key)) reduced[key] = entry;
       }
-      reduced["bpmiq-separator"] = { group: "bpmiq", separator: true };
-      reduced["create.bpmiq-sticky"] = {
-        group: "bpmiq",
+      // ids and group name the feature, not the product (runtime-only, never persisted)
+      reduced["sticky-separator"] = { group: "sticky", separator: true };
+      reduced["create.sticky"] = {
+        group: "sticky",
         title: "Create sticky note (discussion) — or press n",
         // className + CSS mask instead of an <img>: the glyph inherits the
         // palette entry color INCLUDING the hover blue, like the font icons
-        className: "bpmiq-palette-sticky",
+        className: "designiq-palette-sticky",
         action: { dragstart: createSticky, click: createSticky },
       };
       return reduced;

@@ -16,7 +16,7 @@
  * overwrites unreleased live edits for everyone; the parent owns the mutation
  * and closes on success.
  */
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { Button } from "@designiq/ui-kit/components/button";
 import { GitCompare, RotateCcw, X } from "lucide-react";
 import * as monaco from "monaco-editor";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";

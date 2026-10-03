@@ -4,10 +4,10 @@
  * unit-testable (src/test/unit/login-flow.test.ts):
  *
  *   start URL   GET <host>/auth/<provider>?editor=<uri scheme>&editor_state=<nonce>
- *   callback    <scheme>://miragon-gmbh.bpm-live/auth?code=<one-time>&state=<nonce>
+ *   callback    <scheme>://miragon-gmbh.design-iq/auth?code=<one-time>&state=<nonce>
  *   exchange    POST <host>/auth/exchange {code} → Me
  */
-import { EDITOR_LOGIN_PATH } from "@bpmiq/contracts/live";
+import { EDITOR_LOGIN_PATH } from "@designiq/contracts/live";
 
 /** both forms of the configured Live Host URL — the REST base and the
  *  Hocuspocus ws base; the setting accepts either */

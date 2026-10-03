@@ -8,8 +8,8 @@
  */
 import "./styles.css";
 
-import { processDeepLink } from "@bpmiq/contracts/deep-link";
-import { modelStem } from "@bpmiq/notations";
+import { processDeepLink } from "@designiq/contracts/deep-link";
+import { modelStem } from "@designiq/notations";
 
 import { tbpmToggleAction } from "@/notations/bpmn-sticky";
 

@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "bpm-architecture": {
+    "designiq-content": {
       "command": "node",
       "args": ["packages/mcp/server.ts"]
     }

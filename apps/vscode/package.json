@@ -1,7 +1,7 @@
 {
-  "name": "bpm-live",
-  "displayName": "BPM Live Workspace",
-  "description": "Open live model documents (bpm-live://) synced through the bpmiq Live Host — the Miragon BPMN Modeler opens them like any other file.",
+  "name": "design-iq",
+  "displayName": "designIQ",
+  "description": "Open live model documents (designiq://) synced through the designIQ Live Host — the Miragon BPMN Modeler opens them like any other file.",
   "version": "0.0.1",
   "private": true,
   "publisher": "miragon-gmbh",
@@ -10,32 +10,36 @@
   },
   "main": "./out/extension.js",
   "activationEvents": [
-    "onFileSystem:bpm-live",
+    "onFileSystem:designiq",
     "onUri"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "bpmLive.open",
-        "title": "BPM Live: Open Live Model"
+        "command": "designiq.open",
+        "title": "Open Live Model",
+        "category": "designIQ"
       },
       {
-        "command": "bpmLive.login",
-        "title": "BPM Live: Sign in"
+        "command": "designiq.login",
+        "title": "Sign in",
+        "category": "designIQ"
       },
       {
-        "command": "bpmLive.loginWithToken",
-        "title": "BPM Live: Sign in with a session token…"
+        "command": "designiq.loginWithToken",
+        "title": "Sign in with a session token…",
+        "category": "designIQ"
       },
       {
-        "command": "bpmLive.logout",
-        "title": "BPM Live: Sign out"
+        "command": "designiq.logout",
+        "title": "Sign out",
+        "category": "designIQ"
       }
     ],
     "configuration": {
-      "title": "BPM Live",
+      "title": "designIQ",
       "properties": {
-        "bpmLive.serverUrl": {
+        "designiq.serverUrl": {
           "type": "string",
           "default": "http://localhost:8301",
           "description": "URL of the Live Host — http(s):// or ws(s)://, both forms work."
@@ -50,8 +54,8 @@
     "test:e2e": "pnpm compile && esbuild src/test/e2e.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/test-e2e.js && node src/test/runTest.mts"
   },
   "dependencies": {
-    "@bpmiq/contracts": "workspace:*",
-    "@bpmiq/live-client": "workspace:*",
+    "@designiq/contracts": "workspace:*",
+    "@designiq/live-client": "workspace:*",
     "@hocuspocus/provider": "4.7.0",
     "ws": "8.22.0",
     "yjs": "13.6.33"

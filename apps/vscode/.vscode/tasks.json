@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "bpm-live: compile",
+      "label": "design-iq: compile",
       "type": "shell",
       "command": "pnpm compile",
       "problemMatcher": [],

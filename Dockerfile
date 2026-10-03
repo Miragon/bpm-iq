@@ -3,8 +3,8 @@
 # POST /mcp over the bundled example content (process-documentation). Build
 # context = the monorepo root (pnpm workspace).
 #
-# Build (from the repo root):  docker build -t bpmiq-mcp .
-# Serves any content repo: set BPM_CONTENT_ROOT / mount your checkout (docs/on-prem).
+# Build (from the repo root):  docker build -t designiq-mcp .
+# Serves any content repo: set DESIGNIQ_CONTENT_ROOT / mount your checkout (docs/on-prem).
 
 FROM node:26-slim AS build
 # Node 26 no longer bundles Corepack — install it explicitly (pnpm version stays
@@ -34,14 +34,14 @@ RUN npm install -g corepack@latest && corepack enable
 ENV NODE_ENV=production PORT=8080
 WORKDIR /app
 # Runtime needs: the MCP server + its deps and the content the tools read
-# (process-documentation: bpmiq.yml + processes/*.bpmn — the default example).
+# (process-documentation: designiq.yml + processes/*.bpmn — the default example).
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/pnpm-workspace.yaml /app/.npmrc /app/package.json ./
 COPY --from=build /app/packages/notations ./packages/notations
-# tools.ts imports @bpmiq/contracts/todo-anchor (list_todos) — the workspace
+# tools.ts imports @designiq/contracts/todo-anchor (list_todos) — the workspace
 # symlink in node_modules dangles without the real package source
 COPY --from=build /app/packages/contracts ./packages/contracts
-# http.ts imports @bpmiq/http-kit and @bpmiq/mcp-kit — the workspace symlinks
+# http.ts imports @designiq/http-kit and @designiq/mcp-kit — the workspace symlinks
 # in node_modules dangle without the real package sources
 COPY --from=build /app/packages/github-app ./packages/github-app
 COPY --from=build /app/packages/http-kit ./packages/http-kit

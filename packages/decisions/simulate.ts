@@ -11,7 +11,7 @@
  * one the dmn-js widget runs in the browser, so a scenario simulated by an
  * agent and one clicked by a human cannot drift apart.
  */
-import type { DerivedDecision } from "@bpmiq/notations/derive";
+import type { DerivedDecision } from "@designiq/notations/derive";
 
 import { evaluateDrd, type RawValue } from "./engine.ts";
 import { decisionVariables, toDrdModel } from "./model.ts";

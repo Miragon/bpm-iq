@@ -1,7 +1,7 @@
 /**
  * The DMN web plugin MANIFEST — light, eager data. The engine (dmn-js + the
  * simulation add-on + bindDmn) loads behind the dynamic import; the Checks
- * panel (FEEL engine + DMN parser via @bpmiq/decisions) stays its own lazy
+ * panel (FEEL engine + DMN parser via @designiq/decisions) stays its own lazy
  * chunk — only a .dmn author who OPENS the panel pays for it.
  */
 import { ShieldCheck } from "lucide-react";

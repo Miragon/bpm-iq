@@ -12,11 +12,11 @@
  * imperative — the mounted plugin / Monaco / Yjs live in refs inside one effect
  * whose cleanup tears the whole live session down (provider, sockets, bindings).
  */
-import { type MovedNotice, type PresenceUser, roomName } from "@bpmiq/contracts/live";
-import { openLiveSession } from "@bpmiq/live-client";
-import { updateText } from "@bpmiq/live-client/text";
-import { byExtension, modelStem } from "@bpmiq/notations";
-import { cn } from "@bpmiq/ui-kit/lib/utils";
+import { type MovedNotice, type PresenceUser, roomName } from "@designiq/contracts/live";
+import { openLiveSession } from "@designiq/live-client";
+import { updateText } from "@designiq/live-client/text";
+import { byExtension, modelStem } from "@designiq/notations";
+import { cn } from "@designiq/ui-kit/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, ListTodo } from "lucide-react";
 import * as monaco from "monaco-editor";
@@ -155,7 +155,7 @@ export function LiveEditor({
     let cancelled = false;
     const session = openLiveSession({
       url: config.wsUrl,
-      // room name = <repo-full-name>/<repo-relative-path> (@bpmiq/contracts/live)
+      // room name = <repo-full-name>/<repo-relative-path> (@designiq/contracts/live)
       room: roomName(repo, docPath),
       token: me.wsToken,
       onAuthenticationFailed: (reason) => {

@@ -1,6 +1,6 @@
 /**
  * "Analyse with AI" — the doorway from a model into an AI chat whose prefilled
- * first move is this connector's modeler widget. @bpmiq/contracts/assist
+ * first move is this connector's modeler widget. @designiq/contracts/assist
  * builds the work order and the deep link; this menu only picks the
  * destination: Claude Desktop, ChatGPT, or the clipboard. Two shapes: the
  * editor-toolbar button (the canvas selection rides along) and the compact
@@ -13,8 +13,8 @@
  * blurs the page too, so a quiet miss is a hint, never proof of a missing
  * install.
  */
-import { ASSIST_TARGETS, type AssistTargetId, buildAssistPrompt, buildAssistUrl } from "@bpmiq/contracts/assist";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { ASSIST_TARGETS, type AssistTargetId, buildAssistPrompt, buildAssistUrl } from "@designiq/contracts/assist";
+import { Button } from "@designiq/ui-kit/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,19 +22,19 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@bpmiq/ui-kit/components/dropdown-menu";
+} from "@designiq/ui-kit/components/dropdown-menu";
 import { BookOpen, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import type { TodoElementWire } from "@/lib/api";
 import { useConfig } from "@/lib/queries";
 
-const SETUP_URL = "https://github.com/Miragon/bpm-iq/blob/main/docs/mcp-integration.md";
+const SETUP_URL = "https://github.com/Miragon/design-iq/blob/main/docs/mcp-integration.md";
 
 const copyPrompt = async (prompt: string): Promise<void> => {
   try {
     await navigator.clipboard.writeText(prompt);
-    toast.success("Prompt copied", { description: "Paste it into a chat connected to the bpmiq connector." });
+    toast.success("Prompt copied", { description: "Paste it into a chat connected to the designIQ connector." });
   } catch {
     // clipboard needs a secure context (https/localhost) — surface it to copy by hand
     toast.info("Copy the prompt by hand", { description: prompt, duration: 15_000 });
@@ -56,7 +56,7 @@ const openClaude = (url: string, prompt: string): void => {
     document.removeEventListener("visibilitychange", onLeave);
     if (left) return;
     toast("Claude Desktop didn't open?", {
-      description: "It may not be installed — copy the prompt for any chat with the bpmiq connector instead.",
+      description: "It may not be installed — copy the prompt for any chat with the designIQ connector instead.",
       action: { label: "Copy prompt", onClick: () => void copyPrompt(prompt) },
       duration: 10_000,
     });
@@ -141,7 +141,7 @@ export function AssistMenu({
         <DropdownMenuItem asChild>
           <a href={SETUP_URL} target="_blank" rel="noreferrer">
             <BookOpen />
-            Requires the bpmiq connector — setup
+            Requires the designIQ connector — setup
           </a>
         </DropdownMenuItem>
       </DropdownMenuContent>

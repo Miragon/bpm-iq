@@ -4,7 +4,7 @@
  * Modeler bound to the shared Y.Text through live-client's miragon-sync (the
  * spec's text lane decides how), with live presence attached.
  */
-import { bindMiragon } from "@bpmiq/live-client/miragon-sync";
+import { bindMiragon } from "@designiq/live-client/miragon-sync";
 
 import { attachPresenceCanvas } from "@/lib/presence-canvas";
 

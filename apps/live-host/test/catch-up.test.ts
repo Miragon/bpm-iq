@@ -152,12 +152,12 @@ test("parseRawDiff: diff-tree -z records, all-zero ids/modes are absent sides", 
 });
 
 test("parseIndex: ls-files -s -z → path → stage-0 id (unmerged stages ignored)", () => {
-  const raw = `100644 ${H} 0\tprocesses/prüfung.dmn\x00100644 ${R} 1\tprocesses/x.bpmn\x00100644 ${M} 0\tbpmiq.yml\x00`;
+  const raw = `100644 ${H} 0\tprocesses/prüfung.dmn\x00100644 ${R} 1\tprocesses/x.bpmn\x00100644 ${M} 0\tdesigniq.yml\x00`;
   assert.deepEqual(
     parseIndex(raw),
     new Map([
       ["processes/prüfung.dmn", H],
-      ["bpmiq.yml", M],
+      ["designiq.yml", M],
     ]),
   );
 });

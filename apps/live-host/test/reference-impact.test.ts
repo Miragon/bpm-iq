@@ -20,8 +20,8 @@ const CALLER = `<?xml version="1.0" encoding="UTF-8"?>
 </definitions>`;
 
 function repo(): string {
-  const ws = mkdtempSync(join(tmpdir(), "bpm-refimpact-"));
-  writeFileSync(join(ws, "bpmiq.yml"), "processes: processes\n");
+  const ws = mkdtempSync(join(tmpdir(), "designiq-refimpact-"));
+  writeFileSync(join(ws, "designiq.yml"), "models: processes\n");
   mkdirSync(join(ws, "processes"), { recursive: true });
   writeFileSync(join(ws, "processes", "order.bpmn"), CALLER);
   writeFileSync(join(ws, "processes", "credit-check.dmn"), "<definitions/>");
@@ -47,7 +47,7 @@ test("referenceImpact: a shipped DELETE flags the referrers it leaves dangling",
 test("referenceImpact: unreferenced files and non-content repos degrade to ''", async () => {
   const ws = repo();
   assert.equal(await referenceImpact(ws, ["processes/order.bpmn"]), "", "order.bpmn has no incoming refs");
-  const bare = mkdtempSync(join(tmpdir(), "bpm-refimpact-bare-"));
+  const bare = mkdtempSync(join(tmpdir(), "designiq-refimpact-bare-"));
   assert.equal(await referenceImpact(bare, ["anything.bpmn"]), "");
 });
 
@@ -61,6 +61,6 @@ test("referencesTo: who points at each model — what a rename rewrites and a de
     { path: "processes/order.bpmn", referencedBy: [] },
     { path: "nope.bpmn", referencedBy: [] },
   ]);
-  const plain = mkdtempSync(join(tmpdir(), "bpm-refimpact-none-"));
+  const plain = mkdtempSync(join(tmpdir(), "designiq-refimpact-none-"));
   assert.deepEqual(await referencesTo(plain, ["x.bpmn"]), [{ path: "x.bpmn", referencedBy: [] }]);
 });

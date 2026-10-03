@@ -1,5 +1,5 @@
 /**
- * DerivedDecision (@bpmiq/notations/derive) → the evaluation models of
+ * DerivedDecision (@designiq/notations/derive) → the evaluation models of
  * @emaarco/dmn-js-simulation. The platform parses DMN exactly ONCE (the
  * notation registry's extractor); this module only re-shapes that view, so the
  * server and the dmn-js widget simulate against the same numbers.
@@ -14,7 +14,7 @@
  * Node-safe: only the framework-free half of the simulation package is used
  * here (its dmn-js/inferno integration is never touched at runtime).
  */
-import type { DecisionView, DerivedDecision } from "@bpmiq/notations/derive";
+import type { DecisionView, DerivedDecision } from "@designiq/notations/derive";
 import { evaluate } from "feelin";
 
 import type { EngineDecisionModel, EngineDrdDecision, EngineDrdModel, RawValue } from "./engine.ts";

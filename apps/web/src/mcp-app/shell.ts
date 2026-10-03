@@ -20,7 +20,7 @@ export const el = <T extends HTMLElement>(id: string): T => document.getElementB
 export interface WidgetChrome {
   toolbar: { title: HTMLSpanElement; dirty: HTMLSpanElement };
   saveBtn: HTMLButtonElement;
-  /** "Open in bpmiq" — hidden until a model is loaded AND a deep-link base is
+  /** "Open in designIQ" — hidden until a model is loaded AND a deep-link base is
    *  known; each widget wires its own URL builder (per-widget link shapes) */
   openBtn: HTMLButtonElement;
   fullscreenBtn: HTMLButtonElement;

@@ -20,7 +20,7 @@
  * session opener is injectable (the node --test suite fakes the socket), and
  * the one bpmn-specific line — bindBpmn — became the engine's bindLive.
  */
-import { openLiveSession } from "@bpmiq/live-client";
+import { openLiveSession } from "@designiq/live-client";
 
 import type { PresenceSurface, RemotePresence } from "../../lib/presence-canvas.ts";
 import type { LiveEngine } from "./engine.ts";

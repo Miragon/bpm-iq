@@ -1,5 +1,5 @@
 /**
- * @bpmiq/github-app — the shared GitHub App key primitives. appJwt is checked
+ * @designiq/github-app — the shared GitHub App key primitives. appJwt is checked
  * against a freshly generated RSA keypair (signature + claims); loadPrivateKey
  * covers all four sources and their precedence, including the *.pem auto-detect
  * that used to exist on only one of the two callers.

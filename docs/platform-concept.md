@@ -6,8 +6,8 @@
 >   system of record, `validate.ts`, the portal, and the MCP server.
 >
 > **Revision 3 (2026-07-15):** the implemented client stack is React 19 + Vite + TanStack
-> Router/Query + Tailwind v4 + shadcn (shared via `@bpmiq/ui-kit`/`@bpmiq/api-client`);
-> the live-session wiring and the BPMN sync rules below live in `@bpmiq/live-client`;
+> Router/Query + Tailwind v4 + shadcn (shared via `@designiq/ui-kit`/`@designiq/api-client`);
+> the live-session wiring and the BPMN sync rules below live in `@designiq/live-client`;
 > backend/module structure is hexagonal per
 > [ADR 0003](adr/0003-module-architecture-and-shared-packages.md). The 4 sync rules in this
 > document remain the authoritative design; code references to `apps/web/src/sync.ts` now
@@ -26,7 +26,7 @@ sync 0 ms vs. 10 s. E2E encryption lost nothing — our own server read everythi
 
 What changes against the text below: components **1 (relay) and 2 (Live Host) merge into one
 Hocuspocus-based service**; rooms are per model file (matching per-process releases), not one
-workspace session; the VS Code side is a **thin own extension** (`bpm-live://`
+workspace session; the VS Code side is a **thin own extension** (`designiq://`
 FileSystemProvider bound to Y.Text, ~150 lines — skeleton in `apps/vscode/`) instead of the
 OCT plugin. Everything else — release flow, GitHub-based authorization, BPMN text-sync rules,
 deployment shape, milestones — carries over unchanged. OCT stays the right choice if
@@ -234,7 +234,7 @@ added behind the same Y.Doc without changing the platform architecture.
 ## Deployment
 
 Self-hosting is documented in [docs/on-prem/](on-prem/); the images are
-`ghcr.io/miragon/bpmiq-live-host` (server + web app) and the portal image (root
+`ghcr.io/miragon/designiq-live-host` (server + web app) and the portal image (root
 `Dockerfile`). Miragon's hosted operation runs the same artifacts (ADR 0004).
 
 > **Status update (2026-07-09): implemented as TWO apps** — the Hocuspocus pivot merged
@@ -246,7 +246,7 @@ Self-hosting is documented in [docs/on-prem/](on-prem/); the images are
 > | portal+MCP | root `Dockerfile`                                                                                                                                           |
 
 The OCT-era plan (kept as evaluated context) foresaw four apps: `bpm-oct-relay`,
-`bpm-live-host`, `bpm-architecture`, `bpm-collab-web`.
+`bpm-live-host`, `bpm-architecture`, `bpm-collab-web`. <!-- legacy-name-ok: the plan's own names -->
 
 The Live Host is deliberately a single writer (one workspace, one room) — no clustering
 needed or wanted in v1; OCT's server doesn't cluster either. One landscape = one Live Host.

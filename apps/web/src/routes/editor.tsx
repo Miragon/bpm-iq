@@ -1,4 +1,4 @@
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { Button } from "@designiq/ui-kit/components/button";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 

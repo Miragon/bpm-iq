@@ -1,5 +1,5 @@
 /**
- * @bpmiq/decisions — what the platform can say about a DMN decision beyond
+ * @designiq/decisions — what the platform can say about a DMN decision beyond
  * "here is the XML":
  *
  *   simulateDecision — run a scenario through the whole DRD, in dependency
@@ -11,7 +11,7 @@
  *
  * ISOMORPHIC BY DESIGN. The evaluation engine is @emaarco/dmn-js-simulation —
  * the add-on the dmn-js modeler runs in the BROWSER — driven through the
- * platform's own DMN parse (@bpmiq/notations, itself pure). So the same module
+ * platform's own DMN parse (@designiq/notations, itself pure). So the same module
  * answers on every side:
  *
  *   Node    apps/live-host (the /mcp decision tools, the release PR's decision

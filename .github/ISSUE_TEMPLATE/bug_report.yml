@@ -6,7 +6,7 @@ body:
     id: deploy-mode
     attributes:
       label: Deploy mode
-      description: How are you running bpmiq?
+      description: How are you running designIQ?
       options:
         - Docker Compose (docs/on-prem)
         - From source (pnpm live-host)
@@ -18,7 +18,7 @@ body:
     attributes:
       label: Version / image tag
       description: GHCR tag (`vX.Y.Z` / `sha-<short>`), git SHA when running from source, or "SaaS" plus your cell hostname.
-      placeholder: ghcr.io/miragon/bpmiq-live-host:v0.1.0
+      placeholder: ghcr.io/miragon/designiq-live-host:v0.1.0
     validations:
       required: true
   - type: textarea
