@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Miragon/bpm-iq.git",
+    "url": "git+https://github.com/Miragon/design-iq.git",
     "directory": "packages/mcp"
   },
   "keywords": [
