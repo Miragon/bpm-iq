@@ -301,7 +301,7 @@ export function requirementHref(req: Record<string, any>): { href: string; local
  * DMN: decisions (with their full decision-table logic), input data and the
  * information requirements between them. The table detail rides in
  * node.extra — deriveDecision (derive.ts) turns it into the decision view,
- * and the simulator (@bpmiq/decisions) into its evaluation model, so this is
+ * and the simulator (@designiq/decisions) into its evaluation model, so this is
  * the ONE DMN parser on the server side.
  */
 function extractDmn(raw: string): ModelGraph {

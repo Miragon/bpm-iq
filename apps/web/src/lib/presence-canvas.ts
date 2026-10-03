@@ -7,7 +7,7 @@
  * wardley/team-topologies modelers (all diagram-js: canvas + elementRegistry
  * + eventBus-backed on/off).
  *
- * Coordinates travel in MODEL space (@bpmiq/contracts/live CanvasPresence),
+ * Coordinates travel in MODEL space (@designiq/contracts/live CanvasPresence),
  * so peers at different zoom/pan see each cursor on the right spot. The
  * drawing layer is a named diagram-js layer INSIDE the viewport transform:
  * outlines drawn at model coordinates land automatically; cursor glyphs get
@@ -20,7 +20,7 @@
  * save changed. They render as dashed outlines with the name pill anchored to
  * the first outlined element, so "where the AI worked" reads at a glance.
  */
-import type { CanvasPresence, PresenceUser } from "@bpmiq/contracts/live";
+import type { CanvasPresence, PresenceUser } from "@designiq/contracts/live";
 
 // relative on purpose: the MCP-App engines import this controller and the
 // node --test suites import THEM — no vite alias there

@@ -6,8 +6,8 @@
  * splitRoom — the SAME gate the live rooms use, so history serves exactly the
  * shareable model files and nothing else (.git, dotfiles, escapes).
  */
-import type { FileAtCommitWire, FileCommitWire } from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
+import type { FileAtCommitWire, FileCommitWire } from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
 
 import { isCommitSha } from "../domain/file-history.ts";
 import type { RegistryLookup } from "../domain/rooms.ts";

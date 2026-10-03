@@ -21,7 +21,7 @@ import { existsSync, lstatSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import type { FileCommitWire } from "@bpmiq/contracts/live-host";
+import type { FileCommitWire } from "@designiq/contracts/live-host";
 
 import { gitEnv, runGit, scrub } from "../adapters/git/run.ts";
 import {

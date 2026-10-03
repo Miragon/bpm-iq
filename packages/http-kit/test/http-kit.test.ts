@@ -1,4 +1,4 @@
-/** @bpmiq/http-kit — the shared primitives both backends build on. */
+/** @designiq/http-kit — the shared primitives both backends build on. */
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";

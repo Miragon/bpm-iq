@@ -13,7 +13,7 @@
  * SILENTLY on import, so no dirty suppression is needed here (contrast the
  * DSL engines).
  */
-import { bindBpmn } from "@bpmiq/live-client/bpmn-sync";
+import { bindBpmn } from "@designiq/live-client/bpmn-sync";
 import Modeler from "bpmn-js/lib/Modeler";
 import NavigatedViewer from "bpmn-js/lib/NavigatedViewer";
 import type * as Y from "yjs";

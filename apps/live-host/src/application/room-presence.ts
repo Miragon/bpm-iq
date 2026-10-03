@@ -13,8 +13,8 @@
  * hocuspocus.documents): an unloaded room has nobody in it by definition, and
  * answering must never load one.
  */
-import type { PresencePeerWire } from "@bpmiq/contracts/live-host";
-import { sanitizeCanvas, sanitizeUser } from "@bpmiq/live-client/presence";
+import type { PresencePeerWire } from "@designiq/contracts/live-host";
+import { sanitizeCanvas, sanitizeUser } from "@designiq/live-client/presence";
 
 /** one raw awareness state of a room + the login of the ws connection that
  *  announced it (absent for server-published states — the agent leases) */

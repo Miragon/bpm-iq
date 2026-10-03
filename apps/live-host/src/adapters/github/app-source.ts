@@ -6,7 +6,7 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { paginate } from "@bpmiq/github-app";
+import { paginate } from "@designiq/github-app";
 
 import type {
   ConnectionSnapshot,
@@ -128,7 +128,7 @@ export function createGitHubAppSource(args: {
         headers: {
           accept: "application/vnd.github+json",
           authorization: `Bearer ${token}`,
-          "user-agent": "bpm-live-host",
+          "user-agent": "designiq-live-host",
         },
       });
       // 404 = user is not a collaborator / app not installed on this repo → no access

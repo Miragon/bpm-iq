@@ -10,7 +10,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { readBody, send } from "@bpmiq/http-kit";
+import { readBody, send } from "@designiq/http-kit";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import type { McpServer } from "@modelcontextprotocol/server";
 

@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { Me, RepoInfo } from "@bpmiq/contracts/live-host";
+import type { Me, RepoInfo } from "@designiq/contracts/live-host";
 import { QueryClient } from "@tanstack/react-query";
 
 import {
@@ -78,7 +78,7 @@ test("a damaged or foreign-shaped entry is ignored, never thrown", () => {
     JSON.stringify({ login: "petra", savedAt: 1, repos: [{ fullName: 42 }] }),
     JSON.stringify({ login: "petra", repos: [] }),
   ]) {
-    storage.setItem("bpmiq.repos.v1", raw);
+    storage.setItem("designiq.repos.v1", raw);
     assert.equal(readRepoSnapshot("petra", storage, 2), undefined, raw);
   }
 });
@@ -123,7 +123,7 @@ test("persistRepoSnapshots writes each successful repos result under the signed-
     readRepoSnapshot("petra", storage)?.repos.map((r) => r.fullName),
     ["acme/models", "acme/claims"],
   );
-  assert.ok(!storage.items.get("bpmiq.repos.v1")?.includes("sess-secret"), "the ws token never reaches storage");
+  assert.ok(!storage.items.get("designiq.repos.v1")?.includes("sess-secret"), "the ws token never reaches storage");
 
   stop();
   qc.setQueryData(["repos"], []);

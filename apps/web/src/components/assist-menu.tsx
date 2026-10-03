@@ -1,6 +1,6 @@
 /**
  * "Analyse with AI" — the doorway from a model into an AI chat whose prefilled
- * first move is this connector's modeler widget. @bpmiq/contracts/assist
+ * first move is this connector's modeler widget. @designiq/contracts/assist
  * builds the work order and the deep link; this menu only picks the
  * destination: Claude Desktop, ChatGPT, or the clipboard. Two shapes: the
  * editor-toolbar button (the canvas selection rides along) and the compact
@@ -13,8 +13,8 @@
  * blurs the page too, so a quiet miss is a hint, never proof of a missing
  * install.
  */
-import { ASSIST_TARGETS, type AssistTargetId, buildAssistPrompt, buildAssistUrl } from "@bpmiq/contracts/assist";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { ASSIST_TARGETS, type AssistTargetId, buildAssistPrompt, buildAssistUrl } from "@designiq/contracts/assist";
+import { Button } from "@designiq/ui-kit/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,14 +22,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@bpmiq/ui-kit/components/dropdown-menu";
+} from "@designiq/ui-kit/components/dropdown-menu";
 import { BookOpen, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import type { TodoElementWire } from "@/lib/api";
 import { useConfig } from "@/lib/queries";
 
-const SETUP_URL = "https://github.com/Miragon/bpm-iq/blob/main/docs/mcp-integration.md";
+const SETUP_URL = "https://github.com/Miragon/design-iq/blob/main/docs/mcp-integration.md";
 
 const copyPrompt = async (prompt: string): Promise<void> => {
   try {

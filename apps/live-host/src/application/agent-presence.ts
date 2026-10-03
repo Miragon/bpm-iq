@@ -31,7 +31,7 @@ import {
   type CanvasPresence,
   presenceColor,
   type PresenceUser,
-} from "@bpmiq/contracts/live";
+} from "@designiq/contracts/live";
 import { applyAwarenessUpdate, Awareness, encodeAwarenessUpdate } from "y-protocols/awareness";
 import * as Y from "yjs";
 

@@ -13,7 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { templateFor } from "@bpmiq/notations/templates";
+import { templateFor } from "@designiq/notations/templates";
 
 import { checkModelBaseline } from "../src/validate.ts";
 

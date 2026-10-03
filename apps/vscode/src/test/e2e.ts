@@ -13,8 +13,8 @@
  */
 import { readFileSync } from "node:fs";
 
-import { CONTENT_KEY } from "@bpmiq/contracts/live";
-import type { Me, ModelInfo } from "@bpmiq/contracts/live-host";
+import { CONTENT_KEY } from "@designiq/contracts/live";
+import type { Me, ModelInfo } from "@designiq/contracts/live-host";
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
 import * as vscode from "vscode";
 import WebSocket from "ws";
@@ -22,7 +22,7 @@ import WebSocket from "ws";
 import { hostJson } from "../host-api.ts";
 import { modelItems } from "../model-picker.ts";
 
-const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/bpm-iq";
+const HOST_REPO = process.env.GITHUB_REPO ?? "Miragon/design-iq";
 const FILE = "process-documentation/processes/order-to-cash.bpmn";
 /** room name on the Live Host = <owner>/<repo>/<repo-relative-path> */
 const DOC = `${HOST_REPO}/${FILE}`;

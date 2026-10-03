@@ -5,7 +5,7 @@
  * wire rows + routes); every OTHER template-capable notation goes through
  * here — adding notation N+1 with a template needs zero new dialog code.
  */
-import type { NotationDescriptor } from "@bpmiq/notations";
+import type { NotationDescriptor } from "@designiq/notations";
 
 import { type ModelInfo } from "@/lib/api";
 import { useCreateNotationModel } from "@/lib/queries";

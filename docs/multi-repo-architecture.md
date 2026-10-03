@@ -180,7 +180,7 @@ moves host-side; connected repos ship **content only**:
   `release()` executed `node scripts/validate.ts` _from the content repo_, which under a
   public app was **remote code execution by any third-party repo on the host**. If
   release-time validation returns, it must ship with the platform (pinned, versioned,
-  `validate --root <checkout>`), never run repo code — the packaged `@bpmiq/validator`
+  `validate --root <checkout>`), never run repo code — the packaged `@designiq/validator`
   already works this way for the `process-documentation/` example.
 - **Portal**: removed with the slim contract — the web client (`apps/web`) renders the
   models live from the Live Host, so there is no separate VitePress site to serve per repo.
@@ -204,7 +204,7 @@ Every file with a registered notation extension under that folder is a model
 content repo — the Live Host neither lists nor serves it, and live rooms exist
 only inside the configured folder. There is no hand-written metadata: the process
 view (name, roles from BPMN lanes, steps, flow, sub-process calls) is **derived**
-from the BPMN (`@bpmiq/notations/derive`), consumed the same way by the validator,
+from the BPMN (`@designiq/notations/derive`), consumed the same way by the validator,
 the MCP server, and the Live Host. Richer metadata can grow back into the contract
 as it evolves — the `bpmiq.yml` is the seam for it.
 

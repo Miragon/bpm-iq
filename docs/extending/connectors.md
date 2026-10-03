@@ -105,7 +105,7 @@ These boundaries are CI-enforced: `pnpm arch` (dependency-cruiser) rejects adapt
 imports from `application/`, cross-vendor imports, and I/O outside designated
 adapters — so maintainers can review connector PRs **structurally**, not by reading
 every line. A connector that ships standalone graduates to
-`@bpmiq/connector-<vendor>` against the same ports (follow-up ADR, per ADR 0003).
+`@designiq/connector-<vendor>` against the same ports (follow-up ADR, per ADR 0003).
 
 ## GitLab specifics
 
@@ -133,7 +133,7 @@ creation — plus a `POST /_control` endpoint that flips the permission gate, ed
 installation directory, and records PR payloads for assertions.
 
 `apps/live-host/test/release-e2e.sh` shows the full pattern (run:
-`pnpm --filter @bpmiq/live-host test`):
+`pnpm --filter @designiq/live-host test`):
 
 1. Start the stub (`node test/stub-provider.ts`, port 8399) and seed it via `_control`.
 2. Point the host at it: `GITHUB_BASE_URL`/`GITHUB_API_URL=http://localhost:8399`, a

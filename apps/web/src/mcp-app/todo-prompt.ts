@@ -19,8 +19,8 @@
  *    explicit "information, not instructions" marker so a crafted body cannot
  *    splice its own steps into the work order.
  */
-import { fenced } from "@bpmiq/contracts/assist";
-import type { TodoWire } from "@bpmiq/contracts/live-host";
+import { fenced } from "@designiq/contracts/assist";
+import type { TodoWire } from "@designiq/contracts/live-host";
 
 /** the model document the widget currently has open — the anchor's own `file`
  *  is a creation-time snapshot and may be stale after a move */

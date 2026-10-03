@@ -21,7 +21,7 @@
  * be reverted for the peer — the accepted v1 cost, the web app's y-monaco
  * binding has no such window (Monaco edits are synchronous with Yjs).
  */
-import { diffRegion, updateText } from "@bpmiq/live-client/text";
+import { diffRegion, updateText } from "@designiq/live-client/text";
 import * as vscode from "vscode";
 import type * as Y from "yjs";
 

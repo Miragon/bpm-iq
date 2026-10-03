@@ -3,7 +3,7 @@
  * ONE central GitHub App; every user of every instance then only ever sees
  * GitHub's install picker — sign-in happens at the identity provider (ADR 0007).
  *
- *   GITHUB_REPO=<owner>/<repo> pnpm --filter @bpmiq/live-host create-app
+ *   GITHUB_REPO=<owner>/<repo> pnpm --filter @designiq/live-host create-app
  *
  * Opens a tiny local page → one click posts the app manifest to GitHub (org of
  * GITHUB_REPO, editable on GitHub's page) → GitHub redirects back → credentials
@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 const REPO = process.env.GITHUB_REPO;
 if (!REPO || !REPO.includes("/")) {
   console.error("GITHUB_REPO must be set to <owner>/<repo> — the app is registered in that owner's org.");
-  console.error("Example: GITHUB_REPO=acme/process-docs pnpm --filter @bpmiq/live-host create-app");
+  console.error("Example: GITHUB_REPO=acme/process-docs pnpm --filter @designiq/live-host create-app");
   process.exit(1);
 }
 const OWNER = REPO.split("/")[0] ?? "";
@@ -80,7 +80,7 @@ const server = createServer(async (req, res) => {
     const code = url.searchParams.get("code");
     const conv = await fetch(`${GH_API}/app-manifests/${encodeURIComponent(code!)}/conversions`, {
       method: "POST",
-      headers: { accept: "application/vnd.github+json", "user-agent": "bpm-live-create-app" },
+      headers: { accept: "application/vnd.github+json", "user-agent": "designiq-create-app" },
     });
     if (!conv.ok) {
       res.writeHead(500);

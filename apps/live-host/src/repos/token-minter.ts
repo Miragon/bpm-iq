@@ -20,7 +20,7 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { mintInstallationToken } from "@bpmiq/github-app";
+import { mintInstallationToken } from "@designiq/github-app";
 
 import { type AppCredentials, githubApi } from "../adapters/github/app-auth.ts";
 import { makeCipher } from "../domain/crypt.ts";

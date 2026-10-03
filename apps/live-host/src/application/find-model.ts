@@ -11,7 +11,7 @@
  * REST caller gets the status. One deliberate wire change: a repo without a
  * bpmiq.yml now says so, instead of "process 'x' not found".
  */
-import { AppError } from "@bpmiq/http-kit";
+import { AppError } from "@designiq/http-kit";
 
 import type { WorkspaceEnsure } from "../domain/rooms.ts";
 import {

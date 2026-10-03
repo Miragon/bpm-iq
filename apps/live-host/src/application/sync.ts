@@ -16,10 +16,10 @@
  * WorkspaceManager, lineage behind dropLineage). ApiOptions structurally
  * satisfies SyncDeps — the returned shape IS the wire format (SyncResult).
  */
-import { roomName, roomPrefix } from "@bpmiq/contracts/live";
-import type { SyncResult } from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
-import { byExtension, modelStem } from "@bpmiq/notations";
+import { roomName, roomPrefix } from "@designiq/contracts/live";
+import type { SyncResult } from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
+import { byExtension, modelStem } from "@designiq/notations";
 
 import type { ConnectedRepo } from "../repos/registry.ts";
 

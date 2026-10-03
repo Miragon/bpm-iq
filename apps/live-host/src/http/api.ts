@@ -92,8 +92,8 @@ import type {
   SyncResult,
   TodoJobWire,
   TodoWire,
-} from "@bpmiq/contracts/live-host";
-import { AppError, bearerAuth, errorBody, readBody, redirect, securityHeaders, send } from "@bpmiq/http-kit";
+} from "@designiq/contracts/live-host";
+import { AppError, bearerAuth, errorBody, readBody, redirect, securityHeaders, send } from "@designiq/http-kit";
 
 import {
   clearCookie,
@@ -246,7 +246,7 @@ export interface ApiOptions {
   peersOf?: RoomPresenceDeps["peersOf"];
 }
 
-// send/redirect/readBody/securityHeaders/bearerAuth come from @bpmiq/http-kit —
+// send/redirect/readBody/securityHeaders/bearerAuth come from @designiq/http-kit —
 // the shared, unit-tested primitives (one canonical impl for both backends).
 // NB send() now emits compact JSON (was pretty-printed here); the e2e greps are
 // whitespace-tolerant (`"key": *"value"`), verified before the switch.

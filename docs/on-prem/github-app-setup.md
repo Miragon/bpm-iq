@@ -22,7 +22,7 @@ private key and webhook secret, which GitHub hands out **exactly once, at this m
 ```bash
 LIVE_PUBLIC_URL=https://bpm.example.com \
 GITHUB_REPO=<owner>/<repo> \
-pnpm --filter @bpmiq/live-host create-app
+pnpm --filter @designiq/live-host create-app
 ```
 
 Set `LIVE_PUBLIC_URL` to the deployment's public URL **before** running — the callback,

@@ -18,8 +18,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 
-import { CONTENT_KEY } from "@bpmiq/contracts/live";
-import { type AppError } from "@bpmiq/http-kit";
+import { CONTENT_KEY } from "@designiq/contracts/live";
+import { type AppError } from "@designiq/http-kit";
 import { Server } from "@hocuspocus/server";
 
 import { LineageStore } from "../src/adapters/sqlite/lineage-store.ts";

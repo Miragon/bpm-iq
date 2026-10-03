@@ -10,11 +10,11 @@
  * DESIGNIQ_TODOS_TOKEN, which win): a read-only GET against the content
  * repo's issue tracker — the zero-auth default stays untouched.
  *
- * The content contract is minimal (@bpmiq/notations/content): a repo is a BPM
+ * The content contract is minimal (@designiq/notations/content): a repo is a BPM
  * content repo iff it has a root bpmiq.yml naming its BPMN processes folder; a
  * process IS a .bpmn file there. There is NO hand-written process.yaml — the
  * process view (name, roles, steps, flow, sub-process calls) is DERIVED from the
- * BPMN on the fly (@bpmiq/notations/derive). A new notation with an extractor is
+ * BPMN on the fly (@designiq/notations/derive). A new notation with an extractor is
  * automatically analyzable here.
  *
  * Content root: pass --root <dir> (server.ts) or BPM_CONTENT_ROOT (also read as // legacy-name-ok
@@ -25,10 +25,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseAnchor } from "@bpmiq/contracts/todo-anchor";
-import { type GitHubIssueRow, isPullRequestRow, todoLabelQuery } from "@bpmiq/github-app/todos";
-import { fail, ok, READ, safe as kitSafe, type ToolResult } from "@bpmiq/mcp-kit";
-import { byId, NOTATIONS } from "@bpmiq/notations";
+import { parseAnchor } from "@designiq/contracts/todo-anchor";
+import { type GitHubIssueRow, isPullRequestRow, todoLabelQuery } from "@designiq/github-app/todos";
+import { fail, ok, READ, safe as kitSafe, type ToolResult } from "@designiq/mcp-kit";
+import { byId, NOTATIONS } from "@designiq/notations";
 import {
   buildRepoIndex,
   type ContentConfig,
@@ -37,9 +37,9 @@ import {
   discoverModels,
   discoverProcesses,
   loadContentConfig,
-} from "@bpmiq/notations/content";
-import { deriveProcess, deriveView, hasDeriver } from "@bpmiq/notations/derive";
-import { extractModelGraph, type ModelGraph } from "@bpmiq/notations/extract";
+} from "@designiq/notations/content";
+import { deriveProcess, deriveView, hasDeriver } from "@designiq/notations/derive";
+import { extractModelGraph, type ModelGraph } from "@designiq/notations/extract";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
@@ -66,7 +66,7 @@ const readText = (path: string): string | null => {
   }
 };
 
-// ── Tool result codec: @bpmiq/mcp-kit — this zero-auth server prefixes every
+// ── Tool result codec: @designiq/mcp-kit — this zero-auth server prefixes every
 // unexpected throw, unlike the Live Host whose AppErrors speak for themselves
 const safe = (fn: Parameters<typeof kitSafe>[0]) => kitSafe(fn, { prefix: "Unexpected error: " });
 /** every tool here is read-only and repo-local */
@@ -573,7 +573,7 @@ export function createMcpServer(
             headers: {
               accept: "application/vnd.github+json",
               authorization: `Bearer ${todosToken}`,
-              "user-agent": "bpmiq-mcp",
+              "user-agent": "designiq-mcp",
             },
           },
         );

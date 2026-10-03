@@ -1,10 +1,10 @@
-# @bpmiq/decisions
+# @designiq/decisions
 
 Simulation, analysis and tests for DMN decisions — **one implementation, every side**.
 
 ```ts
-import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
-import { runDecisionTests, parseTestSuite } from "@bpmiq/decisions/tests";
+import { analyzeDecision, simulateDecision } from "@designiq/decisions";
+import { runDecisionTests, parseTestSuite } from "@designiq/decisions/tests";
 ```
 
 ## Isomorphic on purpose
@@ -12,7 +12,7 @@ import { runDecisionTests, parseTestSuite } from "@bpmiq/decisions/tests";
 This package runs unchanged in Node **and** in the browser. Its engine is
 [`@emaarco/dmn-js-simulation`](https://github.com/emaarco/dmn-js-simulation) (FEEL via
 [`feelin`](https://github.com/nikku/feelin)) — the add-on the dmn-js modeler mounts in the
-browser — driven through the platform's own DMN parse (`@bpmiq/notations`, itself pure).
+browser — driven through the platform's own DMN parse (`@designiq/notations`, itself pure).
 Nothing it exports touches a Node builtin.
 
 | Where                                  | What it does                                                     |

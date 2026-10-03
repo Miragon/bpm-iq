@@ -13,8 +13,8 @@
  */
 import { randomBytes } from "node:crypto";
 
-import { presenceColor, type PresenceUser } from "@bpmiq/contracts/live";
-import type { AppConfig, EditorLoginExchangeBody, Me } from "@bpmiq/contracts/live-host";
+import { presenceColor, type PresenceUser } from "@designiq/contracts/live";
+import type { AppConfig, EditorLoginExchangeBody, Me } from "@designiq/contracts/live-host";
 import * as vscode from "vscode";
 
 import { hostJson } from "./host-api.ts";
@@ -43,7 +43,7 @@ export class LiveAuth implements vscode.Disposable {
   }
 
   private key(kind: "session" | "me"): string {
-    return `bpmLive.${kind}:${hostUrls(this.serverUrl()).http}`;
+    return `designiq.${kind}:${hostUrls(this.serverUrl()).http}`;
   }
 
   /** who we are on the configured host — undefined while not signed in */
@@ -169,7 +169,7 @@ export class LiveAuth implements vscode.Disposable {
     this.changed.fire();
   }
 
-  /** the URI handler: <scheme>://miragon-gmbh.bpm-live/auth?code=…&state=… */
+  /** the URI handler: <scheme>://miragon-gmbh.design-iq/auth?code=…&state=… */
   handleUri(uri: vscode.Uri): void {
     const callback = parseLoginCallback(uri.path, uri.query);
     if (!callback) return;

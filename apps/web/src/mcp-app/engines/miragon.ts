@@ -33,7 +33,7 @@ import {
   type DocumentModelerLike,
   type DslModelerLike,
   type MiragonLane,
-} from "@bpmiq/live-client/miragon-sync";
+} from "@designiq/live-client/miragon-sync";
 import type * as Y from "yjs";
 
 import { attachPresenceCanvas } from "../../lib/presence-canvas.ts";

@@ -7,7 +7,7 @@
  * labeled with their name; peers come pre-sanitized (presence-format) because
  * awareness payloads are remote input landing in CSS text.
  */
-import type { PresenceUser } from "@bpmiq/contracts/live";
+import type { PresenceUser } from "@designiq/contracts/live";
 
 import { safePresenceColor, safePresenceLabel, withAlpha } from "@/lib/presence-format";
 

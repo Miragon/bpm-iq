@@ -14,7 +14,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { openLiveSession } from "@bpmiq/live-client";
+import { openLiveSession } from "@designiq/live-client";
 import WebSocket from "ws";
 import type * as Y from "yjs";
 
@@ -24,7 +24,7 @@ const URL = process.env.LIVE_URL ?? "ws://localhost:8301";
 const TOKEN = process.env.LIVE_TOKEN ?? "local";
 // room = <owner>/<repo>/<repo-relative-path>; the monorepo's root bpmiq.yml
 // points its processes folder at process-documentation/processes
-const DOC_NAME = "Miragon/bpm-iq/process-documentation/processes/order-to-cash.bpmn";
+const DOC_NAME = "Miragon/design-iq/process-documentation/processes/order-to-cash.bpmn";
 const REL_PATH = DOC_NAME.split("/").slice(2).join("/");
 const HOST_CONTENT =
   process.env.LIVE_HOST_CONTENT_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");

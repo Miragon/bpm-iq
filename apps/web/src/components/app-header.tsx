@@ -1,5 +1,5 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@bpmiq/ui-kit/components/avatar";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@designiq/ui-kit/components/avatar";
+import { Button } from "@designiq/ui-kit/components/button";
 import { Link } from "@tanstack/react-router";
 
 import { MiragonComet } from "@/components/miragon-comet";

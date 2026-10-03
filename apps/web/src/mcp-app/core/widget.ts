@@ -15,7 +15,7 @@
  * never a payload big enough to trip the hosts' ~150k-char result limit.
  * Bundle-only (imports the App and the DOM): never loaded by a test.
  */
-import { fileDeepLink } from "@bpmiq/contracts/deep-link";
+import { fileDeepLink } from "@designiq/contracts/deep-link";
 import type { App } from "@modelcontextprotocol/ext-apps";
 
 import { bootConfig, claimDocument, getModelContent, makeApp, mintWsTicket, saveModelContent } from "../bridge.ts";

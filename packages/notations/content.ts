@@ -8,7 +8,7 @@
  *
  * A repo is a content repo iff a root bpmiq.yml names the folder its model
  * files live in. A model IS a file with a registered notation extension under
- * that folder (@bpmiq/notations); its id is the file stem (modelStem). A
+ * that folder (@designiq/notations); its id is the file stem (modelStem). A
  * process is the .bpmn special case, a decision the .dmn one. Nothing else
  * about the layout is assumed.
  *
@@ -18,7 +18,7 @@
  * mid-edit or broken makes the repo "not a content repo" instead of silently
  * handing the model folder to whatever the other file says.
  *
- * Node-only (fs + yaml) — imported via the "@bpmiq/notations/content" subpath,
+ * Node-only (fs + yaml) — imported via the "@designiq/notations/content" subpath,
  * NEVER from the browser-safe package index.
  */
 import { readFileSync, statSync } from "node:fs";

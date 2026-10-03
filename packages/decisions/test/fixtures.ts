@@ -3,8 +3,8 @@
  * decision tables are actually written in the wild), and a two-step DRD with
  * modelled InputData whose second decision reads the first one's result.
  */
-import { type DerivedDecision, deriveDecision } from "@bpmiq/notations/derive";
-import { extractModelGraph } from "@bpmiq/notations/extract";
+import { type DerivedDecision, deriveDecision } from "@designiq/notations/derive";
+import { extractModelGraph } from "@designiq/notations/extract";
 
 export function view(xml: string): DerivedDecision {
   const graph = extractModelGraph(".dmn", xml);

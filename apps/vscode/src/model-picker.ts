@@ -4,8 +4,8 @@
  * and GET /api/repos/<repo>/models (every model of every registered notation).
  * Unit-tested in src/test/unit/model-picker.test.ts.
  */
-import { roomName } from "@bpmiq/contracts/live";
-import type { ModelInfo, RepoInfo } from "@bpmiq/contracts/live-host";
+import { roomName } from "@designiq/contracts/live";
+import type { ModelInfo, RepoInfo } from "@designiq/contracts/live-host";
 
 /** a QuickPick item carrying its value — the shape vscode.window.showQuickPick
  *  renders (label with $(icon) syntax, description, detail) */

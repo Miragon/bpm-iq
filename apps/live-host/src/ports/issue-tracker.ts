@@ -8,10 +8,10 @@
  * adapter config and issue ids look like "PROJ-123" — which is why `Todo.id`
  * is an opaque string and why nothing in this contract assumes numbers,
  * labels, or markdown. Anchor semantics (which process, which BPMN elements)
- * are platform domain — the codec lives in @bpmiq/contracts/todo-anchor (mcp needs it too); adapters only
+ * are platform domain — the codec lives in @designiq/contracts/todo-anchor (mcp needs it too); adapters only
  * decide WHERE the encoded block lives (GitHub: issue body).
  */
-import type { TodoAnchor } from "@bpmiq/contracts/todo-anchor";
+import type { TodoAnchor } from "@designiq/contracts/todo-anchor";
 
 export interface TodoInput {
   title: string;

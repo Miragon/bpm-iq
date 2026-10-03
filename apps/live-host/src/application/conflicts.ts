@@ -17,9 +17,9 @@
  * injected surfaces (git stays behind WorkspaceManager, lineage behind
  * dropLineage) — ApiOptions structurally satisfies ConflictDeps.
  */
-import { roomName } from "@bpmiq/contracts/live";
-import type { ResolveConflictBody, ResolveConflictResult } from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
+import { roomName } from "@designiq/contracts/live";
+import type { ResolveConflictBody, ResolveConflictResult } from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
 
 import type { ConnectedRepo } from "../repos/registry.ts";
 

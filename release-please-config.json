@@ -4,7 +4,7 @@
   "bootstrap-sha": "d5d19994558e46a41bb18365d784a0de9df29304",
   "packages": {
     ".": {
-      "package-name": "bpmiq",
+      "package-name": "designiq",
       "extra-files": [
         {
           "type": "json",

@@ -11,8 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 
-import { READ } from "@bpmiq/mcp-kit";
-import { toolText } from "@bpmiq/mcp-kit/testing";
+import { READ } from "@designiq/mcp-kit";
+import { toolText } from "@designiq/mcp-kit/testing";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { createMcpServer } from "../tools.ts";

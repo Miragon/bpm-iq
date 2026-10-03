@@ -41,7 +41,7 @@
  * byte-equal `fresh.content === replica` reconcile, the banner and status
  * texts. Each of them is a race that was fixed once; keep them.
  */
-import { roomName } from "@bpmiq/contracts/live";
+import { roomName } from "@designiq/contracts/live";
 
 import type { LiveEngine, WidgetEngine } from "./engine.ts";
 

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { AppError } from "@bpmiq/http-kit";
+import { AppError } from "@designiq/http-kit";
 
 import { type SyncDeps, syncRepo } from "../src/application/sync.ts";
 import type { ConnectedRepo } from "../src/repos/registry.ts";

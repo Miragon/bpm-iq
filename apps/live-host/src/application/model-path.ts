@@ -6,8 +6,8 @@
  * private copy in content.ts and history.ts; the wire-visible error code
  * stays per caller.
  */
-import { roomName } from "@bpmiq/contracts/live";
-import { AppError } from "@bpmiq/http-kit";
+import { roomName } from "@designiq/contracts/live";
+import { AppError } from "@designiq/http-kit";
 
 import { type RegistryLookup, splitRoom } from "../domain/rooms.ts";
 import type { ConnectedRepo } from "../repos/registry.ts";

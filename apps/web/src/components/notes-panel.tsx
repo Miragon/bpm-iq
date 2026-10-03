@@ -5,7 +5,7 @@
  * debounced live text like every notation panel, parsed with the browser's
  * namespace-aware DOMParser — remote stickies appear as they are created.
  */
-import { Badge } from "@bpmiq/ui-kit/components/badge";
+import { Badge } from "@designiq/ui-kit/components/badge";
 import { StickyNote } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { toast } from "sonner";

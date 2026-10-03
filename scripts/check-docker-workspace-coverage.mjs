@@ -25,7 +25,7 @@ const IMAGES = [
   { dockerfile: "Dockerfile", entry: "packages/mcp" },
 ];
 
-const workspaceDirOf = (name) => name.replace(/^@bpmiq\//, "packages/");
+const workspaceDirOf = (name) => name.replace(/^@designiq\//, "packages/");
 
 function workspaceDeps(dir) {
   const manifest = JSON.parse(readFileSync(join(ROOT, dir, "package.json"), "utf8"));

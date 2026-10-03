@@ -3,7 +3,7 @@
 # POST /mcp over the bundled example content (process-documentation). Build
 # context = the monorepo root (pnpm workspace).
 #
-# Build (from the repo root):  docker build -t bpmiq-mcp .
+# Build (from the repo root):  docker build -t designiq-mcp .
 # Serves any content repo: set BPM_CONTENT_ROOT / mount your checkout (docs/on-prem).
 
 FROM node:26-slim AS build
@@ -38,10 +38,10 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/pnpm-workspace.yaml /app/.npmrc /app/package.json ./
 COPY --from=build /app/packages/notations ./packages/notations
-# tools.ts imports @bpmiq/contracts/todo-anchor (list_todos) — the workspace
+# tools.ts imports @designiq/contracts/todo-anchor (list_todos) — the workspace
 # symlink in node_modules dangles without the real package source
 COPY --from=build /app/packages/contracts ./packages/contracts
-# http.ts imports @bpmiq/http-kit and @bpmiq/mcp-kit — the workspace symlinks
+# http.ts imports @designiq/http-kit and @designiq/mcp-kit — the workspace symlinks
 # in node_modules dangle without the real package sources
 COPY --from=build /app/packages/github-app ./packages/github-app
 COPY --from=build /app/packages/http-kit ./packages/http-kit

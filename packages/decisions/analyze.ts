@@ -14,7 +14,7 @@
  * literally subsume each other ("-" or an identical test), never for ranges
  * that would need interval arithmetic to compare.
  */
-import type { DecisionView, DerivedDecision } from "@bpmiq/notations/derive";
+import type { DecisionView, DerivedDecision } from "@designiq/notations/derive";
 import { parseExpression, parseUnaryTests } from "feelin";
 
 import { decisionVariables, variableOf } from "./model.ts";

@@ -1,17 +1,17 @@
-import { byId } from "@bpmiq/notations";
-import { type NotationDescriptor, NOTATIONS } from "@bpmiq/notations";
-import { hasTemplate } from "@bpmiq/notations/templates";
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { byId } from "@designiq/notations";
+import { type NotationDescriptor, NOTATIONS } from "@designiq/notations";
+import { hasTemplate } from "@designiq/notations/templates";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { Button } from "@designiq/ui-kit/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@bpmiq/ui-kit/components/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@bpmiq/ui-kit/components/table";
-import { cn } from "@bpmiq/ui-kit/lib/utils";
+} from "@designiq/ui-kit/components/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@designiq/ui-kit/components/table";
+import { cn } from "@designiq/ui-kit/lib/utils";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
   type Column,

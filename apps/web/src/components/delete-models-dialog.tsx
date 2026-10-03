@@ -9,7 +9,7 @@
  * close them along (in the background — the tracker takes one change at a
  * time); unticked, they stay open in the tracker.
  */
-import type { DeleteModelsResult } from "@bpmiq/contracts/live-host";
+import type { DeleteModelsResult } from "@designiq/contracts/live-host";
 import { CircleAlert, Link2Off, ListTodo, PencilLine } from "lucide-react";
 import { useState } from "react";
 

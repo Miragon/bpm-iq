@@ -53,8 +53,8 @@ test("appRest: GitHub media type + Bearer app JWT + the CALLER'S user-agent", as
 });
 
 test("appRest: the user-agent is a parameter — a different app sends ITS agent", async () => {
-  await appRest(KEY, api("bpm-live-host"), "/app");
-  assert.equal(stub.last().headers["user-agent"], "bpm-live-host");
+  await appRest(KEY, api("designiq-live-host"), "/app");
+  assert.equal(stub.last().headers["user-agent"], "designiq-live-host");
 });
 
 test("appRest: init is honored — method passes through, caller headers win", async () => {
@@ -71,13 +71,13 @@ test("appRest: init is honored — method passes through, caller headers win", a
 // ── tokenRest ───────────────────────────────────────────────────────────────
 
 test("tokenRest: GitHub media type + the raw Bearer token + the CALLER'S user-agent", async () => {
-  await tokenRest("inst-token", api("bpm-live-host"), "/repos/acme/processes/issues");
+  await tokenRest("inst-token", api("designiq-live-host"), "/repos/acme/processes/issues");
   const req = stub.last();
   assert.equal(req.method, "GET");
   assert.equal(req.url, "/repos/acme/processes/issues");
   assert.equal(req.headers.accept, "application/vnd.github+json");
   assert.equal(req.headers.authorization, "Bearer inst-token");
-  assert.equal(req.headers["user-agent"], "bpm-live-host");
+  assert.equal(req.headers["user-agent"], "designiq-live-host");
 });
 
 test("tokenRest: init is honored — method passes through, caller headers win", async () => {
@@ -136,11 +136,11 @@ test("paginate: unwraps the {repositories} envelope (/installation/repositories 
 
 test("paginate: app-JWT auth signs as the app (key mode, /app/installations)", async () => {
   stub.reply({ body: [] });
-  await paginate(api("bpm-live-host"), "/app/installations?per_page=100", { key: KEY });
+  await paginate(api("designiq-live-host"), "/app/installations?per_page=100", { key: KEY });
   const req = stub.last();
   assert.equal(bearerJwtPayload(req.headers.authorization).iss, "4711");
   assert.equal(req.headers.accept, "application/vnd.github+json");
-  assert.equal(req.headers["user-agent"], "bpm-live-host");
+  assert.equal(req.headers["user-agent"], "designiq-live-host");
 });
 
 test("paginate: non-ok → throws GitHubHttpError with the first path + status + body", async () => {

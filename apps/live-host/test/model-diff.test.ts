@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { ModelGraph } from "@bpmiq/notations/extract";
+import type { ModelGraph } from "@designiq/notations/extract";
 
 import { changedElementIds, MAX_CHANGED_IDS } from "../src/domain/model-diff.ts";
 

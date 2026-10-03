@@ -51,13 +51,13 @@ test("cookie round-trip; a tampered cookie decodes to nothing", () => {
 
 test("the return URI targets the fixed extension id with code + state only", () => {
   const uri = editorReturnUri({ scheme: "vscode", state: NONCE }, "c0de");
-  assert.equal(uri, `vscode://miragon-gmbh.bpm-live/auth?code=c0de&state=${NONCE}`);
+  assert.equal(uri, `vscode://miragon-gmbh.design-iq/auth?code=c0de&state=${NONCE}`);
 });
 
 test("the landing page escapes the URI and the login", () => {
-  const page = editorReturnPage("vscode://miragon-gmbh.bpm-live/auth?code=c&state=s", '<img onerror="x">');
-  assert.ok(page.includes('content="0;url=vscode://miragon-gmbh.bpm-live/auth?code=c&amp;state=s"'));
-  assert.ok(page.includes('href="vscode://miragon-gmbh.bpm-live/auth?code=c&amp;state=s"'));
+  const page = editorReturnPage("vscode://miragon-gmbh.design-iq/auth?code=c&state=s", '<img onerror="x">');
+  assert.ok(page.includes('content="0;url=vscode://miragon-gmbh.design-iq/auth?code=c&amp;state=s"'));
+  assert.ok(page.includes('href="vscode://miragon-gmbh.design-iq/auth?code=c&amp;state=s"'));
   assert.ok(!page.includes("<img"), "login escaped");
   assert.ok(page.includes("&lt;img onerror=&quot;x&quot;&gt;"));
 });

@@ -6,8 +6,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { NOTATIONS } from "@bpmiq/notations";
-import { hasTemplate, templateFor } from "@bpmiq/notations/templates";
+import { NOTATIONS } from "@designiq/notations";
+import { hasTemplate, templateFor } from "@designiq/notations/templates";
 
 import { checkModelBaseline } from "../src/validate.ts";
 

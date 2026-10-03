@@ -11,13 +11,13 @@ Evaluating without any login at all? That is `LIVE_AUTH=none`
 
 ## What the realm carries
 
-`deploy/keycloak/realm-bpmiq.json` — imported on Keycloak's first start:
+`deploy/keycloak/realm-designiq.json` — imported on Keycloak's first start:
 
 | Item                                     | What / why                                                                                                                                                                                                                                                                                   |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | realm `bpmiq`                            | one realm for the platform; self-registration off                                                                                                                                                                                                                                            |
-| client `bpmiq-web`                       | the browser login — public client, PKCE S256, redirect `http://localhost:8301/auth/oidc/callback`                                                                                                                                                                                            |
-| client `bpmiq-mcp`                       | MCP clients — public client, PKCE S256, redirect `http://localhost:8765/callback` (Claude Code: `--client-id bpmiq-mcp --callback-port 8765`)                                                                                                                                                |
+| client `designiq-web`                    | the browser login — public client, PKCE S256, redirect `http://localhost:8301/auth/oidc/callback`                                                                                                                                                                                            |
+| client `designiq-mcp`                    | MCP clients — public client, PKCE S256, redirect `http://localhost:8765/callback` (Claude Code: `--client-id designiq-mcp --callback-port 8765`)                                                                                                                                             |
 | two protocol mappers on each client      | **audience**: a fixed `aud: bpmiq` (Keycloak does not honor RFC 8707 resource indicators, so the Live Host is told the fixed value: `LIVE_OIDC_AUDIENCE=bpmiq`) — **`github_login`**: the user attribute as a claim in the access token (the login claim, `LIVE_OIDC_LOGIN_CLAIM`'s default) |
 | user profile attribute `github_login`    | declared, **editable by admins only** — the claim decides which repositories a person may write, so the person must never be able to set it (the Live Host refuses tokens without it, and never falls back to `preferred_username`)                                                          |
 | identity provider `github` (disabled)    | the production path: GitHub as the login method behind Keycloak, with a mapper that copies the verified GitHub `login` into `github_login` at every sign-in (sync mode FORCE) — enable it with your own GitHub OAuth App, see below                                                          |
@@ -44,10 +44,10 @@ provider the E2E uses (see "Verified" below).
 From source, host on your machine, Keycloak in Docker:
 
 ```bash
-LIVE_OIDC_ISSUER=http://localhost:8080/realms/bpmiq \
-LIVE_OIDC_JWKS_URL=http://localhost:8080/realms/bpmiq/protocol/openid-connect/certs \
+LIVE_OIDC_ISSUER=http://localhost:8080/realms/designiq \
+LIVE_OIDC_JWKS_URL=http://localhost:8080/realms/designiq/protocol/openid-connect/certs \
 LIVE_OIDC_AUDIENCE=bpmiq \
-LIVE_OIDC_CLIENT_ID=bpmiq-web \
+LIVE_OIDC_CLIENT_ID=designiq-web \
 LIVE_OIDC_LOGIN_LABEL=Keycloak \
 pnpm live-host            # plus GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY_FILE / GITHUB_APP_SLUG
 ```
@@ -76,14 +76,14 @@ Try `nobody` / `nobody`: Keycloak signs them in, the Live Host refuses the callb
 
 ```bash
 claude mcp add --transport http bpm-live http://localhost:8301/mcp \
-  --client-id bpmiq-mcp --callback-port 8765
+  --client-id designiq-mcp --callback-port 8765
 ```
 
 The client hits `/mcp` → 401 + `WWW-Authenticate` → reads the protected-resource metadata
-→ discovers Keycloak → runs the code+PKCE flow on the pre-registered `bpmiq-mcp` client →
+→ discovers Keycloak → runs the code+PKCE flow on the pre-registered `designiq-mcp` client →
 presents an access token with `aud: bpmiq` and `github_login`. Other clients and their
 redirect URIs: [extending/mcp-idp-setup.md](../extending/mcp-idp-setup.md#client-registration-without-dcr-pre-registration)
-— register each client's callback on `bpmiq-mcp` (or one client per surface).
+— register each client's callback on `designiq-mcp` (or one client per surface).
 
 ## 5. Your real users — GitHub as the login behind Keycloak
 
@@ -91,7 +91,7 @@ The demo users are local accounts with an admin-set attribute. For real people, 
 the login method so the claim is populated by GitHub itself:
 
 1. Create a GitHub **OAuth App** (org → Settings → Developer settings → OAuth Apps) with the
-   authorization callback `http://localhost:8080/realms/bpmiq/broker/github/endpoint`
+   authorization callback `http://localhost:8080/realms/designiq/broker/github/endpoint`
    (Keycloak's broker endpoint — your Keycloak URL in production).
 2. Admin console → Identity providers → **GitHub**: paste client id + secret, enable.
 3. The mapper _github_login from the GitHub profile_ is already there: at every sign-in it
@@ -106,8 +106,8 @@ This path is configuration; the automated verification below covers the local us
 
 ## 6. Beyond localhost
 
-- Realm: Clients → `bpmiq-web` → redirect URI and web origin = your `LIVE_PUBLIC_URL`;
-  `bpmiq-mcp` → the callbacks of the MCP clients you allow.
+- Realm: Clients → `designiq-web` → redirect URI and web origin = your `LIVE_PUBLIC_URL`;
+  `designiq-mcp` → the callbacks of the MCP clients you allow.
 - Compose: `KEYCLOAK_PUBLIC_URL` (the issuer origin every token carries) and
   `KEYCLOAK_ADMIN_PASSWORD` in `.env`; `LIVE_OIDC_ISSUER` / `LIVE_OIDC_AUTHORIZE_URL`
   follow it.
@@ -119,7 +119,7 @@ This path is configuration; the automated verification below covers the local us
 `apps/live-host/test/keycloak-e2e.sh` (needs Docker; not part of `pnpm test`) boots this
 exact compose profile, a GitHub stub and a fresh Live Host in `oidc` mode, then proves: the
 prerequisite check, the browser login through Keycloak's form, an MCP bearer from the
-`bpmiq-mcp` code+PKCE flow at `/api/me` and `/mcp`, a release on that identity (PR at the
+`designiq-mcp` code+PKCE flow at `/api/me` and `/mcp`, a release on that identity (PR at the
 stub, the human as git author), and fail-closed refusal of a token without `github_login`
 at `/api/me`, `/mcp` and the browser callback.
 

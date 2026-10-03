@@ -4,8 +4,8 @@
  * client knows; the server's uniqueness gate stays authoritative (409 inline).
  * The copy is the source's current LIVE state — unreleased edits included.
  */
-import type { DuplicateModelResult } from "@bpmiq/contracts/live-host";
-import { processIdFromName } from "@bpmiq/notations";
+import type { DuplicateModelResult } from "@designiq/contracts/live-host";
+import { processIdFromName } from "@designiq/notations";
 import { Copy, FlaskConical, History } from "lucide-react";
 import { useState } from "react";
 

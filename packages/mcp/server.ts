@@ -13,7 +13,7 @@
  */
 import { existsSync } from "node:fs";
 
-import { cliRoot } from "@bpmiq/notations/cli";
+import { cliRoot } from "@designiq/notations/cli";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
@@ -27,8 +27,8 @@ if (!existsSync(root)) {
       `bpm-mcp-server: content root not found: ${root}`,
       "",
       "Point the server at a BPM content repo (a checkout with a root bpmiq.yml):",
-      "  bpmiq-mcp --root <path-to-content-repo>",
-      "  BPM_CONTENT_ROOT=<path-to-content-repo> bpmiq-mcp",
+      "  designiq-mcp --root <path-to-content-repo>",
+      "  BPM_CONTENT_ROOT=<path-to-content-repo> designiq-mcp",
     ].join("\n"),
   );
   process.exit(2);

@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { CONTENT_KEY } from "@bpmiq/contracts/live";
-import { AppError } from "@bpmiq/http-kit";
+import { CONTENT_KEY } from "@designiq/contracts/live";
+import { AppError } from "@designiq/http-kit";
 import * as Y from "yjs";
 
 import {

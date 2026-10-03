@@ -34,7 +34,7 @@ Companion documents:
 
 ## The image
 
-`ghcr.io/miragon/bpmiq-live-host` — multi-arch (linux/amd64 + linux/arm64), built from
+`ghcr.io/miragon/designiq-live-host` — multi-arch (linux/amd64 + linux/arm64), built from
 [`apps/live-host/Dockerfile`](../../apps/live-host/Dockerfile) by the release workflow
 (see [ADR 0004](../adr/0004-open-source-split.md) for the artifact flow — the same image
 serves on-prem installs and Miragon's hosted cells).
@@ -81,8 +81,8 @@ policy requires a non-root user, run with `user:` and make `/data` writable for 
 Plain `docker run` works too:
 
 ```bash
-docker run -d --name bpmiq -p 8080:8080 -v bpmiq-data:/data \
-  --env-file .env --stop-timeout 30 ghcr.io/miragon/bpmiq-live-host:latest
+docker run -d --name bpmiq -p 8080:8080 -v designiq-data:/data \
+  --env-file .env --stop-timeout 30 ghcr.io/miragon/designiq-live-host:latest
 ```
 
 ## Operating modes

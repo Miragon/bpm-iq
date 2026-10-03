@@ -43,7 +43,7 @@ export class StickyResizePreview {
       let preview = context.stickyPreview;
       if (!preview) {
         preview = context.stickyPreview = document.createElementNS(SVG_NS, "g");
-        preview.classList.add("bpmiq-sticky-resize-preview");
+        preview.classList.add("designiq-sticky-resize-preview");
         // below the dashed frame, so the frame still reads as the resize handle
         const frame = context.frame;
         if (frame?.parentNode) frame.parentNode.insertBefore(preview, frame);

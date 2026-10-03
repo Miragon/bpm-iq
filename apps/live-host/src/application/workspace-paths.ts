@@ -11,7 +11,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, sep } from "node:path";
 
-import { AppError } from "@bpmiq/http-kit";
+import { AppError } from "@designiq/http-kit";
 
 export function assertRealInsideWorkspace(
   target: string,

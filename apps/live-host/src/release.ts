@@ -37,9 +37,9 @@ import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { moveSources, moveUnits, type ReleaseResult } from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
-import { modelStem, processIdFromName } from "@bpmiq/notations";
+import { moveSources, moveUnits, type ReleaseResult } from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
+import { modelStem, processIdFromName } from "@designiq/notations";
 
 import { gitEnv, runGit } from "./adapters/git/run.ts";
 import type { Session } from "./adapters/sqlite/sessions.ts";

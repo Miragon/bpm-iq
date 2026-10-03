@@ -12,7 +12,7 @@
  * tab is a legal empty board, not a rejected edit. Only unparsable JSON and a
  * schema rejection are `ok: false` (the caller keeps its last good canvas).
  */
-import type { DocumentCodec } from "@bpmiq/live-client/miragon-sync";
+import type { DocumentCodec } from "@designiq/live-client/miragon-sync";
 
 /** what every Miragon schema-model package exports
  *  (@miragon/team-topologies-schema-model, @miragon/context-maps-schema-model) */

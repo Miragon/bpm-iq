@@ -24,7 +24,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, posix, relative, resolve, sep } from "node:path";
 
-import { CONTENT_KEY, movedNotice, roomName } from "@bpmiq/contracts/live";
+import { CONTENT_KEY, movedNotice, roomName } from "@designiq/contracts/live";
 import type {
   DecisionInfo,
   DeleteModelsBody,
@@ -39,13 +39,13 @@ import type {
   RenameModelBody,
   RenameModelResult,
   TodoJobWire,
-} from "@bpmiq/contracts/live-host";
-import { testsPathFor } from "@bpmiq/decisions/tests";
-import { AppError } from "@bpmiq/http-kit";
-import { readSnapshot } from "@bpmiq/live-client/structured";
-import { byExtension, byId, modelStem, processIdFromName } from "@bpmiq/notations";
-import { retargetRefs } from "@bpmiq/notations/retarget";
-import { newBpmnXml, newDmnXml, templateFor } from "@bpmiq/notations/templates";
+} from "@designiq/contracts/live-host";
+import { testsPathFor } from "@designiq/decisions/tests";
+import { AppError } from "@designiq/http-kit";
+import { readSnapshot } from "@designiq/live-client/structured";
+import { byExtension, byId, modelStem, processIdFromName } from "@designiq/notations";
+import { retargetRefs } from "@designiq/notations/retarget";
+import { newBpmnXml, newDmnXml, templateFor } from "@designiq/notations/templates";
 import * as Y from "yjs";
 
 import { docCodecForPath } from "../domain/rooms.ts";

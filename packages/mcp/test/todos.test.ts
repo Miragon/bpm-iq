@@ -4,7 +4,7 @@
  * win — todosConfigFromEnv) the tool must not exist (the server
  * stays zero-auth by default); with both set it lists open todos from a tiny
  * local GitHub-shaped HTTP stub: label filter (todo + process:<id>), PR-row
- * exclusion, anchor parsing via @bpmiq/contracts/todo-anchor, token forwarding.
+ * exclusion, anchor parsing via @designiq/contracts/todo-anchor, token forwarding.
  * Drives the REAL server over an in-memory transport, like tools.test.ts.
  */
 import assert from "node:assert/strict";
@@ -12,8 +12,8 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, test } from "node:test";
 
-import { encodeAnchor } from "@bpmiq/contracts/todo-anchor";
-import { toolText } from "@bpmiq/mcp-kit/testing";
+import { encodeAnchor } from "@designiq/contracts/todo-anchor";
+import { toolText } from "@designiq/mcp-kit/testing";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "../tools.ts";

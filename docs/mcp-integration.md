@@ -18,7 +18,7 @@ repo's processes. Any MCP client (Claude Code, other IDEs, agent frameworks) can
 processes **live from HEAD**: a content repo is a root `bpmiq.yml` naming its models folder
 (`models:`, legacy alias `processes:`), a model IS a file with a registered notation extension
 there (a process its `.bpmn`, a decision its `.dmn`), and the process view is **derived from
-the BPMN** at call time (`@bpmiq/notations/derive`). No build step; the tool definitions live in
+the BPMN** at call time (`@designiq/notations/derive`). No build step; the tool definitions live in
 `packages/mcp/tools.ts`, shared by two entry points:
 
 - `packages/mcp/server.ts` — **stdio**, for local use (Claude Code auto-connects via `.mcp.json`)
@@ -31,7 +31,7 @@ the BPMN** at call time (`@bpmiq/notations/derive`). No build step; the tool def
 | `list_processes`             | What processes exist?               | every `.bpmn` under the `bpmiq.yml` folder: id (file stem), derived name, path, stats                                                                            |
 | `get_process(id)`            | Everything about one process        | the derived view: name, roles (BPMN lanes), steps (with role), gateways, events, flow, sub-process calls                                                         |
 | `get_view(id)`               | The view of ANY model               | name, summary, stats + the rich notation payload in `detail` — every notation with extract+derive                                                                |
-| `get_model(id)`              | What does the MODEL say?            | ANY model parsed into a generic graph (nodes/edges/meta) via `@bpmiq/notations/extract`                                                                          |
+| `get_model(id)`              | What does the MODEL say?            | ANY model parsed into a generic graph (nodes/edges/meta) via `@designiq/notations/extract`                                                                       |
 | `enumerate_paths(id, max?)`  | Which ways can a case take?         | start→end path enumeration over the notation's flow edges (graphHints; cycle-safe, capped)                                                                       |
 | `find_cycles(id)`            | Where does the flow loop?           | the notation's flow edges per graphHints (BPMN sequence flows, Wardley dependencies, DMN requirements)                                                           |
 | `who_owns(id)`               | Who does what?                      | the BPMN lanes (roles) and the steps each contains; the pools                                                                                                    |
@@ -77,7 +77,7 @@ Requires Node >= 23.6 (runs the TypeScript server directly via built-in type str
     "mcpServers": {
       "bpm-architecture": {
         "command": "node",
-        "args": ["/absolute/path/to/bpm-iq/packages/mcp/server.ts"]
+        "args": ["/absolute/path/to/design-iq/packages/mcp/server.ts"]
       }
     }
   }
@@ -149,7 +149,7 @@ call is gated by the caller's per-repo permission.
 ### Any notation: the generic model tools
 
 `get_model_content`, `save_model_content`, `create_model` and `validate_model` are ONE tool
-set for the whole notation registry (`@bpmiq/notations`: bpmn, dmn, wardley, team-topology,
+set for the whole notation registry (`@designiq/notations`: bpmn, dmn, wardley, team-topology,
 event-storming, context-map, value-chain, markdown) beside the wire-pinned BPMN/DMN twins. They address a
 model as `{repo, id | path, notation?}` — `id` is the file stem `list_models` shows; a stem
 shared across notations resolves bpmn-first unless `notation` picks another. The text travels
@@ -220,7 +220,7 @@ numeric boundaries the rules use: the raw material for writing test cases.
 Both take either a stored decision (`repo` + `id`/`path`) or an explicit `xml` — the
 same dry-run shape as `validate_bpmn`, so an edit can be checked before it is saved.
 
-Evaluation runs on `@bpmiq/decisions`, and MCP is only one of its callers: the package is
+Evaluation runs on `@designiq/decisions`, and MCP is only one of its callers: the package is
 **isomorphic**, so the very same module also runs in the browser — in the web client's
 live DMN editor (the **Checks** panel: findings and "try a scenario" without a
 round-trip) and in the MCP-App widget. Together with the engine it drives
@@ -377,7 +377,7 @@ the login gate and land on the model, not the overview (the SPA stashes the deep
 across the auth round-trip). The `open_modeler` / `open_decision_modeler` results carry
 the same link as `opened.url`, so non-apps clients can surface it in plain text.
 
-Clients without apps support (Claude Code, the read-only `@bpmiq/mcp` package) see a
+Clients without apps support (Claude Code, the read-only `@designiq/mcp` package) see a
 plain tool that returns a short process summary plus the model's web URL — use
 `get_process`/`get_bpmn_xml` there. Under `LIVE_MCP_READONLY=1` the tool stays registered
 but the widget becomes a read-only viewer (no save button, no ws ticket), matching the
@@ -416,7 +416,7 @@ conflict flow covers the rare collision honestly.
 
 `open_wardley_modeler`, `open_team_topology_modeler`, `open_event_storming_modeler` and
 `open_context_map_modeler` are generated from the notation registry (their names come from
-`@bpmiq/contracts/mcp-app`, the same derivation the web app's "Analyse with AI" prompt
+`@designiq/contracts/mcp-app`, the same derivation the web app's "Analyse with AI" prompt
 uses). Each takes `{repo, id | path}` and forces its notation: a stem shared with a
 `.bpmn` twin opens THIS notation's file, and a `path` of another notation fails in the
 tool rather than inside the iframe. The widgets run the shared core on the Miragon
@@ -437,7 +437,7 @@ opens an AI chat whose first move is the model's widget tool (`open_modeler` /
 renderer) for exactly the model on screen, so the widget comes up live-synced with
 the editor the user just left. The menu appears wherever a widget is served — every
 notation the platform renders today. The menu only picks the destination — Claude Desktop, ChatGPT, or the
-clipboard. The prompt is a work order built by `@bpmiq/contracts/assist`: the literal
+clipboard. The prompt is a work order built by `@designiq/contracts/assist`: the literal
 tool call with repo and path inlined, the Live Host's MCP URL named (a connector
 pointed at a _different_ instance then fails as a recognizable "wrong instance", not a
 phantom missing repo), and the current canvas selection riding along as fenced data —
@@ -468,7 +468,7 @@ with the literal tool call is the lever, honest UI copy is the promise.
 `save_bpmn_xml` is compare-and-set: the caller passes the `baseVersion` from a prior
 `get_bpmn_xml`, and if the live document moved in between, the save is refused with a
 retryable `{conflict: true, currentContent}` — re-read (or rebase onto `currentContent`) and retry;
-nothing is overwritten. Saves are validation-gated (`@bpmiq/validator`: ERROR findings
+nothing is overwritten. Saves are validation-gated (`@designiq/validator`: ERROR findings
 refuse the save, WARN findings come back as warnings) and land in the live Yjs state —
 every open editor sees them instantly, exactly like a keystroke.
 

@@ -28,19 +28,19 @@ import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 
-import { fileDeepLink, processDeepLink } from "@bpmiq/contracts/deep-link";
-import { type CanvasPresence, presenceColor, roomName } from "@bpmiq/contracts/live";
-import type { ContentConflictWire, RoomPresenceWire, TodoWire, WidgetBootWire } from "@bpmiq/contracts/live-host";
-import { mcpAppToolName } from "@bpmiq/contracts/mcp-app";
-import { analyzeDecision, simulateDecision } from "@bpmiq/decisions";
-import { parseTestSuite, type TestCase, testsPathFor } from "@bpmiq/decisions/tests";
-import { fail, ok, READ, safe, WRITE } from "@bpmiq/mcp-kit";
-import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
-import { byExtension, byId, modelStem, NOTATIONS } from "@bpmiq/notations";
-import { deriveDecision, deriveProcess, deriveView, hasDeriver } from "@bpmiq/notations/derive";
-import { extractModelGraph } from "@bpmiq/notations/extract";
-import { hasTemplate } from "@bpmiq/notations/templates";
-import { checkModel } from "@bpmiq/validator";
+import { fileDeepLink, processDeepLink } from "@designiq/contracts/deep-link";
+import { type CanvasPresence, presenceColor, roomName } from "@designiq/contracts/live";
+import type { ContentConflictWire, RoomPresenceWire, TodoWire, WidgetBootWire } from "@designiq/contracts/live-host";
+import { mcpAppToolName } from "@designiq/contracts/mcp-app";
+import { analyzeDecision, simulateDecision } from "@designiq/decisions";
+import { parseTestSuite, type TestCase, testsPathFor } from "@designiq/decisions/tests";
+import { fail, ok, READ, safe, WRITE } from "@designiq/mcp-kit";
+import { mountStatelessMcp } from "@designiq/mcp-kit/mount";
+import { byExtension, byId, modelStem, NOTATIONS } from "@designiq/notations";
+import { deriveDecision, deriveProcess, deriveView, hasDeriver } from "@designiq/notations/derive";
+import { extractModelGraph } from "@designiq/notations/extract";
+import { hasTemplate } from "@designiq/notations/templates";
+import { checkModel } from "@designiq/validator";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
@@ -98,7 +98,7 @@ export type McpDeps = OverviewDeps &
     presence?: Pick<AgentPresence, "touch">;
   };
 
-// tool result codec: @bpmiq/mcp-kit — safe() runs WITHOUT a prefix here, the
+// tool result codec: @designiq/mcp-kit — safe() runs WITHOUT a prefix here, the
 // AppErrors from the use-cases carry actionable, agent-readable messages
 // (validation findings, conflict guidance, authz denials)
 
@@ -133,7 +133,7 @@ function loadWidget(webDist: string, file: string, name: string, configSalt: str
     return undefined;
   }
   const hash = createHash("sha256").update(html).update("\0").update(configSalt).digest("hex").slice(0, 8);
-  const widget = { html, uri: `ui://bpmiq/${name}-${hash}.html` };
+  const widget = { html, uri: `ui://designiq/${name}-${hash}.html` };
   widgetCache.set(key, widget);
   return widget;
 }
@@ -184,10 +184,10 @@ interface WidgetSpec {
   live: boolean;
   /** apps/web/dist/<file> — apps/web/package.json's build chain emits it */
   file: string;
-  /** `ui://bpmiq/<name>-<hash8>.html` (the tests pin the prefix) */
+  /** `ui://designiq/<name>-<hash8>.html` (the tests pin the prefix) */
   name: string;
   /** open_modeler / open_decision_modeler are wire-pinned; the rest come from
-   *  mcpAppToolName (@bpmiq/contracts/mcp-app — the SPA's assist prompt
+   *  mcpAppToolName (@designiq/contracts/mcp-app — the SPA's assist prompt
    *  derives the same name) */
   tool: string;
   description: string;
@@ -294,7 +294,7 @@ const testCasesArg = z.array(testCaseSchema);
 type TestCaseArg = z.infer<typeof testCaseSchema>;
 
 /** the process a model path belongs to — id IS the file stem (the content
- *  contract, @bpmiq/notations/content), so a path always names its process */
+ *  contract, @designiq/notations/content), so a path always names its process */
 const processIdOf = modelStem;
 /** the decision id of a .dmn path — the same file-stem rule */
 const decisionIdOf = modelStem;
@@ -304,7 +304,7 @@ const PROVIDED = "<provided xml>";
 
 /**
  * A per-capability tool contribution — the composition hook capability modules
- * (the @bpmiq/decisions pattern) plug their live tools into. Contributions run
+ * (the @designiq/decisions pattern) plug their live tools into. Contributions run
  * AFTER the core registration, against the same deps and caller session; the
  * decision-semantics quartet migrates onto this hook once a second semantics
  * module exists (epic #118 — the same restraint as the sidecar-test framework).
@@ -1283,7 +1283,7 @@ export function createLiveMcpServer(
             mimeType: RESOURCE_MIME_TYPE,
             // replacer FUNCTION: a plain replacement string would expand `$`
             // patterns ($&, $') lurking in the operator-controlled boot value
-            text: widget.html.replace('"__BPMIQ_BOOT__"', () => boot),
+            text: widget.html.replace('"__DESIGNIQ_BOOT__"', () => boot),
             _meta: { ui: { csp } },
           },
         ],
@@ -1441,7 +1441,7 @@ export function createLiveMcpServer(
   return server;
 }
 
-/** Stateless Streamable HTTP mount (@bpmiq/mcp-kit). api.ts has already
+/** Stateless Streamable HTTP mount (@designiq/mcp-kit). api.ts has already
  *  authenticated `session` and answered non-POST. */
 export function handleMcp(req: IncomingMessage, res: ServerResponse, opts: McpDeps, session: Session): Promise<void> {
   // save_bpmn_xml carries whole models — same body budget as the content PUT

@@ -16,26 +16,26 @@
   "contributes": {
     "commands": [
       {
-        "command": "bpmLive.open",
+        "command": "designiq.open",
         "title": "BPM Live: Open Live Model"
       },
       {
-        "command": "bpmLive.login",
+        "command": "designiq.login",
         "title": "BPM Live: Sign in"
       },
       {
-        "command": "bpmLive.loginWithToken",
+        "command": "designiq.loginWithToken",
         "title": "BPM Live: Sign in with a session token…"
       },
       {
-        "command": "bpmLive.logout",
+        "command": "designiq.logout",
         "title": "BPM Live: Sign out"
       }
     ],
     "configuration": {
       "title": "BPM Live",
       "properties": {
-        "bpmLive.serverUrl": {
+        "designiq.serverUrl": {
           "type": "string",
           "default": "http://localhost:8301",
           "description": "URL of the Live Host — http(s):// or ws(s)://, both forms work."
@@ -50,8 +50,8 @@
     "test:e2e": "pnpm compile && esbuild src/test/e2e.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/test-e2e.js && node src/test/runTest.mts"
   },
   "dependencies": {
-    "@bpmiq/contracts": "workspace:*",
-    "@bpmiq/live-client": "workspace:*",
+    "@designiq/contracts": "workspace:*",
+    "@designiq/live-client": "workspace:*",
     "@hocuspocus/provider": "4.7.0",
     "ws": "8.22.0",
     "yjs": "13.6.33"

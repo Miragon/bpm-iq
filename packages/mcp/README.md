@@ -1,4 +1,4 @@
-# @bpmiq/mcp
+# @designiq/mcp
 
 Read-only MCP server that exposes a BPM content repo's processes to any MCP client (Claude
 Code, Claude Desktop, IDEs, ...). A content repo is a root `bpmiq.yml` naming its models
@@ -12,13 +12,13 @@ construction: the tools only ever read files, and all of them carry `readOnlyHin
 This server runs against a **checkout** — the right tool for CI, offline use, and any agent
 with the repo on disk. For live, writable access to the collaboratively edited state of a
 running Live Host, use the Live Host's own `/mcp` endpoint instead — see
-[docs/mcp-integration.md](https://github.com/Miragon/bpm-iq/blob/main/docs/mcp-integration.md).
+[docs/mcp-integration.md](https://github.com/Miragon/design-iq/blob/main/docs/mcp-integration.md).
 
 ## Usage
 
 ```sh
 # stdio server against your content repo
-npx @bpmiq/mcp --root ./my-content-repo
+npx @designiq/mcp --root ./my-content-repo
 ```
 
 Or register it in an MCP client config (e.g. `.mcp.json`):
@@ -28,14 +28,14 @@ Or register it in an MCP client config (e.g. `.mcp.json`):
   "mcpServers": {
     "bpm": {
       "command": "npx",
-      "args": ["@bpmiq/mcp", "--root", "./my-content-repo"]
+      "args": ["@designiq/mcp", "--root", "./my-content-repo"]
     }
   }
 }
 ```
 
 The content root can also be set via `BPM_CONTENT_ROOT`. A Streamable-HTTP entry point ships
-as `@bpmiq/mcp/http` (`PORT`, optional `MCP_TOKEN` bearer auth).
+as `@designiq/mcp/http` (`PORT`, optional `MCP_TOKEN` bearer auth).
 
 ## Todos (opt-in)
 
@@ -51,11 +51,11 @@ BPM_TODOS_TOKEN=...         # a token with issues:read on that repo
 
 `GITHUB_API_URL` overrides the REST base (default `https://api.github.com`).
 
-## Part of bpm-iq
+## Part of design-iq
 
 Source, content contract, and the example content repo live in
-[Miragon/bpm-iq](https://github.com/Miragon/bpm-iq) — see
-[docs/mcp-integration.md](https://github.com/Miragon/bpm-iq/blob/main/docs/mcp-integration.md)
+[Miragon/design-iq](https://github.com/Miragon/design-iq) — see
+[docs/mcp-integration.md](https://github.com/Miragon/design-iq/blob/main/docs/mcp-integration.md)
 for the full tool list and setup.
 
 ## License

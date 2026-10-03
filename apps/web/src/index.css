@@ -1,10 +1,10 @@
 @import "tailwindcss";
-@import "@bpmiq/ui-kit/theme.css";
+@import "@designiq/ui-kit/theme.css";
 @import "./lib/todo-canvas.css";
 
 /* the kit's raw sources live under node_modules (not auto-scanned) — tell
    Tailwind to pick up the utility classes its components use */
-@source "../node_modules/@bpmiq/ui-kit/src";
+@source "../node_modules/@designiq/ui-kit/src";
 
 /* the collaborative editor fills its route; the diagram-js engines + Monaco need explicit height */
 .bpmn-canvas,

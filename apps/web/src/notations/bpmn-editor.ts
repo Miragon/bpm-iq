@@ -7,7 +7,7 @@
  * every import.done (bindBpmn re-imports remote changes); without todos the
  * list stays empty and no badge ever renders.
  */
-import { bindBpmn } from "@bpmiq/live-client/bpmn-sync";
+import { bindBpmn } from "@designiq/live-client/bpmn-sync";
 import BpmnModeler from "bpmn-js/lib/Modeler";
 
 import { attachPresenceCanvas } from "@/lib/presence-canvas";

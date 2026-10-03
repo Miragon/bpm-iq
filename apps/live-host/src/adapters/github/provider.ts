@@ -27,7 +27,7 @@ export function createGitHubProvider(cfg: GitHubConfig = {}): GitProvider {
       headers: {
         accept: "application/vnd.github+json",
         authorization: `Bearer ${token}`,
-        "user-agent": "bpm-live-host",
+        "user-agent": "designiq-live-host",
         ...(init.headers ?? {}),
       },
     });

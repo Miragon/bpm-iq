@@ -2,15 +2,15 @@
  * The reference half of a release PR: which models point at what this release
  * ships — the notation-agnostic sibling of decision-impact.ts (which stays
  * the rich, semantic DMN commentary). Derived from the repo-wide reference
- * index (@bpmiq/notations/content) over the WORKSPACE state, so a reviewer
+ * index (@designiq/notations/content) over the WORKSPACE state, so a reviewer
  * sees the blast radius of a change — including references that a shipped
  * DELETE leaves dangling.
  *
  * Degrades quietly: no config, no refs, unreadable files → empty string. A
  * release must never fail because its commentary could not be produced.
  */
-import type { ModelReferencesWire } from "@bpmiq/contracts/live-host";
-import { byExtension, modelStem } from "@bpmiq/notations";
+import type { ModelReferencesWire } from "@designiq/contracts/live-host";
+import { byExtension, modelStem } from "@designiq/notations";
 
 import { buildRepoIndex, loadContentConfig } from "../repos/content.ts";
 

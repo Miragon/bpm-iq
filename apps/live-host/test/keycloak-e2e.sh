@@ -1,13 +1,13 @@
 #!/bin/bash
 # Keycloak IdP quickstart — verified end to end (the exit criterion of ADR 0007
-# step 3). Needs Docker. Boots the quickstart realm (deploy/keycloak/realm-bpmiq.json
+# step 3). Needs Docker. Boots the quickstart realm (deploy/keycloak/realm-designiq.json
 # through the compose `keycloak` profile), a GitHub stub and a fresh Live Host
 # in LIVE_AUTH=oidc on http://localhost:8301, then proves:
 #   K1  oidc mode refuses to start without the IdP (naming the variables);
 #       up, it offers exactly the Keycloak login and answers 401 to anonymous
 #   K2  browser login: /auth/oidc → Keycloak's login form → callback → session
 #       cookie; /api/me = petra (oidc); the overview shows the writable repo
-#   K3  MCP bearer: a code+PKCE flow on the bpmiq-mcp client (what Claude Code
+#   K3  MCP bearer: a code+PKCE flow on the designiq-mcp client (what Claude Code
 #       runs) → /api/me by bearer, /mcp initialize answers
 #   K4  a release on that identity: create a process → release → PR at the
 #       stub, the human (IdP name) as git author
@@ -22,7 +22,7 @@ REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
 FIXTURE="$REPO_ROOT/packages/validator/test/fixtures/content-repo"
 E2E="$(mktemp -d "${TMPDIR:-/tmp}/bpm-keycloak-e2e.XXXXXX")"
 COMPOSE=(docker compose -p bpmiq-keycloak-e2e -f "$REPO_ROOT/deploy/docker-compose.yml" --profile keycloak)
-ISSUER="http://localhost:8080/realms/bpmiq"
+ISSUER="http://localhost:8080/realms/designiq"
 HOST="http://localhost:8301"
 STUB_PORT=8399
 PASS=0; FAIL=0
@@ -76,7 +76,7 @@ host() {
     "$@" node "$REPO_ROOT/apps/live-host/src/server.ts"
 }
 OIDC=(LIVE_AUTH=oidc LIVE_OIDC_ISSUER="$ISSUER" LIVE_OIDC_JWKS_URL="$ISSUER/protocol/openid-connect/certs"
-      LIVE_OIDC_AUDIENCE=bpmiq LIVE_OIDC_CLIENT_ID=bpmiq-web LIVE_OIDC_LOGIN_LABEL=Keycloak)
+      LIVE_OIDC_AUDIENCE=bpmiq LIVE_OIDC_CLIENT_ID=designiq-web LIVE_OIDC_LOGIN_LABEL=Keycloak)
 # the flow helpers print the credential on stdout; stderr goes to a log that a
 # failure shows (Node's own warnings must never end up inside a cookie)
 flow() { node "$HERE/keycloak-flows.ts" "$@" 2>>"$E2E/flows.log"; }
@@ -107,16 +107,16 @@ if SID=$(flow login "$HOST" petra petra); then
 else
   bad "K2: browser login failed: $(tail -1 "$E2E/flows.log")"; SID=""
 fi
-ME=$(curl -s -H "cookie: bpm_live_sid=$SID" "$HOST/api/me")
+ME=$(curl -s -H "cookie: designiq_sid=$SID" "$HOST/api/me")
 echo "$ME" | grep -q '"login": *"petra"' && echo "$ME" | grep -q '"provider": *"oidc"' \
   && ok "K2b: /api/me = petra via oidc" || bad "K2b: $ME"
-REPOS=$(curl -s -H "cookie: bpm_live_sid=$SID" "$HOST/api/repos")
+REPOS=$(curl -s -H "cookie: designiq_sid=$SID" "$HOST/api/repos")
 echo "$REPOS" | grep -q '"fullName": *"acme/bpm-processes"' && echo "$REPOS" | grep -q '"permission": *"write"' \
   && ok "K2c: the overview shows the writable repo (app-side permission check)" || bad "K2c: $REPOS"
 
 # ═══ K3: MCP bearer ═══
-if TOKEN=$(flow token "$ISSUER" bpmiq-mcp http://localhost:8765/callback petra petra); then
-  ok "K3: code+PKCE on the bpmiq-mcp client yields an access token"
+if TOKEN=$(flow token "$ISSUER" designiq-mcp http://localhost:8765/callback petra petra); then
+  ok "K3: code+PKCE on the designiq-mcp client yields an access token"
 else
   bad "K3: $(tail -1 "$E2E/flows.log")"; TOKEN=""
 fi
@@ -141,7 +141,7 @@ AUTHOR=$(git -C "$E2E/origin/acme/bpm-processes.git" show -s --format='%an <%ae>
   && ok "K4c: commit authored by the human (IdP name, GitHub noreply address)" || bad "K4c: author '$AUTHOR'"
 
 # ═══ K5: fail closed without the login claim ═══
-NTOKEN=$(flow token "$ISSUER" bpmiq-mcp http://localhost:8765/callback nobody nobody) || bad "K5: token flow for nobody: $(tail -1 "$E2E/flows.log")"
+NTOKEN=$(flow token "$ISSUER" designiq-mcp http://localhost:8765/callback nobody nobody) || bad "K5: token flow for nobody: $(tail -1 "$E2E/flows.log")"
 NME=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $NTOKEN" "$HOST/api/me")
 echo "$NME" | grep -q 'github_login' && [ "$(echo "$NME" | tail -1)" = 401 ] \
   && ok "K5: a token without github_login is refused (401, names the claim)" || bad "K5: $NME"

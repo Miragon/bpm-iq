@@ -3,7 +3,7 @@
  * live document serializes to its canonical at-rest text — the bridge that
  * keeps git diffs, PR review, sha256 compare-and-set, per-file history and
  * the validator working on plain text while the LIVE document merges
- * element-wise (Y.Map, @bpmiq/contracts/live ELEMENTS_KEY/META_KEY).
+ * element-wise (Y.Map, @designiq/contracts/live ELEMENTS_KEY/META_KEY).
  *
  * Dark-launched: the registry below is EMPTY — no shipped notation is
  * structured yet. The first canvas notation (event storming, #116) registers

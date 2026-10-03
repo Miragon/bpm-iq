@@ -2,7 +2,7 @@
 
 This repository models business processes as BPMN. **The models are the source
 of truth — ground every answer in them.** It is served by the
-[bpmiq](https://github.com/Miragon/bpm-iq) platform.
+[bpmiq](https://github.com/Miragon/design-iq) platform.
 
 ## The contract (slim)
 

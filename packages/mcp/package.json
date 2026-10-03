@@ -1,5 +1,5 @@
 {
-  "name": "@bpmiq/mcp",
+  "name": "@designiq/mcp",
   "version": "4.3.1",
   "description": "Read-only MCP server exposing a BPM content repo's processes — discovered from bpmiq.yml, derived from the BPMN — to any MCP client.",
   "type": "module",
@@ -21,7 +21,7 @@
     "node": ">=22"
   },
   "bin": {
-    "bpmiq-mcp": "server.ts"
+    "designiq-mcp": "server.ts"
   },
   "exports": {
     ".": "./server.ts",
@@ -37,7 +37,7 @@
       "./http": "./dist/http.js"
     },
     "bin": {
-      "bpmiq-mcp": "dist/server.js"
+      "designiq-mcp": "dist/server.js"
     }
   },
   "scripts": {
@@ -54,11 +54,11 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@bpmiq/contracts": "workspace:*",
-    "@bpmiq/github-app": "workspace:*",
-    "@bpmiq/http-kit": "workspace:*",
-    "@bpmiq/mcp-kit": "workspace:*",
-    "@bpmiq/notations": "workspace:*",
+    "@designiq/contracts": "workspace:*",
+    "@designiq/github-app": "workspace:*",
+    "@designiq/http-kit": "workspace:*",
+    "@designiq/mcp-kit": "workspace:*",
+    "@designiq/notations": "workspace:*",
     "@modelcontextprotocol/client": "2.1.0",
     "tsdown": "0.23.0"
   }

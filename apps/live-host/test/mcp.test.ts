@@ -17,8 +17,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 
-import { presenceColor } from "@bpmiq/contracts/live";
-import { toolText } from "@bpmiq/mcp-kit/testing";
+import { presenceColor } from "@designiq/contracts/live";
+import { toolText } from "@designiq/mcp-kit/testing";
 import { Server as HocuspocusServer } from "@hocuspocus/server";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
@@ -115,7 +115,7 @@ after(async () => {
  *  test can tell the bundles apart. loadWidget memoises per (dist, file,
  *  boot): every deps() gets its own tmp dist, so a test may omit files freely. */
 const widgetStub = (file: string): string =>
-  `<html><head><script>window.BPMIQ_BOOT = "__BPMIQ_BOOT__";</script></head><body>${file}</body></html>`;
+  `<html><head><script>window.DESIGNIQ_BOOT = "__DESIGNIQ_BOOT__";</script></head><body>${file}</body></html>`;
 
 function deps(over: Partial<McpDeps> = {}, widgets: readonly string[] = WIDGET_FILES): McpDeps {
   const ws = mkdtempSync(join(tmpdir(), "bpm-mcp-"));
@@ -396,7 +396,7 @@ test("MCP App: open_modeler carries the ui resource link; the resource serves th
     "openai/outputTemplate"?: string;
   };
   const uri = meta?.ui?.resourceUri;
-  assert.ok(uri?.startsWith("ui://bpmiq/modeler-"), `ui resourceUri: ${uri}`);
+  assert.ok(uri?.startsWith("ui://designiq/modeler-"), `ui resourceUri: ${uri}`);
   assert.equal(meta?.["ui/resourceUri"], uri);
   // ChatGPT's compatibility alias — older builds read only this key
   assert.equal(meta?.["openai/outputTemplate"], uri);
@@ -405,7 +405,7 @@ test("MCP App: open_modeler carries the ui resource link; the resource serves th
   const res = await client.readResource({ uri: uri! });
   const doc = res.contents[0] as { mimeType?: string; text?: string };
   assert.equal(doc.mimeType, "text/html;profile=mcp-app");
-  assert.ok(!doc.text!.includes("__BPMIQ_BOOT__"), "marker replaced");
+  assert.ok(!doc.text!.includes("__DESIGNIQ_BOOT__"), "marker replaced");
   assert.ok(doc.text!.includes('\\"readonly\\":false'), "boot config injected");
   // the deep-link base rides in the boot payload — the sandboxed iframe has
   // no other way to learn the instance origin
@@ -435,7 +435,7 @@ test("MCP App: open_decision_modeler serves the DMN widget and takes a scenario"
   const tool = (await client.listTools()).tools.find((t) => t.name === "open_decision_modeler");
   assert.ok(tool, "open_decision_modeler registered");
   const uri = (tool._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri;
-  assert.ok(uri?.startsWith("ui://bpmiq/decision-modeler-"), `ui resourceUri: ${uri}`);
+  assert.ok(uri?.startsWith("ui://designiq/decision-modeler-"), `ui resourceUri: ${uri}`);
   assert.equal((tool._meta as { "openai/outputTemplate"?: string })?.["openai/outputTemplate"], uri);
   // its own resource — never the BPMN widget's
   const other = (await client.listTools()).tools.find((t) => t.name === "open_modeler");
@@ -1249,14 +1249,14 @@ test("widgets: the generated open_<notation>_modeler tools serve their own bundl
     assert.ok(tool, `${c.tool} registered`);
     const meta = tool._meta as { "ui/resourceUri"?: string; "openai/outputTemplate"?: string };
     const uri = uiMeta(tool)?.resourceUri;
-    assert.ok(uri?.startsWith(`ui://bpmiq/${c.notation}-modeler-`), `${c.tool} uri: ${uri}`);
+    assert.ok(uri?.startsWith(`ui://designiq/${c.notation}-modeler-`), `${c.tool} uri: ${uri}`);
     assert.equal(meta["ui/resourceUri"], uri);
     assert.equal(meta["openai/outputTemplate"], uri);
     uris.add(uri!);
     // its own bundle, boot marker replaced, viewer flag + deep-link base injected
     const doc = (await client.readResource({ uri: uri! })).contents[0] as { mimeType?: string; text?: string };
     assert.equal(doc.mimeType, "text/html;profile=mcp-app");
-    assert.ok(!doc.text!.includes("__BPMIQ_BOOT__"), "marker replaced");
+    assert.ok(!doc.text!.includes("__DESIGNIQ_BOOT__"), "marker replaced");
     assert.ok(doc.text!.includes('\\"readonly\\":false'), "boot config injected");
     assert.ok(doc.text!.includes('\\"publicUrl\\":\\"http://live.test\\"'), "publicUrl injected");
     assert.match(doc.text!, new RegExp(`<body>mcp-app-${c.notation}\\.html</body>`));

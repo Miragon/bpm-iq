@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, test } from "node:test";
 
-import { AppError } from "@bpmiq/http-kit";
+import { AppError } from "@designiq/http-kit";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
 import { expandAudienceTwins, makeOidcVerifier, type OidcVerify } from "../src/auth/oidc.ts";

@@ -117,12 +117,12 @@ export class StickyPalette {
         if (WORKSHOP_PALETTE.has(key)) reduced[key] = entry;
       }
       reduced["bpmiq-separator"] = { group: "bpmiq", separator: true };
-      reduced["create.bpmiq-sticky"] = {
+      reduced["create.designiq-sticky"] = {
         group: "bpmiq",
         title: "Create sticky note (discussion) — or press n",
         // className + CSS mask instead of an <img>: the glyph inherits the
         // palette entry color INCLUDING the hover blue, like the font icons
-        className: "bpmiq-palette-sticky",
+        className: "designiq-palette-sticky",
         action: { dragstart: createSticky, click: createSticky },
       };
       return reduced;

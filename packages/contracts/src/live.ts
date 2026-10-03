@@ -3,7 +3,7 @@
  * on the Live Host. Shared by the server-side collab hooks, the web editor,
  * the VS Code extension and headless test guests, so the literals can't drift.
  *
- * NB the ONLY value exports in @bpmiq/contracts live here, and all are
+ * NB the ONLY value exports in @designiq/contracts live here, and all are
  * erasable-syntax-safe (plain const / arrow function) — the type-stripped
  * backends can import them at runtime.
  */
@@ -41,7 +41,7 @@ export const roomName = (repoFullName: string, path: string): string => `${repoF
 // under the same id — a literal shared here so the two cannot drift.
 
 /** publisher.name of the VS Code extension (apps/vscode/package.json) */
-export const EDITOR_EXTENSION_ID = "miragon-gmbh.bpm-live";
+export const EDITOR_EXTENSION_ID = "miragon-gmbh.design-iq";
 /** the path of the extension's sign-in URI handler */
 export const EDITOR_LOGIN_PATH = "/auth";
 

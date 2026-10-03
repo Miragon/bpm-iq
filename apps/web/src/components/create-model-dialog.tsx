@@ -7,8 +7,8 @@
  * kind-switching hook call inside one component would break the rules of
  * hooks) and types its onCreated payload.
  */
-import { processIdFromName } from "@bpmiq/notations";
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { processIdFromName } from "@designiq/notations";
+import { Button } from "@designiq/ui-kit/components/button";
 import { useEffect, useState } from "react";
 
 const fieldClass =

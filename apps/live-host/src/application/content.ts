@@ -25,20 +25,20 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 
-import { CONTENT_KEY, roomName } from "@bpmiq/contracts/live";
+import { CONTENT_KEY, roomName } from "@designiq/contracts/live";
 import type {
   ContentConflictWire,
   ContentWire,
   PutContentRequest,
   PutContentResultWire,
-} from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
-import { readSnapshot, reconcileSnapshot } from "@bpmiq/live-client/structured";
-import { updateText } from "@bpmiq/live-client/text";
-import { byExtension } from "@bpmiq/notations";
-import type { DocCodec } from "@bpmiq/notations/codecs";
-import { hasRefs } from "@bpmiq/notations/refs";
-import { checkModel, type Finding } from "@bpmiq/validator";
+} from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
+import { readSnapshot, reconcileSnapshot } from "@designiq/live-client/structured";
+import { updateText } from "@designiq/live-client/text";
+import { byExtension } from "@designiq/notations";
+import type { DocCodec } from "@designiq/notations/codecs";
+import { hasRefs } from "@designiq/notations/refs";
+import { checkModel, type Finding } from "@designiq/validator";
 import type * as Y from "yjs";
 
 import {

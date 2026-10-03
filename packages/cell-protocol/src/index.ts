@@ -1,5 +1,5 @@
 /**
- * @bpmiq/cell-protocol — the control-plane ↔ cell security wire contract
+ * @designiq/cell-protocol — the control-plane ↔ cell security wire contract
  * (ADR 0002), pinned in ONE place so the two sides can't drift. Zero deps
  * (node:crypto only), so it copies cleanly into the dep-free control-plane image.
  *

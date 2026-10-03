@@ -1,6 +1,6 @@
 /**
  * Live-host ↔ web wire contract — the JSON the live-host HTTP API sends and
- * @bpmiq/web consumes. The BACKEND is the source of truth: http/api.ts,
+ * @designiq/web consumes. The BACKEND is the source of truth: http/api.ts,
  * application/overview.ts and release.ts assemble these shapes under
  * `satisfies` / return-type annotations; the web client re-exports them from
  * lib/api.ts. Changing a field here changes the LIVE wire format — don't.
@@ -10,7 +10,7 @@ import type { TodoAnchor, TodoElement } from "./todo-anchor.ts";
 
 /** one model file of a process — each opens as its own live document */
 export interface ModelRef {
-  /** notation registry id (@bpmiq/notations); "text" fallback */
+  /** notation registry id (@designiq/notations); "text" fallback */
   notation: string;
   /** repo-relative path, e.g. "processes/<file>.bpmn" */
   path: string;
@@ -78,7 +78,7 @@ export interface CreateDecisionBody {
  * stem, slug of `name`) must be unique per notation repo-wide → 409. The
  * typed /processes and /decisions creates stay (wire-pinned richer rows). */
 export interface CreateModelBody {
-  /** notation registry id (@bpmiq/notations), e.g. "wardley" */
+  /** notation registry id (@designiq/notations), e.g. "wardley" */
   notation: string;
   /** human title — lands in the template; the file stem is its kebab-case slug */
   name: string;
@@ -98,7 +98,7 @@ export interface ModelInfo {
   name: string;
   /** the model file (repo-relative path) */
   path: string;
-  /** notation registry id (@bpmiq/notations) */
+  /** notation registry id (@designiq/notations) */
   notation: string;
   /** folder of the file relative to the models root ("" = root) */
   folder: string;
@@ -266,7 +266,7 @@ export interface ReferenceWire {
   path: string;
   /** the element carrying the reference, when it hangs on one */
   element?: string;
-  /** the relation: "calls", "decides", … (@bpmiq/notations/refs) */
+  /** the relation: "calls", "decides", … (@designiq/notations/refs) */
   rel: string;
 }
 
@@ -606,7 +606,7 @@ export interface ContentConflictWire {
 export interface PresencePeerWire {
   name: string;
   /** "agent" = an AI client acting for someone (server-asserted, see
-   *  @bpmiq/contracts/live PresenceUser.kind) */
+   *  @designiq/contracts/live PresenceUser.kind) */
   kind: "human" | "agent";
   /** the caller's OWN human presence — the person an agent acts for. Matched
    *  server-side on the ws connection's login, never on the payload. */
@@ -626,7 +626,7 @@ export interface RoomPresenceWire {
 }
 
 /** the boot payload the Live Host bakes into the modeler widgets' HTML
- *  (the __BPMIQ_BOOT__ marker, http/mcp.ts) — parsed back by the widgets'
+ *  (the __DESIGNIQ_BOOT__ marker, http/mcp.ts) — parsed back by the widgets'
  *  bridge.ts. The widget iframe is sandboxed on the HOST's origin, so this is
  *  its only source of instance facts. */
 export interface WidgetBootWire {

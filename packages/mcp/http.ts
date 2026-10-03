@@ -13,8 +13,8 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { bearerAuth, send } from "@bpmiq/http-kit";
-import { mountStatelessMcp } from "@bpmiq/mcp-kit/mount";
+import { bearerAuth, send } from "@designiq/http-kit";
+import { mountStatelessMcp } from "@designiq/mcp-kit/mount";
 
 import { createMcpServer, DEFAULT_ROOT, todosConfigFromEnv } from "./tools.ts";
 

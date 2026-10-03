@@ -11,7 +11,7 @@
   "ssoSessionMaxLifespan": 43200,
   "clients": [
     {
-      "clientId": "bpmiq-web",
+      "clientId": "designiq-web",
       "name": "bpmiq Live Host \u2014 browser login",
       "enabled": true,
       "protocol": "openid-connect",
@@ -59,8 +59,8 @@
       ]
     },
     {
-      "clientId": "bpmiq-mcp",
-      "name": "bpmiq Live Host \u2014 MCP clients (Claude Code: --client-id bpmiq-mcp --callback-port 8765)",
+      "clientId": "designiq-mcp",
+      "name": "bpmiq Live Host \u2014 MCP clients (Claude Code: --client-id designiq-mcp --callback-port 8765)",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,

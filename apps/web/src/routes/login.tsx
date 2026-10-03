@@ -1,5 +1,5 @@
-import { Button } from "@bpmiq/ui-kit/components/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bpmiq/ui-kit/components/card";
+import { Button } from "@designiq/ui-kit/components/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@designiq/ui-kit/components/card";
 
 import { useConfig } from "@/lib/queries";
 import { stashReturnTo } from "@/lib/return-to";
@@ -22,7 +22,7 @@ export function Login() {
               variables —{" "}
               <a
                 className="underline"
-                href="https://github.com/Miragon/bpm-iq/blob/main/docs/on-prem/configuration.md"
+                href="https://github.com/Miragon/design-iq/blob/main/docs/on-prem/configuration.md"
                 target="_blank"
                 rel="noreferrer"
               >

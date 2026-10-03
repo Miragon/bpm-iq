@@ -2,7 +2,7 @@
    currentColor, so it matches the font glyphs exactly — palette color AND
    hover blue. Shipped with the module so every bpmn surface (SPA engine
    chunk, MCP-App widget) gets it. */
-.djs-palette .entry.bpmiq-palette-sticky::before {
+.djs-palette .entry.designiq-palette-sticky::before {
   content: "";
   display: inline-block;
   width: 26px;
@@ -18,11 +18,11 @@
 /* a sticky under resize steps aside for its live preview (#188,
    sticky-resize.ts): the preview is the sticky at the new size, its text
    re-fitted on every move */
-.djs-shape.djs-resizing > .djs-visual > .bpmiq-sticky-note,
-.djs-shape.djs-resizing > .djs-visual > .bpmiq-sticky-text {
+.djs-shape.djs-resizing > .djs-visual > .designiq-sticky-note,
+.djs-shape.djs-resizing > .djs-visual > .designiq-sticky-text {
   visibility: hidden;
 }
 
-.bpmiq-sticky-resize-preview {
+.designiq-sticky-resize-preview {
   pointer-events: none;
 }

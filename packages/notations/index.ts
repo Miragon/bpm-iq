@@ -1,5 +1,5 @@
 /**
- * @bpmiq/notations — the ONE place that knows what a modeling notation is.
+ * @designiq/notations — the ONE place that knows what a modeling notation is.
  *
  * The descriptor here is pure DATA (extensions, media kind, noun, doc shape,
  * graph hints) — this module is imported EAGERLY by the web SPA and must stay
@@ -11,9 +11,9 @@
  *                  notation views deriveProcess/deriveDecision)
  *   - ./templates  blank-model file content (templateFor)
  *   - ./content    content-repo discovery over any checkout (Node-only)
- *   - @bpmiq/validator  checkModel — the platform check per notation (the
+ *   - @designiq/validator  checkModel — the platform check per notation (the
  *                  checkers stay OUT of this package: the published
- *                  bpmiq-validate binary owns them)
+ *                  designiq-validate binary owns them)
  *
  * Adding a notation = one descriptor here + one entry per capability it
  * offers. A descriptor with no capabilities still gets everything generic:

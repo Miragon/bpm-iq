@@ -8,8 +8,8 @@
  */
 import { resolve } from "node:path";
 
-import { byExtension, EDITABLE_EXTENSIONS } from "@bpmiq/notations";
-import { type DocCodec, docCodecFor } from "@bpmiq/notations/codecs";
+import { byExtension, EDITABLE_EXTENSIONS } from "@designiq/notations";
+import { type DocCodec, docCodecFor } from "@designiq/notations/codecs";
 
 import type { ConnectedRepo } from "../repos/registry.ts";
 

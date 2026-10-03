@@ -17,7 +17,7 @@ pnpm --filter bpm-live compile
 code --extensionDevelopmentPath=$PWD/apps/vscode
 ```
 
-Settings (`bpmLive.*`):
+Settings (`designiq.*`):
 
 | Setting     | Default                 | What                                                   |
 | ----------- | ----------------------- | ------------------------------------------------------ |
@@ -37,7 +37,7 @@ Commands:
 
 _BPM Live: Sign in_ opens the host's own login (GitHub OAuth, or the SSO login
 when the host has one) in your browser. The callback bounces back into this
-editor through `vscode://miragon-gmbh.bpm-live/auth` with a one-time code,
+editor through `vscode://miragon-gmbh.design-iq/auth` with a one-time code,
 which the extension exchanges for its session — the one credential the host
 accepts on the websocket and the REST routes. It is stored in VS Code's
 SecretStorage per host URL; the browser gets no cookie, so signing out of the

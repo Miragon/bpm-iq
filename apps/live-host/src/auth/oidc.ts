@@ -19,7 +19,7 @@
  * The interactive browser-SSO login (authorize-redirect flow) is a separate,
  * still-open contribution seam — see docs/extending/sso.md.
  */
-import { AppError } from "@bpmiq/http-kit";
+import { AppError } from "@designiq/http-kit";
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
 
 export interface OidcVerifierConfig {

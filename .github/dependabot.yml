@@ -33,7 +33,7 @@ updates:
       - dependency-name: "typescript"
         versions: [">=7"]
       # inferno is not ours to pick: it is the renderer dmn-js's decision table
-      # (table-js) draws with, and @bpmiq/decisions only declares it because the
+      # (table-js) draws with, and @designiq/decisions only declares it because the
       # simulation add-on's bundle imports it. Both peer on inferno 5
       # (table-js "^5.0.5", @emaarco/dmn-js-simulation ">=5.6 <6"), so a bump
       # here just puts a SECOND inferno major in the web bundle, rendering the

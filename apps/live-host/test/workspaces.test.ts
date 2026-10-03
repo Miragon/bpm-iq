@@ -28,7 +28,7 @@ const repo = (fullName: string): ConnectedRepo => ({
 function manager(hostRoot: string, dataDir: string) {
   return new WorkspaceManager({
     dataDir,
-    hostRepo: "Miragon/bpm-iq",
+    hostRepo: "Miragon/design-iq",
     hostRoot,
     registry: {} as RepoRegistry, // isHostRepo/dir never touch the registry
     githubBaseUrl: "https://github.com",
@@ -40,10 +40,10 @@ test("isHostRepo: true only for the host repo WITH a root contract file (legacy 
   const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
   const wm = manager(hostRoot, data);
   // no bpmiq.yml yet → the host checkout is NOT served in place (cloned like any repo)
-  assert.equal(wm.isHostRepo("Miragon/bpm-iq"), false);
+  assert.equal(wm.isHostRepo("Miragon/design-iq"), false);
   writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n"); // legacy-name-ok: pins the legacy path
-  assert.equal(wm.isHostRepo("Miragon/bpm-iq"), true);
-  assert.equal(wm.isHostRepo("miragon/BPM-IQ"), true, "host match is case-insensitive");
+  assert.equal(wm.isHostRepo("Miragon/design-iq"), true);
+  assert.equal(wm.isHostRepo("miragon/DESIGN-IQ"), true, "host match is case-insensitive");
   assert.equal(wm.isHostRepo("acme/other"), false, "a different repo is never the host");
 });
 
@@ -51,13 +51,13 @@ test("isHostRepo: a host root whose contract file is designiq.yml is served in p
   const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
   const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
   const wm = manager(hostRoot, data);
-  assert.equal(wm.isHostRepo("Miragon/bpm-iq"), false);
+  assert.equal(wm.isHostRepo("Miragon/design-iq"), false);
   // the bind-mount case: a checkout that only carries the new name must not be
   // bypassed (and GITHUB_REPO cloned instead) by a probe for the legacy file
   writeFileSync(join(hostRoot, "designiq.yml"), "models: processes\n");
-  assert.equal(wm.isHostRepo("Miragon/bpm-iq"), true);
+  assert.equal(wm.isHostRepo("Miragon/design-iq"), true);
   assert.equal(wm.isHostRepo("acme/other"), false, "a different repo is never the host");
-  assert.equal(wm.dir(repo("Miragon/bpm-iq")), hostRoot);
+  assert.equal(wm.dir(repo("Miragon/design-iq")), hostRoot);
 });
 
 test("dir: host repo → its checkout in place; other repos → dataDir/workspaces/<owner>/<name>", () => {
@@ -67,7 +67,7 @@ test("dir: host repo → its checkout in place; other repos → dataDir/workspac
   const wm = manager(hostRoot, data);
   // the checkout root, NOT a content subdirectory — the bpmiq.yml folder is the
   // content config's business, so dir() no longer probes for processes/
-  assert.equal(wm.dir(repo("Miragon/bpm-iq")), hostRoot);
+  assert.equal(wm.dir(repo("Miragon/design-iq")), hostRoot);
   assert.equal(wm.dir(repo("acme/models")), join(data, "workspaces", "acme", "models"));
 });
 
@@ -121,7 +121,7 @@ test("resetToDefault: discards dirty edits + untracked files, hard-resets onto o
   const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-")); // no bpmiq.yml → not the host repo
   const wm = new WorkspaceManager({
     dataDir: data,
-    hostRepo: "Miragon/bpm-iq",
+    hostRepo: "Miragon/design-iq",
     hostRoot,
     registry: { tokenFor: async () => undefined } as unknown as RepoRegistry,
     githubBaseUrl: "https://github.com",
@@ -147,7 +147,7 @@ test("resetToDefault: refuses the in-place host checkout (would wipe the operato
   const data = mkdtempSync(join(tmpdir(), "bpm-data-"));
   writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n"); // now it IS the host repo
   const wm = manager(hostRoot, data);
-  await assert.rejects(wm.resetToDefault(repo("Miragon/bpm-iq")), /in-place host checkout/);
+  await assert.rejects(wm.resetToDefault(repo("Miragon/design-iq")), /in-place host checkout/);
 });
 
 // ── catch-up (#185): per-file reconcile against real repos ───────────────────
@@ -171,7 +171,7 @@ function catchUpFixture(files: Record<string, string>) {
 
   const wm = new WorkspaceManager({
     dataDir: data,
-    hostRepo: "Miragon/bpm-iq",
+    hostRepo: "Miragon/design-iq",
     hostRoot: mkdtempSync(join(tmpdir(), "bpm-host-")), // no bpmiq.yml → not the host repo
     registry: { tokenFor: async () => undefined } as unknown as RepoRegistry,
     githubBaseUrl: "https://github.com",
@@ -475,10 +475,10 @@ test("reconcile / markReleased: never touch the in-place host checkout", async (
   const hostRoot = mkdtempSync(join(tmpdir(), "bpm-host-"));
   writeFileSync(join(hostRoot, "bpmiq.yml"), "processes: processes\n"); // not even a git repo
   const wm = manager(hostRoot, mkdtempSync(join(tmpdir(), "bpm-data-")));
-  await wm.reconcile(repo("Miragon/bpm-iq")); // would throw on any git call
-  await wm.markReleased(repo("Miragon/bpm-iq"), "deadbeef", ["processes/a.bpmn"]);
-  assert.deepEqual(await wm.conflicts(repo("Miragon/bpm-iq")), []);
-  await assert.rejects(wm.takeUpstream(repo("Miragon/bpm-iq"), "processes/a.bpmn"), /in-place host checkout/);
+  await wm.reconcile(repo("Miragon/design-iq")); // would throw on any git call
+  await wm.markReleased(repo("Miragon/design-iq"), "deadbeef", ["processes/a.bpmn"]);
+  assert.deepEqual(await wm.conflicts(repo("Miragon/design-iq")), []);
+  await assert.rejects(wm.takeUpstream(repo("Miragon/design-iq"), "processes/a.bpmn"), /in-place host checkout/);
 });
 
 // ── the rename journal (#208) ───────────────────────────────────────────────

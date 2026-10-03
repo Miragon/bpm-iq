@@ -6,8 +6,8 @@
  * errors (409: open in a live session, destination taken) surface inline —
  * one refused file refuses the whole move.
  */
-import { Badge } from "@bpmiq/ui-kit/components/badge";
-import { cn } from "@bpmiq/ui-kit/lib/utils";
+import { Badge } from "@designiq/ui-kit/components/badge";
+import { cn } from "@designiq/ui-kit/lib/utils";
 import { Folder, FolderRoot } from "lucide-react";
 import { useState } from "react";
 

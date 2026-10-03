@@ -11,8 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import type { FileCommitWire } from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
+import type { FileCommitWire } from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
 
 import { runGit } from "../src/adapters/git/run.ts";
 import { fileAtCommit, fileHistory, type HistoryDeps } from "../src/application/history.ts";

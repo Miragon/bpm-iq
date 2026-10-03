@@ -4,7 +4,7 @@
 #   docker compose up -d
 #
 # The image serves HTTP API + web app + WebSocket sync on ONE port (8080
-# in-container). ghcr.io/miragon/bpmiq-live-host is the same artifact Miragon's
+# in-container). ghcr.io/miragon/designiq-live-host is the same artifact Miragon's
 # hosted cells run.
 
 services:
@@ -44,8 +44,8 @@ services:
   # ── Optional: Keycloak as the identity provider (profile "keycloak") ─────
   # The self-contained IdP quickstart (docs/on-prem/idp-quickstart.md, ADR
   # 0007): `docker compose --profile keycloak up -d` starts Keycloak next to the
-  # Live Host with the bpmiq realm imported from ./keycloak/realm-bpmiq.json —
-  # two public PKCE clients (bpmiq-web for the browser, bpmiq-mcp for MCP
+  # Live Host with the bpmiq realm imported from ./keycloak/realm-designiq.json —
+  # two public PKCE clients (designiq-web for the browser, designiq-mcp for MCP
   # clients), the `github_login` user attribute (admin-only editable) as a
   # claim, a fixed audience `bpmiq`, and a demo user petra/petra.
   # Evaluation only as shipped (dev mode, in-memory H2, admin/admin) — for a
@@ -66,7 +66,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./keycloak/realm-bpmiq.json:/opt/keycloak/data/import/realm-bpmiq.json:ro
+      - ./keycloak/realm-designiq.json:/opt/keycloak/data/import/realm-designiq.json:ro
     restart: unless-stopped
     healthcheck:
       # no curl in the image — bash's /dev/tcp against the management port

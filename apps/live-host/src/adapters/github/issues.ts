@@ -2,7 +2,7 @@
  * GitHub implementation of the IssueTracker port — todos are repo ISSUES in
  * the customer's own repository, never rows in a platform database. Each todo
  * carries the `todo` label plus `process:<id>` for the anchored process; the
- * platform anchor block (the codec lives in @bpmiq/contracts/todo-anchor (mcp needs it too)) lives invisibly
+ * platform anchor block (the codec lives in @designiq/contracts/todo-anchor (mcp needs it too)) lives invisibly
  * at the top of the issue body, followed by the author's text and a textual
  * attribution line (issues are bot-authored via the installation token, the
  * human stays attributed — same model as releases, ADR 0001).
@@ -13,17 +13,23 @@
  * (remote mint). Nothing GitHub-specific leaks through the port — GitLab/Jira
  * implement the same contract against their own issue APIs.
  */
-import { processDeepLink } from "@bpmiq/contracts/deep-link";
-import { encodeAnchor, parseAnchor, replaceAnchor, stripAnchor, type TodoAnchor } from "@bpmiq/contracts/todo-anchor";
-import { GitHubHttpError, paginate, tokenRest } from "@bpmiq/github-app";
+import { processDeepLink } from "@designiq/contracts/deep-link";
+import {
+  encodeAnchor,
+  parseAnchor,
+  replaceAnchor,
+  stripAnchor,
+  type TodoAnchor,
+} from "@designiq/contracts/todo-anchor";
+import { GitHubHttpError, paginate, tokenRest } from "@designiq/github-app";
 import {
   type GitHubIssueRow,
   isPullRequestRow,
   processLabel,
   TODO_LABEL,
   todoLabelQuery,
-} from "@bpmiq/github-app/todos";
-import { AppError } from "@bpmiq/http-kit";
+} from "@designiq/github-app/todos";
+import { AppError } from "@designiq/http-kit";
 
 import {
   type IssueTracker,
@@ -81,7 +87,7 @@ export interface DeepLinkTarget {
 }
 
 /** one 📍 line per anchored element, linking into the web app's process-editor
- * route — the URL shape is the shared @bpmiq/contracts/deep-link builder (the
+ * route — the URL shape is the shared @designiq/contracts/deep-link builder (the
  * widget button and the open_modeler result build the very same links) */
 function deepLinkLines(anchor: TodoAnchor, target: DeepLinkTarget): string {
   return anchor.elements

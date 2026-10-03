@@ -13,8 +13,8 @@ import { dirname, join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import type { TodoAnchor } from "@bpmiq/contracts/todo-anchor";
-import { AppError } from "@bpmiq/http-kit";
+import type { TodoAnchor } from "@designiq/contracts/todo-anchor";
+import { AppError } from "@designiq/http-kit";
 
 import {
   attributionLine,

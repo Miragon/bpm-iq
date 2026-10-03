@@ -1,5 +1,5 @@
 {
-  "name": "@bpmiq/mcp-kit",
+  "name": "@designiq/mcp-kit",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "test": "node --test test/*.test.ts"
   },
   "dependencies": {
-    "@bpmiq/http-kit": "workspace:*",
+    "@designiq/http-kit": "workspace:*",
     "@modelcontextprotocol/node": "2.1.0",
     "@modelcontextprotocol/server": "2.1.0",
     "zod": "4.6.5"

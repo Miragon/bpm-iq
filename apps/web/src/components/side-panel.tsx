@@ -5,7 +5,7 @@
  * icon). The badge slot is a ReactNode on purpose: the three panels' badges
  * are not one shape (count, analysis verdict, none-while-loading).
  */
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { Button } from "@designiq/ui-kit/components/button";
 import type { LucideIcon } from "lucide-react";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";

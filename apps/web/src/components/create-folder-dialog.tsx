@@ -4,7 +4,7 @@
  * 400 invalid name) surface inline. Mounted on open, so state resets by
  * unmounting.
  */
-import { Button } from "@bpmiq/ui-kit/components/button";
+import { Button } from "@designiq/ui-kit/components/button";
 import { useEffect, useState } from "react";
 
 import { useCreateFolder } from "@/lib/queries";

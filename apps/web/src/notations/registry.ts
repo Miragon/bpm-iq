@@ -112,7 +112,7 @@ export interface DiffSpec {
 }
 
 export interface WebNotationPlugin {
-  /** must match a NotationDescriptor.id (@bpmiq/notations) */
+  /** must match a NotationDescriptor.id (@designiq/notations) */
   id: string;
   /** css class of the canvas host (engine styling) */
   canvasClassName: string;

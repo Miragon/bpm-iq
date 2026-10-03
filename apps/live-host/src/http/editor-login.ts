@@ -5,7 +5,7 @@
  *   editor  → browser   GET /auth/<provider>?editor=<uri scheme>&editor_state=<nonce>
  *   browser → IdP → callback: the session is minted as always, but instead of
  *             the cookie the callback answers a page that sends the browser to
- *             <scheme>://miragon-gmbh.bpm-live/auth?code=<one-time>&state=<nonce>
+ *             <scheme>://miragon-gmbh.design-iq/auth?code=<one-time>&state=<nonce>
  *   editor  → POST /auth/exchange {code} → Me (the session id as wsToken)
  *
  * Trust boundaries:
@@ -19,7 +19,7 @@
  *  - the browser gets NO session cookie: the editor's session and a web
  *    session are separate, so signing out of one never kills the other
  */
-import { EDITOR_EXTENSION_ID, EDITOR_LOGIN_PATH } from "@bpmiq/contracts/live";
+import { EDITOR_EXTENSION_ID, EDITOR_LOGIN_PATH } from "@designiq/contracts/live";
 
 /** a custom URI scheme (RFC 3986 scheme grammar, lowercase): vscode,
  *  vscode-insiders, cursor … — what vscode.env.uriScheme reports */

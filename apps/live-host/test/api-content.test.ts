@@ -13,8 +13,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, before, test } from "node:test";
 
-import type { ContentConflictWire, ContentWire, PutContentResultWire } from "@bpmiq/contracts/live-host";
-import { AppError } from "@bpmiq/http-kit";
+import type { ContentConflictWire, ContentWire, PutContentResultWire } from "@designiq/contracts/live-host";
+import { AppError } from "@designiq/http-kit";
 import { Server as HocuspocusServer } from "@hocuspocus/server";
 
 import { LineageStore } from "../src/adapters/sqlite/lineage-store.ts";
@@ -215,7 +215,7 @@ test("sessionOf JWT branch: synthetic identity on /api/me, typed 401 for a bad J
   // an established cookie session is checked FIRST — a stray broken bearer
   // must not lock the browser out
   const s = sessions.create({ login: "cookie-user", name: "Cookie", avatarUrl: null, provider: "github" });
-  const both = await get("/api/me", { cookie: `bpm_live_sid=${s.id}`, authorization: "Bearer expired.jwt.token" });
+  const both = await get("/api/me", { cookie: `designiq_sid=${s.id}`, authorization: "Bearer expired.jwt.token" });
   assert.equal(both.status, 200);
   assert.equal(((await both.json()) as { user: { login: string } }).user.login, "cookie-user");
 });

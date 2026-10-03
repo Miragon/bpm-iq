@@ -18,7 +18,7 @@ import {
   parseMovedNotice,
   type PresenceUser,
   roomName,
-} from "@bpmiq/contracts/live";
+} from "@designiq/contracts/live";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import type * as Y from "yjs";
 

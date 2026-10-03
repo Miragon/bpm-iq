@@ -23,7 +23,7 @@
  * Every job re-lists the source's open todos when it starts, so items filed
  * meanwhile are included and a retry picks up exactly what is still left.
  */
-import type { TodoJobWire } from "@bpmiq/contracts/live-host";
+import type { TodoJobWire } from "@designiq/contracts/live-host";
 
 import { type IssueTracker, type TodoTarget, TrackerRateLimited } from "../ports/issue-tracker.ts";
 

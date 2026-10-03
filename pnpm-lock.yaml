@@ -50,31 +50,31 @@ importers:
 
   apps/live-host:
     dependencies:
-      '@bpmiq/cell-protocol':
+      '@designiq/cell-protocol':
         specifier: workspace:*
         version: link:../../packages/cell-protocol
-      '@bpmiq/contracts':
+      '@designiq/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@bpmiq/decisions':
+      '@designiq/decisions':
         specifier: workspace:*
         version: link:../../packages/decisions
-      '@bpmiq/github-app':
+      '@designiq/github-app':
         specifier: workspace:*
         version: link:../../packages/github-app
-      '@bpmiq/http-kit':
+      '@designiq/http-kit':
         specifier: workspace:*
         version: link:../../packages/http-kit
-      '@bpmiq/live-client':
+      '@designiq/live-client':
         specifier: workspace:*
         version: link:../../packages/live-client
-      '@bpmiq/mcp-kit':
+      '@designiq/mcp-kit':
         specifier: workspace:*
         version: link:../../packages/mcp-kit
-      '@bpmiq/notations':
+      '@designiq/notations':
         specifier: workspace:*
         version: link:../../packages/notations
-      '@bpmiq/validator':
+      '@designiq/validator':
         specifier: workspace:*
         version: link:../../packages/validator
       '@hocuspocus/server':
@@ -114,10 +114,10 @@ importers:
 
   apps/vscode:
     dependencies:
-      '@bpmiq/contracts':
+      '@designiq/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@bpmiq/live-client':
+      '@designiq/live-client':
         specifier: workspace:*
         version: link:../../packages/live-client
       '@hocuspocus/provider':
@@ -148,25 +148,25 @@ importers:
 
   apps/web:
     dependencies:
-      '@bpmiq/api-client':
+      '@designiq/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@bpmiq/contracts':
+      '@designiq/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@bpmiq/decisions':
+      '@designiq/decisions':
         specifier: workspace:*
         version: link:../../packages/decisions
-      '@bpmiq/live-client':
+      '@designiq/live-client':
         specifier: workspace:*
         version: link:../../packages/live-client
-      '@bpmiq/mcp-kit':
+      '@designiq/mcp-kit':
         specifier: workspace:*
         version: link:../../packages/mcp-kit
-      '@bpmiq/notations':
+      '@designiq/notations':
         specifier: workspace:*
         version: link:../../packages/notations
-      '@bpmiq/ui-kit':
+      '@designiq/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
       '@emaarco/dmn-js-simulation':
@@ -289,7 +289,7 @@ importers:
 
   packages/decisions:
     dependencies:
-      '@bpmiq/notations':
+      '@designiq/notations':
         specifier: workspace:*
         version: link:../notations
       '@emaarco/dmn-js-simulation':
@@ -322,7 +322,7 @@ importers:
 
   packages/live-client:
     dependencies:
-      '@bpmiq/contracts':
+      '@designiq/contracts':
         specifier: workspace:*
         version: link:../contracts
       '@hocuspocus/provider':
@@ -357,19 +357,19 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
-      '@bpmiq/contracts':
+      '@designiq/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@bpmiq/github-app':
+      '@designiq/github-app':
         specifier: workspace:*
         version: link:../github-app
-      '@bpmiq/http-kit':
+      '@designiq/http-kit':
         specifier: workspace:*
         version: link:../http-kit
-      '@bpmiq/mcp-kit':
+      '@designiq/mcp-kit':
         specifier: workspace:*
         version: link:../mcp-kit
-      '@bpmiq/notations':
+      '@designiq/notations':
         specifier: workspace:*
         version: link:../notations
       '@modelcontextprotocol/client':
@@ -381,7 +381,7 @@ importers:
 
   packages/mcp-kit:
     dependencies:
-      '@bpmiq/http-kit':
+      '@designiq/http-kit':
         specifier: workspace:*
         version: link:../http-kit
       '@modelcontextprotocol/node':
@@ -466,7 +466,7 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
     devDependencies:
-      '@bpmiq/notations':
+      '@designiq/notations':
         specifier: workspace:*
         version: link:../notations
       tsdown:

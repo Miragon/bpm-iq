@@ -10,7 +10,7 @@
  * server-side returnTo could never thread through.
  */
 
-const KEY = "bpmiq.returnTo";
+const KEY = "designiq.returnTo";
 
 /** call from the sign-in click while the deep-link URL is still current */
 export function stashReturnTo(): void {

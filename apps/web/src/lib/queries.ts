@@ -1,4 +1,4 @@
-import { queryDefaults } from "@bpmiq/api-client";
+import { queryDefaults } from "@designiq/api-client";
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 

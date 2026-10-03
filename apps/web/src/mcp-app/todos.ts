@@ -17,7 +17,7 @@
  * The panel DOM lives in mcp-app.html; only the list and the anchor chips are
  * rebuilt here — the compose form keeps its own input state across renders.
  */
-import type { TodoElementWire, TodoWire } from "@bpmiq/contracts/live-host";
+import type { TodoElementWire, TodoWire } from "@designiq/contracts/live-host";
 import type { App } from "@modelcontextprotocol/ext-apps";
 
 import { attachTodoCanvas, type TodoCanvas } from "@/lib/todo-canvas";

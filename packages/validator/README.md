@@ -1,4 +1,4 @@
-# @bpmiq/validator
+# @designiq/validator
 
 Deterministic validator for BPM content repositories: `bpmiq.yml` discovery, BPMN structural
 checks (flow soundness, complete BPMNDI coverage), the generic cross-model reference rule
@@ -13,20 +13,20 @@ target repo as pure data — it never executes content-repo code. Exit code 0 = 
 
 ```sh
 # validate the content repo in the current directory
-npx @bpmiq/validator --root .
+npx @designiq/validator --root .
 
 # validate a single process
-npx @bpmiq/validator --root . order-to-cash
+npx @designiq/validator --root . order-to-cash
 ```
 
 `--root` points at any checkout that follows the content contract (a root `bpmiq.yml` naming
 the models folder — `models:`, legacy alias `processes:`).
 
-## Part of bpm-iq
+## Part of design-iq
 
 Source, content contract, and the example content repo live in
-[Miragon/bpm-iq](https://github.com/Miragon/bpm-iq) — see
-[docs/on-prem](https://github.com/Miragon/bpm-iq/tree/main/docs/on-prem) for running the
+[Miragon/design-iq](https://github.com/Miragon/design-iq) — see
+[docs/on-prem](https://github.com/Miragon/design-iq/tree/main/docs/on-prem) for running the
 platform yourself.
 
 ## License

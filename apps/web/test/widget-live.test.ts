@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { AwarenessPeer } from "@bpmiq/live-client";
+import type { AwarenessPeer } from "@designiq/live-client";
 import * as Y from "yjs";
 
 import type { LiveEngine } from "../src/mcp-app/core/engine.ts";

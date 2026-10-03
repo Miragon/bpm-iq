@@ -192,7 +192,7 @@ configuration. **Keycloak** is the shipped, verified quickstart
 from an admin-only user attribute (or, for real users, a mapper on the brokered
 GitHub identity), the audience from an audience mapper minting a fixed value
 (Keycloak does not honor RFC 8707 — set `LIVE_OIDC_AUDIENCE`), and MCP clients use
-the pre-registered public client `bpmiq-mcp`. GitLab identities even arrive as
+the pre-registered public client `designiq-mcp`. GitLab identities even arrive as
 standard OIDC claims.
 
 ## When the corporate IdP cannot front MCP: broker topology

@@ -17,10 +17,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { analyzeDecision } from "@bpmiq/decisions";
-import { parseTestSuite, runDecisionTests, type SuiteOutcome, testsPathFor } from "@bpmiq/decisions/tests";
-import { type DerivedDecision, deriveDecision } from "@bpmiq/notations/derive";
-import { extractModelGraph } from "@bpmiq/notations/extract";
+import { analyzeDecision } from "@designiq/decisions";
+import { parseTestSuite, runDecisionTests, type SuiteOutcome, testsPathFor } from "@designiq/decisions/tests";
+import { type DerivedDecision, deriveDecision } from "@designiq/notations/derive";
+import { extractModelGraph } from "@designiq/notations/extract";
 
 import type { ConnectedRepo } from "../repos/registry.ts";
 

@@ -11,7 +11,7 @@
  */
 import "./chrome.css";
 
-import { byId } from "@bpmiq/notations";
+import { byId } from "@designiq/notations";
 
 import { spec } from "@/mcp-app/widget-spec";
 

@@ -19,9 +19,9 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 
-import { ELEMENTS_KEY } from "@bpmiq/contracts/live";
-import { readSnapshot, reconcileSnapshot } from "@bpmiq/live-client/structured";
-import { jsonLinesCodec } from "@bpmiq/notations/codecs";
+import { ELEMENTS_KEY } from "@designiq/contracts/live";
+import { readSnapshot, reconcileSnapshot } from "@designiq/live-client/structured";
+import { jsonLinesCodec } from "@designiq/notations/codecs";
 import { Server } from "@hocuspocus/server";
 import * as Y from "yjs";
 

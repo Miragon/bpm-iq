@@ -13,16 +13,16 @@
  * Pure orchestration over injected surfaces: the dirty check goes through
  * WorkspaceManager.changedPaths (the git subprocess lives behind that seam,
  * never here). The returned object shapes ARE the wire format
- * (@bpmiq/contracts/live-host — shape drift is a tsc error).
+ * (@designiq/contracts/live-host — shape drift is a tsc error).
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { roomName, roomPrefix } from "@bpmiq/contracts/live";
-import type { ChangedFileWire, DecisionInfo, ModelInfo, ProcessInfo, RepoInfo } from "@bpmiq/contracts/live-host";
-import { byExtension } from "@bpmiq/notations";
-import { deriveProcess } from "@bpmiq/notations/derive";
-import { extractModelGraph } from "@bpmiq/notations/extract";
+import { roomName, roomPrefix } from "@designiq/contracts/live";
+import type { ChangedFileWire, DecisionInfo, ModelInfo, ProcessInfo, RepoInfo } from "@designiq/contracts/live-host";
+import { byExtension } from "@designiq/notations";
+import { deriveProcess } from "@designiq/notations/derive";
+import { extractModelGraph } from "@designiq/notations/extract";
 
 import type { Session } from "../adapters/sqlite/sessions.ts";
 import { discoverDecisions, discoverModels, discoverProcesses, loadContentConfig } from "../repos/content.ts";

@@ -1,4 +1,4 @@
-# @bpmiq/web
+# @designiq/web
 
 The collaborative web client of bpmiq — the SPA (bpmn-js / dmn-js / the Miragon
 renderers + Monaco on a shared Y.Text, the repo overview) **and** the MCP-App
@@ -7,12 +7,12 @@ Desktop, ChatGPT).
 
 ## Scripts
 
-| Script                               | What it does                                                                                                                    |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm --filter @bpmiq/web dev`       | Vite dev server: the SPA, and every widget at `/mcp-app*.html` (raw boot marker → editable, this origin as the deep-link base). |
-| `pnpm --filter @bpmiq/web build`     | The SPA plus **one single-file bundle per widget** into `dist/` (`vite build`, then `scripts/build-widgets.ts`, see below).     |
-| `pnpm --filter @bpmiq/web test`      | `node --test test/*.test.ts` — the DOM-free widget-core suites (lifecycle, live upgrade, engines).                              |
-| `pnpm --filter @bpmiq/web typecheck` | `tsc --noEmit` over `src/` and `test/`.                                                                                         |
+| Script                                  | What it does                                                                                                                    |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm --filter @designiq/web dev`       | Vite dev server: the SPA, and every widget at `/mcp-app*.html` (raw boot marker → editable, this origin as the deep-link base). |
+| `pnpm --filter @designiq/web build`     | The SPA plus **one single-file bundle per widget** into `dist/` (`vite build`, then `scripts/build-widgets.ts`, see below).     |
+| `pnpm --filter @designiq/web test`      | `node --test test/*.test.ts` — the DOM-free widget-core suites (lifecycle, live upgrade, engines).                              |
+| `pnpm --filter @designiq/web typecheck` | `tsc --noEmit` over `src/` and `test/`.                                                                                         |
 
 ## The MCP-App widgets
 
@@ -51,7 +51,7 @@ entries: `src/notations/miragon/<id>.ts` holds ONE `MiragonRendererSpec` per
 renderer (package, css classes, a lazy `load()` yielding Modeler + viewer +
 the text lane), and everything derives from it — the SPA's editor plugin
 (`notations/miragon/plugin.ts`), the widget engine (`engines/miragon.ts` over
-`@bpmiq/live-client/miragon-sync`), the vendor-CSS scoping in `vite.config.ts`,
+`@designiq/live-client/miragon-sync`), the vendor-CSS scoping in `vite.config.ts`,
 and the widget bundle: `mcp-app-miragon.html` + `src/mcp-app/miragon-main.ts`
 are the ONE template + entry, built once per spec with the spec aliased in
 through `@/mcp-app/widget-spec` (`miragonWidgetConfig`) and emitted as
@@ -71,14 +71,14 @@ a stack only the Modeler registers).
 
 ### Adding a Miragon notation
 
-1. The descriptor in `@bpmiq/notations` (extensions, noun, media kind).
+1. The descriptor in `@designiq/notations` (extensions, noun, media kind).
 2. One spec file `src/notations/miragon/<id>.ts` (copy `wardley.ts` for a DSL
    renderer, `team-topology.ts` for a JSON one) and its line in
    `src/notations/miragon/index.ts` — the SPA editor plugin, the widget engine,
    the CSS scoping and the widget bundle derive from it.
 3. The notation id in `GENERATED_WIDGET_NOTATIONS` (`apps/live-host/src/http/mcp.ts`)
    — the tool, its description and its resource derive from the registry
-   descriptor (`@bpmiq/contracts/mcp-app` names the tool) and the test stubs
+   descriptor (`@designiq/contracts/mcp-app` names the tool) and the test stubs
    follow `WIDGET_FILES`; the two literal tool-list pins in
    `apps/live-host/test/mcp.test.ts` gain the new name (on purpose — a new tool
    shows up in a reviewed diff).
@@ -86,7 +86,7 @@ a stack only the Modeler registers).
 
 A renderer with a different API than the two lanes (or a non-Miragon engine)
 gets a bespoke engine adapter + entry, the bpmn/dmn way — until
-[#136](https://github.com/Miragon/bpm-iq/issues/136) (`@miragon/modeler-api`)
+[#136](https://github.com/Miragon/design-iq/issues/136) (`@miragon/modeler-api`)
 makes the lane split disappear.
 
 ### Mixed deployments

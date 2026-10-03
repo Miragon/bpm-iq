@@ -18,7 +18,7 @@ processes: processes
   (`processes/order-to-cash.bpmn` → `order-to-cash`).
 - There is no hand-written metadata: the process view (name, roles from lanes,
   steps, flow, sub-process calls) is **derived from the BPMN on the fly**
-  (`@bpmiq/notations/derive`).
+  (`@designiq/notations/derive`).
 
 ```
 bpmiq.yml

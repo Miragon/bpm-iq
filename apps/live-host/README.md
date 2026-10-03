@@ -46,7 +46,7 @@ cross-repo bleed) and per-(user,repo) authorization.
 
 `GET/POST /api/repos/:fullName/todos` (+ `POST …/todos/:id/close`) stores todos as **GitHub
 Issues in the content repo** (label `todo` + `process:<id>`, the anchor block from
-`@bpmiq/contracts/todo-anchor` embedded in the issue body) — never in a platform database.
+`@designiq/contracts/todo-anchor` embedded in the issue body) — never in a platform database.
 The MCP twins are `list_todos` / `create_todo` / `close_todo` (below), so agents and the
 embedded modeler widget file and complete the same items humans see in the web app. Reads
 return the author's own text (`body`) with that platform markup stripped again — it is what
@@ -81,9 +81,9 @@ registers no write tools at all. Non-MCP clients use the REST twins:
 `GET/PUT /api/repos/:owner/:repo/content?path=<model path>` — GET returns
 `{repo, path, content, baseVersion}`; PUT requires `{content, baseVersion}` (the pre-#154 `xml`
 key is still accepted and emitted as a deprecated alias for one release), validates the
-notation via `@bpmiq/validator` (ERROR findings → 422, WARN returned as warnings), enforces
+notation via `@designiq/validator` (ERROR findings → 422, WARN returned as warnings), enforces
 the doc size cap (413), and CASes (stale `baseVersion` → 409 with the current state). Writes land
-in the live Y.Text (the `@bpmiq/live-client/text` minimal-diff writer over a Hocuspocus
+in the live Y.Text (the `@designiq/live-client/text` minimal-diff writer over a Hocuspocus
 direct connection), so every open editor sees them instantly — git is only reached through
 the release-as-PR flow. Full doc: docs/mcp-integration.md; decision record:
 docs/adr/0005-in-process-mcp-and-oidc-resource-server.md.
@@ -112,7 +112,7 @@ provider (CODEOWNERS/branch protection). No user token is obtained or stored, an
 ### GitHub — one vendor app, users only see the install picker
 
 **Vendor step, once ever** (Miragon / the instance operator):
-`pnpm --filter @bpmiq/live-host create-app` — a guided page creates the central
+`pnpm --filter @designiq/live-host create-app` — a guided page creates the central
 **"BPM Live" GitHub App** under the org that owns the content repo (requires being signed
 in as org owner); credentials land automatically in `apps/live-host/.env`. Never touched again.
 
@@ -200,7 +200,7 @@ pnpm install                     # monorepo root
 LIVE_AUTH=none pnpm live-host   # local evaluation: no login (ADR 0007)
 
 # Terminal 2 — automated exit-criterion test (two headless guests)
-pnpm --filter @bpmiq/live-host test:sync
+pnpm --filter @designiq/live-host test:sync
 
 # MCP smoke test against the running host (LIVE_AUTH=none: no token; else SMOKE_TOKEN=<token>)
 node apps/live-host/scripts/mcp-smoke.mjs [mcpUrl] [repo]

@@ -25,7 +25,7 @@
 #       files arrives, and a file changed on both sides is flagged, refused,
 #       and resolvable either way
 #
-# Run: bash test/release-e2e.sh   (or: pnpm --filter @bpmiq/live-host test)
+# Run: bash test/release-e2e.sh   (or: pnpm --filter @designiq/live-host test)
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"

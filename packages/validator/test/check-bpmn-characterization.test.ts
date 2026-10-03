@@ -265,7 +265,7 @@ test("7±2: adHocSubProcess and transaction count as activities — like deriveP
   // 8 userTask + 1 transaction + 1 adHocSubProcess = 10 activities. The old
   // predicate (endsWith("task") || callActivity || subProcess) counted 8 and
   // stayed silent while deriveProcess reported stats.steps = 10 — the two
-  // classifiers now share @bpmiq/notations/bpmn-kinds.
+  // classifiers now share @designiq/notations/bpmn-kinds.
   const tasks = Array.from({ length: 8 }, (_, i) => `<userTask id="T${i}"/>`).join("");
   const bpmn = `<?xml version="1.0"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">

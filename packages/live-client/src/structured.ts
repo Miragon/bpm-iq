@@ -1,6 +1,6 @@
 /**
  * The STRUCTURED live-doc lane (epic #118 step 8) — plain-snapshot helpers
- * over the element-wise CRDT shape (@bpmiq/contracts/live: ELEMENTS_KEY =
+ * over the element-wise CRDT shape (@designiq/contracts/live: ELEMENTS_KEY =
  * Y.Map<elementId, Y.Map<attr, value>>, META_KEY = flat Y.Map).
  *
  * readSnapshot / applySnapshot are the codec bridge (seed + write-through);
@@ -9,10 +9,10 @@
  * attributes, so a co-editor's concurrent edit on a DIFFERENT element — or a
  * different attribute of the same element — survives untouched.
  *
- * The snapshot shape mirrors @bpmiq/notations/codecs StructuredSnapshot
+ * The snapshot shape mirrors @designiq/notations/codecs StructuredSnapshot
  * structurally (this package deliberately has no notations dependency).
  */
-import { ELEMENTS_KEY, META_KEY } from "@bpmiq/contracts/live";
+import { ELEMENTS_KEY, META_KEY } from "@designiq/contracts/live";
 import * as Y from "yjs";
 
 export interface StructuredSnapshot {
