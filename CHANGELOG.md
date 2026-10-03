@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.3.1](https://github.com/Miragon/design-iq/compare/v4.3.0...v4.3.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **mcp,validator:** point repository.url at the renamed repo ([#224](https://github.com/Miragon/design-iq/issues/224)) ([bdb479b](https://github.com/Miragon/design-iq/commit/bdb479b6c80e436772cadb7220ffdebcaf85479d))
+
 ## [4.3.0](https://github.com/Miragon/bpm-iq/compare/v4.2.0...v4.3.0) (2026-10-02)
 
 
